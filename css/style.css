@@ -34,8 +34,8 @@
     --stat-blue: #38BDF8;
 
     /* Typography */
-    --font-primary: 'JetBrains Mono', monospace;
-    --font-fallback: system-ui, sans-serif;
+    --font-primary: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
 
     /* Font Sizes */
     --fs-hero: 3rem;
