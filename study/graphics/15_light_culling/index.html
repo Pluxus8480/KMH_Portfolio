@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수천 개의 빛을 효율적으로 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>수천 개의 빛을 효율적으로</h1>
+            <p class="subtitle">Light Culling 기법 (Tiled, Clustered)</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 다수의 라이트 문제</h2>
+            <div class="conversation">
+                <div class="q">라이트가 수천 개면 어떤 문제가 있나요?</div>
+                <div class="a">
+                    <p>기본 Deferred에서 각 라이트마다 전체 화면을 처리하면 <span class="warning">O(픽셀 × 라이트)</span>가 됩니다.</p>
+                    <p>라이트 1000개, 1080p = 20억 번의 라이팅 계산!</p>
+                    <p><span class="highlight">Light Culling</span>은 각 픽셀에 영향을 주는 라이트만 계산합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+기존 Deferred의 문제:
+
+화면                         라이트들
+┌─────────────────────┐      💡 💡 💡
+│                     │      💡 💡 💡
+│                     │      💡 💡 💡
+│    모든 픽셀이      │        ...
+│    모든 라이트      │      (1000개)
+│    체크해야 함      │
+│                     │
+└─────────────────────┘
+
+픽셀 P에서:
+  for (light in allLights)  // 1000번 반복!
+      if (InRange(light, P))
+          Calculate(light)
+
+→ 대부분의 라이트는 픽셀에 영향 안 줌 (낭비)
+                </pre>
+                <p class="diagram-caption">단순 접근의 비효율</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Tiled Deferred Rendering</h2>
+            <div class="conversation">
+                <div class="q">Tiled Deferred는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>화면을 <span class="highlight">타일(예: 16×16 픽셀)</span>로 나누고, 각 타일에 영향을 주는 라이트 목록을 미리 계산합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Tiled Deferred 파이프라인:
+
+1. 화면을 타일로 분할 (16×16)
+┌───┬───┬───┬───┬───┬───┐
+│ T │ T │ T │ T │ T │ T │
+├───┼───┼───┼───┼───┼───┤
+│ T │ T │ T │ T │ T │ T │
+├───┼───┼───┼───┼───┼───┤
+│ T │ T │ T │ T │ T │ T │
+└───┴───┴───┴───┴───┴───┘
+
+2. 타일별로 라이트 컬링
+   타일 A: 💡 💡 💡        (3개만 영향)
+   타일 B: 💡               (1개만)
+   타일 C: 💡 💡 💡 💡 💡  (5개)
+
+3. 라이팅 패스
+   각 타일은 자신의 라이트 리스트만 처리
+   → O(픽셀 × 타일당 라이트) << O(픽셀 × 전체 라이트)
+                </pre>
+                <p class="diagram-caption">Tiled 접근 방식</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">타일 Light Culling (Compute Shader)</div>
+                <pre><code>// 타일 크기
+#define TILE_SIZE 16
+#define MAX_LIGHTS_PER_TILE 256
+
+// 타일별 라이트 목록
+groupshared uint tileLightCount;
+groupshared uint tileLightIndices[MAX_LIGHTS_PER_TILE];
+
+// 타일의 깊이 범위 (절두체 좁히기)
+groupshared uint tileMinZ;
+groupshared uint tileMaxZ;
+
+[numthreads(TILE_SIZE, TILE_SIZE, 1)]
+void CS_LightCulling(uint3 groupID : SV_GroupID,
+                     uint3 groupThreadID : SV_GroupThreadID,
+                     uint groupIndex : SV_GroupIndex)
+{
+    // 1. 초기화 (첫 스레드만)
+    if (groupIndex == 0)
+    {
+        tileLightCount = 0;
+        tileMinZ = 0xFFFFFFFF;
+        tileMaxZ = 0;
+    }
+    GroupMemoryBarrierWithGroupSync();
+
+    // 2. 타일 내 깊이 범위 계산
+    uint2 pixelCoord = groupID.xy * TILE_SIZE + groupThreadID.xy;
+    float depth = depthBuffer[pixelCoord];
+    float linearDepth = LinearizeDepth(depth);
+
+    // Atomic으로 Min/Max 업데이트
+    uint depthUint = asuint(linearDepth);
+    InterlockedMin(tileMinZ, depthUint);
+    InterlockedMax(tileMaxZ, depthUint);
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // 3. 타일 절두체 구성
+    float minZ = asfloat(tileMinZ);
+    float maxZ = asfloat(tileMaxZ);
+
+    // 타일 경계 → 뷰 공간 절두체
+    Frustum tileFrustum = CreateTileFrustum(
+        groupID.xy, TILE_SIZE, minZ, maxZ);
+
+    // 4. 라이트 컬링 (스레드들이 분담)
+    uint lightCount = totalLightCount;
+    for (uint i = groupIndex; i < lightCount; i += TILE_SIZE * TILE_SIZE)
+    {
+        Light light = lights[i];
+
+        // 라이트가 타일 절두체와 교차하는지
+        if (IntersectFrustumSphere(tileFrustum, light.position, light.radius))
+        {
+            uint index;
+            InterlockedAdd(tileLightCount, 1, index);
+
+            if (index < MAX_LIGHTS_PER_TILE)
+            {
+                tileLightIndices[index] = i;
+            }
+        }
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // 5. 라이트 리스트 저장
+    if (groupIndex == 0)
+    {
+        uint tileIndex = groupID.y * numTilesX + groupID.x;
+        tileInfo[tileIndex].lightCount = min(tileLightCount, MAX_LIGHTS_PER_TILE);
+        tileInfo[tileIndex].lightOffset = tileIndex * MAX_LIGHTS_PER_TILE;
+    }
+
+    // 모든 스레드가 라이트 인덱스 저장
+    if (groupIndex < tileLightCount && groupIndex < MAX_LIGHTS_PER_TILE)
+    {
+        uint tileIndex = groupID.y * numTilesX + groupID.x;
+        lightIndexList[tileIndex * MAX_LIGHTS_PER_TILE + groupIndex] =
+            tileLightIndices[groupIndex];
+    }
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Tiled 라이팅 패스</h2>
+            <div class="conversation">
+                <div class="q">컬링 후 라이팅은 어떻게 하나요?</div>
+                <div class="a">
+                    <p>각 픽셀은 자신이 속한 타일의 라이트 리스트만 순회합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Tiled Lighting (Compute Shader)</div>
+                <pre><code>[numthreads(TILE_SIZE, TILE_SIZE, 1)]
+void CS_TiledLighting(uint3 groupID : SV_GroupID,
+                      uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    uint2 pixelCoord = dispatchThreadID.xy;
+    uint tileIndex = groupID.y * numTilesX + groupID.x;
+
+    // G-Buffer 읽기
+    float3 albedo = gBuffer0[pixelCoord].rgb;
+    float3 normal = DecodeNormal(gBuffer1[pixelCoord].rg);
+    float3 worldPos = ReconstructPosition(pixelCoord);
+    float roughness = gBuffer1[pixelCoord].b;
+    float metallic = gBuffer1[pixelCoord].a;
+
+    // 타일의 라이트 정보
+    uint lightCount = tileInfo[tileIndex].lightCount;
+    uint lightOffset = tileInfo[tileIndex].lightOffset;
+
+    // 라이팅 계산
+    float3 finalColor = float3(0, 0, 0);
+    float3 viewDir = normalize(cameraPos - worldPos);
+
+    // 해당 타일의 라이트만 순회!
+    for (uint i = 0; i < lightCount; i++)
+    {
+        uint lightIndex = lightIndexList[lightOffset + i];
+        Light light = lights[lightIndex];
+
+        float3 lightDir = light.position - worldPos;
+        float distance = length(lightDir);
+        lightDir /= distance;
+
+        // 거리 감쇠
+        float attenuation = 1.0 / (distance * distance);
+        attenuation *= saturate(1.0 - distance / light.radius);
+
+        // PBR 라이팅
+        finalColor += CalculatePBR(albedo, normal, viewDir, lightDir,
+                                    roughness, metallic, light.color)
+                      * attenuation;
+    }
+
+    outputTexture[pixelCoord] = float4(finalColor, 1);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Clustered Deferred</h2>
+            <div class="conversation">
+                <div class="q">Tiled의 한계는 무엇인가요?</div>
+                <div class="a">
+                    <p>Tiled는 <span class="warning">2D 타일</span>이라 깊이 방향 라이트 분포를 잘 처리하지 못합니다.</p>
+                    <p><span class="highlight">Clustered</span>는 깊이 방향으로도 분할해 3D 클러스터를 만듭니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Tiled vs Clustered:
+
+Tiled (2D 분할):                 Clustered (3D 분할):
+
+      카메라                           카메라
+         ╲                                ╲
+          ╲                                ╲
+┌──────────────────┐           ┌─┬─┬─┬─┬─┬─┬─┬─┐
+│    💡           │           │ │ │💡│ │ │ │ │ │ Z0
+│        💡       │           ├─┼─┼─┼─┼─┼─┼─┼─┤
+│           💡    │           │ │ │ │💡│ │ │ │ │ Z1
+│  타일 = 2D      │           ├─┼─┼─┼─┼─┼─┼─┼─┤
+│  깊이 무시      │           │ │ │ │ │💡│ │ │ │ Z2
+└──────────────────┘           └─┴─┴─┴─┴─┴─┴─┴─┘
+
+💡가 화면 전체에 영향?        💡는 특정 클러스터에만
+→ 전체 타일에 포함됨          → 정확한 3D 컬링
+                </pre>
+                <p class="diagram-caption">Tiled vs Clustered 비교</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Clustered 데이터 구조</div>
+                <pre><code>// 클러스터 구조
+// X, Y: 화면 타일 (예: 16×16)
+// Z: 깊이 슬라이스 (예: 24개, 로그 스케일)
+
+struct ClusterInfo
+{
+    uint lightCount;
+    uint lightOffset;
+};
+
+// 깊이 슬라이스 계산 (로그 분포)
+uint GetDepthSlice(float linearDepth)
+{
+    // 로그 분포: 가까울수록 촘촘, 멀수록 성김
+    float logDepth = log(linearDepth / nearPlane);
+    float logRange = log(farPlane / nearPlane);
+    return uint(logDepth / logRange * numDepthSlices);
+}
+
+// 클러스터 인덱스 계산
+uint3 GetClusterIndex(uint2 pixelCoord, float linearDepth)
+{
+    uint3 cluster;
+    cluster.x = pixelCoord.x / TILE_SIZE;
+    cluster.y = pixelCoord.y / TILE_SIZE;
+    cluster.z = GetDepthSlice(linearDepth);
+    return cluster;
+}
+
+uint GetClusterLinearIndex(uint3 cluster)
+{
+    return cluster.x +
+           cluster.y * numClustersX +
+           cluster.z * numClustersX * numClustersY;
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Clustered 컬링</h2>
+            <div class="conversation">
+                <div class="q">3D 클러스터 컬링은 어떻게 하나요?</div>
+                <div class="a">
+                    <p>각 클러스터의 AABB를 구하고, 라이트 볼륨과 교차 테스트합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Clustered Light Culling</div>
+                <pre><code>// 클러스터 AABB 계산
+AABB GetClusterAABB(uint3 clusterIndex)
+{
+    float2 tileMin = float2(clusterIndex.xy) * TILE_SIZE;
+    float2 tileMax = tileMin + TILE_SIZE;
+
+    // 스크린 → NDC
+    float2 ndcMin = tileMin / screenSize * 2.0 - 1.0;
+    float2 ndcMax = tileMax / screenSize * 2.0 - 1.0;
+
+    // 깊이 범위 (로그 분포)
+    float zNear = GetDepthAtSlice(clusterIndex.z);
+    float zFar = GetDepthAtSlice(clusterIndex.z + 1);
+
+    // 뷰 공간 AABB 계산
+    AABB aabb;
+    aabb.minPoint = ScreenToView(ndcMin, zNear);
+    aabb.maxPoint = ScreenToView(ndcMax, zFar);
+
+    return aabb;
+}
+
+[numthreads(CLUSTERS_X, CLUSTERS_Y, CLUSTERS_Z)]
+void CS_ClusteredCulling(uint3 clusterID : SV_DispatchThreadID)
+{
+    uint clusterIndex = GetClusterLinearIndex(clusterID);
+
+    // 클러스터 AABB
+    AABB clusterAABB = GetClusterAABB(clusterID);
+
+    // 라이트 컬링
+    uint lightCount = 0;
+    uint lightIndices[MAX_LIGHTS_PER_CLUSTER];
+
+    for (uint i = 0; i < totalLightCount; i++)
+    {
+        Light light = lights[i];
+
+        // AABB vs Sphere 교차 테스트
+        if (IntersectAABBSphere(clusterAABB, light.position, light.radius))
+        {
+            if (lightCount < MAX_LIGHTS_PER_CLUSTER)
+            {
+                lightIndices[lightCount++] = i;
+            }
+        }
+    }
+
+    // 결과 저장
+    clusterInfo[clusterIndex].lightCount = lightCount;
+    // ... 라이트 인덱스 저장
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>기법</th>
+                        <th>장점</th>
+                        <th>단점</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Tiled Deferred</td>
+                        <td>구현 간단, 메모리 적음</td>
+                        <td>깊이 변화 큰 씬에서 비효율</td>
+                    </tr>
+                    <tr>
+                        <td>Clustered Deferred</td>
+                        <td>3D 컬링으로 정확함</td>
+                        <td>메모리 더 사용, 구현 복잡</td>
+                    </tr>
+                    <tr>
+                        <td>Clustered Forward</td>
+                        <td>반투명 지원, MSAA 쉬움</td>
+                        <td>셰이더에서 컬링 데이터 접근</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: Forward+ (Tiled Forward)</h2>
+            <div class="conversation">
+                <div class="q">Forward 렌더링에서도 Light Culling이 가능한가요?</div>
+                <div class="a">
+                    <p><span class="highlight">Forward+</span>는 Tiled/Clustered 컬링을 Forward 렌더링과 결합합니다. Deferred의 한계(반투명, MSAA)를 극복합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Forward+ 파이프라인:
+
+1. Depth Pre-Pass
+   ┌─────────────────────────┐
+   │   깊이만 먼저 렌더링    │
+   └─────────────────────────┘
+              │
+              ▼
+2. Light Culling (Compute)
+   ┌─────────────────────────┐
+   │  Tiled/Clustered 컬링   │
+   │  타일별 라이트 리스트   │
+   └─────────────────────────┘
+              │
+              ▼
+3. Forward Shading
+   ┌─────────────────────────┐
+   │  각 픽셀에서:           │
+   │  - 타일 라이트 리스트   │
+   │    접근                 │
+   │  - 해당 라이트만 계산   │
+   │  - 반투명, MSAA 지원!   │
+   └─────────────────────────┘
+
+Forward의 유연성 + Deferred의 라이트 효율
+                </pre>
+                <p class="diagram-caption">Forward+ 파이프라인</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Forward+ Pixel Shader</div>
+                <pre><code>// Forward+ 라이팅 (Pixel Shader)
+float4 PS_ForwardPlus(VSOutput input) : SV_Target
+{
+    // 픽셀이 속한 타일/클러스터 계산
+    uint2 tileCoord = uint2(input.position.xy) / TILE_SIZE;
+    uint tileIndex = tileCoord.y * numTilesX + tileCoord.x;
+
+    // 머티리얼 샘플링
+    float3 albedo = albedoMap.Sample(samp, input.uv).rgb;
+    float3 normal = normalMap.Sample(samp, input.uv).rgb * 2.0 - 1.0;
+    // ...
+
+    // 라이팅 계산
+    float3 finalColor = ambientLight * albedo;
+    float3 viewDir = normalize(cameraPos - input.worldPos);
+
+    // 타일의 라이트만 순회
+    uint lightCount = tileLightInfo[tileIndex].lightCount;
+    uint lightOffset = tileLightInfo[tileIndex].lightOffset;
+
+    for (uint i = 0; i < lightCount; i++)
+    {
+        uint lightIndex = lightIndexList[lightOffset + i];
+        Light light = lights[lightIndex];
+
+        // PBR 라이팅
+        finalColor += CalculatePBR(/* ... */);
+    }
+
+    return float4(finalColor, 1);
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 렌더링 기법 선택 가이드</strong>
+                <p><span class="highlight">Tiled Deferred</span>: 다수의 라이트, 불투명 위주</p>
+                <p><span class="highlight">Clustered Deferred</span>: 복잡한 깊이 분포, 대규모 씬</p>
+                <p><span class="highlight">Forward+</span>: 반투명 많음, MSAA 필요</p>
+                <p><span class="highlight">Clustered Forward</span>: 현대 엔진의 표준 (언리얼, 유니티)</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Light Culling</strong>: 픽셀에 영향 주는 라이트만 계산해 성능 향상</li>
+                <li><strong>Tiled</strong>: 화면을 2D 타일로 분할, 타일별 라이트 리스트</li>
+                <li><strong>Clustered</strong>: 3D 클러스터로 깊이 방향도 분할, 더 정확한 컬링</li>
+                <li><strong>Forward+</strong>: Light Culling + Forward = 반투명/MSAA 지원</li>
+                <li>현대 엔진은 <strong>Clustered Forward/Deferred</strong>가 표준</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

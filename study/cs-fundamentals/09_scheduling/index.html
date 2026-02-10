@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프로세스와 스레드 스케줄링 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+            <h1>"CPU가 4개인데 프로세스가 100개?"</h1>
+            <p class="subtitle">OS 스케줄링과 게임 스레드 관리</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 스케줄링 기본 개념</h2>
+            <div class="conversation">
+                <div class="q">스케줄러는 무엇을 하나요?</div>
+                <div class="a">
+                    <p>여러 프로세스/스레드 중 <strong>누가 CPU를 사용할지</strong> 결정합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                      스케줄링 상태 전이                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│                    ┌─────────────────┐                              │
+│       create ────▶ │     Ready       │ ◀─────────────┐              │
+│                    │   (실행 대기)    │              │              │
+│                    └────────┬────────┘              │              │
+│                             │                       │              │
+│                    dispatch │ (스케줄러 선택)        │ I/O 완료     │
+│                             ▼                       │              │
+│                    ┌─────────────────┐              │              │
+│                    │    Running      │              │              │
+│                    │   (CPU 실행)    │              │              │
+│                    └────────┬────────┘              │              │
+│                      │      │      │                │              │
+│           time out   │      │      │ I/O 요청      │              │
+│           (선점)     │      │      │               │              │
+│                      ▼      │      ▼               │              │
+│                  ┌───┐      │   ┌─────────────────┐│              │
+│                  │   │──────┘   │    Blocked      ││              │
+│                  │   │          │  (I/O 대기)      │┘              │
+│                  │   │          └─────────────────┘               │
+│                  │   │               │                             │
+│                  │   │ exit         │                             │
+│                  │   ▼              │                             │
+│                  │ ┌────────────┐   │                             │
+│                  └─│ Terminated │◀──┘ (비정상 종료)               │
+│                    └────────────┘                                  │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">주요 스케줄링 알고리즘은?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>알고리즘</th>
+                                <th>특징</th>
+                                <th>게임 적합성</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Round Robin</td>
+                                <td>시간 할당량(Time Slice) 순환</td>
+                                <td>공정하지만 실시간 보장 없음</td>
+                            </tr>
+                            <tr>
+                                <td>Priority</td>
+                                <td>우선순위 높은 것 먼저</td>
+                                <td>게임 스레드 우선 가능</td>
+                            </tr>
+                            <tr>
+                                <td>CFS (Linux)</td>
+                                <td>가상 런타임 균등화</td>
+                                <td>일반적으로 공정</td>
+                            </tr>
+                            <tr>
+                                <td>Real-Time</td>
+                                <td>데드라인 보장</td>
+                                <td>오디오 스레드에 적합</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 컨텍스트 스위칭</h2>
+            <div class="conversation">
+                <div class="q">컨텍스트 스위칭은 얼마나 비용이 드나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    컨텍스트 스위칭 과정                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Thread A 실행 중                                                  │
+│   ──────────────────────────────────────                           │
+│                                                                     │
+│   1. 인터럽트 발생 (타이머 or 시스템콜)                             │
+│      │                                                              │
+│   2. 현재 상태 저장 ───────────────┐                               │
+│      - 레지스터 (EAX, EBX, ...)    │                               │
+│      - 프로그램 카운터 (PC)        │──▶ Thread A의 TCB             │
+│      - 스택 포인터 (SP)            │    (Thread Control Block)     │
+│      - 플래그 레지스터             │                               │
+│      │                             │                               │
+│   3. 스케줄러 실행 (다음 스레드 선택)                               │
+│      │                                                              │
+│   4. 새 상태 복원 ◀────────────────┐                               │
+│      - Thread B의 레지스터        │                               │
+│      - Thread B의 PC              │──── Thread B의 TCB            │
+│      - Thread B의 SP              │                               │
+│      │                                                              │
+│   5. Thread B 실행 재개                                             │
+│                                                                     │
+│   비용: 직접적 ~1-10μs + 간접적 (캐시 미스) ~10-100μs              │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <p class="warning">캐시 오염이 더 큰 문제! 스위칭 후 캐시 미스 급증</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 게임에서의 스레드 관리</h2>
+            <div class="conversation">
+                <div class="q">게임에서는 어떤 스레드들이 있나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    게임 엔진 스레드 구조                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Core 0              Core 1              Core 2        Core 3     │
+│   ┌─────────────┐     ┌─────────────┐     ┌────────┐   ┌────────┐ │
+│   │Main/Render  │     │   Physics   │     │ Worker │   │ Worker │ │
+│   │   Thread    │     │   Thread    │     │ Thread │   │ Thread │ │
+│   └─────────────┘     └─────────────┘     └────────┘   └────────┘ │
+│         │                   │                 │             │      │
+│         │                   │                 └──────┬──────┘      │
+│         │                   │                        │             │
+│         ▼                   ▼                        ▼             │
+│   ┌───────────────────────────────────────────────────────────┐   │
+│   │                      Job Queue                             │   │
+│   │  [AI Task] [Audio] [Anim] [Network] [Loading] [Script]    │   │
+│   └───────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│   별도:                                                             │
+│   ┌─────────────┐     ┌─────────────┐                              │
+│   │Audio Thread │     │  I/O Thread │     (높은 우선순위)          │
+│   │(Real-Time)  │     │ (비동기)    │                              │
+│   └─────────────┘     └─────────────┘                              │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">스레드 우선순위와 친화도는 어떻게 설정하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Windows 스레드 설정</div>
+                        <pre><code>#include <windows.h>
+
+// 우선순위 설정
+void setThreadPriority() {
+    HANDLE thread = GetCurrentThread();
+
+    // 우선순위 클래스 (프로세스 단위)
+    SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+
+    // 스레드 우선순위
+    SetThreadPriority(thread, THREAD_PRIORITY_HIGHEST);
+    // THREAD_PRIORITY_TIME_CRITICAL  // 최고 (실시간)
+    // THREAD_PRIORITY_HIGHEST        // 높음
+    // THREAD_PRIORITY_ABOVE_NORMAL   // 약간 높음
+    // THREAD_PRIORITY_NORMAL         // 기본
+}
+
+// CPU 친화도 설정 (특정 코어에 고정)
+void setThreadAffinity(int coreId) {
+    HANDLE thread = GetCurrentThread();
+    DWORD_PTR mask = 1ULL << coreId;
+    SetThreadAffinityMask(thread, mask);
+}
+
+// 오디오 스레드 설정 예시
+void setupAudioThread() {
+    // 우선순위 최고
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+
+    // Core 0에 고정 (캐시 효율)
+    SetThreadAffinityMask(GetCurrentThread(), 1);
+
+    // MMCSS(Multimedia Class Scheduler Service) 사용
+    DWORD taskIndex = 0;
+    HANDLE hTask = AvSetMmThreadCharacteristics(TEXT("Pro Audio"), &taskIndex);
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Linux 스레드 설정</div>
+                        <pre><code>#include <pthread.h>
+#include <sched.h>
+
+// 우선순위 설정
+void setThreadPriority() {
+    pthread_t thread = pthread_self();
+
+    // 스케줄링 정책 + 우선순위
+    struct sched_param param;
+    param.sched_priority = 99;  // 1-99 (FIFO/RR)
+
+    pthread_setschedparam(thread, SCHED_FIFO, &param);
+    // SCHED_FIFO: 실시간, 선점적
+    // SCHED_RR: 실시간, Round Robin
+    // SCHED_OTHER: 일반 (CFS)
+}
+
+// CPU 친화도 설정
+void setThreadAffinity(int coreId) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(coreId, &cpuset);
+
+    pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+}
+
+// 게임 스레드 레이아웃 예시
+void setupGameThreads() {
+    // 메인 스레드: Core 0
+    setThreadAffinity(0);
+
+    // 렌더 스레드: Core 1
+    std::thread renderThread(renderLoop);
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(1, &cpuset);
+    pthread_setaffinity_np(renderThread.native_handle(),
+                          sizeof(cpuset), &cpuset);
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 스레드 풀과 Job System</h2>
+            <div class="conversation">
+                <div class="q">스레드 풀은 왜 사용하나요?</div>
+                <div class="a">
+                    <p>스레드 생성/소멸 비용을 피하고, <strong>스레드 수를 코어 수에 맞춤</strong></p>
+
+                    <div class="code-block">
+                        <div class="code-header">간단한 스레드 풀</div>
+                        <pre><code>class ThreadPool {
+private:
+    std::vector<std::thread> workers_;
+    std::queue<std::function<void()>> tasks_;
+    std::mutex mutex_;
+    std::condition_variable condition_;
+    bool stop_ = false;
+
+public:
+    ThreadPool(size_t numThreads = std::thread::hardware_concurrency()) {
+        for (size_t i = 0; i < numThreads; ++i) {
+            workers_.emplace_back([this, i] { workerLoop(i); });
+        }
+    }
+
+    ~ThreadPool() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stop_ = true;
+        }
+        condition_.notify_all();
+        for (auto& worker : workers_) {
+            worker.join();
+        }
+    }
+
+    template<typename F>
+    auto enqueue(F&& f) -> std::future<decltype(f())> {
+        using ReturnType = decltype(f());
+
+        auto task = std::make_shared<std::packaged_task<ReturnType()>>(
+            std::forward<F>(f)
+        );
+        std::future<ReturnType> result = task->get_future();
+
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            tasks_.emplace([task] { (*task)(); });
+        }
+        condition_.notify_one();
+
+        return result;
+    }
+
+private:
+    void workerLoop(int threadId) {
+        // 스레드별 친화도 설정
+        setThreadAffinity(threadId);
+
+        while (true) {
+            std::function<void()> task;
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                condition_.wait(lock, [this] {
+                    return stop_ || !tasks_.empty();
+                });
+                if (stop_ && tasks_.empty()) return;
+                task = std::move(tasks_.front());
+                tasks_.pop();
+            }
+            task();
+        }
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="key-point">스레드 수 = CPU 코어 수 (하이퍼스레딩 제외하면 물리 코어 수)</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 게임 루프와 동기화</h2>
+            <div class="conversation">
+                <div class="q">멀티스레드 게임 루프는 어떻게 구성하나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│              프레임 병렬 파이프라인 (Frame N, N+1 동시)              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Frame N        │ Frame N+1      │ Frame N+2                       │
+│   ───────────────┼────────────────┼───────────                      │
+│                                                                     │
+│   [Simulate N]   │                │                                 │
+│        │         │                │                                 │
+│        ▼         │                │                                 │
+│   [Render N] ───▶│ [Simulate N+1]│                                 │
+│        │         │      │         │                                 │
+│        │         │      ▼         │                                 │
+│   [Present N]    │ [Render N+1]──▶│ [Simulate N+2]                 │
+│                  │      │         │      │                          │
+│                  │ [Present N+1]  │      ▼                          │
+│                  │                │ [Render N+2]                    │
+│                                                                     │
+│   동기 포인트:                                                       │
+│   - Simulate 완료 후 Render 시작                                    │
+│   - Render 완료 후 Present                                          │
+│   - Present은 VSync에 동기화                                        │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Fork-Join 패턴</div>
+                        <pre><code>void gameFrame() {
+    // === 시뮬레이션 단계 (병렬) ===
+    auto aiJob = threadPool.enqueue([&] { updateAI(); });
+    auto physicsJob = threadPool.enqueue([&] { updatePhysics(); });
+    auto animJob = threadPool.enqueue([&] { updateAnimations(); });
+
+    // 동기 포인트: 모든 시뮬레이션 완료 대기
+    aiJob.wait();
+    physicsJob.wait();
+    animJob.wait();
+
+    // === 렌더 준비 (직렬) ===
+    prepareRenderData();  // 시뮬레이션 결과 → 렌더 데이터
+
+    // === 렌더링 단계 (병렬) ===
+    auto shadowJob = threadPool.enqueue([&] { renderShadows(); });
+    auto opaqueJob = threadPool.enqueue([&] { renderOpaqueObjects(); });
+
+    shadowJob.wait();
+    opaqueJob.wait();
+
+    // === 후처리 + 표시 (직렬) ===
+    renderPostProcess();
+    present();  // VSync 대기
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>스케줄러</strong>: CPU 시간을 프로세스/스레드에 분배</li>
+                <li><strong>컨텍스트 스위칭</strong>: 직접 비용 + 캐시 오염 간접 비용</li>
+                <li><strong>우선순위</strong>: 오디오 등 실시간 스레드에 높은 우선순위 부여</li>
+                <li><strong>친화도</strong>: 특정 코어에 고정하여 캐시 효율 향상</li>
+                <li><strong>스레드 풀</strong>: 스레드 수 = 코어 수, 생성/소멸 비용 제거</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메모리 정렬과 패딩 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+            <h1>"구조체 크기가 왜 예상과 다르죠?"</h1>
+            <p class="subtitle">메모리 정렬과 패딩의 비밀</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 메모리 정렬이란?</h2>
+            <div class="conversation">
+                <div class="q">왜 메모리 정렬이 필요한가요?</div>
+                <div class="a">
+                    <p>CPU는 <strong>정렬된 주소</strong>에서 데이터를 읽을 때 가장 효율적입니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    정렬된 접근 vs 비정렬 접근                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   메모리 (4바이트 단위로 접근):                                      │
+│   ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┐                │
+│   │  0  │  1  │  2  │  3  │  4  │  5  │  6  │  7  │                │
+│   └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘                │
+│                                                                     │
+│   정렬된 접근 (주소 0에서 int 읽기):                                 │
+│   ┌─────────────────┐                                               │
+│   │ 한 번에 읽기!   │  → 1 사이클                                   │
+│   └─────────────────┘                                               │
+│                                                                     │
+│   비정렬 접근 (주소 1에서 int 읽기):                                 │
+│       ┌─────────────────┐                                           │
+│       │  바이트 1,2,3   │  → 1차 접근                               │
+│       └─────────────────┘                                           │
+│               ┌─────────────────┐                                   │
+│               │    바이트 4     │  → 2차 접근                       │
+│               └─────────────────┘                                   │
+│   + 병합 연산 필요  → 2배 이상 느림!                                │
+│                                                                     │
+│   ※ 일부 CPU(ARM)는 비정렬 접근 시 예외 발생!                       │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">각 타입의 정렬 요구사항은?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>타입</th>
+                                <th>크기</th>
+                                <th>정렬 요구</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>char</td>
+                                <td>1바이트</td>
+                                <td>1바이트</td>
+                            </tr>
+                            <tr>
+                                <td>short</td>
+                                <td>2바이트</td>
+                                <td>2바이트</td>
+                            </tr>
+                            <tr>
+                                <td>int / float</td>
+                                <td>4바이트</td>
+                                <td>4바이트</td>
+                            </tr>
+                            <tr>
+                                <td>double / int64</td>
+                                <td>8바이트</td>
+                                <td>8바이트</td>
+                            </tr>
+                            <tr>
+                                <td>포인터 (64비트)</td>
+                                <td>8바이트</td>
+                                <td>8바이트</td>
+                            </tr>
+                            <tr>
+                                <td>__m128 (SSE)</td>
+                                <td>16바이트</td>
+                                <td>16바이트</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 구조체 패딩</h2>
+            <div class="conversation">
+                <div class="q">구조체에 패딩이 왜 들어가나요?</div>
+                <div class="a">
+                    <p>각 멤버가 <strong>정렬 요구사항</strong>을 만족하도록 빈 공간을 삽입합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">패딩 예시</div>
+                        <pre><code>// 예상: 1 + 4 + 1 = 6바이트
+// 실제: 12바이트!
+struct BadLayout {
+    char  a;    // 1바이트 (오프셋 0)
+    // 3바이트 패딩 (int 정렬을 위해)
+    int   b;    // 4바이트 (오프셋 4)
+    char  c;    // 1바이트 (오프셋 8)
+    // 3바이트 패딩 (구조체 정렬을 위해)
+};  // 총 12바이트
+
+// 메모리 레이아웃:
+// ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+// │ a │pad│pad│pad│ b │ b │ b │ b │ c │pad│pad│pad│
+// └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+//  0   1   2   3   4   5   6   7   8   9  10  11
+
+// 최적화: 멤버 재배열
+struct GoodLayout {
+    int   b;    // 4바이트 (오프셋 0)
+    char  a;    // 1바이트 (오프셋 4)
+    char  c;    // 1바이트 (오프셋 5)
+    // 2바이트 패딩
+};  // 총 8바이트 (33% 절약!)
+
+// 메모리 레이아웃:
+// ┌───┬───┬───┬───┬───┬───┬───┬───┐
+// │ b │ b │ b │ b │ a │ c │pad│pad│
+// └───┴───┴───┴───┴───┴───┴───┴───┘</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">정렬과 패딩을 확인하는 방법은?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">정렬/크기 확인</div>
+                        <pre><code>#include <iostream>
+#include <cstddef>  // offsetof
+
+struct Example {
+    char a;
+    int b;
+    char c;
+    double d;
+};
+
+int main() {
+    std::cout << "sizeof: " << sizeof(Example) << std::endl;
+    std::cout << "alignof: " << alignof(Example) << std::endl;
+
+    std::cout << "a offset: " << offsetof(Example, a) << std::endl;
+    std::cout << "b offset: " << offsetof(Example, b) << std::endl;
+    std::cout << "c offset: " << offsetof(Example, c) << std::endl;
+    std::cout << "d offset: " << offsetof(Example, d) << std::endl;
+}
+
+// 출력:
+// sizeof: 24
+// alignof: 8
+// a offset: 0
+// b offset: 4
+// c offset: 8
+// d offset: 16</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 정렬 제어</h2>
+            <div class="conversation">
+                <div class="q">정렬을 직접 제어하는 방법은?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">alignas와 alignof</div>
+                        <pre><code>// C++11 alignas
+struct alignas(16) Vector4 {
+    float x, y, z, w;
+};  // 16바이트 정렬 보장
+
+// 변수에도 적용 가능
+alignas(64) int cacheLineData[16];  // 캐시 라인 정렬
+
+// alignof로 확인
+static_assert(alignof(Vector4) == 16);
+
+// 동적 할당 시 정렬
+#include <cstdlib>
+
+// C++17 aligned_alloc
+void* ptr = std::aligned_alloc(64, 1024);
+
+// 또는 MSVC
+void* ptr = _aligned_malloc(1024, 64);
+_aligned_free(ptr);
+
+// C++17 new with alignment
+struct alignas(64) CacheLine { char data[64]; };
+CacheLine* cl = new CacheLine;  // 자동으로 64바이트 정렬</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">패딩 제거 (#pragma pack)</div>
+                        <pre><code>// 네트워크 패킷, 파일 포맷 등에서 사용
+#pragma pack(push, 1)  // 1바이트 정렬 (패딩 제거)
+struct NetworkPacket {
+    uint8_t  type;      // 1
+    uint32_t playerId;  // 4
+    uint16_t x, y;      // 4
+    uint8_t  health;    // 1
+};  // 정확히 10바이트
+#pragma pack(pop)
+
+// 주의: 비정렬 접근으로 성능 저하 가능!
+// 읽기/쓰기 시 복사하여 사용 권장
+
+void processPacket(const NetworkPacket* packet) {
+    // 정렬된 로컬 변수로 복사
+    uint32_t playerId;
+    memcpy(&playerId, &packet->playerId, sizeof(playerId));
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 게임 최적화 기법</h2>
+            <div class="conversation">
+                <div class="q">게임 엔티티 구조체는 어떻게 최적화하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">게임 엔티티 레이아웃 최적화</div>
+                        <pre><code>// ❌ 나쁜 레이아웃: 72바이트 (많은 패딩)
+struct EntityBad {
+    bool isActive;      // 1 + 7 padding
+    double posX;        // 8
+    bool hasPhysics;    // 1 + 3 padding
+    int health;         // 4
+    double posY;        // 8
+    char name[16];      // 16
+    bool isVisible;     // 1 + 7 padding
+    double posZ;        // 8
+};
+
+// ✅ 좋은 레이아웃: 56바이트 (패딩 최소화)
+struct EntityGood {
+    // 8바이트 정렬 멤버 먼저
+    double posX;        // 8
+    double posY;        // 8
+    double posZ;        // 8
+    char name[16];      // 16
+
+    // 4바이트 정렬
+    int health;         // 4
+
+    // 1바이트 멤버들을 모아서
+    bool isActive;      // 1
+    bool hasPhysics;    // 1
+    bool isVisible;     // 1
+    // 1바이트 패딩
+};  // 48바이트 (33% 절약!)
+
+// ✅ 핫/콜드 분리 (더 나은 방법)
+struct EntityHot {
+    double posX, posY, posZ;  // 24바이트
+    int health;               // 4바이트
+    bool isActive;            // 1바이트
+    // 3바이트 패딩
+};  // 32바이트 - 캐시 라인 절반
+
+struct EntityCold {
+    char name[16];
+    bool hasPhysics;
+    bool isVisible;
+};  // 별도 배열로 관리</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">비트필드로 공간을 더 줄일 수 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">비트필드 활용</div>
+                        <pre><code>// 여러 bool을 1바이트에 압축
+struct EntityFlags {
+    uint8_t isActive   : 1;
+    uint8_t isVisible  : 1;
+    uint8_t hasPhysics : 1;
+    uint8_t isDead     : 1;
+    uint8_t isPlayer   : 1;
+    uint8_t reserved   : 3;  // 향후 확장용
+};
+
+// 또는 enum + 비트 연산
+enum EntityFlag : uint8_t {
+    ACTIVE   = 1 << 0,
+    VISIBLE  = 1 << 1,
+    PHYSICS  = 1 << 2,
+    DEAD     = 1 << 3,
+    PLAYER   = 1 << 4
+};
+
+struct Entity {
+    uint8_t flags;
+
+    bool isActive() const { return flags & ACTIVE; }
+    void setActive(bool v) {
+        if (v) flags |= ACTIVE;
+        else flags &= ~ACTIVE;
+    }
+};
+
+// 범위가 작은 값도 압축
+struct CompactTransform {
+    int16_t posX, posY, posZ;  // -32768 ~ 32767 범위면 충분
+    uint8_t rotationIndex;     // 256가지 회전만 사용
+    uint8_t scaleIndex;        // 미리 정의된 스케일 인덱스
+};  // 8바이트 (vs float 24바이트)</code></pre>
+                    </div>
+
+                    <p class="warning">비트필드와 압축은 읽기/쓰기에 추가 연산이 필요합니다. 프로파일링으로 확인하세요!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: SIMD를 위한 정렬</h2>
+            <div class="conversation">
+                <div class="q">SIMD 사용 시 정렬은 얼마나 중요한가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">SIMD 정렬 요구사항</div>
+                        <pre><code>// SSE: 16바이트 정렬
+alignas(16) float vectorA[4];
+alignas(16) float vectorB[4];
+
+__m128 a = _mm_load_ps(vectorA);   // 정렬된 로드 (빠름)
+__m128 b = _mm_loadu_ps(vectorB);  // 비정렬 로드 (느림)
+
+// AVX: 32바이트 정렬
+alignas(32) float data[8];
+__m256 v = _mm256_load_ps(data);
+
+// 대량 데이터 배열
+struct alignas(32) ParticleData {
+    float* posX;  // 각 배열도 32바이트 정렬 필요
+    float* posY;
+    float* posZ;
+    size_t count;
+};
+
+// 정렬된 메모리 할당
+float* allocAligned(size_t count) {
+    void* ptr = nullptr;
+    #ifdef _WIN32
+        ptr = _aligned_malloc(count * sizeof(float), 32);
+    #else
+        posix_memalign(&ptr, 32, count * sizeof(float));
+    #endif
+    return static_cast<float*>(ptr);
+}</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>로드 타입</th>
+                                <th>정렬 요구</th>
+                                <th>성능</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>_mm_load_ps</td>
+                                <td>16바이트 필수</td>
+                                <td>최고</td>
+                            </tr>
+                            <tr>
+                                <td>_mm_loadu_ps</td>
+                                <td>없음</td>
+                                <td>~10% 느림</td>
+                            </tr>
+                            <tr>
+                                <td>_mm256_load_ps</td>
+                                <td>32바이트 필수</td>
+                                <td>최고</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>정렬 규칙</strong>: 데이터 타입 크기의 배수 주소에 배치</li>
+                <li><strong>구조체 최적화</strong>: 큰 멤버부터 선언, 작은 멤버는 모아서</li>
+                <li><strong>alignas</strong>: 명시적 정렬 지정, SIMD나 캐시 최적화에 활용</li>
+                <li><strong>pragma pack</strong>: 네트워크/파일 포맷용, 성능 저하 주의</li>
+                <li><strong>핫/콜드 분리</strong>: 자주 쓰는 데이터를 작고 밀집되게 유지</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

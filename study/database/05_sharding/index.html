@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>샤딩과 파티셔닝 전략 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../database.html" class="back-link">← 목록으로</a>
+            <h1>DB 하나로 100만 유저를 감당할 수 있을까?</h1>
+            <p class="subtitle">샤딩과 파티셔닝으로 데이터베이스 확장하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 스케일업 vs 스케일아웃</h2>
+            <div class="conversation">
+                <div class="q">DB가 느려지면 어떻게 해야 하나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+DB 확장 방법:
+
+스케일업 (Scale Up):
+┌─────────────┐      ┌─────────────┐
+│   DB 서버   │  →   │ 더 좋은 DB  │
+│   (4 CPU)   │      │  (64 CPU)   │
+└─────────────┘      └─────────────┘
+장점: 간단, 코드 변경 없음
+단점: 비용 급증, 물리적 한계
+
+스케일아웃 (Scale Out):
+┌─────────────┐      ┌────┐┌────┐┌────┐
+│   DB 서버   │  →   │DB 1││DB 2││DB 3│
+└─────────────┘      └────┘└────┘└────┘
+장점: 무한 확장 가능, 비용 효율적
+단점: 분산 시스템 복잡도, 코드 변경 필요
+                        </pre>
+                    </div>
+                    <p class="highlight">샤딩 = 데이터를 여러 DB에 분산 저장 (스케일아웃)</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 파티셔닝 vs 샤딩</h2>
+            <div class="conversation">
+                <div class="q">파티셔닝과 샤딩의 차이는?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>파티셔닝</th>
+                                <th>샤딩</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>위치</td>
+                                <td>단일 DB 내</td>
+                                <td>여러 DB 서버</td>
+                            </tr>
+                            <tr>
+                                <td>목적</td>
+                                <td>쿼리 성능, 관리 용이</td>
+                                <td>용량, 부하 분산</td>
+                            </tr>
+                            <tr>
+                                <td>복잡도</td>
+                                <td>낮음 (DB가 처리)</td>
+                                <td>높음 (애플리케이션이 처리)</td>
+                            </tr>
+                            <tr>
+                                <td>JOIN</td>
+                                <td>가능</td>
+                                <td>어려움 (크로스 샤드)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="visual-section">
+                        <pre class="diagram">
+파티셔닝 (Partitioning):
+┌─────────────────────────────────────┐
+│           Single DB Server          │
+│  ┌─────────┐ ┌─────────┐ ┌────────┐│
+│  │ Part 1  │ │ Part 2  │ │ Part 3 ││
+│  │ 2022년  │ │ 2023년  │ │ 2024년 ││
+│  └─────────┘ └─────────┘ └────────┘│
+└─────────────────────────────────────┘
+
+샤딩 (Sharding):
+┌─────────┐   ┌─────────┐   ┌─────────┐
+│ Shard 1 │   │ Shard 2 │   │ Shard 3 │
+│ User    │   │ User    │   │ User    │
+│ 1~100만 │   │100만~200만│ │200만~300만│
+└─────────┘   └─────────┘   └─────────┘
+  Server A      Server B      Server C
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 샤딩 키 선택</h2>
+            <div class="conversation">
+                <div class="q">샤딩 키를 잘못 선택하면 어떻게 되나요?</div>
+                <div class="a">
+                    <p>특정 샤드에 데이터가 몰려 <strong>핫스팟</strong>이 발생합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+나쁜 샤딩 키: 가입 날짜
+
+2024년 1월 가입자 → Shard 1 (과부하!)
+2024년 2월 가입자 → Shard 2 (거의 비어있음)
+2024년 3월 가입자 → Shard 3 (거의 비어있음)
+
+새 유저는 모두 최신 샤드로 → 불균형!
+
+좋은 샤딩 키: 유저 ID (해시)
+
+User 1 → Shard 1
+User 2 → Shard 2
+User 3 → Shard 3
+User 4 → Shard 1
+...
+균등하게 분산!
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">어떤 샤딩 키가 좋은가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>샤딩 키</th>
+                                <th>장점</th>
+                                <th>단점</th>
+                                <th>적합한 경우</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>유저 ID</td>
+                                <td>균등 분산, 유저 데이터 같은 샤드</td>
+                                <td>크로스 유저 쿼리 어려움</td>
+                                <td>대부분의 게임</td>
+                            </tr>
+                            <tr>
+                                <td>길드 ID</td>
+                                <td>길드 데이터 같은 샤드</td>
+                                <td>대형 길드 핫스팟</td>
+                                <td>길드 중심 게임</td>
+                            </tr>
+                            <tr>
+                                <td>서버/채널</td>
+                                <td>서버별 분리, 관리 쉬움</td>
+                                <td>서버 간 이동 어려움</td>
+                                <td>서버 분리형 MMO</td>
+                            </tr>
+                            <tr>
+                                <td>지역</td>
+                                <td>지역별 지연 최소화</td>
+                                <td>인기 지역 핫스팟</td>
+                                <td>글로벌 서비스</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 샤딩 전략</h2>
+            <div class="conversation">
+                <div class="q">Range 샤딩과 Hash 샤딩의 차이는?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Range Sharding</div>
+                        <pre><code>// 유저 ID 범위로 샤드 결정
+int GetShardByRange(int userId) {
+    if (userId < 1000000)  return 0;  // Shard 0: 1~100만
+    if (userId < 2000000)  return 1;  // Shard 1: 100만~200만
+    if (userId < 3000000)  return 2;  // Shard 2: 200만~300만
+    return 3;
+}
+
+// 장점: 범위 쿼리 효율적
+// 단점: 최신 샤드에 부하 집중, 불균형</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">Hash Sharding</div>
+                        <pre><code>// 해시 함수로 샤드 결정
+int GetShardByHash(int userId, int numShards) {
+    return hash(userId) % numShards;
+}
+
+// 장점: 균등 분산
+// 단점: 범위 쿼리 어려움, 샤드 추가 시 리밸런싱</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">Consistent Hashing (권장)</div>
+                        <pre><code>// 샤드 추가/제거 시 최소한의 데이터만 이동
+class ConsistentHash {
+    std::map<uint32_t, int> ring;  // hash → shard_id
+    int virtualNodes = 100;
+
+public:
+    void AddShard(int shardId) {
+        for (int i = 0; i < virtualNodes; i++) {
+            uint32_t hash = hashFunc("shard_" + to_string(shardId) +
+                                     "_" + to_string(i));
+            ring[hash] = shardId;
+        }
+    }
+
+    int GetShard(int userId) {
+        uint32_t hash = hashFunc(to_string(userId));
+        auto it = ring.lower_bound(hash);
+        if (it == ring.end()) it = ring.begin();
+        return it->second;
+    }
+};
+
+// 샤드 추가 시: 1/N만 이동 (vs 기존 해시: 거의 전부 이동)</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 크로스 샤드 문제</h2>
+            <div class="conversation">
+                <div class="q">다른 샤드의 유저와 거래하려면 어떻게 하나요?</div>
+                <div class="a">
+                    <p>크로스 샤드 트랜잭션은 <strong>2PC(Two-Phase Commit)</strong> 또는 <strong>Saga 패턴</strong>이 필요합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+크로스 샤드 거래 (Saga 패턴):
+
+    Shard A                    Shard B
+       │                          │
+       ├── 1. A 골드 차감 (-1000) │
+       │   (임시 차감, 보상 트랜잭션 준비)
+       │                          │
+       │                          ├── 2. B 아이템 이동
+       │                          │   (성공 시 커밋)
+       │                          │
+       ├── 3. A 커밋             │
+       │   (차감 확정)            │
+       │                          │
+       ▼                          ▼
+    완료!                       완료!
+
+만약 2단계 실패 시:
+       ├── 보상: A 골드 복구 (+1000)
+                        </pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">Saga 패턴 구현 예시</div>
+                        <pre><code>class CrossShardTrade {
+public:
+    void ExecuteTrade(int userA, int userB, int itemId, int gold) {
+        try {
+            // Step 1: A의 골드 임시 차감
+            shardRouter.Execute(userA,
+                "UPDATE users SET gold = gold - ?, pending_gold = ? WHERE id = ?",
+                gold, gold, userA);
+
+            // Step 2: 아이템 이동 (A → B)
+            shardRouter.Execute(userA,
+                "DELETE FROM inventory WHERE user_id = ? AND item_id = ?",
+                userA, itemId);
+
+            shardRouter.Execute(userB,
+                "INSERT INTO inventory (user_id, item_id) VALUES (?, ?)",
+                userB, itemId);
+
+            // Step 3: B의 골드 추가, A의 pending 정리
+            shardRouter.Execute(userB,
+                "UPDATE users SET gold = gold + ? WHERE id = ?",
+                gold, userB);
+
+            shardRouter.Execute(userA,
+                "UPDATE users SET pending_gold = 0 WHERE id = ?",
+                userA);
+
+        } catch (Exception& e) {
+            // 보상 트랜잭션 실행
+            CompensateTrade(userA, userB, itemId, gold);
+            throw;
+        }
+    }
+
+    void CompensateTrade(int userA, int userB, int itemId, int gold) {
+        // 실패 지점에 따라 롤백
+        // A 골드 복구
+        shardRouter.Execute(userA,
+            "UPDATE users SET gold = gold + pending_gold, pending_gold = 0 WHERE id = ?",
+            userA);
+        // 아이템 복구 등...
+    }
+};</code></pre>
+                    </div>
+                    <p class="warning">크로스 샤드 트랜잭션은 복잡하고 느립니다. 가능하면 피하는 설계가 좋습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 글로벌 데이터 처리</h2>
+            <div class="conversation">
+                <div class="q">랭킹같이 전체 유저 데이터가 필요한 경우는?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">글로벌 데이터 처리 전략</div>
+                        <pre><code>// 방법 1: 별도 글로벌 DB
+// 랭킹, 경매장 등은 별도 DB에서 관리
+┌──────────┐  ┌──────────┐  ┌──────────┐
+│ Shard 1  │  │ Shard 2  │  │ Shard 3  │
+│ User Data│  │ User Data│  │ User Data│
+└────┬─────┘  └────┬─────┘  └────┬─────┘
+     │             │             │
+     └─────────────┼─────────────┘
+                   ▼
+           ┌─────────────┐
+           │ Global DB   │
+           │ - 랭킹      │
+           │ - 경매장    │
+           └─────────────┘
+
+// 방법 2: Redis로 집계
+// 실시간 랭킹 → Redis Sorted Set
+redis.ZAdd("ranking:level", score, charId);
+auto topPlayers = redis.ZRevRange("ranking:level", 0, 99);
+
+// 방법 3: 배치 집계
+// 주기적으로 각 샤드에서 데이터 수집
+void AggregateRankingDaily() {
+    vector<PlayerScore> allScores;
+
+    for (auto& shard : shards) {
+        auto scores = shard.Query(
+            "SELECT char_id, level, exp FROM characters ORDER BY level DESC LIMIT 1000"
+        );
+        allScores.insert(allScores.end(), scores.begin(), scores.end());
+    }
+
+    // 전체 정렬 후 글로벌 DB에 저장
+    sort(allScores);
+    globalDb.ReplaceRanking(allScores);
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>파티셔닝</strong>: 단일 DB 내 테이블 분할, 쿼리 최적화 목적</li>
+                <li><strong>샤딩</strong>: 여러 DB 서버에 데이터 분산, 용량/부하 분산 목적</li>
+                <li><strong>샤딩 키</strong>: 유저 ID가 보통 최선 (균등 분산, 데이터 지역성)</li>
+                <li><strong>Consistent Hashing</strong>: 샤드 추가/제거 시 최소 데이터 이동</li>
+                <li><strong>크로스 샤드</strong>: Saga 패턴으로 처리, 가능하면 피하는 설계</li>
+                <li><strong>글로벌 데이터</strong>: 별도 DB 또는 Redis로 집계</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

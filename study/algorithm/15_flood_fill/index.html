@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flood Fill과 경로 최적화 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>물이 퍼지듯 영역을 채운다?</h1>
+            <p class="subtitle">Flood Fill과 Flow Field를 활용한 경로 최적화</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Flood Fill이란?</h2>
+            <div class="conversation">
+                <div class="q">Flood Fill은 어디에 사용되나요?</div>
+                <div class="a">
+                    <p class="highlight">연결된 영역을 탐색하거나 채우는 알고리즘입니다.</p>
+
+                    <ul>
+                        <li><strong>그래픽 에디터</strong>: 페인트 버킷 도구</li>
+                        <li><strong>게임 맵</strong>: 이동 가능 영역 탐지</li>
+                        <li><strong>미로 풀이</strong>: 도달 가능 영역 탐색</li>
+                        <li><strong>Flow Field</strong>: 대규모 유닛 길찾기</li>
+                    </ul>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Flood Fill 예시
+
+시작 전:                  Flood Fill 후:
+┌─┬─┬─┬─┬─┐            ┌─┬─┬─┬─┬─┐
+│ │ │█│ │ │            │●│●│█│○│○│
+├─┼─┼─┼─┼─┤            ├─┼─┼─┼─┼─┤
+│ │★│█│ │ │   →       │●│★│█│○│○│
+├─┼─┼─┼─┼─┤            ├─┼─┼─┼─┼─┤
+│ │ │█│ │ │            │●│●│█│○│○│
+└─┴─┴─┴─┴─┘            └─┴─┴─┴─┴─┘
+
+★: 시작점  █: 벽  ●: 채워진 영역
+벽으로 분리된 오른쪽(○)은 채워지지 않음
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">어떻게 구현하나요?</div>
+                <div class="a">
+                    <p><strong>두 가지 방식:</strong></p>
+                    <ul>
+                        <li><strong>재귀 (DFS)</strong>: 깊이 우선, 스택 오버플로우 위험</li>
+                        <li><strong>큐 (BFS)</strong>: 너비 우선, 물이 퍼지는 것처럼 동작</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Flood Fill 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">BFS 기반 Flood Fill</div>
+                    <pre><code>#include &lt;queue&gt;
+#include &lt;vector&gt;
+
+class FloodFill {
+private:
+    int width, height;
+    std::vector&lt;int&gt; grid;  // 0: 빈 공간, 1: 벽, 2+: 채워진 영역
+
+    int dx[4] = {-1, 0, 1, 0};
+    int dy[4] = {0, -1, 0, 1};
+
+    bool isValid(int x, int y) const {
+        return x >= 0 && x < width && y >= 0 && y < height;
+    }
+
+    int& cell(int x, int y) {
+        return grid[y * width + x];
+    }
+
+public:
+    FloodFill(int w, int h) : width(w), height(h), grid(w * h, 0) {}
+
+    // BFS Flood Fill
+    int fill(int startX, int startY, int fillValue) {
+        if (!isValid(startX, startY)) return 0;
+        if (cell(startX, startY) != 0) return 0;
+
+        int filledCount = 0;
+        std::queue&lt;std::pair&lt;int, int&gt;&gt; queue;
+        queue.push({startX, startY});
+        cell(startX, startY) = fillValue;
+
+        while (!queue.empty()) {
+            auto [x, y] = queue.front();
+            queue.pop();
+            filledCount++;
+
+            for (int i = 0; i < 4; i++) {
+                int nx = x + dx[i];
+                int ny = y + dy[i];
+
+                if (isValid(nx, ny) && cell(nx, ny) == 0) {
+                    cell(nx, ny) = fillValue;
+                    queue.push({nx, ny});
+                }
+            }
+        }
+
+        return filledCount;
+    }
+
+    // 스캔라인 최적화 (수평 연속 영역 한 번에 처리)
+    int fillScanline(int startX, int startY, int fillValue) {
+        if (!isValid(startX, startY)) return 0;
+        if (cell(startX, startY) != 0) return 0;
+
+        int filledCount = 0;
+        std::queue&lt;std::pair&lt;int, int&gt;&gt; queue;
+        queue.push({startX, startY});
+
+        while (!queue.empty()) {
+            auto [x, y] = queue.front();
+            queue.pop();
+
+            if (cell(x, y) != 0) continue;
+
+            // 왼쪽 끝 찾기
+            int left = x;
+            while (left > 0 && cell(left - 1, y) == 0) left--;
+
+            // 오른쪽으로 채우면서 위/아래 스캔
+            bool checkAbove = true, checkBelow = true;
+
+            for (int cx = left; cx < width && cell(cx, y) == 0; cx++) {
+                cell(cx, y) = fillValue;
+                filledCount++;
+
+                // 위쪽 행 체크
+                if (y > 0) {
+                    if (cell(cx, y - 1) == 0) {
+                        if (checkAbove) {
+                            queue.push({cx, y - 1});
+                            checkAbove = false;
+                        }
+                    } else {
+                        checkAbove = true;
+                    }
+                }
+
+                // 아래쪽 행 체크
+                if (y < height - 1) {
+                    if (cell(cx, y + 1) == 0) {
+                        if (checkBelow) {
+                            queue.push({cx, y + 1});
+                            checkBelow = false;
+                        }
+                    } else {
+                        checkBelow = true;
+                    }
+                }
+            }
+        }
+
+        return filledCount;
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 거리 필드 생성</h2>
+            <div class="conversation">
+                <div class="q">목표까지의 거리를 어떻게 계산하나요?</div>
+                <div class="a">
+                    <p class="highlight">BFS로 목표에서 시작하여 각 셀까지의 거리를 기록합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+거리 필드 (Distance Field)
+
+목표(G)에서 BFS:
+┌───┬───┬───┬───┬───┐
+│ 4 │ 3 │ █ │ 5 │ 6 │
+├───┼───┼───┼───┼───┤
+│ 3 │ 2 │ █ │ 4 │ 5 │
+├───┼───┼───┼───┼───┤
+│ 2 │ 1 │ G │ 1 │ 2 │
+├───┼───┼───┼───┼───┤
+│ 3 │ 2 │ 1 │ 2 │ 3 │
+└───┴───┴───┴───┴───┘
+
+숫자 = 목표까지의 최단 거리
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">거리 필드 생성</div>
+                        <pre><code>class DistanceField {
+private:
+    int width, height;
+    std::vector&lt;int&gt; distances;  // -1: 벽/미방문, 0+: 거리
+    std::vector&lt;bool&gt; obstacles;
+
+public:
+    void compute(int goalX, int goalY) {
+        // 초기화
+        std::fill(distances.begin(), distances.end(), -1);
+
+        std::queue&lt;std::pair&lt;int, int&gt;&gt; queue;
+        queue.push({goalX, goalY});
+        distances[goalY * width + goalX] = 0;
+
+        while (!queue.empty()) {
+            auto [x, y] = queue.front();
+            queue.pop();
+
+            int currentDist = distances[y * width + x];
+
+            // 4방향 (또는 8방향) 탐색
+            for (int i = 0; i < 4; i++) {
+                int nx = x + dx[i];
+                int ny = y + dy[i];
+
+                if (!isValid(nx, ny)) continue;
+                if (obstacles[ny * width + nx]) continue;
+                if (distances[ny * width + nx] >= 0) continue;
+
+                distances[ny * width + nx] = currentDist + 1;
+                queue.push({nx, ny});
+            }
+        }
+    }
+
+    int getDistance(int x, int y) const {
+        if (!isValid(x, y)) return -1;
+        return distances[y * width + x];
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Flow Field 길찾기</h2>
+            <div class="conversation">
+                <div class="q">Flow Field는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p class="highlight">각 셀에서 목표로 향하는 방향을 저장하여, 수천 유닛이 동일한 필드를 공유합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Flow Field (화살표 = 이동 방향)
+
+┌───┬───┬───┬───┬───┐
+│ ↓ │ ↓ │ █ │ ↓ │ ↓ │
+├───┼───┼───┼───┼───┤
+│ ↓ │ ↓ │ █ │ ↙ │ ↓ │
+├───┼───┼───┼───┼───┤
+│ → │ → │ G │ ← │ ← │
+├───┼───┼───┼───┼───┤
+│ ↗ │ ↑ │ ↑ │ ↑ │ ↖ │
+└───┴───┴───┴───┴───┘
+
+모든 유닛은 화살표를 따라 이동하면 G에 도착!
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Flow Field 생성 및 사용</div>
+                        <pre><code>struct Vec2i { int x, y; };
+
+class FlowField {
+private:
+    int width, height;
+    std::vector&lt;int&gt; distances;
+    std::vector&lt;Vec2i&gt; flowDirections;
+
+    // 8방향
+    Vec2i dirs[8] = {
+        {-1, 0}, {1, 0}, {0, -1}, {0, 1},  // 4방향
+        {-1, -1}, {1, -1}, {-1, 1}, {1, 1}  // 대각선
+    };
+
+public:
+    void compute(int goalX, int goalY) {
+        // 1단계: 거리 필드 생성 (BFS)
+        computeDistances(goalX, goalY);
+
+        // 2단계: Flow 방향 계산
+        computeFlowDirections();
+    }
+
+private:
+    void computeDistances(int goalX, int goalY) {
+        std::fill(distances.begin(), distances.end(), INT_MAX);
+        std::queue&lt;Vec2i&gt; queue;
+
+        distances[goalY * width + goalX] = 0;
+        queue.push({goalX, goalY});
+
+        while (!queue.empty()) {
+            Vec2i current = queue.front();
+            queue.pop();
+
+            int currentDist = distances[current.y * width + current.x];
+
+            for (int i = 0; i < 8; i++) {
+                int nx = current.x + dirs[i].x;
+                int ny = current.y + dirs[i].y;
+
+                if (!isValid(nx, ny) || isObstacle(nx, ny)) continue;
+
+                int newDist = currentDist + (i < 4 ? 10 : 14);  // 대각선 비용
+                if (newDist < distances[ny * width + nx]) {
+                    distances[ny * width + nx] = newDist;
+                    queue.push({nx, ny});
+                }
+            }
+        }
+    }
+
+    void computeFlowDirections() {
+        flowDirections.resize(width * height, {0, 0});
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                if (isObstacle(x, y)) continue;
+
+                int minDist = distances[y * width + x];
+                Vec2i bestDir = {0, 0};
+
+                for (int i = 0; i < 8; i++) {
+                    int nx = x + dirs[i].x;
+                    int ny = y + dirs[i].y;
+
+                    if (!isValid(nx, ny)) continue;
+
+                    int dist = distances[ny * width + nx];
+                    if (dist < minDist) {
+                        minDist = dist;
+                        bestDir = dirs[i];
+                    }
+                }
+
+                flowDirections[y * width + x] = bestDir;
+            }
+        }
+    }
+
+public:
+    Vec2i getFlowDirection(int x, int y) const {
+        if (!isValid(x, y)) return {0, 0};
+        return flowDirections[y * width + x];
+    }
+
+    // 유닛 이동
+    void moveUnit(float& unitX, float& unitY, float speed, float dt) {
+        int cellX = static_cast&lt;int&gt;(unitX);
+        int cellY = static_cast&lt;int&gt;(unitY);
+
+        Vec2i dir = getFlowDirection(cellX, cellY);
+
+        // 보간을 위해 주변 셀도 고려 (선택적)
+        float flowX = static_cast&lt;float&gt;(dir.x);
+        float flowY = static_cast&lt;float&gt;(dir.y);
+
+        // 정규화
+        float len = std::sqrt(flowX * flowX + flowY * flowY);
+        if (len > 0.01f) {
+            flowX /= len;
+            flowY /= len;
+        }
+
+        unitX += flowX * speed * dt;
+        unitY += flowY * speed * dt;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 다중 목표와 가중치</h2>
+            <div class="conversation">
+                <div class="q">여러 목표가 있으면 어떻게 하나요?</div>
+                <div class="a">
+                    <p class="highlight">모든 목표를 시작점으로 BFS를 수행하면 "가장 가까운 목표"로 향하는 필드가 생성됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">다중 목표 Flow Field</div>
+                        <pre><code>void computeMultiGoal(const std::vector&lt;Vec2i&gt;& goals) {
+    std::fill(distances.begin(), distances.end(), INT_MAX);
+    std::queue&lt;Vec2i&gt; queue;
+
+    // 모든 목표를 거리 0으로 시작
+    for (const Vec2i& goal : goals) {
+        distances[goal.y * width + goal.x] = 0;
+        queue.push(goal);
+    }
+
+    // 일반 BFS
+    while (!queue.empty()) {
+        // ... (동일한 BFS 로직)
+    }
+
+    computeFlowDirections();
+}
+
+// 지형 가중치 적용
+void computeWithCosts(int goalX, int goalY,
+                      const std::vector&lt;int&gt;& movementCosts) {
+    // Dijkstra 사용 (BFS 대신)
+    std::priority_queue&lt;std::pair&lt;int, Vec2i&gt;,
+                        std::vector&lt;std::pair&lt;int, Vec2i&gt;&gt;,
+                        std::greater&lt;&gt;&gt; pq;
+
+    std::fill(distances.begin(), distances.end(), INT_MAX);
+    distances[goalY * width + goalX] = 0;
+    pq.push({0, {goalX, goalY}});
+
+    while (!pq.empty()) {
+        auto [dist, current] = pq.top();
+        pq.pop();
+
+        if (dist > distances[current.y * width + current.x]) continue;
+
+        for (int i = 0; i < 8; i++) {
+            int nx = current.x + dirs[i].x;
+            int ny = current.y + dirs[i].y;
+
+            if (!isValid(nx, ny) || isObstacle(nx, ny)) continue;
+
+            // 이동 비용 (지형에 따라 다름)
+            int baseCost = (i < 4) ? 10 : 14;
+            int terrainCost = movementCosts[ny * width + nx];
+            int newDist = dist + baseCost * terrainCost;
+
+            if (newDist < distances[ny * width + nx]) {
+                distances[ny * width + nx] = newDist;
+                pq.push({newDist, {nx, ny}});
+            }
+        }
+    }
+
+    computeFlowDirections();
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: Flow Field vs A*</h2>
+            <div class="conversation">
+                <div class="q">언제 Flow Field를 사용해야 하나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>상황</th>
+                                <th>A*</th>
+                                <th>Flow Field</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>유닛 수</td>
+                                <td>소수 (1~10)</td>
+                                <td>다수 (100+)</td>
+                            </tr>
+                            <tr>
+                                <td>목표</td>
+                                <td>유닛마다 다름</td>
+                                <td>공통 목표</td>
+                            </tr>
+                            <tr>
+                                <td>계산 비용</td>
+                                <td>유닛당 O(n log n)</td>
+                                <td>맵당 O(n)</td>
+                            </tr>
+                            <tr>
+                                <td>동적 장애물</td>
+                                <td>빠른 재계산</td>
+                                <td>전체 재계산 필요</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+사용 사례:
+
+A* 적합:                    Flow Field 적합:
+- RPG 파티 이동              - RTS 대규모 유닛 이동
+- 개별 NPC 패스파인딩         - 타워 디펜스 몬스터 웨이브
+- 동적 목표 추적              - 군중 시뮬레이션
+
+하이브리드:
+- Flow Field로 대략적 방향
+- 로컬 A*로 장애물 회피
+                        </pre>
+                    </div>
+
+                    <p class="key-point">Supreme Commander, StarCraft 2 등 RTS 게임은 Flow Field를 사용합니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Flood Fill</strong>: BFS로 연결된 영역 탐색/채우기</li>
+                <li><strong>스캔라인</strong>: 수평 연속 영역 한 번에 처리로 최적화</li>
+                <li><strong>거리 필드</strong>: 목표에서 BFS로 각 셀까지 거리 계산</li>
+                <li><strong>Flow Field</strong>: 거리 필드에서 방향 추출, 다수 유닛 공유</li>
+                <li><strong>활용</strong>: RTS 유닛 이동, 군중 시뮬레이션, 타워 디펜스</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

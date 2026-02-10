@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>폴리곤 수십억 개를 어떻게 렌더링할까? | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+
+        <header class="content-header">
+            <h1>폴리곤 수십억 개를 어떻게 렌더링할까?</h1>
+            <p class="subtitle">Nanite 가상화 지오메트리의 원리</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 기존 방식의 한계</h2>
+            <div class="conversation">
+                <div class="q">게임에서 고품질 3D 모델을 쓰기 어려운 이유가 무엇인가요?</div>
+                <div class="a">
+                    <p>전통적인 렌더링에서는 모든 메시의 <span class="highlight">모든 폴리곤</span>을 GPU에 보내야 했습니다. 영화용 에셋(수백만~수천만 폴리곤)을 그대로 쓰면 GPU가 감당할 수 없죠.</p>
+                    <p>그래서 아티스트들은 LOD(Level of Detail)를 수작업으로 만들어야 했습니다. 멀리 있으면 저폴리, 가까우면 고폴리. 하지만 이건 노동집약적이고, LOD 전환 시 "팝인" 현상이 발생합니다.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>기존 방식은 마치 <span class="highlight">도서관의 모든 책을 한 번에 책상에 올려놓는 것</span>과 같습니다.</p>
+                <p>Nanite는 <span class="highlight">필요한 페이지만 그때그때 가져오는 것</span>입니다. 책 전체를 올릴 필요가 없죠.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Nanite의 핵심 아이디어</h2>
+            <div class="conversation">
+                <div class="q">Nanite는 어떻게 이 문제를 해결하나요?</div>
+                <div class="a">
+                    <p>Nanite의 핵심은 <span class="highlight">가상화(Virtualization)</span>입니다. 가상 메모리처럼, 필요한 데이터만 필요할 때 로드합니다.</p>
+                    <p class="key-point">메시를 작은 클러스터로 분할하고, 화면에서 차지하는 픽셀 수에 따라 적절한 디테일만 렌더링합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+원본 메시 (수백만 폴리곤)
+        │
+        ▼
+┌───────────────────────────────────────┐
+│          클러스터 분할                │
+│  ┌──┐ ┌──┐ ┌──┐ ┌──┐ ┌──┐ ┌──┐      │
+│  │C1│ │C2│ │C3│ │C4│ │C5│ │C6│ ...  │
+│  └──┘ └──┘ └──┘ └──┘ └──┘ └──┘      │
+│    (각 클러스터 ~128 삼각형)         │
+└───────────────────────────────────────┘
+        │
+        ▼
+┌───────────────────────────────────────┐
+│           LOD 계층 생성               │
+│                                       │
+│   LOD 0: ████████████ (원본)         │
+│   LOD 1: ████████                    │
+│   LOD 2: ████                        │
+│   LOD 3: ██                          │
+│                                       │
+└───────────────────────────────────────┘
+        │
+        ▼
+    GPU 컬링 + 렌더링
+                </pre>
+                <p class="diagram-caption">Nanite의 처리 파이프라인</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 클러스터와 DAG 구조</h2>
+            <div class="conversation">
+                <div class="q">클러스터는 구체적으로 어떻게 구성되나요?</div>
+                <div class="a">
+                    <p>Nanite는 메시를 <span class="highlight">약 128개의 삼각형으로 구성된 클러스터</span>로 분할합니다. 이 클러스터들은 DAG(Directed Acyclic Graph) 구조로 계층화됩니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">클러스터 계층 구조</div>
+                <pre><code>// 개념적 구조
+struct NaniteCluster {
+    uint32 TriangleCount;     // ~128개
+    BoundingBox Bounds;       // 바운딩 박스
+    float LODError;           // 이 LOD의 오차
+
+    // 부모/자식 관계 (DAG)
+    NaniteCluster* Parent;    // 더 단순한 버전
+    Array<NaniteCluster*> Children; // 더 디테일한 버전
+};
+
+// 화면에서 클러스터가 차지하는 크기
+float ScreenSize = ProjectedBoundsSize / ScreenResolution;
+
+// 화면 크기에 따라 적절한 LOD 선택
+if (ScreenSize * LODError < PixelThreshold) {
+    // 이 LOD 사용 (충분히 작음)
+} else {
+    // 자식 클러스터로 세분화
+}</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">왜 삼각형 128개인가요?</div>
+                <div class="a">
+                    <p>128개는 <span class="highlight">GPU의 웨이브/워프 크기</span>와 관련 있습니다. GPU는 32~64개의 스레드를 동시에 처리하므로, 128개의 삼각형은 효율적인 병렬 처리가 가능합니다.</p>
+                    <p class="warning">너무 작으면 오버헤드가 크고, 너무 크면 세밀한 컬링이 어렵습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: GPU 기반 컬링</h2>
+            <div class="conversation">
+                <div class="q">Nanite의 컬링은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>Nanite는 <span class="highlight">GPU에서 직접 컬링</span>을 수행합니다. CPU의 개입 없이 수백만 개의 클러스터를 빠르게 처리할 수 있죠.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>컬링 단계</th>
+                        <th>설명</th>
+                        <th>제거되는 것</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>인스턴스 컬링</td>
+                        <td>전체 오브젝트 단위</td>
+                        <td>화면 밖 오브젝트</td>
+                    </tr>
+                    <tr>
+                        <td>클러스터 컬링</td>
+                        <td>클러스터 단위 절두체/오클루전</td>
+                        <td>보이지 않는 클러스터</td>
+                    </tr>
+                    <tr>
+                        <td>삼각형 컬링</td>
+                        <td>뒷면/서브픽셀 삼각형</td>
+                        <td>렌더링 불필요한 삼각형</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="conversation">
+                <div class="q">오클루전 컬링도 GPU에서 하나요?</div>
+                <div class="a">
+                    <p>네! Nanite는 <span class="highlight">2-pass 오클루전 컬링</span>을 사용합니다.</p>
+                    <p>1. 이전 프레임의 HZB(Hierarchical Z-Buffer)로 1차 컬링</p>
+                    <p>2. 현재 프레임 렌더링 후 재검사 (늦게 보이게 된 것 처리)</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 소프트웨어 래스터라이저</h2>
+            <div class="conversation">
+                <div class="q">왜 하드웨어 래스터라이저를 안 쓰나요?</div>
+                <div class="a">
+                    <p>기존 하드웨어 래스터라이저는 <span class="highlight">작은 삼각형에 비효율적</span>입니다. 1픽셀보다 작은 삼각형도 최소 2x2 픽셀(쿼드) 단위로 처리하기 때문이죠.</p>
+                    <p>Nanite의 소프트웨어 래스터라이저는 <span class="key-point">픽셀 단위로 정확하게</span> 처리해서 작은 삼각형도 효율적으로 렌더링합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">래스터라이저 선택 로직 (개념)</div>
+                <pre><code>// 삼각형 크기에 따라 래스터라이저 선택
+if (triangleScreenSize > LARGE_TRIANGLE_THRESHOLD) {
+    // 하드웨어 래스터라이저 사용
+    // 큰 삼각형은 하드웨어가 더 효율적
+    UseHardwareRasterizer(triangle);
+} else {
+    // 소프트웨어 래스터라이저 사용
+    // Compute Shader로 직접 픽셀 쓰기
+    UseSoftwareRasterizer(triangle);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: Nanite의 한계</h2>
+            <div class="conversation">
+                <div class="q">Nanite를 못 쓰는 경우도 있나요?</div>
+                <div class="a">
+                    <p class="warning">Nanite는 만능이 아닙니다. 다음 경우에는 사용할 수 없습니다:</p>
+                    <p>• <strong>스켈레탈 메시</strong> - 본 애니메이션이 있는 캐릭터</p>
+                    <p>• <strong>월드 포지션 오프셋</strong> - 버텍스 셰이더에서 위치 변경</p>
+                    <p>• <strong>반투명 머티리얼</strong> - 알파 블렌딩 필요</p>
+                    <p>• <strong>Masked 머티리얼</strong> (부분 지원)</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th>기존 방식</th>
+                        <th>Nanite</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>폴리곤 한계</td>
+                        <td>수백만 (성능 저하)</td>
+                        <td>수십억 (실시간)</td>
+                    </tr>
+                    <tr>
+                        <td>LOD 제작</td>
+                        <td>수동 (노동 집약)</td>
+                        <td>자동</td>
+                    </tr>
+                    <tr>
+                        <td>LOD 전환</td>
+                        <td>팝인 현상</td>
+                        <td>부드러운 전환</td>
+                    </tr>
+                    <tr>
+                        <td>애니메이션</td>
+                        <td>완전 지원</td>
+                        <td>제한적</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Nanite</strong>는 메시를 클러스터로 분할하고 화면 기여도에 따라 적절한 LOD만 렌더링합니다</li>
+                <li><strong>GPU 기반 컬링</strong>으로 CPU 병목 없이 수백만 클러스터를 처리합니다</li>
+                <li><strong>소프트웨어 래스터라이저</strong>가 작은 삼각형을 효율적으로 처리합니다</li>
+                <li>스켈레탈 메시, WPO, 반투명은 <strong>지원하지 않습니다</strong></li>
+                <li>영화급 에셋을 게임에서 <strong>실시간으로</strong> 사용할 수 있게 해줍니다</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

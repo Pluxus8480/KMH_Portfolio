@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>눈부신 빛의 표현 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>눈부신 빛의 표현</h1>
+            <p class="subtitle">HDR 렌더링과 Bloom 효과</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: HDR이란?</h2>
+            <div class="conversation">
+                <div class="q">왜 일반 렌더링으로는 밝은 빛을 표현할 수 없나요?</div>
+                <div class="a">
+                    <p>일반 LDR(Low Dynamic Range)은 색상을 <span class="warning">0~1 범위</span>로 제한합니다. 하지만 현실의 밝기는 태양(10만 lux)부터 달빛(0.1 lux)까지 엄청난 범위를 가집니다.</p>
+                    <p><span class="highlight">HDR</span>은 1.0을 초과하는 밝기를 저장해, 나중에 효과(Bloom, 노출 조절)에 활용합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Dynamic Range 비교:
+
+현실 세계:
+0.0001 ────────────────────────────────────── 100,000+
+ │                                              │
+달빛                                           태양
+
+LDR (8비트):
+0.0 ───────────────── 1.0
+ │                     │
+검정                   흰색 (클램프)
+
+HDR (16비트+ 부동소수점):
+0.0 ────────────────────────────────────── ∞
+ │                                         │
+검정                               무한한 밝기
+
+HDR → 1.0 초과 값 → Bloom, 노출 조절에 활용
+                </pre>
+                <p class="diagram-caption">Dynamic Range 차이</p>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>LDR은 <span class="highlight">"볼륨 최대 10"</span>인 스피커와 같습니다.</p>
+                <p>HDR은 <span class="highlight">"볼륨 100까지 있지만, 나중에 10으로 줄여서 틀 수 있는"</span> 스피커입니다. 그 사이에서 조절이 가능합니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: HDR 렌더 타겟</h2>
+            <div class="conversation">
+                <div class="q">HDR 렌더링을 위한 설정은?</div>
+                <div class="a">
+                    <p>8비트 포맷(R8G8B8A8) 대신 <span class="highlight">16비트/32비트 부동소수점 포맷</span>을 사용합니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>포맷</th>
+                        <th>비트/채널</th>
+                        <th>범위</th>
+                        <th>용도</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>R8G8B8A8_UNORM</td>
+                        <td>8bit</td>
+                        <td>0~1</td>
+                        <td>LDR, UI</td>
+                    </tr>
+                    <tr>
+                        <td>R16G16B16A16_FLOAT</td>
+                        <td>16bit</td>
+                        <td>±65504</td>
+                        <td>HDR (권장)</td>
+                    </tr>
+                    <tr>
+                        <td>R32G32B32A32_FLOAT</td>
+                        <td>32bit</td>
+                        <td>±3.4×10³⁸</td>
+                        <td>고정밀 연산</td>
+                    </tr>
+                    <tr>
+                        <td>R11G11B10_FLOAT</td>
+                        <td>11/11/10bit</td>
+                        <td>양수만</td>
+                        <td>HDR (메모리 절약)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">HDR 렌더 타겟 생성 (DirectX 11)</div>
+                <pre><code>// HDR 렌더 타겟 텍스처 생성
+D3D11_TEXTURE2D_DESC hdrDesc = {};
+hdrDesc.Width = screenWidth;
+hdrDesc.Height = screenHeight;
+hdrDesc.MipLevels = 1;
+hdrDesc.ArraySize = 1;
+hdrDesc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;  // HDR 포맷!
+hdrDesc.SampleDesc.Count = 1;
+hdrDesc.Usage = D3D11_USAGE_DEFAULT;
+hdrDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+
+ID3D11Texture2D* hdrTexture;
+device->CreateTexture2D(&hdrDesc, nullptr, &hdrTexture);
+
+// Render Target View
+ID3D11RenderTargetView* hdrRTV;
+device->CreateRenderTargetView(hdrTexture, nullptr, &hdrRTV);
+
+// Shader Resource View (Post-Processing용)
+ID3D11ShaderResourceView* hdrSRV;
+device->CreateShaderResourceView(hdrTexture, nullptr, &hdrSRV);</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Bloom 효과</h2>
+            <div class="conversation">
+                <div class="q">밝은 부분이 번지는 효과는 어떻게 만드나요?</div>
+                <div class="a">
+                    <p><span class="highlight">Bloom</span>은 HDR의 밝은 영역(1.0 초과)을 추출해 블러 처리 후 원본에 합성합니다.</p>
+                    <p>눈이나 카메라 렌즈에서 빛이 산란되는 현상을 모방합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Bloom 파이프라인:
+
+HDR Scene
+┌──────────────────────────────────────────┐
+│     ☀️ (값: 5.0)                         │
+│                    💡 (값: 2.0)          │
+│  일반 오브젝트 (값: 0.3~0.8)             │
+└──────────────────────────────────────────┘
+                    │
+          ┌────────┴────────┐
+          │                 │
+          ▼                 ▼
+    ┌──────────┐      ┌──────────┐
+    │ Threshold│      │ Original │
+    │ (밝은 부분│      │  (원본)  │
+    │  추출)   │      │          │
+    └──────────┘      └──────────┘
+          │                 │
+          ▼                 │
+    ┌──────────┐            │
+    │ Downsample│           │
+    │ + Blur    │           │
+    └──────────┘            │
+          │                 │
+          ▼                 │
+    ┌──────────┐            │
+    │ Upsample │            │
+    │ + Blur   │            │
+    └──────────┘            │
+          │                 │
+          └────────┬────────┘
+                   │
+                   ▼
+            ┌──────────┐
+            │ Composite│
+            │ (합성)   │
+            └──────────┘
+                   │
+                   ▼
+             Final Output
+                </pre>
+                <p class="diagram-caption">Bloom 처리 단계</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Bloom - Brightness Threshold</div>
+                <pre><code>// 1단계: 밝은 픽셀만 추출
+float4 BrightnessThreshold_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    float3 color = hdrTexture.Sample(linearSamp, uv).rgb;
+
+    // 휘도(Luminance) 계산
+    float luminance = dot(color, float3(0.2126, 0.7152, 0.0722));
+
+    // Threshold 이상만 추출
+    float threshold = 1.0;
+    float softThreshold = 0.5;
+
+    // Soft Knee (부드러운 전환)
+    float knee = threshold * softThreshold;
+    float soft = luminance - threshold + knee;
+    soft = clamp(soft, 0, knee * 2);
+    soft = soft * soft / (4 * knee + 0.00001);
+
+    float contribution = max(soft, luminance - threshold);
+    contribution /= max(luminance, 0.00001);
+
+    return float4(color * contribution, 1);
+}</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Bloom - Gaussian Blur (분리 가능)</div>
+                <pre><code>// 가우시안 블러 가중치 (9탭)
+static const float weights[5] = {
+    0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216
+};
+
+// 수평 블러
+float4 BlurHorizontal_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    float3 result = bloomTexture.Sample(linearSamp, uv).rgb * weights[0];
+
+    for (int i = 1; i < 5; i++)
+    {
+        float2 offset = float2(texelSize.x * i, 0);
+        result += bloomTexture.Sample(linearSamp, uv + offset).rgb * weights[i];
+        result += bloomTexture.Sample(linearSamp, uv - offset).rgb * weights[i];
+    }
+
+    return float4(result, 1);
+}
+
+// 수직 블러
+float4 BlurVertical_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    float3 result = blurHTexture.Sample(linearSamp, uv).rgb * weights[0];
+
+    for (int i = 1; i < 5; i++)
+    {
+        float2 offset = float2(0, texelSize.y * i);
+        result += blurHTexture.Sample(linearSamp, uv + offset).rgb * weights[i];
+        result += blurHTexture.Sample(linearSamp, uv - offset).rgb * weights[i];
+    }
+
+    return float4(result, 1);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 다운샘플/업샘플 체인</h2>
+            <div class="conversation">
+                <div class="q">넓은 범위의 Bloom은 어떻게 구현하나요?</div>
+                <div class="a">
+                    <p><span class="highlight">MIP 체인</span>을 사용합니다. 다운샘플하면서 블러하고, 업샘플하면서 누적합니다. 적은 샘플로 넓은 블러를 얻습니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+다운샘플/업샘플 체인:
+
+다운샘플 (Blur + Downsample):
+
+MIP 0: 1920×1080  ┌────────────────────────┐
+                  │                        │
+                  └────────────────────────┘
+                           ↓ 1/2
+MIP 1:  960×540   ┌────────────────┐
+                  │                │
+                  └────────────────┘
+                           ↓ 1/2
+MIP 2:  480×270   ┌──────────┐
+                  │          │
+                  └──────────┘
+                           ↓ 1/2
+MIP 3:  240×135   ┌──────┐
+                  │      │
+                  └──────┘
+
+업샘플 (Blur + Upsample + Add):
+
+MIP 3 → MIP 2 → MIP 1 → MIP 0
+  │        │        │        │
+  └──ADD───┴──ADD───┴──ADD───┴→ Final Bloom
+
+각 레벨의 블러가 누적되어 넓은 Bloom 효과
+                </pre>
+                <p class="diagram-caption">Progressive Bloom 체인</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Bloom MIP Chain 구현</div>
+                <pre><code>// 다운샘플 + 블러 (Karis Average 포함)
+float4 Downsample_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    // 13탭 다운샘플 (고품질)
+    float3 a = sourceTexture.Sample(linearSamp, uv + float2(-2, -2) * texelSize).rgb;
+    float3 b = sourceTexture.Sample(linearSamp, uv + float2( 0, -2) * texelSize).rgb;
+    float3 c = sourceTexture.Sample(linearSamp, uv + float2( 2, -2) * texelSize).rgb;
+    // ... (13개 샘플)
+
+    // Weighted average with Karis average to reduce fireflies
+    float3 result = (a + c + g + i) * 0.125 * 0.5;
+    result += (b + d + f + h) * 0.25 * 0.5;
+    result += e * 0.5;
+
+    return float4(result, 1);
+}
+
+// 업샘플 + 이전 레벨 합성
+float4 Upsample_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    // Tent 필터 (3×3) 업샘플
+    float3 a = lowerMip.Sample(linearSamp, uv + float2(-1, -1) * texelSize).rgb;
+    float3 b = lowerMip.Sample(linearSamp, uv + float2( 0, -1) * texelSize).rgb;
+    // ...
+
+    float3 upsampled = (a + c + g + i) / 16.0
+                     + (b + d + f + h) / 8.0
+                     + e / 4.0;
+
+    // 현재 레벨과 합성
+    float3 current = currentMip.Sample(linearSamp, uv).rgb;
+
+    return float4(current + upsampled * bloomIntensity, 1);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 최종 합성과 Tone Mapping</h2>
+            <div class="conversation">
+                <div class="q">HDR을 모니터에 출력하려면?</div>
+                <div class="a">
+                    <p>대부분의 모니터는 LDR(0~1)만 표시합니다. <span class="highlight">Tone Mapping</span>으로 HDR 범위를 압축합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">최종 합성 + Tone Mapping</div>
+                <pre><code>// Bloom 합성 + Tone Mapping
+float4 FinalComposite_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    // HDR 씬
+    float3 hdrColor = hdrSceneTexture.Sample(linearSamp, uv).rgb;
+
+    // Bloom 추가
+    float3 bloom = bloomTexture.Sample(linearSamp, uv).rgb;
+    hdrColor += bloom * bloomStrength;
+
+    // 노출 조절 (Exposure)
+    hdrColor *= exposure;
+
+    // Tone Mapping (ACES Filmic)
+    float3 ldrColor = ACESToneMapping(hdrColor);
+
+    // 감마 보정
+    ldrColor = pow(ldrColor, 1.0 / 2.2);
+
+    return float4(ldrColor, 1);
+}
+
+// ACES Tone Mapping
+float3 ACESToneMapping(float3 x)
+{
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>Tone Mapping</th>
+                        <th>특징</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Reinhard</td>
+                        <td>간단, 약간 탁한 느낌</td>
+                    </tr>
+                    <tr>
+                        <td>ACES Filmic</td>
+                        <td>영화 같은 룩, 콘트라스트 좋음</td>
+                    </tr>
+                    <tr>
+                        <td>Uncharted 2</td>
+                        <td>게임에 적합, 디테일 보존</td>
+                    </tr>
+                    <tr>
+                        <td>AgX</td>
+                        <td>최신 기법, 자연스러운 색상</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 자동 노출 (Auto Exposure)</h2>
+            <div class="conversation">
+                <div class="q">밝은 곳에서 어두운 곳으로 이동할 때 눈이 적응하는 효과는?</div>
+                <div class="a">
+                    <p><span class="highlight">자동 노출</span>은 화면의 평균 휘도를 계산해 노출을 조절합니다. 눈의 적응 현상을 모방합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">평균 휘도 계산 (Log Average)</div>
+                <pre><code>// 1단계: 휘도 계산 + 다운샘플
+// 최종적으로 1x1 텍스처로 감소
+
+float4 LuminanceDownsample_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    float3 color = hdrTexture.Sample(linearSamp, uv).rgb;
+
+    // 휘도 계산
+    float luminance = dot(color, float3(0.2126, 0.7152, 0.0722));
+
+    // Log 공간에서 평균 (0 방지)
+    float logLum = log(luminance + 0.0001);
+
+    return float4(logLum, luminance, 0, 1);
+}
+
+// 2단계: 적응 속도 적용
+float AdaptLuminance(float currentLum, float targetLum, float deltaTime)
+{
+    float adaptSpeed = (targetLum > currentLum) ? 2.0 : 1.0;  // 밝아지면 빠르게
+    return currentLum + (targetLum - currentLum) * (1 - exp(-deltaTime * adaptSpeed));
+}
+
+// 3단계: 노출 계산
+float CalculateExposure(float avgLuminance)
+{
+    // 목표 휘도 기준 노출 계산
+    float keyValue = 0.18;  // 중간 회색
+    float exposure = keyValue / avgLuminance;
+
+    // 범위 제한
+    return clamp(exposure, minExposure, maxExposure);
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 성능 팁</strong>
+                <p><span class="highlight">Bloom MIP 활용</span>: 별도 휘도 계산 대신 Bloom 다운샘플 재사용</p>
+                <p><span class="highlight">Compute Shader</span>: 히스토그램 기반 노출이 더 정확</p>
+                <p><span class="highlight">시간 보간</span>: 급격한 변화 방지 (눈 적응 시뮬레이션)</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>HDR</strong>은 1.0 초과 밝기를 저장, 16비트 부동소수점 포맷 사용</li>
+                <li><strong>Bloom</strong> = Threshold → Downsample/Blur → Upsample → Composite</li>
+                <li><strong>MIP 체인</strong>으로 넓은 범위 Bloom을 효율적으로 계산</li>
+                <li><strong>Tone Mapping</strong>으로 HDR → LDR 변환 (ACES, Reinhard 등)</li>
+                <li><strong>자동 노출</strong>로 동적 밝기 적응, 눈의 반응 시뮬레이션</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

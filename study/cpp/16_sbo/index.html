@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Small Buffer Optimization (SBO) | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>작은 문자열은 힙에 안 간다고?</h1>
+            <p class="subtitle">Small Buffer Optimization으로 할당 비용 제거하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 동적 할당의 비용</h2>
+            <div class="conversation">
+                <div class="q">왜 힙 할당을 피하려고 하나요?</div>
+                <div class="a">
+                    <p class="warning">힙 할당은 시스템 호출, 락, 단편화 등 상당한 오버헤드가 있습니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">할당 비용 분석</div>
+                        <pre><code>// 힙 할당 비용
+// 1. 메모리 관리자 락 획득
+// 2. 적절한 크기의 블록 검색
+// 3. 블록 분할/병합
+// 4. 메타데이터 저장 (크기, 정렬 등)
+// 5. 실제 메모리 할당
+
+// 작은 객체에 대해 이 비용이 과함!
+std::string shortStr = "Hi";  // 2바이트인데 힙 할당?
+
+// 벤치마크: 100만 번 생성
+void benchmark() {
+    // 힙 할당 버전
+    for (int i = 0; i < 1000000; i++) {
+        std::string* s = new std::string("Hello");
+        delete s;
+    }
+    // 약 100ms
+
+    // 스택 버전 (SBO 적용됨)
+    for (int i = 0; i < 1000000; i++) {
+        std::string s = "Hello";  // 힙 할당 없음!
+    }
+    // 약 10ms (10배 빠름!)
+}</code></pre>
+                    </div>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>볼펜 하나를 보관할 때마다 창고에 가서 서류 작업을 하는 대신, 주머니에 넣어두는 것이 SBO입니다. 작은 물건은 가까이 두세요!</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: SBO 원리</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">SBO 기본 구조</div>
+                    <pre><code>// 기본 아이디어: 객체 내부에 작은 버퍼를 포함
+// 작은 데이터는 버퍼에, 큰 데이터는 힙에
+
+template&lt;typename T, size_t BufferSize = 64&gt;
+class SmallVector {
+    union {
+        T buffer[BufferSize];  // 인라인 버퍼
+        struct {
+            T* data;           // 힙 포인터
+            size_t capacity;
+        } heap;
+    };
+    size_t size_ = 0;
+    bool isHeap = false;
+
+public:
+    void push_back(const T& value) {
+        if (size_ < BufferSize && !isHeap) {
+            // 버퍼에 저장
+            buffer[size_++] = value;
+        } else {
+            // 힙으로 전환 또는 확장
+            if (!isHeap) {
+                convertToHeap();
+            }
+            // 힙에 추가...
+        }
+    }
+
+    T* data() {
+        return isHeap ? heap.data : buffer;
+    }
+};</code></pre>
+                </div>
+
+                <div class="visual-section">
+                    <pre class="diagram">
+SBO 메모리 레이아웃
+
+작은 데이터 (버퍼 사용):
+┌─────────────────────────────────┐
+│ [H][e][l][l][o][\0][  ][  ]... │  ← 인라인 버퍼
+│ size=5  isHeap=false            │
+└─────────────────────────────────┘
+  스택/객체 내부에 저장, 힙 할당 없음
+
+큰 데이터 (힙 사용):
+┌─────────────────────────────────┐
+│ ptr ──────────────────────────┐ │
+│ size=100  isHeap=true         │ │
+└───────────────────────────────│─┘
+                                ↓
+                    힙: [Very long string...]
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: std::string의 SSO</h2>
+            <div class="conversation">
+                <div class="q">std::string은 어떻게 구현되어 있나요?</div>
+                <div class="a">
+                    <p class="highlight">Short String Optimization: 대부분의 구현에서 15~22바이트까지 인라인 저장!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">SSO 확인</div>
+                        <pre><code>// SSO 임계값 확인
+void checkSSO() {
+    std::string s1 = "Hello";  // 5자
+    std::string s2 = "Hello, World!!!";  // 15자
+    std::string s3 = "Hello, World!!!!";  // 16자
+
+    // 주소 비교로 SSO 확인
+    // 인라인이면 객체 주소 근처, 힙이면 멀리
+    std::cout << "s1 addr: " << &s1 << "\n";
+    std::cout << "s1 data: " << (void*)s1.data() << "\n";
+    std::cout << "s2 addr: " << &s2 << "\n";
+    std::cout << "s2 data: " << (void*)s2.data() << "\n";
+    std::cout << "s3 addr: " << &s3 << "\n";
+    std::cout << "s3 data: " << (void*)s3.data() << "\n";
+
+    // s1, s2: data()가 객체 주소 근처 (SSO)
+    // s3: data()가 힙 주소 (멀리)
+}
+
+// 컴파일러/라이브러리별 SSO 크기
+// - libc++ (LLVM): 22바이트
+// - libstdc++ (GCC): 15바이트
+// - MSVC: 15바이트
+
+// SSO 최대 활용
+void efficientStrings() {
+    // 좋음: 짧은 문자열
+    std::string id = "player_1";     // SSO
+    std::string tag = "enemy";       // SSO
+
+    // 주의: 긴 문자열
+    std::string desc = getLongDescription();  // 힙 할당
+
+    // 팁: 미리 reserve로 재할당 방지
+    std::string buffer;
+    buffer.reserve(1000);
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: std::function의 SBO</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">function SBO 분석</div>
+                    <pre><code>// std::function도 SBO 사용
+// 작은 호출 가능 객체는 인라인 저장
+
+#include &lt;functional&gt;
+
+void functionSBO() {
+    // 작은 람다: SBO 적용
+    std::function&lt;int(int)&gt; f1 = [](int x) { return x + 1; };
+
+    // 캡처가 적은 람다: SBO 적용
+    int a = 1;
+    std::function&lt;int(int)&gt; f2 = [a](int x) { return x + a; };
+
+    // 큰 캡처: 힙 할당
+    std::array&lt;int, 100&gt; big{};
+    std::function&lt;int(int)&gt; f3 = [big](int x) { return x + big[0]; };
+    // 힙 할당 발생!
+}
+
+// SBO 크기는 보통 sizeof(void*) * 2~4
+// 약 16~32바이트
+
+// 대안: std::move_only_function (C++23)
+// 또는 function_ref 라이브러리
+
+// 인라인 함수 객체 (템플릿)
+template&lt;typename F&gt;
+void process(F&& func) {
+    func(42);  // 인라인화 가능, 힙 할당 없음!
+}
+
+// 사용
+process([](int x) { std::cout << x; });  // 최적화됨</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: SBO 직접 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">타입 소거 SBO</div>
+                    <pre><code>// 다형성 + SBO
+template&lt;size_t BufferSize = 64&gt;
+class Any {
+    // 내부 저장소
+    alignas(std::max_align_t) std::byte buffer[BufferSize];
+    bool isHeap = false;
+
+    // 타입 소거 인터페이스
+    struct Concept {
+        virtual ~Concept() = default;
+        virtual void* get() = 0;
+        virtual void copyTo(std::byte* dest) const = 0;
+        virtual void moveTo(std::byte* dest) = 0;
+    };
+
+    template&lt;typename T&gt;
+    struct Model : Concept {
+        T value;
+        Model(T v) : value(std::move(v)) {}
+        void* get() override { return &value; }
+        void copyTo(std::byte* dest) const override {
+            new (dest) Model(value);
+        }
+        void moveTo(std::byte* dest) override {
+            new (dest) Model(std::move(value));
+        }
+    };
+
+    Concept* concept = nullptr;
+
+public:
+    template&lt;typename T&gt;
+    Any(T value) {
+        using M = Model&lt;T&gt;;
+        if constexpr (sizeof(M) <= BufferSize) {
+            // SBO: 버퍼에 저장
+            concept = new (buffer) M(std::move(value));
+            isHeap = false;
+        } else {
+            // 힙에 저장
+            concept = new M(std::move(value));
+            isHeap = true;
+        }
+    }
+
+    ~Any() {
+        if (concept) {
+            if (isHeap) {
+                delete concept;
+            } else {
+                concept->~Concept();
+            }
+        }
+    }
+
+    template&lt;typename T&gt;
+    T& get() {
+        return *static_cast&lt;T*&gt;(concept->get());
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 팁</h2>
+            <div class="conversation">
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>타입</th>
+                            <th>SBO 크기</th>
+                            <th>비고</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>std::string</td>
+                            <td>15~22 바이트</td>
+                            <td>구현마다 다름</td>
+                        </tr>
+                        <tr>
+                            <td>std::function</td>
+                            <td>16~32 바이트</td>
+                            <td>캡처 크기 주의</td>
+                        </tr>
+                        <tr>
+                            <td>std::any</td>
+                            <td>구현마다 다름</td>
+                            <td>작은 타입 권장</td>
+                        </tr>
+                        <tr>
+                            <td>std::variant</td>
+                            <td>가장 큰 타입</td>
+                            <td>항상 인라인</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="code-block">
+                    <div class="code-header">최적화 팁</div>
+                    <pre><code>// 1. 짧은 문자열 선호
+std::string id = "player";  // Good
+std::string uuid = "550e8400-e29b-41d4-a716-446655440000";  // 힙
+
+// 2. 람다 캡처 최소화
+// Bad: 큰 객체 값 캡처
+std::function&lt;void()&gt; bad = [largeData]() { use(largeData); };
+
+// Good: 참조 또는 포인터 캡처
+std::function&lt;void()&gt; good = [&largeData]() { use(largeData); };
+
+// 3. std::function 대신 템플릿
+template&lt;typename F&gt;
+void forEach(Container& c, F&& func) {  // 힙 할당 없음
+    for (auto& item : c) func(item);
+}
+
+// 4. 프로파일링
+// perf, VTune 등으로 할당 핫스팟 확인
+// 작은 객체가 많이 할당되면 SBO 적용 검토
+
+// 5. 커스텀 할당자
+// 빈번한 작은 할당은 풀 할당자 사용 검토
+template&lt;typename T&gt;
+using SmallString = std::basic_string&lt;char, std::char_traits&lt;char&gt;,
+                                      PoolAllocator&lt;char&gt;&gt;;</code></pre>
+                </div>
+
+                <p class="key-point">SBO는 작은 객체의 성능을 극적으로 향상시킵니다. 문자열, 람다, 작은 컨테이너에 자동 적용됩니다!</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>SBO</strong>: 작은 데이터를 객체 내부 버퍼에 저장</li>
+                <li><strong>장점</strong>: 힙 할당 제거, 캐시 효율 향상</li>
+                <li><strong>std::string</strong>: 15~22바이트까지 SSO</li>
+                <li><strong>std::function</strong>: 작은 호출 객체는 인라인</li>
+                <li><strong>활용</strong>: 캡처 최소화, 짧은 문자열, 템플릿 선호</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

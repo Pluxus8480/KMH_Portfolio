@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coroutine (C++20) | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>함수 실행을 멈췄다가 다시 시작한다고?</h1>
+            <p class="subtitle">C++20 코루틴으로 비동기 코드 깔끔하게 작성하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 코루틴이란?</h2>
+            <div class="conversation">
+                <div class="q">코루틴은 일반 함수와 뭐가 다른가요?</div>
+                <div class="a">
+                    <p class="highlight">코루틴은 실행을 중단(suspend)했다가 나중에 재개(resume)할 수 있는 함수입니다!</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+일반 함수 vs 코루틴
+
+일반 함수:
+caller → function() → 완료 → caller
+         └──────────────────┘
+            한 번에 실행
+
+코루틴:
+caller → coroutine() → 중단 → caller
+                ↓
+         caller → 재개 → 중단 → caller
+                          ↓
+                   caller → 재개 → 완료 → caller
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">코루틴 기본 개념</div>
+                        <pre><code>// 코루틴 키워드
+// co_await: 다른 작업 완료 대기, 중단
+// co_yield: 값을 반환하고 중단
+// co_return: 최종 값 반환 후 종료
+
+// 제너레이터 예시 (개념)
+Generator&lt;int&gt; countTo(int n) {
+    for (int i = 1; i <= n; i++) {
+        co_yield i;  // i를 반환하고 중단
+    }
+}
+
+// 사용
+for (int x : countTo(5)) {
+    std::cout << x << " ";  // 1 2 3 4 5
+}</code></pre>
+                    </div>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>책을 읽다가 북마크를 끼워두고 다른 일을 하다가, 나중에 북마크 위치부터 다시 읽는 것과 같습니다. 코루틴은 함수에 북마크를 끼워둘 수 있습니다!</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 코루틴 구성 요소</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">코루틴의 구조</div>
+                    <pre><code>// 코루틴은 3가지 요소가 필요:
+// 1. Promise 타입: 코루틴 동작 정의
+// 2. Coroutine Handle: 코루틴 제어
+// 3. Return Object: 호출자가 받는 객체
+
+template&lt;typename T&gt;
+class Generator {
+public:
+    // Promise 타입 정의
+    struct promise_type {
+        T current_value;
+
+        Generator get_return_object() {
+            return Generator{
+                std::coroutine_handle&lt;promise_type&gt;::from_promise(*this)
+            };
+        }
+
+        std::suspend_always initial_suspend() { return {}; }
+        std::suspend_always final_suspend() noexcept { return {}; }
+
+        std::suspend_always yield_value(T value) {
+            current_value = value;
+            return {};
+        }
+
+        void return_void() {}
+        void unhandled_exception() { std::terminate(); }
+    };
+
+    // 코루틴 핸들
+    using handle_type = std::coroutine_handle&lt;promise_type&gt;;
+
+private:
+    handle_type handle;
+
+public:
+    Generator(handle_type h) : handle(h) {}
+    ~Generator() { if (handle) handle.destroy(); }
+
+    // 이동만 허용
+    Generator(const Generator&) = delete;
+    Generator(Generator&& other) : handle(other.handle) {
+        other.handle = nullptr;
+    }
+
+    // 값 접근
+    T getValue() { return handle.promise().current_value; }
+
+    // 다음 값으로 진행
+    bool next() {
+        handle.resume();
+        return !handle.done();
+    }
+};</code></pre>
+                </div>
+
+                <div class="visual-section">
+                    <pre class="diagram">
+코루틴 구조
+
+┌─────────────────────────────────────┐
+│           Return Object             │
+│  (Generator, Task 등)               │
+├─────────────────────────────────────┤
+│        Coroutine Handle             │
+│  - resume(): 재개                   │
+│  - destroy(): 파괴                  │
+│  - done(): 완료 여부                │
+├─────────────────────────────────────┤
+│          Promise Type               │
+│  - get_return_object()              │
+│  - initial_suspend()                │
+│  - final_suspend()                  │
+│  - yield_value() / return_value()   │
+│  - unhandled_exception()            │
+├─────────────────────────────────────┤
+│        Coroutine Frame              │
+│  (힙에 할당된 상태 저장소)           │
+│  - 지역 변수                        │
+│  - 중단 지점                        │
+│  - Promise 객체                     │
+└─────────────────────────────────────┘
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: co_yield와 제너레이터</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">제너레이터 구현과 사용</div>
+                    <pre><code>// 간단한 제너레이터 사용
+Generator&lt;int&gt; range(int start, int end) {
+    for (int i = start; i < end; i++) {
+        co_yield i;
+    }
+}
+
+// 피보나치 제너레이터
+Generator&lt;int&gt; fibonacci(int count) {
+    int a = 0, b = 1;
+    for (int i = 0; i < count; i++) {
+        co_yield a;
+        int next = a + b;
+        a = b;
+        b = next;
+    }
+}
+
+// 무한 시퀀스
+Generator&lt;int&gt; infiniteCounter() {
+    int i = 0;
+    while (true) {
+        co_yield i++;
+    }
+}
+
+// 사용
+void useGenerators() {
+    // range 사용
+    auto gen = range(1, 5);
+    while (gen.next()) {
+        std::cout << gen.getValue() << " ";  // 1 2 3 4
+    }
+
+    // 피보나치
+    for (auto fib = fibonacci(10); fib.next(); ) {
+        std::cout << fib.getValue() << " ";  // 0 1 1 2 3 5 8 13 21 34
+    }
+
+    // 무한 시퀀스 (처음 10개만)
+    auto inf = infiniteCounter();
+    for (int i = 0; i < 10 && inf.next(); i++) {
+        std::cout << inf.getValue() << " ";
+    }
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: co_await와 비동기 작업</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">비동기 Task 구현</div>
+                    <pre><code>// Awaitable 객체
+struct Awaitable {
+    // await_ready(): 즉시 완료 가능?
+    bool await_ready() const noexcept { return false; }
+
+    // await_suspend(): 중단 시 동작
+    void await_suspend(std::coroutine_handle<> h) {
+        // 다른 스레드에서 작업 후 h.resume() 호출
+        std::thread([h]() {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            h.resume();
+        }).detach();
+    }
+
+    // await_resume(): 재개 시 반환값
+    int await_resume() { return 42; }
+};
+
+// Task 타입
+template&lt;typename T&gt;
+class Task {
+public:
+    struct promise_type {
+        T result;
+        std::exception_ptr exception;
+
+        Task get_return_object() {
+            return Task{handle_type::from_promise(*this)};
+        }
+
+        std::suspend_never initial_suspend() { return {}; }
+        std::suspend_always final_suspend() noexcept { return {}; }
+
+        void return_value(T value) { result = value; }
+
+        void unhandled_exception() {
+            exception = std::current_exception();
+        }
+    };
+
+    using handle_type = std::coroutine_handle&lt;promise_type&gt;;
+
+private:
+    handle_type handle;
+
+public:
+    Task(handle_type h) : handle(h) {}
+    ~Task() { if (handle) handle.destroy(); }
+
+    T get() {
+        if (handle.promise().exception) {
+            std::rethrow_exception(handle.promise().exception);
+        }
+        return handle.promise().result;
+    }
+};
+
+// 비동기 함수
+Task&lt;int&gt; asyncComputation() {
+    std::cout << "시작...\n";
+    int result = co_await Awaitable{};  // 1초 대기
+    std::cout << "완료!\n";
+    co_return result * 2;
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 실전 활용</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">게임 코루틴 예시</div>
+                    <pre><code>// 게임 AI 행동 시퀀스
+Task&lt;void&gt; enemyBehavior(Enemy& enemy) {
+    while (enemy.isAlive()) {
+        // 플레이어 탐색
+        co_await patrolUntilPlayerFound(enemy);
+
+        // 플레이어 추적
+        while (enemy.canSeePlayer()) {
+            co_await chasePlayer(enemy);
+
+            if (enemy.inAttackRange()) {
+                co_await attack(enemy);
+                co_await waitFrames(30);  // 공격 후 딜레이
+            }
+        }
+
+        // 플레이어를 놓침
+        co_await searchForPlayer(enemy, 5.0f);  // 5초간 수색
+    }
+}
+
+// 프레임 대기
+Task&lt;void&gt; waitFrames(int frames) {
+    for (int i = 0; i < frames; i++) {
+        co_await NextFrame{};  // 다음 프레임까지 대기
+    }
+}
+
+// 타이머
+Task&lt;void&gt; waitSeconds(float seconds) {
+    auto start = std::chrono::steady_clock::now();
+    while (true) {
+        auto now = std::chrono::steady_clock::now();
+        float elapsed = std::chrono::duration&lt;float&gt;(now - start).count();
+        if (elapsed >= seconds) break;
+        co_await NextFrame{};
+    }
+}
+
+// 연출 시퀀스
+Task&lt;void&gt; cutscene() {
+    co_await fadeOut(1.0f);
+    co_await moveCamera(targetPos, 2.0f);
+    co_await showDialogue("안녕하세요!");
+    co_await waitForInput();
+    co_await fadeIn(1.0f);
+}</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">비동기 I/O</div>
+                    <pre><code>// 비동기 파일 읽기 (개념)
+Task&lt;std::string&gt; readFileAsync(const std::string& path) {
+    auto file = co_await asyncOpen(path);
+    std::string content = co_await asyncRead(file);
+    co_await asyncClose(file);
+    co_return content;
+}
+
+// 여러 작업 동시 실행
+Task&lt;void&gt; processMultipleFiles() {
+    // 순차 실행
+    auto content1 = co_await readFileAsync("file1.txt");
+    auto content2 = co_await readFileAsync("file2.txt");
+
+    // 병렬 실행 (whenAll 구현 필요)
+    auto [c1, c2] = co_await whenAll(
+        readFileAsync("file1.txt"),
+        readFileAsync("file2.txt")
+    );
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 주의사항과 성능</h2>
+            <div class="conversation">
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>항목</th>
+                            <th>일반 함수</th>
+                            <th>코루틴</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>상태 저장</td>
+                            <td>스택</td>
+                            <td>힙 (코루틴 프레임)</td>
+                        </tr>
+                        <tr>
+                            <td>호출 비용</td>
+                            <td>매우 낮음</td>
+                            <td>힙 할당 오버헤드</td>
+                        </tr>
+                        <tr>
+                            <td>중단/재개</td>
+                            <td>불가</td>
+                            <td>가능</td>
+                        </tr>
+                        <tr>
+                            <td>디버깅</td>
+                            <td>쉬움</td>
+                            <td>복잡함</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="code-block">
+                    <div class="code-header">주의사항</div>
+                    <pre><code>// 1. 힙 할당 최소화
+// HALO (Heap Allocation eLision Optimization)로
+// 컴파일러가 일부 할당을 생략할 수 있음
+
+// 2. 코루틴 핸들 관리
+Task&lt;int&gt; dangerous() {
+    int* ptr = new int(42);
+    co_await suspend();  // 여기서 예외 발생 시 누수!
+    delete ptr;
+    co_return *ptr;
+}
+
+// RAII로 해결
+Task&lt;int&gt; safe() {
+    auto ptr = std::make_unique&lt;int&gt;(42);
+    co_await suspend();
+    co_return *ptr;  // 자동 해제
+}
+
+// 3. 참조 캡처 주의
+Task&lt;int&gt; captureRef(int& x) {
+    co_await suspend();
+    return x;  // x가 아직 유효한가?
+}
+
+// 안전: 값으로 전달
+Task&lt;int&gt; captureValue(int x) {
+    co_await suspend();
+    return x;  // OK
+}</code></pre>
+                </div>
+
+                <p class="key-point">코루틴은 비동기 로직을 동기 코드처럼 작성할 수 있게 해주지만, 수명 관리에 주의하세요!</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>코루틴</strong>: 실행을 중단/재개할 수 있는 함수</li>
+                <li><strong>co_yield</strong>: 값을 반환하고 중단 (제너레이터)</li>
+                <li><strong>co_await</strong>: 비동기 작업 대기</li>
+                <li><strong>co_return</strong>: 최종 값 반환</li>
+                <li><strong>구성</strong>: Promise, Handle, Return Object</li>
+                <li><strong>활용</strong>: 제너레이터, 비동기 I/O, 게임 AI 시퀀스</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

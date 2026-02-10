@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Behavior Tree 알고리즘 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>게임 AI는 어떻게 스스로 판단할까?</h1>
+            <p class="subtitle">Behavior Tree로 복잡한 AI 행동 설계하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: FSM에서 Behavior Tree로</h2>
+            <div class="conversation">
+                <div class="q">기존 FSM(상태 기계)의 문제점은 무엇인가요?</div>
+                <div class="a">
+                    <p class="warning">상태가 많아지면 전이(Transition)가 기하급수적으로 증가합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+FSM의 문제: 스파게티 전이
+
+    ┌─────┐      ┌─────┐
+    │Idle │◄────►│Patrol│
+    └──┬──┘      └──┬──┘
+       │    ╲  ╱    │
+       │     ╲╱     │
+       │     ╱╲     │
+       ▼    ╱  ╲    ▼
+    ┌──┴──┐      ┌──┴──┐
+    │Chase│◄────►│Attack│
+    └──┬──┘      └──┬──┘
+       │            │
+       └────────────┘
+
+상태 5개 → 최대 20개 전이
+상태 10개 → 최대 90개 전이!
+                        </pre>
+                    </div>
+
+                    <p class="highlight">Behavior Tree는 행동을 트리 구조로 조직화하여 이 문제를 해결합니다.</p>
+                </div>
+
+                <div class="q">Behavior Tree의 장점은 무엇인가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>FSM</th>
+                                <th>Behavior Tree</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>구조</td>
+                                <td>그래프 (상태 + 전이)</td>
+                                <td>트리 (계층적)</td>
+                            </tr>
+                            <tr>
+                                <td>확장성</td>
+                                <td>복잡도 폭발</td>
+                                <td>모듈식 확장</td>
+                            </tr>
+                            <tr>
+                                <td>재사용</td>
+                                <td>어려움</td>
+                                <td>서브트리 재사용 쉬움</td>
+                            </tr>
+                            <tr>
+                                <td>디버깅</td>
+                                <td>전이 추적 어려움</td>
+                                <td>실행 경로 명확</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Behavior Tree 기본 구조</h2>
+            <div class="conversation">
+                <div class="q">Behavior Tree는 어떤 노드로 구성되나요?</div>
+                <div class="a">
+                    <p><strong>노드 타입:</strong></p>
+                    <ul>
+                        <li><strong>Action (Leaf)</strong>: 실제 행동 실행</li>
+                        <li><strong>Condition (Leaf)</strong>: 조건 검사</li>
+                        <li><strong>Composite</strong>: 자식 노드 제어 (Selector, Sequence)</li>
+                        <li><strong>Decorator</strong>: 자식 노드 수정 (반복, 반전 등)</li>
+                    </ul>
+
+                    <p><strong>반환 상태:</strong></p>
+                    <ul>
+                        <li><strong>Success</strong>: 작업 성공</li>
+                        <li><strong>Failure</strong>: 작업 실패</li>
+                        <li><strong>Running</strong>: 작업 진행 중</li>
+                    </ul>
+                </div>
+
+                <div class="visual-section">
+                    <pre class="diagram">
+Behavior Tree 기본 구조
+
+            [Root]
+               │
+          [Selector]  ← "하나라도 성공하면 성공"
+          /    |    \
+         /     |     \
+    [Seq1]  [Seq2]  [Idle]
+      │       │
+   [Cond]  [Cond]   ← Condition 노드
+      │       │
+   [Act1]  [Act2]   ← Action 노드
+      │
+   [Act3]
+
+Selector: 왼쪽부터 시도, 하나 성공하면 종료
+Sequence: 왼쪽부터 실행, 하나 실패하면 종료
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Composite 노드 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">C++ Behavior Tree 기본 구조</div>
+                    <pre><code>#include &lt;vector&gt;
+#include &lt;memory&gt;
+
+enum class NodeStatus {
+    Success,
+    Failure,
+    Running
+};
+
+// 기본 노드 인터페이스
+class BTNode {
+public:
+    virtual ~BTNode() = default;
+    virtual NodeStatus tick(float deltaTime) = 0;
+    virtual void reset() {}
+};
+
+using BTNodePtr = std::shared_ptr&lt;BTNode&gt;;
+
+// Selector: OR 로직 - 하나라도 성공하면 성공
+class Selector : public BTNode {
+private:
+    std::vector&lt;BTNodePtr&gt; children;
+    int currentChild = 0;
+
+public:
+    void addChild(BTNodePtr child) {
+        children.push_back(child);
+    }
+
+    NodeStatus tick(float deltaTime) override {
+        while (currentChild < children.size()) {
+            NodeStatus status = children[currentChild]->tick(deltaTime);
+
+            if (status == NodeStatus::Running) {
+                return NodeStatus::Running;
+            }
+
+            if (status == NodeStatus::Success) {
+                reset();
+                return NodeStatus::Success;  // 하나 성공 = 전체 성공
+            }
+
+            // Failure: 다음 자식 시도
+            currentChild++;
+        }
+
+        reset();
+        return NodeStatus::Failure;  // 모두 실패
+    }
+
+    void reset() override {
+        currentChild = 0;
+        for (auto& child : children) {
+            child->reset();
+        }
+    }
+};
+
+// Sequence: AND 로직 - 모두 성공해야 성공
+class Sequence : public BTNode {
+private:
+    std::vector&lt;BTNodePtr&gt; children;
+    int currentChild = 0;
+
+public:
+    void addChild(BTNodePtr child) {
+        children.push_back(child);
+    }
+
+    NodeStatus tick(float deltaTime) override {
+        while (currentChild < children.size()) {
+            NodeStatus status = children[currentChild]->tick(deltaTime);
+
+            if (status == NodeStatus::Running) {
+                return NodeStatus::Running;
+            }
+
+            if (status == NodeStatus::Failure) {
+                reset();
+                return NodeStatus::Failure;  // 하나 실패 = 전체 실패
+            }
+
+            // Success: 다음 자식으로
+            currentChild++;
+        }
+
+        reset();
+        return NodeStatus::Success;  // 모두 성공
+    }
+
+    void reset() override {
+        currentChild = 0;
+        for (auto& child : children) {
+            child->reset();
+        }
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Action과 Condition 노드</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">Action과 Condition 예시</div>
+                    <pre><code>// Blackboard: AI 상태 공유 데이터
+class Blackboard {
+public:
+    std::unordered_map&lt;std::string, std::any&gt; data;
+
+    template&lt;typename T&gt;
+    void set(const std::string& key, const T& value) {
+        data[key] = value;
+    }
+
+    template&lt;typename T&gt;
+    T get(const std::string& key) const {
+        return std::any_cast&lt;T&gt;(data.at(key));
+    }
+
+    bool has(const std::string& key) const {
+        return data.find(key) != data.end();
+    }
+};
+
+// Condition: 적이 범위 내에 있는가?
+class IsEnemyInRange : public BTNode {
+private:
+    Blackboard* blackboard;
+    float range;
+
+public:
+    IsEnemyInRange(Blackboard* bb, float r) : blackboard(bb), range(r) {}
+
+    NodeStatus tick(float deltaTime) override {
+        if (!blackboard->has("enemy")) {
+            return NodeStatus::Failure;
+        }
+
+        auto self = blackboard->get&lt;Vec3&gt;("selfPosition");
+        auto enemy = blackboard->get&lt;Vec3&gt;("enemyPosition");
+        float distance = (enemy - self).length();
+
+        return distance <= range ? NodeStatus::Success : NodeStatus::Failure;
+    }
+};
+
+// Action: 적에게 이동
+class MoveToEnemy : public BTNode {
+private:
+    Blackboard* blackboard;
+    float speed;
+    float arrivalThreshold = 1.0f;
+
+public:
+    MoveToEnemy(Blackboard* bb, float s) : blackboard(bb), speed(s) {}
+
+    NodeStatus tick(float deltaTime) override {
+        auto& self = blackboard->get&lt;Vec3&gt;("selfPosition");
+        auto enemy = blackboard->get&lt;Vec3&gt;("enemyPosition");
+
+        Vec3 direction = (enemy - self).normalized();
+        self = self + direction * speed * deltaTime;
+
+        float distance = (enemy - self).length();
+        if (distance <= arrivalThreshold) {
+            return NodeStatus::Success;  // 도착
+        }
+
+        return NodeStatus::Running;  // 이동 중
+    }
+};
+
+// Action: 공격
+class AttackEnemy : public BTNode {
+private:
+    Blackboard* blackboard;
+    float attackCooldown;
+    float timer = 0;
+
+public:
+    AttackEnemy(Blackboard* bb, float cooldown)
+        : blackboard(bb), attackCooldown(cooldown) {}
+
+    NodeStatus tick(float deltaTime) override {
+        timer += deltaTime;
+
+        if (timer >= attackCooldown) {
+            // 공격 실행
+            auto enemy = blackboard->get&lt;Entity*&gt;("enemy");
+            enemy->takeDamage(10);
+
+            timer = 0;
+            return NodeStatus::Success;
+        }
+
+        return NodeStatus::Running;  // 쿨다운 중
+    }
+
+    void reset() override {
+        timer = 0;
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Decorator 노드</h2>
+            <div class="conversation">
+                <div class="q">Decorator는 어떤 역할을 하나요?</div>
+                <div class="a">
+                    <p class="highlight">자식 노드의 결과를 수정하거나 실행 방식을 변경합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Decorator 구현</div>
+                        <pre><code>// Inverter: 결과 반전 (Success ↔ Failure)
+class Inverter : public BTNode {
+private:
+    BTNodePtr child;
+
+public:
+    Inverter(BTNodePtr c) : child(c) {}
+
+    NodeStatus tick(float deltaTime) override {
+        NodeStatus status = child->tick(deltaTime);
+
+        if (status == NodeStatus::Success) return NodeStatus::Failure;
+        if (status == NodeStatus::Failure) return NodeStatus::Success;
+        return NodeStatus::Running;
+    }
+};
+
+// Repeater: N번 반복
+class Repeater : public BTNode {
+private:
+    BTNodePtr child;
+    int repeatCount;
+    int currentCount = 0;
+
+public:
+    Repeater(BTNodePtr c, int count) : child(c), repeatCount(count) {}
+
+    NodeStatus tick(float deltaTime) override {
+        if (currentCount >= repeatCount) {
+            reset();
+            return NodeStatus::Success;
+        }
+
+        NodeStatus status = child->tick(deltaTime);
+
+        if (status == NodeStatus::Success) {
+            currentCount++;
+            child->reset();
+        } else if (status == NodeStatus::Failure) {
+            reset();
+            return NodeStatus::Failure;
+        }
+
+        return NodeStatus::Running;
+    }
+
+    void reset() override {
+        currentCount = 0;
+        child->reset();
+    }
+};
+
+// UntilFail: 자식이 실패할 때까지 반복
+class UntilFail : public BTNode {
+private:
+    BTNodePtr child;
+
+public:
+    UntilFail(BTNodePtr c) : child(c) {}
+
+    NodeStatus tick(float deltaTime) override {
+        NodeStatus status = child->tick(deltaTime);
+
+        if (status == NodeStatus::Failure) {
+            return NodeStatus::Success;  // 실패하면 성공 반환
+        }
+
+        if (status == NodeStatus::Success) {
+            child->reset();  // 성공하면 다시 실행
+        }
+
+        return NodeStatus::Running;
+    }
+};
+
+// Cooldown: 쿨다운 적용
+class Cooldown : public BTNode {
+private:
+    BTNodePtr child;
+    float cooldownTime;
+    float timer = 0;
+    bool onCooldown = false;
+
+public:
+    Cooldown(BTNodePtr c, float cd) : child(c), cooldownTime(cd) {}
+
+    NodeStatus tick(float deltaTime) override {
+        if (onCooldown) {
+            timer += deltaTime;
+            if (timer >= cooldownTime) {
+                timer = 0;
+                onCooldown = false;
+            } else {
+                return NodeStatus::Failure;  // 쿨다운 중
+            }
+        }
+
+        NodeStatus status = child->tick(deltaTime);
+
+        if (status != NodeStatus::Running) {
+            onCooldown = true;
+        }
+
+        return status;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 AI 트리 구성</h2>
+            <div class="conversation">
+                <div class="q">실제 게임 AI는 어떻게 구성하나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+적 AI Behavior Tree 예시
+
+                    [Root Selector]
+                    /      |       \
+                   /       |        \
+           [Combat]   [Investigate]  [Patrol]
+               │           │            │
+          [Selector]  [Sequence]   [Sequence]
+          /    \           │            │
+         /      \     [HasTarget]  [GetNextPoint]
+   [Attack]  [Chase]      │            │
+       │        │    [MoveTo       [MoveTo
+       │        │     Target]       Point]
+  [Sequence] [Sequence]
+      │         │
+  [InRange]  [SeeEnemy]
+      │         │
+  [DoAttack] [MoveToEnemy]
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">AI 트리 빌더</div>
+                        <pre><code>class EnemyAI {
+private:
+    BTNodePtr rootNode;
+    Blackboard blackboard;
+
+public:
+    void buildBehaviorTree() {
+        // Combat 서브트리
+        auto attack = std::make_shared&lt;Sequence&gt;();
+        attack->addChild(std::make_shared&lt;IsEnemyInRange&gt;(&blackboard, 2.0f));
+        attack->addChild(std::make_shared&lt;Cooldown&gt;(
+            std::make_shared&lt;AttackEnemy&gt;(&blackboard, 0.5f), 1.0f));
+
+        auto chase = std::make_shared&lt;Sequence&gt;();
+        chase->addChild(std::make_shared&lt;IsEnemyVisible&gt;(&blackboard));
+        chase->addChild(std::make_shared&lt;MoveToEnemy&gt;(&blackboard, 5.0f));
+
+        auto combat = std::make_shared&lt;Selector&gt;();
+        combat->addChild(attack);
+        combat->addChild(chase);
+
+        // Investigate 서브트리
+        auto investigate = std::make_shared&lt;Sequence&gt;();
+        investigate->addChild(std::make_shared&lt;HasLastKnownPosition&gt;(&blackboard));
+        investigate->addChild(std::make_shared&lt;MoveToPosition&gt;(&blackboard, "lastKnownPos", 3.0f));
+        investigate->addChild(std::make_shared&lt;LookAround&gt;(&blackboard, 2.0f));
+
+        // Patrol 서브트리
+        auto patrol = std::make_shared&lt;Sequence&gt;();
+        patrol->addChild(std::make_shared&lt;GetNextPatrolPoint&gt;(&blackboard));
+        patrol->addChild(std::make_shared&lt;MoveToPosition&gt;(&blackboard, "patrolTarget", 2.0f));
+        patrol->addChild(std::make_shared&lt;Wait&gt;(2.0f));
+
+        // 루트
+        auto root = std::make_shared&lt;Selector&gt;();
+        root->addChild(combat);
+        root->addChild(investigate);
+        root->addChild(std::make_shared&lt;UntilFail&gt;(patrol));
+
+        rootNode = root;
+    }
+
+    void update(float deltaTime) {
+        // 센서 데이터 업데이트
+        updateBlackboard();
+
+        // 트리 실행
+        rootNode->tick(deltaTime);
+    }
+
+    void updateBlackboard() {
+        blackboard.set("selfPosition", getPosition());
+
+        Entity* nearestEnemy = findNearestEnemy();
+        if (nearestEnemy && canSee(nearestEnemy)) {
+            blackboard.set("enemy", nearestEnemy);
+            blackboard.set("enemyPosition", nearestEnemy->getPosition());
+            blackboard.set("lastKnownPos", nearestEnemy->getPosition());
+        } else {
+            blackboard.data.erase("enemy");
+            blackboard.data.erase("enemyPosition");
+        }
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="key-point">Unreal Engine의 Behavior Tree는 이 구조를 비주얼 에디터로 편집할 수 있게 해줍니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Behavior Tree</strong>: 계층적 트리 구조로 AI 행동 조직화</li>
+                <li><strong>Selector</strong>: OR 로직, 하나라도 성공하면 성공</li>
+                <li><strong>Sequence</strong>: AND 로직, 모두 성공해야 성공</li>
+                <li><strong>Decorator</strong>: 자식 노드의 결과/실행 방식 수정</li>
+                <li><strong>Blackboard</strong>: AI 상태 데이터 공유 저장소</li>
+                <li><strong>장점</strong>: 모듈성, 재사용성, 디버깅 용이</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

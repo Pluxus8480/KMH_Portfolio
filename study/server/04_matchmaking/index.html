@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>매치메이킹 시스템 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../server.html" class="back-link">← 목록으로</a>
+            <h1>왜 나만 매번 고수를 만나지?</h1>
+            <p class="subtitle">공정한 게임을 만드는 매치메이킹 시스템 설계</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 매치메이킹의 목표</h2>
+            <div class="conversation">
+                <div class="q">매치메이킹의 목표는 무엇인가요?</div>
+                <div class="a">
+                    <p>크게 세 가지 상충되는 목표가 있습니다:</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+매치메이킹의 트릴레마:
+
+              공정성 (Fairness)
+                   /\
+                  /  \
+                 /    \
+                /      \
+               /________\
+       대기 시간        게임 품질
+      (Wait Time)    (Match Quality)
+
+세 가지를 모두 만족시킬 수 없음!
+- 공정성 ↑ + 품질 ↑ → 대기 시간 ↑
+- 대기 시간 ↓ → 공정성 ↓ or 품질 ↓
+                        </pre>
+                    </div>
+                    <p class="highlight">좋은 매치메이킹은 이 세 요소의 <strong>균형점</strong>을 찾는 것입니다.</p>
+                </div>
+
+                <div class="q">구체적으로 어떤 요소들을 고려해야 하나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>카테고리</th>
+                                <th>고려 요소</th>
+                                <th>영향</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td rowspan="3">실력</td>
+                                <td>MMR/Elo 점수</td>
+                                <td>기본 매칭 기준</td>
+                            </tr>
+                            <tr>
+                                <td>신뢰도(게임 수)</td>
+                                <td>점수 정확도 반영</td>
+                            </tr>
+                            <tr>
+                                <td>최근 성적</td>
+                                <td>실력 변화 반영</td>
+                            </tr>
+                            <tr>
+                                <td rowspan="2">네트워크</td>
+                                <td>지역/핑</td>
+                                <td>게임 품질</td>
+                            </tr>
+                            <tr>
+                                <td>서버 위치</td>
+                                <td>공정한 핑 배분</td>
+                            </tr>
+                            <tr>
+                                <td rowspan="2">소셜</td>
+                                <td>파티 크기</td>
+                                <td>팀 밸런스</td>
+                            </tr>
+                            <tr>
+                                <td>블랙리스트</td>
+                                <td>불쾌한 경험 방지</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 실력 평가 시스템 (Rating Systems)</h2>
+            <div class="conversation">
+                <div class="q">Elo 시스템은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>체스에서 시작된 시스템으로, 1:1 대결의 결과를 바탕으로 점수를 조정합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Elo Rating 계산</div>
+                        <pre><code>class EloRating {
+    static const float K_FACTOR = 32.0f;  // 변동 폭
+
+public:
+    // 기대 승률 계산
+    static float ExpectedScore(float ratingA, float ratingB) {
+        return 1.0f / (1.0f + pow(10.0f, (ratingB - ratingA) / 400.0f));
+    }
+
+    // 레이팅 업데이트
+    static void UpdateRatings(Player& winner, Player& loser) {
+        float expectedWin = ExpectedScore(winner.rating, loser.rating);
+        float expectedLose = ExpectedScore(loser.rating, winner.rating);
+
+        // 승자: 기대 이상이면 많이 오름, 기대대로면 조금 오름
+        winner.rating += K_FACTOR * (1.0f - expectedWin);
+
+        // 패자: 기대 이상 졌으면 적게 내림, 기대대로면 많이 내림
+        loser.rating += K_FACTOR * (0.0f - expectedLose);
+    }
+};
+
+// 예시:
+// Player A (1600) vs Player B (1400)
+// A의 기대 승률 = 1 / (1 + 10^(-200/400)) = 0.76 (76%)
+// A가 이기면: +32 * (1 - 0.76) = +7.68
+// A가 지면: +32 * (0 - 0.76) = -24.32 (대이변!)</code></pre>
+                    </div>
+                    <p class="key-point">강자가 약자를 이기면 점수 변화가 적고, 약자가 이기면 큰 변화가 생깁니다.</p>
+                </div>
+
+                <div class="q">팀 게임에서는 어떻게 적용하나요?</div>
+                <div class="a">
+                    <p>팀 전체를 하나의 플레이어로 보거나, 개인 기여도를 반영합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">팀 Elo 변형</div>
+                        <pre><code>class TeamElo {
+public:
+    static void UpdateTeamRatings(Team& winners, Team& losers) {
+        // 팀 평균 레이팅
+        float winnerAvg = CalculateTeamRating(winners);
+        float loserAvg = CalculateTeamRating(losers);
+
+        float expectedWin = EloRating::ExpectedScore(winnerAvg, loserAvg);
+
+        for (Player& p : winners.members) {
+            // 개인 기여도 가중치 (KDA, 데미지 등)
+            float contribution = CalculateContribution(p, winners);
+
+            // 기본 K값에 기여도 반영
+            float personalK = K_FACTOR * contribution;
+
+            p.rating += personalK * (1.0f - expectedWin);
+        }
+
+        for (Player& p : losers.members) {
+            float contribution = CalculateContribution(p, losers);
+            float personalK = K_FACTOR * contribution;
+
+            p.rating += personalK * (0.0f - (1.0f - expectedWin));
+        }
+    }
+
+private:
+    static float CalculateContribution(const Player& p, const Team& team) {
+        // 예: 팀 내 킬 비중, 데미지 비중 등
+        float killShare = (float)p.kills / team.totalKills;
+        float damageShare = (float)p.damage / team.totalDamage;
+
+        // 기여도 = (킬 비중 + 데미지 비중) / 2, 최소 0.5 보장
+        return std::max(0.5f, (killShare + damageShare) / 2.0f * team.size);
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">Glicko 시스템은 뭐가 다른가요?</div>
+                <div class="a">
+                    <p>Glicko는 레이팅의 <strong>불확실성(RD, Rating Deviation)</strong>을 함께 관리합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+Elo vs Glicko 비교:
+
+Elo: 점수만 있음
+┌─────────────────────────────────────────┐
+│  Player A: 1500                         │
+│  Player B: 1500                         │
+│                                         │
+│  둘 다 1500이면 실력이 같은 건가?        │
+│  A는 1000게임, B는 10게임인데?           │
+└─────────────────────────────────────────┘
+
+Glicko: 점수 + 불확실성
+┌─────────────────────────────────────────┐
+│  Player A: 1500 ± 50  (RD = 50)         │
+│  │████████████████│                      │
+│  1450          1550                      │
+│  "높은 확신" - 1000게임 플레이            │
+│                                         │
+│  Player B: 1500 ± 200 (RD = 200)        │
+│  │████████████████████████████████│      │
+│  1300                          1700     │
+│  "낮은 확신" - 10게임 플레이              │
+└─────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">Glicko-2 핵심 개념</div>
+                        <pre><code>struct GlickoRating {
+    float rating;     // 레이팅 (기본값: 1500)
+    float rd;         // Rating Deviation, 불확실성 (기본값: 350)
+    float volatility; // 변동성 (기본값: 0.06)
+};
+
+class Glicko2 {
+public:
+    // RD는 시간이 지나면 증가 (오래 안 하면 불확실해짐)
+    static void DecayRD(GlickoRating& rating, int daysSinceLastGame) {
+        float c = 34.6f;  // 불확실성 증가 상수
+        rating.rd = std::min(350.0f,
+            sqrt(rating.rd * rating.rd + c * c * daysSinceLastGame));
+    }
+
+    // 매칭에서 RD 활용
+    static float GetMatchQuality(const GlickoRating& a, const GlickoRating& b) {
+        // 불확실성이 높으면 매치 품질이 낮음
+        float rdPenalty = (a.rd + b.rd) / 2.0f / 350.0f;
+
+        // 레이팅 차이 페널티
+        float ratingDiff = abs(a.rating - b.rating);
+        float ratingPenalty = ratingDiff / 400.0f;
+
+        return 1.0f - rdPenalty * 0.3f - ratingPenalty * 0.7f;
+    }
+};</code></pre>
+                    </div>
+                    <p class="highlight">Glicko는 신규 유저, 휴면 유저를 더 정확하게 매칭할 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 매치메이커 구현</h2>
+            <div class="conversation">
+                <div class="q">실제 매치메이커는 어떻게 구현하나요?</div>
+                <div class="a">
+                    <p>대기열(Queue)에서 플레이어를 꺼내 최적의 조합을 찾습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">기본 매치메이커</div>
+                        <pre><code>class Matchmaker {
+    struct QueueEntry {
+        PlayerID playerID;
+        float rating;
+        float rd;
+        float queueTime;      // 대기 시간
+        Region preferredRegion;
+        int partySize;
+    };
+
+    std::vector<QueueEntry> queue;
+    const int TEAM_SIZE = 5;
+    const int MATCH_SIZE = TEAM_SIZE * 2;
+
+public:
+    void AddToQueue(const Player& player) {
+        queue.push_back({
+            player.id,
+            player.rating,
+            player.rd,
+            0.0f,
+            player.region,
+            player.partySize
+        });
+    }
+
+    std::optional<Match> TryCreateMatch() {
+        if (queue.size() < MATCH_SIZE) return std::nullopt;
+
+        // 대기 시간 업데이트
+        for (auto& entry : queue) {
+            entry.queueTime += deltaTime;
+        }
+
+        // 가장 오래 기다린 플레이어 기준으로 매치 시도
+        std::sort(queue.begin(), queue.end(),
+            [](const auto& a, const auto& b) {
+                return a.queueTime > b.queueTime;
+            });
+
+        QueueEntry& anchor = queue[0];
+
+        // 적합한 플레이어 찾기
+        std::vector<QueueEntry*> candidates;
+        float searchRange = CalculateSearchRange(anchor);
+
+        for (auto& entry : queue) {
+            if (&entry == &anchor) continue;
+
+            if (IsCompatible(anchor, entry, searchRange)) {
+                candidates.push_back(&entry);
+            }
+        }
+
+        if (candidates.size() >= MATCH_SIZE - 1) {
+            return CreateMatch(anchor, candidates);
+        }
+
+        return std::nullopt;
+    }
+
+private:
+    float CalculateSearchRange(const QueueEntry& entry) {
+        // 대기 시간이 길어질수록 검색 범위 확장
+        float baseRange = 100.0f;  // 기본 ±100
+        float expansion = entry.queueTime * 10.0f;  // 초당 10씩 확장
+        float maxRange = 500.0f;   // 최대 ±500
+
+        // RD가 높으면 범위 추가 확장
+        float rdBonus = (entry.rd / 350.0f) * 100.0f;
+
+        return std::min(maxRange, baseRange + expansion + rdBonus);
+    }
+
+    bool IsCompatible(const QueueEntry& a, const QueueEntry& b,
+                      float searchRange) {
+        // 레이팅 차이 체크
+        if (abs(a.rating - b.rating) > searchRange) return false;
+
+        // 지역 체크 (같은 지역 선호)
+        if (a.preferredRegion != b.preferredRegion) {
+            // 대기가 길면 다른 지역도 허용
+            if (a.queueTime < 60.0f) return false;
+        }
+
+        return true;
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">팀 밸런싱은 어떻게 하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">팀 밸런싱 알고리즘</div>
+                        <pre><code>class TeamBalancer {
+public:
+    std::pair<Team, Team> BalanceTeams(std::vector<Player>& players) {
+        // 레이팅 순 정렬
+        std::sort(players.begin(), players.end(),
+            [](const auto& a, const auto& b) {
+                return a.rating > b.rating;
+            });
+
+        Team teamA, teamB;
+
+        // 스네이크 드래프트 방식
+        // 1, 4, 5, 8, 9 → Team A
+        // 2, 3, 6, 7, 10 → Team B
+        for (int i = 0; i < players.size(); i++) {
+            int round = i / 2;
+            bool isOddRound = (round % 2 == 1);
+
+            if ((i % 2 == 0) != isOddRound) {
+                teamA.Add(players[i]);
+            } else {
+                teamB.Add(players[i]);
+            }
+        }
+
+        // 미세 조정 (레이팅 합 차이가 크면 스왑)
+        OptimizeBalance(teamA, teamB);
+
+        return {teamA, teamB};
+    }
+
+private:
+    void OptimizeBalance(Team& a, Team& b) {
+        float diff = abs(a.AverageRating() - b.AverageRating());
+
+        // 차이가 50 이상이면 스왑 시도
+        while (diff > 50.0f) {
+            bool improved = false;
+
+            for (int i = 0; i < a.size(); i++) {
+                for (int j = 0; j < b.size(); j++) {
+                    // 스왑했을 때 더 균형잡히면 스왑
+                    float newDiffA = a.RatingWithout(i) + b.players[j].rating;
+                    float newDiffB = b.RatingWithout(j) + a.players[i].rating;
+                    float newDiff = abs(newDiffA / a.size() - newDiffB / b.size());
+
+                    if (newDiff < diff) {
+                        std::swap(a.players[i], b.players[j]);
+                        diff = newDiff;
+                        improved = true;
+                        break;
+                    }
+                }
+                if (improved) break;
+            }
+
+            if (!improved) break;
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: SBMM과 논쟁</h2>
+            <div class="conversation">
+                <div class="q">SBMM(Skill-Based Matchmaking)이 논란이 되는 이유는?</div>
+                <div class="a">
+                    <p>강한 SBMM은 모든 게임을 "땀나는 경기"로 만듭니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+SBMM 강도에 따른 경험:
+
+약한 SBMM (캐주얼):
+┌────────────────────────────────────────┐
+│ 쉬운 게임 ████████                      │
+│ 보통 게임 ██████████████████            │
+│ 어려운 게임 ██████                       │
+│                                        │
+│ → 다양한 경험, 가끔 스트레스              │
+└────────────────────────────────────────┘
+
+강한 SBMM (경쟁):
+┌────────────────────────────────────────┐
+│ 쉬운 게임 ██                            │
+│ 보통 게임 ████████████████████████████  │
+│ 어려운 게임 ██                           │
+│                                        │
+│ → 항상 비슷한 난이도, 매번 집중 필요       │
+└────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                    <p class="highlight">고수 플레이어들은 "편하게 즐기고 싶은데 항상 고수만 만난다"고 불만을 표합니다.</p>
+                </div>
+
+                <div class="q">좋은 SBMM 설계란 무엇인가요?</div>
+                <div class="a">
+                    <p>플레이어 유형과 모드에 따라 다르게 적용해야 합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">적응형 SBMM</div>
+                        <pre><code>class AdaptiveSBMM {
+    // 모드별 매칭 엄격도
+    struct ModeConfig {
+        float strictness;     // 0.0 (느슨) ~ 1.0 (엄격)
+        bool useRecentPerf;   // 최근 성적 반영 여부
+        float newPlayerProtection;  // 신규 유저 보호 기간
+    };
+
+    std::map<GameMode, ModeConfig> modeConfigs = {
+        { GameMode::Casual,     { 0.3f, true,  20 } },  // 느슨, 최근 성적 반영
+        { GameMode::Ranked,     { 0.9f, false, 10 } },  // 엄격, MMR만 사용
+        { GameMode::Tournament, { 1.0f, false, 0 } },   // 최대 엄격
+    };
+
+public:
+    float CalculateEffectiveRating(const Player& p, GameMode mode) {
+        const auto& config = modeConfigs[mode];
+        float baseRating = p.mmr;
+
+        // 최근 성적 반영 (최근 10게임)
+        if (config.useRecentPerf) {
+            float recentWinRate = p.GetRecentWinRate(10);
+            float adjustment = (recentWinRate - 0.5f) * 200.0f;
+
+            // 연승 시 상향, 연패 시 하향
+            baseRating += adjustment * config.strictness;
+        }
+
+        // 신규 유저 보호
+        if (p.gamesPlayed < config.newPlayerProtection) {
+            float protectionFactor = 1.0f - (p.gamesPlayed /
+                                             config.newPlayerProtection);
+            // 신규 유저는 약간 낮은 상대와 매칭
+            baseRating -= 100.0f * protectionFactor;
+        }
+
+        return baseRating;
+    }
+
+    float GetSearchRange(const Player& p, GameMode mode, float waitTime) {
+        const auto& config = modeConfigs[mode];
+
+        // 기본 범위
+        float baseRange = 200.0f * (1.0f - config.strictness) + 50.0f;
+
+        // 대기 시간에 따른 확장
+        float timeExpansion = waitTime * (10.0f * (1.0f - config.strictness));
+
+        return baseRange + timeExpansion;
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">Engagement Optimized Matchmaking (EOMM)이란?</div>
+                <div class="a">
+                    <p>플레이어 이탈을 방지하기 위해 의도적으로 승/패를 조절하는 시스템입니다.</p>
+
+                    <div class="warning">
+                        <strong>⚠️ EOMM의 논란</strong>
+                        <p>일부 게임은 연패 후 의도적으로 쉬운 상대를, 연승 후 어려운 상대를 매칭합니다.
+                        이는 "게임이 결과를 조작한다"는 비판을 받습니다.</p>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>접근법</th>
+                                <th>목표</th>
+                                <th>비판</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>순수 SBMM</td>
+                                <td>공정한 매치</td>
+                                <td>항상 힘든 게임</td>
+                            </tr>
+                            <tr>
+                                <td>EOMM</td>
+                                <td>플레이 시간 최대화</td>
+                                <td>결과 조작 의혹</td>
+                            </tr>
+                            <tr>
+                                <td>하이브리드</td>
+                                <td>균형</td>
+                                <td>투명성 부족</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 파티 매칭과 특수 케이스</h2>
+            <div class="conversation">
+                <div class="q">파티(그룹)가 있을 때 어떻게 매칭하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">파티 레이팅 계산</div>
+                        <pre><code>class PartyRating {
+public:
+    static float CalculatePartyRating(const std::vector<Player>& party) {
+        if (party.size() == 1) {
+            return party[0].rating;
+        }
+
+        float avgRating = 0;
+        float maxRating = 0;
+
+        for (const auto& p : party) {
+            avgRating += p.rating;
+            maxRating = std::max(maxRating, p.rating);
+        }
+        avgRating /= party.size();
+
+        // 파티 보너스: 협동 이점 반영
+        // 2인: +50, 3인: +75, 4인: +90, 5인: +100
+        float partyBonus = 50.0f * log2(party.size());
+
+        // 최고 레이팅 가중치 (부스팅 방지)
+        // 레이팅 차이가 클수록 최고 레이팅 비중 증가
+        float ratingSpread = maxRating - (avgRating - maxRating / party.size() *
+                                          (party.size() - 1));
+        float maxWeight = std::min(0.5f, ratingSpread / 1000.0f);
+
+        float effectiveRating = avgRating * (1.0f - maxWeight) +
+                               maxRating * maxWeight + partyBonus;
+
+        return effectiveRating;
+    }
+};
+
+// 예시:
+// 솔로 플레이어: 1500
+// 2인 파티 (1500, 1500): 1500 + 50 = 1550
+// 2인 파티 (2000, 1000): avg=1500, max비중↑ → ~1700
+// → 부스팅 파티는 더 높은 상대와 매칭</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">스머프(고수의 새 계정) 문제는 어떻게 해결하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">스머프 탐지 및 빠른 레이팅 조정</div>
+                        <pre><code>class SmurfDetection {
+public:
+    struct PerformanceMetrics {
+        float winRate;
+        float kda;
+        float accuracy;
+        float apm;  // Actions Per Minute
+        float reactionTime;
+    };
+
+    bool IsPotentialSmurf(const Player& p) {
+        if (p.gamesPlayed > 50) return false;  // 충분히 플레이함
+
+        PerformanceMetrics metrics = GetRecentMetrics(p, 10);
+
+        // 신규 계정인데 성적이 비정상적으로 좋음
+        bool highWinRate = metrics.winRate > 0.75f;
+        bool highKDA = metrics.kda > 3.0f;
+        bool advancedMechanics = metrics.apm > GetAverageAPM(p.rating) * 1.5f;
+
+        int suspicionScore = 0;
+        if (highWinRate) suspicionScore += 2;
+        if (highKDA) suspicionScore += 2;
+        if (advancedMechanics) suspicionScore += 1;
+
+        return suspicionScore >= 3;
+    }
+
+    float GetAcceleratedK(const Player& p) {
+        // 스머프 의심 시 K factor 증가 (빠른 레이팅 상승)
+        if (IsPotentialSmurf(p)) {
+            return K_FACTOR * 3.0f;  // 3배 빠른 조정
+        }
+
+        // 일반 신규 유저도 초반엔 빠르게
+        if (p.gamesPlayed < 20) {
+            return K_FACTOR * 2.0f;
+        }
+
+        return K_FACTOR;
+    }
+};</code></pre>
+                    </div>
+                    <p class="key-point">빠른 레이팅 조정으로 스머프가 곧 원래 실력대로 매칭되게 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 모니터링과 개선</h2>
+            <div class="conversation">
+                <div class="q">매치메이킹 품질을 어떻게 측정하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">매치메이킹 메트릭</div>
+                        <pre><code>class MatchmakingMetrics {
+public:
+    struct MatchQualityReport {
+        // 대기 시간
+        float avgWaitTime;
+        float p95WaitTime;  // 95% 이하가 이 시간 내 매칭
+
+        // 밸런스
+        float avgRatingDiff;     // 팀 간 평균 레이팅 차이
+        float avgPredictedWinRate;  // 예측 승률 (0.5에 가까울수록 좋음)
+
+        // 결과
+        float actualWinRateVariance;  // 실제 승률 분산
+        float stompsRate;  // 일방적 게임 비율 (15분 내 서렌 등)
+
+        // 플레이어 경험
+        float rematchRate;   // 최근 상대와 재매칭 비율
+        float partyFairness; // 파티 vs 솔로 승률 균형
+    };
+
+    void LogMatch(const Match& match) {
+        float ratingDiff = abs(match.teamA.AvgRating() -
+                              match.teamB.AvgRating());
+        float predictedWinRate = CalculatePredictedWinRate(match);
+
+        metrics.totalMatches++;
+        metrics.totalRatingDiff += ratingDiff;
+        metrics.totalWaitTime += match.avgWaitTime;
+
+        // 일방적 게임 체크
+        if (match.duration < 15 * 60 && match.scoreDiff > 20) {
+            metrics.stomps++;
+        }
+
+        // 시간대별, 레이팅 구간별 분석
+        RecordByTimeOfDay(match);
+        RecordByRatingBracket(match);
+    }
+
+    void GenerateReport() {
+        MatchQualityReport report;
+        report.avgWaitTime = metrics.totalWaitTime / metrics.totalMatches;
+        report.avgRatingDiff = metrics.totalRatingDiff / metrics.totalMatches;
+        report.stompsRate = (float)metrics.stomps / metrics.totalMatches;
+
+        // 목표치와 비교
+        if (report.avgWaitTime > TARGET_WAIT_TIME) {
+            Alert("대기 시간 초과: " + std::to_string(report.avgWaitTime));
+        }
+        if (report.stompsRate > 0.1f) {
+            Alert("일방적 게임 비율 높음: " + std::to_string(report.stompsRate));
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>트릴레마</strong>: 공정성, 대기 시간, 매치 품질 중 선택 필요</li>
+                <li><strong>Elo</strong>: 1:1 대전 기반, 기대 승률과 실제 결과 비교로 점수 조정</li>
+                <li><strong>Glicko</strong>: 불확실성(RD)을 함께 관리, 신규/휴면 유저에 적합</li>
+                <li><strong>대기 시간</strong>: 길어질수록 검색 범위 확장</li>
+                <li><strong>파티 매칭</strong>: 파티 보너스 + 최고 레이팅 가중치로 부스팅 방지</li>
+                <li><strong>스머프 대응</strong>: 빠른 레이팅 조정(높은 K factor)으로 원래 실력대 매칭</li>
+                <li><strong>모니터링</strong>: 대기 시간, 밸런스, stomp 비율 등 지속 측정</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

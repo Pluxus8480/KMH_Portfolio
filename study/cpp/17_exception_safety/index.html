@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>예외 안전성 (Exception Safety) | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>예외가 발생해도 안전한 코드?</h1>
+            <p class="subtitle">Exception Safety 보장 수준과 구현 기법</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 예외 안전성이란?</h2>
+            <div class="conversation">
+                <div class="q">왜 예외 안전성이 중요한가요?</div>
+                <div class="a">
+                    <p class="warning">예외 발생 시 리소스 누수, 데이터 손상, 불변성 위반이 발생할 수 있습니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">예외 안전하지 않은 코드</div>
+                        <pre><code>class UnsafeVector {
+    int* data;
+    size_t size;
+    size_t capacity;
+
+public:
+    void push_back(int value) {
+        if (size == capacity) {
+            int* newData = new int[capacity * 2];  // (1)
+            for (size_t i = 0; i < size; i++) {
+                newData[i] = data[i];  // (2) 예외 발생 가능!
+            }
+            delete[] data;  // (3) 실행 안 됨!
+            data = newData;
+            capacity *= 2;
+        }
+        data[size++] = value;  // (4)
+    }
+};
+
+// 문제:
+// (2)에서 복사 생성자가 예외를 던지면
+// (1)에서 할당한 newData 누수!
+// 기존 data는 남아있지만 상태가 불확실</code></pre>
+                    </div>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>은행 송금 중 정전이 나도 돈이 사라지면 안 됩니다. 예외 안전성은 "중간에 뭔가 잘못돼도 최소한 이것만은 보장한다"입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 예외 안전성 보장 수준</h2>
+            <div class="conversation">
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>수준</th>
+                            <th>보장 내용</th>
+                            <th>예시</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>No-throw</td>
+                            <td>절대 예외 없음</td>
+                            <td>소멸자, swap</td>
+                        </tr>
+                        <tr>
+                            <td>Strong</td>
+                            <td>실패 시 원래 상태</td>
+                            <td>트랜잭션</td>
+                        </tr>
+                        <tr>
+                            <td>Basic</td>
+                            <td>누수 없음, 유효 상태</td>
+                            <td>대부분 함수</td>
+                        </tr>
+                        <tr>
+                            <td>No guarantee</td>
+                            <td>보장 없음</td>
+                            <td>피해야 함!</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="code-block">
+                    <div class="code-header">각 수준 예시</div>
+                    <pre><code>// No-throw 보장 (noexcept)
+void swap(Widget& a, Widget& b) noexcept {
+    // 포인터 교환만 - 절대 실패 안 함
+    std::swap(a.data_, b.data_);
+}
+
+// Strong 보장 (원자적 연산처럼)
+class Account {
+public:
+    void transfer(Account& to, int amount) {
+        // Copy-and-Swap 패턴
+        int myBalance = balance_;
+        int theirBalance = to.balance_;
+
+        if (myBalance < amount) throw InsufficientFunds{};
+
+        myBalance -= amount;
+        theirBalance += amount;
+
+        // 모든 연산 성공 후에만 커밋
+        balance_ = myBalance;
+        to.balance_ = theirBalance;
+    }
+};
+
+// Basic 보장
+class Container {
+public:
+    void add(Element e) {
+        elements_.push_back(std::move(e));
+        // 실패해도: 누수 없음, 컨테이너는 유효
+        // 하지만: 원소가 추가됐는지 아닌지는 불확실
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: RAII로 기본 보장</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">RAII 적용</div>
+                    <pre><code>// 문제 코드
+void unsafeProcess() {
+    Resource* r1 = acquire();
+    Resource* r2 = acquire();  // 예외 시 r1 누수!
+
+    doWork(r1, r2);  // 예외 시 둘 다 누수!
+
+    release(r1);
+    release(r2);
+}
+
+// RAII로 해결
+void safeProcess() {
+    auto r1 = std::make_unique&lt;Resource&gt;();
+    auto r2 = std::make_unique&lt;Resource&gt;();  // 예외 시 r1 자동 해제!
+
+    doWork(r1.get(), r2.get());  // 예외 시 둘 다 자동 해제!
+
+    // 명시적 해제 불필요!
+}
+
+// 락 RAII
+void safeMultithreaded() {
+    std::lock_guard&lt;std::mutex&gt; lock(mutex);
+    // 예외가 발생해도 락 자동 해제!
+
+    doWork();
+}
+
+// 파일 RAII
+void safeFileIO() {
+    std::ofstream file("output.txt");
+    // 예외가 발생해도 파일 자동 닫힘!
+
+    file << data;
+}</code></pre>
+                </div>
+
+                <p class="key-point">RAII만 제대로 적용해도 Basic 보장은 거의 달성됩니다!</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Copy-and-Swap으로 Strong 보장</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">Copy-and-Swap 이디엄</div>
+                    <pre><code>class Widget {
+    int* data;
+    size_t size;
+
+public:
+    // Strong 보장 대입 연산자
+    Widget& operator=(Widget other) {  // 값으로 복사
+        swap(*this, other);  // noexcept swap
+        return *this;
+    }  // 이전 데이터는 other가 소멸하며 해제
+
+    friend void swap(Widget& a, Widget& b) noexcept {
+        using std::swap;
+        swap(a.data, b.data);
+        swap(a.size, b.size);
+    }
+};
+
+// 동작 방식:
+// 1. 인자가 값으로 전달 → 복사본 생성 (예외 발생 가능)
+// 2. swap은 noexcept → 절대 실패 안 함
+// 3. 함수 종료 시 이전 데이터 소멸
+
+// 예외 발생 시나리오:
+// - 복사 중 예외: 원본 변경 없음 (Strong 보장!)
+// - swap은 noexcept라 예외 없음
+// - 소멸자는 noexcept라 예외 없음</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">컨테이너 Strong 보장</div>
+                    <pre><code>template&lt;typename T&gt;
+class SafeVector {
+    std::unique_ptr&lt;T[]&gt; data;
+    size_t size_ = 0;
+    size_t capacity_ = 0;
+
+public:
+    void push_back(const T& value) {
+        if (size_ == capacity_) {
+            // 1. 새 저장소 준비 (예외 가능)
+            size_t newCap = capacity_ ? capacity_ * 2 : 1;
+            auto newData = std::make_unique&lt;T[]&gt;(newCap);
+
+            // 2. 기존 원소 이동 (noexcept면 이동, 아니면 복사)
+            if constexpr (std::is_nothrow_move_constructible_v&lt;T&gt;) {
+                for (size_t i = 0; i < size_; i++) {
+                    newData[i] = std::move(data[i]);
+                }
+            } else {
+                // 복사: 예외 시 원본 유지
+                for (size_t i = 0; i < size_; i++) {
+                    newData[i] = data[i];
+                }
+            }
+
+            // 3. 새 원소 추가 (예외 가능)
+            newData[size_] = value;
+
+            // 4. 커밋 (noexcept 연산만)
+            data = std::move(newData);
+            capacity_ = newCap;
+            size_++;
+        } else {
+            data[size_++] = value;
+        }
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: noexcept의 중요성</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">noexcept 사용</div>
+                    <pre><code>// 소멸자는 암시적 noexcept
+class Widget {
+    ~Widget() {  // noexcept 자동
+        // 여기서 예외 던지면 std::terminate!
+    }
+};
+
+// 이동 연산자는 noexcept 권장
+class Resource {
+public:
+    Resource(Resource&& other) noexcept  // noexcept 중요!
+        : data(std::exchange(other.data, nullptr)) {}
+
+    Resource& operator=(Resource&& other) noexcept {
+        if (this != &other) {
+            delete data;
+            data = std::exchange(other.data, nullptr);
+        }
+        return *this;
+    }
+};
+
+// noexcept가 중요한 이유:
+// std::vector가 재할당할 때 noexcept 이동이면 이동,
+// 아니면 복사를 사용함!
+
+void example() {
+    std::vector&lt;Resource&gt; vec;
+    vec.reserve(10);
+
+    Resource r;
+    vec.push_back(std::move(r));
+    // noexcept면 이동 (빠름)
+    // 아니면 복사 (느림, Strong 보장 위해)
+}
+
+// noexcept 조건부
+template&lt;typename T&gt;
+void swap(T& a, T& b) noexcept(
+    std::is_nothrow_move_constructible_v&lt;T&gt; &&
+    std::is_nothrow_move_assignable_v&lt;T&gt;
+) {
+    T tmp = std::move(a);
+    a = std::move(b);
+    b = std::move(tmp);
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 패턴</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">실전 예외 안전 패턴</div>
+                    <pre><code>// 1. Scope Guard 패턴
+template&lt;typename F&gt;
+class ScopeGuard {
+    F cleanup;
+    bool active = true;
+
+public:
+    ScopeGuard(F f) : cleanup(std::move(f)) {}
+    ~ScopeGuard() { if (active) cleanup(); }
+    void dismiss() { active = false; }
+};
+
+void transactional() {
+    beginTransaction();
+    ScopeGuard guard([]{ rollback(); });  // 실패 시 롤백
+
+    doStep1();
+    doStep2();
+    doStep3();
+
+    commit();
+    guard.dismiss();  // 성공했으니 롤백 취소
+}
+
+// 2. 두 단계 초기화
+class ComplexObject {
+    std::vector&lt;Resource&gt; resources;
+    Connection conn;
+
+public:
+    // 생성자는 간단하게
+    ComplexObject() = default;
+
+    // 실패 가능한 초기화는 별도
+    void initialize() {
+        // 모든 리소스 준비
+        std::vector&lt;Resource&gt; temp;
+        temp.reserve(10);
+        for (int i = 0; i < 10; i++) {
+            temp.push_back(acquireResource(i));
+        }
+
+        auto tempConn = createConnection();
+
+        // 모두 성공 후 커밋
+        resources = std::move(temp);
+        conn = std::move(tempConn);
+    }
+};
+
+// 3. 임시 객체로 작업 후 swap
+void safeUpdate(Document& doc, const Changes& changes) {
+    // 복사본에서 작업
+    Document temp = doc;
+    temp.apply(changes);  // 예외 가능
+
+    // 성공 시 swap
+    swap(doc, temp);  // noexcept
+}</code></pre>
+                </div>
+
+                <p class="key-point">예외 안전 코드의 핵심: "실패할 수 있는 것은 먼저, 커밋은 noexcept로"</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>No-throw</strong>: 절대 예외 없음 (소멸자, swap)</li>
+                <li><strong>Strong</strong>: 실패 시 원래 상태 (Copy-and-Swap)</li>
+                <li><strong>Basic</strong>: 누수 없음, 유효 상태 (RAII)</li>
+                <li><strong>noexcept</strong>: 이동 연산에 필수, 성능에 영향</li>
+                <li><strong>원칙</strong>: 실패 가능한 것 먼저, 커밋은 noexcept</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

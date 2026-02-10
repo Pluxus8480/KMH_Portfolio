@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU의 범용 계산 능력 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>GPU의 범용 계산 능력</h1>
+            <p class="subtitle">Compute Shader 활용</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Compute Shader란?</h2>
+            <div class="conversation">
+                <div class="q">Compute Shader는 일반 셰이더와 뭐가 다른가요?</div>
+                <div class="a">
+                    <p><span class="highlight">Compute Shader</span>는 렌더링 파이프라인과 독립적으로 실행됩니다. 정점이나 픽셀 개념 없이 순수한 GPU 병렬 계산을 수행합니다.</p>
+                    <p>데이터를 읽고 → 처리하고 → 결과를 쓰는 <span class="key-point">범용 계산(GPGPU)</span>에 적합합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+일반 셰이더 vs Compute Shader:
+
+Vertex/Pixel Shader:
+┌─────────────────────────────────────────────────────┐
+│  Input Assembler → VS → Rasterizer → PS → Output   │
+│        정해진 파이프라인을 따름                      │
+│        정점/픽셀 단위 처리                          │
+└─────────────────────────────────────────────────────┘
+
+Compute Shader:
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+│   버퍼/텍스처  →  [Compute Shader]  →  버퍼/텍스처  │
+│                                                     │
+│   - 파이프라인 독립적                               │
+│   - 임의 스레드 그룹으로 실행                       │
+│   - 스레드 간 공유 메모리                           │
+│   - 동기화 가능                                     │
+└─────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">Compute Shader의 독립성</p>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>특징</th>
+                        <th>Pixel Shader</th>
+                        <th>Compute Shader</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>실행 단위</td>
+                        <td>픽셀</td>
+                        <td>스레드 (자유 정의)</td>
+                    </tr>
+                    <tr>
+                        <td>입력</td>
+                        <td>래스터라이저 출력</td>
+                        <td>버퍼/텍스처 (자유)</td>
+                    </tr>
+                    <tr>
+                        <td>출력</td>
+                        <td>렌더 타겟</td>
+                        <td>UAV (버퍼/텍스처)</td>
+                    </tr>
+                    <tr>
+                        <td>공유 메모리</td>
+                        <td>❌</td>
+                        <td>✅ groupshared</td>
+                    </tr>
+                    <tr>
+                        <td>스레드 동기화</td>
+                        <td>❌</td>
+                        <td>✅ GroupMemoryBarrier</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 스레드 구조</h2>
+            <div class="conversation">
+                <div class="q">Compute Shader의 스레드는 어떻게 구성되나요?</div>
+                <div class="a">
+                    <p><span class="highlight">스레드 그룹</span>은 함께 실행되는 스레드 묶음입니다. 그룹 내 스레드는 공유 메모리를 사용할 수 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Compute Shader 스레드 계층:
+
+Dispatch(2, 2, 1)  →  2×2×1 = 4개 스레드 그룹
+
+┌─────────────────────┬─────────────────────┐
+│   Group (0,0,0)     │   Group (1,0,0)     │
+│   ┌───┬───┬───┬───┐ │   ┌───┬───┬───┬───┐ │
+│   │ T │ T │ T │ T │ │   │ T │ T │ T │ T │ │
+│   ├───┼───┼───┼───┤ │   ├───┼───┼───┼───┤ │
+│   │ T │ T │ T │ T │ │   │ T │ T │ T │ T │ │
+│   ├───┼───┼───┼───┤ │   ├───┼───┼───┼───┤ │
+│   │ T │ T │ T │ T │ │   │ T │ T │ T │ T │ │
+│   ├───┼───┼───┼───┤ │   ├───┼───┼───┼───┤ │
+│   │ T │ T │ T │ T │ │   │ T │ T │ T │ T │ │
+│   └───┴───┴───┴───┘ │   └───┴───┴───┴───┘ │
+├─────────────────────┼─────────────────────┤
+│   Group (0,1,0)     │   Group (1,1,0)     │
+│       ...           │       ...           │
+└─────────────────────┴─────────────────────┘
+
+[numthreads(4, 4, 1)]  →  그룹당 4×4×1 = 16 스레드
+
+총 스레드 수 = 그룹 수 × 그룹당 스레드 수
+            = 4 × 16 = 64 스레드
+                </pre>
+                <p class="diagram-caption">스레드 그룹 구조</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">스레드 ID 시스템</div>
+                <pre><code>// Compute Shader에서 사용 가능한 ID들
+[numthreads(8, 8, 1)]
+void CS_Main(
+    uint3 groupID : SV_GroupID,           // 그룹 ID (0~Dispatch크기-1)
+    uint3 groupThreadID : SV_GroupThreadID, // 그룹 내 스레드 ID (0~numthreads-1)
+    uint3 dispatchThreadID : SV_DispatchThreadID, // 전역 스레드 ID
+    uint groupIndex : SV_GroupIndex)       // 그룹 내 선형 인덱스
+{
+    // 예시: Dispatch(10, 10, 1), numthreads(8, 8, 1)
+    // 그룹 (1, 2, 0)의 스레드 (3, 4, 0)인 경우:
+    //
+    // groupID = (1, 2, 0)
+    // groupThreadID = (3, 4, 0)
+    // dispatchThreadID = (1*8+3, 2*8+4, 0) = (11, 20, 0)
+    // groupIndex = 4*8+3 = 35
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 공유 메모리와 동기화</h2>
+            <div class="conversation">
+                <div class="q">스레드 간 데이터 공유는 어떻게 하나요?</div>
+                <div class="a">
+                    <p><span class="highlight">groupshared</span> 메모리는 같은 그룹의 스레드가 공유합니다. 전역 메모리보다 훨씬 빠르지만, 크기가 제한됩니다 (보통 32KB).</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">공유 메모리 사용 예제</div>
+                <pre><code>// 공유 메모리 선언 (그룹 내 공유)
+groupshared float sharedData[256];
+
+[numthreads(256, 1, 1)]
+void CS_Reduction(uint3 id : SV_DispatchThreadID,
+                  uint groupIndex : SV_GroupIndex)
+{
+    // 1. 전역 메모리 → 공유 메모리로 로드
+    sharedData[groupIndex] = inputBuffer[id.x];
+
+    // 2. 그룹 내 모든 스레드가 로드 완료할 때까지 대기
+    GroupMemoryBarrierWithGroupSync();
+
+    // 3. 리덕션 (합계 계산)
+    for (uint stride = 128; stride > 0; stride >>= 1)
+    {
+        if (groupIndex < stride)
+        {
+            sharedData[groupIndex] += sharedData[groupIndex + stride];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    // 4. 첫 번째 스레드가 결과 저장
+    if (groupIndex == 0)
+    {
+        outputBuffer[id.x / 256] = sharedData[0];
+    }
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>동기화 함수</th>
+                        <th>설명</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>GroupMemoryBarrier</td>
+                        <td>공유 메모리 접근 완료 대기</td>
+                    </tr>
+                    <tr>
+                        <td>GroupMemoryBarrierWithGroupSync</td>
+                        <td>공유 메모리 + 그룹 내 모든 스레드 대기</td>
+                    </tr>
+                    <tr>
+                        <td>DeviceMemoryBarrier</td>
+                        <td>전역 메모리 접근 완료 대기</td>
+                    </tr>
+                    <tr>
+                        <td>AllMemoryBarrier</td>
+                        <td>모든 메모리 접근 완료 대기</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 활용 예시 - 이미지 블러</h2>
+            <div class="conversation">
+                <div class="q">Compute Shader로 이미지 처리를 어떻게 하나요?</div>
+                <div class="a">
+                    <p>공유 메모리를 활용한 효율적인 블러 구현입니다. 중복 샘플링을 공유 메모리로 캐싱합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Gaussian Blur (Compute Shader)</div>
+                <pre><code>// 타일 크기 + 블러 반경만큼의 패딩
+#define TILE_SIZE 16
+#define BLUR_RADIUS 4
+#define CACHE_SIZE (TILE_SIZE + 2 * BLUR_RADIUS)
+
+Texture2D<float4> inputTexture : register(t0);
+RWTexture2D<float4> outputTexture : register(u0);
+
+groupshared float4 cache[CACHE_SIZE][CACHE_SIZE];
+
+[numthreads(TILE_SIZE, TILE_SIZE, 1)]
+void CS_GaussianBlur(uint3 groupID : SV_GroupID,
+                      uint3 groupThreadID : SV_GroupThreadID,
+                      uint3 dispatchThreadID : SV_DispatchThreadID)
+{
+    // 1. 공유 메모리에 타일 + 경계 로드
+    int2 baseCoord = groupID.xy * TILE_SIZE - BLUR_RADIUS;
+
+    // 각 스레드가 여러 텍셀 로드 (경계 포함)
+    for (int y = groupThreadID.y; y < CACHE_SIZE; y += TILE_SIZE)
+    {
+        for (int x = groupThreadID.x; x < CACHE_SIZE; x += TILE_SIZE)
+        {
+            int2 coord = baseCoord + int2(x, y);
+            coord = clamp(coord, 0, textureSize - 1);
+            cache[y][x] = inputTexture[coord];
+        }
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // 2. 블러 계산 (공유 메모리에서 읽기)
+    float4 result = 0;
+    float totalWeight = 0;
+
+    int2 cacheCoord = groupThreadID.xy + BLUR_RADIUS;
+
+    for (int dy = -BLUR_RADIUS; dy <= BLUR_RADIUS; dy++)
+    {
+        for (int dx = -BLUR_RADIUS; dx <= BLUR_RADIUS; dx++)
+        {
+            float weight = GaussianWeight(dx, dy, BLUR_RADIUS);
+            result += cache[cacheCoord.y + dy][cacheCoord.x + dx] * weight;
+            totalWeight += weight;
+        }
+    }
+
+    result /= totalWeight;
+
+    // 3. 결과 저장
+    outputTexture[dispatchThreadID.xy] = result;
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 활용 예시 - 파티클 시뮬레이션</h2>
+            <div class="conversation">
+                <div class="q">물리 시뮬레이션에도 사용할 수 있나요?</div>
+                <div class="a">
+                    <p>수십만 개의 파티클을 병렬로 업데이트합니다. CPU보다 훨씬 빠릅니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">GPU 파티클 시스템</div>
+                <pre><code>struct Particle
+{
+    float3 position;
+    float3 velocity;
+    float life;
+    float size;
+};
+
+RWStructuredBuffer<Particle> particles : register(u0);
+
+cbuffer SimulationParams : register(b0)
+{
+    float deltaTime;
+    float3 gravity;
+    float3 emitterPosition;
+    uint particleCount;
+};
+
+[numthreads(256, 1, 1)]
+void CS_UpdateParticles(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= particleCount) return;
+
+    Particle p = particles[id.x];
+
+    // 수명 감소
+    p.life -= deltaTime;
+
+    if (p.life <= 0)
+    {
+        // 리스폰
+        p.position = emitterPosition;
+        p.velocity = RandomVelocity(id.x);
+        p.life = 2.0;
+    }
+    else
+    {
+        // 물리 업데이트
+        p.velocity += gravity * deltaTime;
+        p.position += p.velocity * deltaTime;
+
+        // 바닥 충돌
+        if (p.position.y < 0)
+        {
+            p.position.y = 0;
+            p.velocity.y *= -0.5;  // 반발
+        }
+    }
+
+    particles[id.x] = p;
+}
+
+// C++ 측 디스패치
+void UpdateParticles()
+{
+    context->CSSetShader(updateParticleCS, nullptr, 0);
+    context->CSSetUnorderedAccessViews(0, 1, &particleUAV, nullptr);
+    context->CSSetConstantBuffers(0, 1, &simParamsBuffer);
+
+    UINT threadGroups = (particleCount + 255) / 256;
+    context->Dispatch(threadGroups, 1, 1);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 최적화 팁</h2>
+            <div class="conversation">
+                <div class="q">Compute Shader 성능을 높이려면?</div>
+                <div class="a">
+                    <p>GPU 아키텍처를 이해하고 최적화해야 합니다:</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 최적화 체크리스트</strong>
+                <p><span class="highlight">Occupancy</span>: 그룹 크기를 웨이브/워프 배수로 (64 또는 32)</p>
+                <p><span class="highlight">Coalesced Access</span>: 연속 스레드가 연속 메모리 접근</p>
+                <p><span class="highlight">Bank Conflicts</span>: 공유 메모리 뱅크 충돌 회피</p>
+                <p><span class="highlight">Divergence</span>: 분기 최소화 (같은 웨이브 내)</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">최적화 예시</div>
+                <pre><code>// ❌ 나쁜 예: 메모리 접근 패턴
+[numthreads(64, 1, 1)]
+void CS_Bad(uint3 id : SV_DispatchThreadID)
+{
+    // 스레드 0: buffer[0], 스레드 1: buffer[64], ...
+    // 비연속 접근 → 캐시 미스
+    float value = buffer[id.x * 64];
+}
+
+// ✅ 좋은 예: Coalesced 접근
+[numthreads(64, 1, 1)]
+void CS_Good(uint3 id : SV_DispatchThreadID)
+{
+    // 스레드 0: buffer[0], 스레드 1: buffer[1], ...
+    // 연속 접근 → 캐시 히트
+    float value = buffer[id.x];
+}
+
+// ❌ 나쁜 예: 분기 발산
+[numthreads(64, 1, 1)]
+void CS_Divergent(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x % 2 == 0)
+        DoSomething();  // 절반의 스레드
+    else
+        DoSomethingElse();  // 나머지 절반
+    // 웨이브가 두 경로를 모두 실행해야 함
+}
+
+// ✅ 좋은 예: 분기 통합
+[numthreads(64, 1, 1)]
+void CS_Unified(uint3 id : SV_DispatchThreadID)
+{
+    float result = lerp(valueA, valueB, id.x % 2);
+    // 분기 없이 동일한 연산
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>그룹 크기</th>
+                        <th>권장 사항</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>총 스레드 수</td>
+                        <td>64~256 (웨이브 크기 배수)</td>
+                    </tr>
+                    <tr>
+                        <td>2D 이미지</td>
+                        <td>8×8, 16×16</td>
+                    </tr>
+                    <tr>
+                        <td>1D 데이터</td>
+                        <td>64, 128, 256</td>
+                    </tr>
+                    <tr>
+                        <td>공유 메모리</td>
+                        <td>16~32KB 이내</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Compute Shader</strong>: 렌더링 파이프라인 독립, 범용 GPU 계산</li>
+                <li><strong>스레드 그룹</strong>: 함께 실행되는 스레드 묶음, 공유 메모리 사용 가능</li>
+                <li><strong>groupshared</strong>: 빠른 그룹 내 공유 메모리, 동기화 필요</li>
+                <li><strong>활용</strong>: 이미지 처리, 파티클, 물리, AI, 컬링 등</li>
+                <li><strong>최적화</strong>: Coalesced 접근, 분기 최소화, 적절한 그룹 크기</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

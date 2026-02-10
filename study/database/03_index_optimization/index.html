@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인덱스 최적화와 쿼리 튜닝 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../database.html" class="back-link">← 목록으로</a>
+            <h1>왜 이 쿼리가 10초나 걸리지?</h1>
+            <p class="subtitle">인덱스 원리와 쿼리 성능 최적화 기법</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 인덱스의 원리</h2>
+            <div class="conversation">
+                <div class="q">인덱스가 왜 빠른가요?</div>
+                <div class="a">
+                    <p>책의 <strong>색인</strong>처럼, 원하는 데이터의 위치를 빠르게 찾습니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+인덱스 없이 검색 (Full Table Scan):
+
+테이블: 100만 행
+┌──────────────────────────────────────┐
+│ Row 1, Row 2, Row 3, ... Row 1000000 │
+│    ▼      ▼      ▼          ▼        │
+│  하나씩 모두 확인 (O(N))               │
+└──────────────────────────────────────┘
+→ 최악의 경우 100만 번 비교
+
+인덱스 있을 때 (B-Tree 검색):
+
+          [500,000]
+         /         \
+    [250,000]    [750,000]
+      /    \        /    \
+   [...]  [...]  [...]  [...]
+                        ↓
+                    찾는 값!
+
+→ 20번 정도 비교로 찾음 (O(log N))
+  100만 행 = log2(1000000) ≈ 20
+                        </pre>
+                    </div>
+                    <p class="highlight">100만 행 테이블: 인덱스 없이 100만 번 vs 인덱스 있으면 20번</p>
+                </div>
+
+                <div class="q">B-Tree 인덱스는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+B-Tree 구조 (MySQL InnoDB):
+
+                    [Root Node]
+                   /     |     \
+          [Branch]   [Branch]   [Branch]
+          /  |  \    /  |  \    /  |  \
+       [Leaf] [Leaf] [Leaf] [Leaf] [Leaf]
+         │      │      │      │      │
+         ▼      ▼      ▼      ▼      ▼
+      [Data] [Data] [Data] [Data] [Data]
+
+Leaf Node 내부:
+┌─────────────────────────────────────────────┐
+│ key1→ptr | key2→ptr | key3→ptr | ... | →next│
+└─────────────────────────────────────────────┘
+                                          │
+                                 다음 Leaf로 연결
+
+범위 검색 시 (WHERE level BETWEEN 10 AND 20):
+1. B-Tree로 level=10인 Leaf 찾기
+2. Leaf에서 다음 Leaf로 순차 스캔
+3. level=20 넘으면 종료
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 인덱스 설계</h2>
+            <div class="conversation">
+                <div class="q">어떤 컬럼에 인덱스를 만들어야 하나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>인덱스 생성 O</th>
+                                <th>인덱스 생성 X</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>WHERE 절에 자주 사용</td>
+                                <td>거의 검색 안 되는 컬럼</td>
+                            </tr>
+                            <tr>
+                                <td>JOIN 조건 컬럼</td>
+                                <td>값 종류가 너무 적음 (성별 등)</td>
+                            </tr>
+                            <tr>
+                                <td>ORDER BY 컬럼</td>
+                                <td>자주 업데이트되는 컬럼</td>
+                            </tr>
+                            <tr>
+                                <td>카디널리티가 높은 컬럼</td>
+                                <td>작은 테이블 (수천 행 이하)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">인덱스도 저장 공간을 차지하고, INSERT/UPDATE 시 오버헤드가 있습니다!</p>
+                </div>
+
+                <div class="q">복합 인덱스는 어떻게 설계하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">복합 인덱스 순서의 중요성</div>
+                        <pre><code>-- 쿼리 패턴
+SELECT * FROM characters
+WHERE server_id = 1 AND level > 50
+ORDER BY level DESC;
+
+-- 복합 인덱스 생성 (순서 중요!)
+CREATE INDEX idx_server_level ON characters(server_id, level);
+
+-- 왜 (server_id, level) 순서?
+-- 1. server_id = 1 조건으로 범위 축소
+-- 2. 그 범위 내에서 level 정렬된 상태로 저장됨
+-- 3. level > 50 조건과 ORDER BY 모두 인덱스 활용 가능
+
+-- 만약 (level, server_id) 순서였다면?
+-- level > 50 범위가 너무 넓어서 비효율적
+
+/*
+복합 인덱스 원칙:
+1. 등호(=) 조건 컬럼을 앞에
+2. 범위 조건 컬럼을 뒤에
+3. 카디널리티 높은 것을 앞에 (선택성 높음)
+*/</code></pre>
+                    </div>
+                    <div class="visual-section">
+                        <pre class="diagram">
+복합 인덱스 (server_id, level) 구조:
+
+server_id=1           server_id=2
+    │                     │
+    ▼                     ▼
+┌─────────────┐     ┌─────────────┐
+│ level: 1    │     │ level: 5    │
+│ level: 10   │     │ level: 15   │
+│ level: 50 ← │     │ level: 60   │
+│ level: 55   │     │ level: 70   │
+│ level: 99   │     │ level: 99   │
+└─────────────┘     └─────────────┘
+
+WHERE server_id = 1 AND level > 50:
+→ server_id=1 블록으로 바로 이동
+→ level > 50 위치부터 순차 스캔
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: EXPLAIN으로 쿼리 분석</h2>
+            <div class="conversation">
+                <div class="q">쿼리가 느린지 어떻게 확인하나요?</div>
+                <div class="a">
+                    <p><strong>EXPLAIN</strong>으로 실행 계획을 확인합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">EXPLAIN 분석</div>
+                        <pre><code>EXPLAIN SELECT * FROM characters
+WHERE server_id = 1 AND level > 50;
+
+-- 결과:
++----+-------------+------------+-------+------------------+-----------+---------+------+------+-------------+
+| id | select_type | table      | type  | possible_keys    | key       | key_len | ref  | rows | Extra       |
++----+-------------+------------+-------+------------------+-----------+---------+------+------+-------------+
+|  1 | SIMPLE      | characters | range | idx_server_level | idx_server_level | 6  | NULL | 1500 | Using where |
++----+-------------+------------+-------+------------------+-----------+---------+------+------+-------------+
+
+주요 컬럼 해석:
+┌────────────┬─────────────────────────────────────────┐
+│ type       │ 접근 방식 (좋은 순서)                    │
+│            │ const > eq_ref > ref > range > ALL     │
+├────────────┼─────────────────────────────────────────┤
+│ key        │ 실제 사용된 인덱스                       │
+├────────────┼─────────────────────────────────────────┤
+│ rows       │ 예상 검색 행 수 (적을수록 좋음)          │
+├────────────┼─────────────────────────────────────────┤
+│ Extra      │ 추가 정보                               │
+│            │ Using index: 커버링 인덱스 사용 (좋음)  │
+│            │ Using filesort: 정렬 필요 (나쁨)       │
+│            │ Using temporary: 임시 테이블 (나쁨)    │
+└────────────┴─────────────────────────────────────────┘</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">type이 ALL이면 문제인가요?</div>
+                <div class="a">
+                    <p>네, <strong>Full Table Scan</strong>을 의미합니다. 대부분 인덱스 추가가 필요합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">나쁜 쿼리 → 좋은 쿼리</div>
+                        <pre><code>-- BAD: Full Table Scan (type: ALL)
+EXPLAIN SELECT * FROM characters WHERE YEAR(created_at) = 2024;
+-- 함수 사용으로 인덱스 무효화!
+
+-- GOOD: Range Scan (type: range)
+EXPLAIN SELECT * FROM characters
+WHERE created_at >= '2024-01-01' AND created_at < '2025-01-01';
+-- 인덱스 사용 가능
+
+-- BAD: Full Table Scan
+EXPLAIN SELECT * FROM characters WHERE name LIKE '%홍길동%';
+-- 앞에 와일드카드 → 인덱스 불가
+
+-- GOOD: Range Scan
+EXPLAIN SELECT * FROM characters WHERE name LIKE '홍길동%';
+-- 뒤에만 와일드카드 → 인덱스 사용
+
+-- BAD: 타입 불일치
+EXPLAIN SELECT * FROM characters WHERE level = '50';
+-- level이 INT인데 문자열로 비교 → 형변환 발생
+
+-- GOOD: 타입 일치
+EXPLAIN SELECT * FROM characters WHERE level = 50;</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 커버링 인덱스</h2>
+            <div class="conversation">
+                <div class="q">커버링 인덱스란?</div>
+                <div class="a">
+                    <p>쿼리에 필요한 모든 컬럼이 인덱스에 포함되어, <strong>테이블 접근 없이</strong> 결과를 반환합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+일반 인덱스 vs 커버링 인덱스:
+
+[일반 인덱스]
+Index (level)     →     Table
+    │                      │
+    ▼                      ▼
+ level=50  ──ptr──▶  실제 행 데이터
+                    (name, gold, exp...)
+두 번의 I/O!
+
+[커버링 인덱스]
+Index (level, exp)
+    │
+    ▼
+ level=50, exp=1000  ← 여기서 바로 반환!
+한 번의 I/O!
+                        </pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">커버링 인덱스 예시</div>
+                        <pre><code>-- 자주 실행되는 쿼리
+SELECT char_id, level, exp FROM characters
+WHERE server_id = 1 AND level > 50
+ORDER BY level DESC
+LIMIT 100;
+
+-- 커버링 인덱스 생성
+CREATE INDEX idx_covering ON characters(server_id, level, exp, char_id);
+
+-- EXPLAIN 결과
++----+-------+------------------+--------------+---------+------+------+--------------------------+
+| id | type  | key              | key_len      | rows    | Extra                    |
++----+-------+------------------+--------------+---------+------+------+--------------------------+
+|  1 | range | idx_covering     | 6            | 1500    | Using where; Using index |
++----+-------+------------------+--------------+---------+------+------+--------------------------+
+
+"Using index" = 커버링 인덱스 사용됨!</code></pre>
+                    </div>
+                    <p class="warning">인덱스에 컬럼을 많이 추가하면 INSERT/UPDATE 성능 저하에 주의!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 쿼리 튜닝 실전</h2>
+            <div class="conversation">
+                <div class="q">N+1 쿼리 문제란?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">N+1 문제와 해결</div>
+                        <pre><code>-- BAD: N+1 쿼리 (캐릭터 100명 → 쿼리 101번)
+SELECT * FROM characters WHERE guild_id = 1;  -- 1번
+-- 결과: 100명의 캐릭터
+
+-- 각 캐릭터의 장비 조회 (100번)
+for each character:
+    SELECT * FROM equipment WHERE char_id = ?;
+
+-- GOOD: JOIN으로 1번에 해결
+SELECT c.*, e.*
+FROM characters c
+LEFT JOIN equipment e ON c.char_id = e.char_id
+WHERE c.guild_id = 1;
+
+-- 또는: IN 쿼리로 2번에 해결
+SELECT * FROM characters WHERE guild_id = 1;
+SELECT * FROM equipment WHERE char_id IN (1, 2, 3, ... 100);</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">페이징 쿼리는 어떻게 최적화하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">페이징 최적화</div>
+                        <pre><code>-- BAD: OFFSET이 커질수록 느림
+SELECT * FROM characters
+ORDER BY char_id
+LIMIT 10 OFFSET 100000;
+-- 100,000개를 읽고 버린 후 10개 반환
+
+-- GOOD: Keyset Pagination (커서 기반)
+-- 마지막으로 본 char_id를 기억
+SELECT * FROM characters
+WHERE char_id > 100000  -- 이전 페이지 마지막 ID
+ORDER BY char_id
+LIMIT 10;
+-- 인덱스로 바로 접근!
+
+-- GOOD: Deferred JOIN
+SELECT c.*
+FROM characters c
+INNER JOIN (
+    SELECT char_id FROM characters
+    ORDER BY char_id
+    LIMIT 10 OFFSET 100000
+) AS tmp ON c.char_id = tmp.char_id;
+-- 서브쿼리에서 ID만 추출 (커버링 인덱스)
+-- 그 ID로 실제 데이터 JOIN</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">서브쿼리 vs JOIN은 언제 어떤 게 좋나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">서브쿼리 vs JOIN</div>
+                        <pre><code>-- 상황 1: EXISTS (서브쿼리가 좋음)
+-- "길드에 속한 캐릭터 중 레벨 50 이상이 있는가?"
+SELECT * FROM guilds g
+WHERE EXISTS (
+    SELECT 1 FROM characters c
+    WHERE c.guild_id = g.guild_id AND c.level >= 50
+);
+-- EXISTS는 하나만 찾으면 바로 종료
+
+-- 상황 2: 데이터 가져오기 (JOIN이 좋음)
+-- "각 캐릭터와 그 길드 정보"
+SELECT c.*, g.guild_name
+FROM characters c
+INNER JOIN guilds g ON c.guild_id = g.guild_id;
+
+-- 상황 3: 집계 (서브쿼리가 좋을 수 있음)
+-- "각 길드의 멤버 수"
+SELECT g.*, (
+    SELECT COUNT(*) FROM characters c
+    WHERE c.guild_id = g.guild_id
+) AS member_count
+FROM guilds g;
+-- 또는 GROUP BY 사용
+
+-- 결론: EXPLAIN으로 직접 확인하는 것이 가장 정확!</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 게임에서 자주 쓰는 최적화</h2>
+            <div class="conversation">
+                <div class="q">게임 DB에서 자주 쓰는 쿼리 패턴은?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">게임 최적화 패턴</div>
+                        <pre><code>-- 1. 랭킹 조회 (Top N)
+-- 인덱스: (level DESC) 또는 Sorted Set(Redis) 권장
+SELECT char_id, name, level
+FROM characters
+ORDER BY level DESC, exp DESC
+LIMIT 100;
+
+-- 2. 내 랭킹 조회 (내 위의 수 카운트)
+-- 인덱스: (level, exp) 복합 인덱스
+SELECT COUNT(*) + 1 AS my_rank
+FROM characters
+WHERE (level > @my_level)
+   OR (level = @my_level AND exp > @my_exp);
+
+-- 3. 친구 온라인 상태 (IN 쿼리)
+-- Redis Set으로 온라인 목록 관리 권장
+SELECT char_id, name, last_login
+FROM characters
+WHERE char_id IN (1, 2, 3, 4, 5)  -- 친구 ID 목록
+  AND is_online = 1;
+
+-- 4. 아이템 검색 (JSON 필드)
+-- MySQL 8.0+ 가상 컬럼 + 인덱스
+ALTER TABLE items
+ADD COLUMN attack INT AS (JSON_EXTRACT(attributes, '$.attack'));
+CREATE INDEX idx_attack ON items(attack);
+
+SELECT * FROM items WHERE attack > 100;</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>인덱스 원리</strong>: B-Tree로 O(log N) 검색, Full Scan은 O(N)</li>
+                <li><strong>복합 인덱스</strong>: 등호 조건 앞, 범위 조건 뒤, 카디널리티 높은 것 앞</li>
+                <li><strong>EXPLAIN</strong>: type(ALL 피하기), key(인덱스 사용 확인), Extra 확인</li>
+                <li><strong>커버링 인덱스</strong>: SELECT 컬럼 모두 인덱스에 포함 → 테이블 접근 불필요</li>
+                <li><strong>N+1 방지</strong>: JOIN 또는 IN 쿼리로 해결</li>
+                <li><strong>페이징</strong>: Keyset Pagination으로 OFFSET 피하기</li>
+                <li><strong>함수 사용 주의</strong>: WHERE 절에서 컬럼에 함수 적용하면 인덱스 무효화</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

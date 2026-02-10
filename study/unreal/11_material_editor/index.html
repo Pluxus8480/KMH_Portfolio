@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>픽셀의 색을 결정하는 법 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+
+        <header class="content-header">
+            <h1>픽셀의 색을 결정하는 법</h1>
+            <p class="subtitle">Material Editor 심화</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Material의 본질</h2>
+            <div class="conversation">
+                <div class="q">Material이란 정확히 무엇인가요?</div>
+                <div class="a">
+                    <p>Material은 <span class="highlight">표면의 시각적 특성을 정의하는 셰이더</span>입니다. "이 표면은 금속인가? 거칠기는? 어떤 색인가?"를 GPU에게 알려줍니다.</p>
+                    <p>언리얼의 Material Editor에서 만드는 노드 그래프는 결국 <span class="key-point">HLSL 셰이더 코드로 컴파일</span>됩니다.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>Material은 <span class="highlight">물체의 피부</span>와 같습니다.</p>
+                <p>피부(Material)가 어떤지에 따라 같은 조명 아래서도 금속처럼 보이거나, 플라스틱처럼 보이거나, 피부처럼 보입니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: PBR Material 속성</h2>
+            <div class="conversation">
+                <div class="q">Material의 주요 입력값은 무엇인가요?</div>
+                <div class="a">
+                    <p>언리얼은 <span class="highlight">PBR(Physically Based Rendering)</span> 워크플로우를 사용합니다. 현실 물리 법칙에 기반한 재질 표현입니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>속성</th>
+                        <th>설명</th>
+                        <th>값 범위</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Base Color</td>
+                        <td>표면 기본 색상 (알베도)</td>
+                        <td>RGB 0~1</td>
+                    </tr>
+                    <tr>
+                        <td>Metallic</td>
+                        <td>금속성 (0=비금속, 1=금속)</td>
+                        <td>0 또는 1</td>
+                    </tr>
+                    <tr>
+                        <td>Roughness</td>
+                        <td>표면 거칠기</td>
+                        <td>0(매끄러움)~1(거침)</td>
+                    </tr>
+                    <tr>
+                        <td>Normal</td>
+                        <td>표면 미세 요철 (법선 맵)</td>
+                        <td>RGB(-1~1)</td>
+                    </tr>
+                    <tr>
+                        <td>Emissive</td>
+                        <td>자체 발광 색상</td>
+                        <td>RGB, HDR 가능</td>
+                    </tr>
+                    <tr>
+                        <td>Opacity</td>
+                        <td>투명도 (Translucent만)</td>
+                        <td>0(투명)~1(불투명)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Material Input 핀 구조:
+
+┌─────────────────────────────────────────────────┐
+│              Material Result Node                │
+├─────────────────────────────────────────────────┤
+│                                                  │
+│  Base Color ─────────● [RGB 색상]               │
+│  Metallic ───────────● [0-1 값]                 │
+│  Specular ───────────● [0-1 값, 보통 0.5]       │
+│  Roughness ──────────● [0-1 값]                 │
+│  Emissive Color ─────● [RGB, HDR]               │
+│  Normal ─────────────● [탄젠트 공간 노멀]       │
+│  World Position Offset─● [월드 좌표 오프셋]    │
+│  Ambient Occlusion ──● [0-1 값]                 │
+│                                                  │
+└─────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">Material의 핵심 입력 핀</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 자주 쓰는 노드</h2>
+            <div class="conversation">
+                <div class="q">어떤 노드들을 많이 사용하나요?</div>
+                <div class="a">
+                    <p>Material Editor에는 수백 개의 노드가 있지만, 자주 쓰는 것들은 한정적입니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>노드</th>
+                        <th>단축키</th>
+                        <th>용도</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Texture Sample</td>
+                        <td>T</td>
+                        <td>텍스처 샘플링</td>
+                    </tr>
+                    <tr>
+                        <td>Multiply</td>
+                        <td>M</td>
+                        <td>값 곱하기</td>
+                    </tr>
+                    <tr>
+                        <td>Add</td>
+                        <td>A</td>
+                        <td>값 더하기</td>
+                    </tr>
+                    <tr>
+                        <td>Lerp</td>
+                        <td>L</td>
+                        <td>선형 보간</td>
+                    </tr>
+                    <tr>
+                        <td>Constant</td>
+                        <td>1,2,3,4</td>
+                        <td>상수 값</td>
+                    </tr>
+                    <tr>
+                        <td>Parameter</td>
+                        <td>S, V</td>
+                        <td>외부 파라미터</td>
+                    </tr>
+                    <tr>
+                        <td>TexCoord</td>
+                        <td>U</td>
+                        <td>UV 좌표</td>
+                    </tr>
+                    <tr>
+                        <td>Panner</td>
+                        <td>-</td>
+                        <td>UV 스크롤</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">Lerp를 이용한 텍스처 블렌딩</div>
+                <pre><code>// 두 텍스처를 마스크로 블렌딩
+
+TextureA ───┐
+            ├── Lerp ──→ Base Color
+TextureB ───┤
+            │
+Mask ───────┘ (Alpha)
+
+// Lerp(A, B, Alpha) = A * (1-Alpha) + B * Alpha
+// Alpha가 0이면 A, 1이면 B, 0.5면 절반씩</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Material Instance</h2>
+            <div class="conversation">
+                <div class="q">왜 Material Instance를 사용하나요?</div>
+                <div class="a">
+                    <p>Material을 수정하면 <span class="warning">셰이더를 다시 컴파일</span>해야 합니다. 수 분이 걸릴 수 있죠. Material Instance는 파라미터 값만 바꾸므로 <span class="highlight">즉시 반영</span>됩니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Material 구조:
+
+      ┌─────────────────────────┐
+      │   M_Character (Parent)  │ ← 베이스 Material
+      │                         │   (셰이더 로직 정의)
+      │   Parameters:           │
+      │   • BaseColor           │
+      │   • RoughnessValue      │
+      │   • NormalIntensity     │
+      └───────────┬─────────────┘
+                  │ 상속
+      ┌───────────┼───────────┐
+      │           │           │
+      ▼           ▼           ▼
+┌──────────┐ ┌──────────┐ ┌──────────┐
+│MI_Char   │ │MI_Char   │ │MI_Char   │
+│ _Red     │ │ _Blue    │ │ _Gold    │
+│          │ │          │ │          │
+│BaseColor:│ │BaseColor:│ │BaseColor:│
+│ (1,0,0)  │ │ (0,0,1)  │ │ (1,0.8,0)│
+└──────────┘ └──────────┘ └──────────┘
+
+Instance는 파라미터만 다름 → 셰이더 공유!
+                </pre>
+                <p class="diagram-caption">Parent Material과 Instance 관계</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++에서 Material Instance 파라미터 변경</div>
+                <pre><code>// Dynamic Material Instance 생성
+UMaterialInstanceDynamic* DynMaterial =
+    UMaterialInstanceDynamic::Create(BaseMaterial, this);
+
+// 메시에 적용
+MeshComponent->SetMaterial(0, DynMaterial);
+
+// 파라미터 변경 (실시간)
+DynMaterial->SetVectorParameterValue(
+    FName("BaseColor"), FLinearColor::Red);
+DynMaterial->SetScalarParameterValue(
+    FName("Roughness"), 0.3f);</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 고급 기법</h2>
+            <div class="conversation">
+                <div class="q">자주 사용되는 고급 기법은 무엇인가요?</div>
+                <div class="a">
+                    <p>몇 가지 유용한 Material 기법을 소개합니다:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">1. 디졸브 효과 (Dissolve)</div>
+                <pre><code>// Opacity Mask에 연결
+NoiseTexture ─── Subtract ─── Opacity Mask
+                    │
+DissolveAmount ────┘ (0~1 파라미터)
+
+// DissolveAmount가 증가하면 노이즈의
+// 낮은 부분부터 점점 사라짐</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">2. 프레넬 효과 (Rim Light)</div>
+                <pre><code>// 가장자리 빛나기
+Fresnel ───┐
+           ├── Multiply ─── Add ─── Emissive
+RimColor ──┘              │
+                          │
+BaseEmissive ─────────────┘
+
+// Fresnel: 카메라와 표면이 수직일수록 1에 가까움
+// → 오브젝트 가장자리가 빛나는 효과</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">3. World Aligned 텍스처</div>
+                <pre><code>// UV 대신 월드 좌표로 텍스처 매핑
+WorldPosition ─── Divide ─── TextureSample
+                    │
+TextureScale ──────┘
+
+// 복잡한 지형에서 이음새 없는 텍스처링
+// Tri-planar mapping에 활용</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 최적화 팁</h2>
+            <div class="conversation">
+                <div class="q">Material 성능 최적화는 어떻게 하나요?</div>
+                <div class="a">
+                    <p>셰이더 복잡도가 높으면 GPU 성능에 직접적인 영향을 미칩니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>최적화 기법</th>
+                        <th>효과</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>텍스처 채널 패킹</td>
+                        <td>R=AO, G=Roughness, B=Metallic으로 텍스처 수 감소</td>
+                    </tr>
+                    <tr>
+                        <td>불필요한 노드 제거</td>
+                        <td>Instruction 수 감소</td>
+                    </tr>
+                    <tr>
+                        <td>Static Switch 사용</td>
+                        <td>런타임 분기 대신 컴파일타임 분기</td>
+                    </tr>
+                    <tr>
+                        <td>Quality Switch</td>
+                        <td>저사양에서 간단한 버전 사용</td>
+                    </tr>
+                    <tr>
+                        <td>Material LOD</td>
+                        <td>거리에 따라 다른 Material</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">Shader Complexity 확인</div>
+                <pre><code>// 에디터에서
+View Mode → Optimization Viewmodes → Shader Complexity
+
+// 녹색: 가벼움 (50~100 instructions)
+// 노랑: 중간 (100~200)
+// 빨강: 무거움 (200~300)
+// 흰색: 매우 무거움 (300+)
+
+// Material Editor에서 Stats 창 확인
+Window → Stats
+→ 각 셰이더 타입별 Instruction 수 표시</code></pre>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>Material은 <strong>표면의 시각적 특성</strong>을 정의하는 셰이더입니다</li>
+                <li><strong>Base Color, Metallic, Roughness, Normal</strong>이 PBR의 핵심 속성입니다</li>
+                <li><strong>Material Instance</strong>를 사용하면 셰이더 재컴파일 없이 파라미터만 변경 가능</li>
+                <li><strong>Dynamic Material Instance</strong>로 런타임에 머티리얼 속성 변경</li>
+                <li>Shader Complexity를 확인하고 <strong>텍스처 패킹, Quality Switch</strong>로 최적화</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

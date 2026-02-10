@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>네트워크 동기화 전략 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../server.html" class="back-link">← 목록으로</a>
+            <h1>같은 게임인데 왜 결과가 다를까?</h1>
+            <p class="subtitle">Deterministic vs State Sync - 네트워크 동기화의 두 가지 철학</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 동기화가 필요한 이유</h2>
+            <div class="conversation">
+                <div class="q">온라인 게임에서 모든 플레이어가 같은 화면을 보려면 어떻게 해야 하나요?</div>
+                <div class="a">
+                    <p>핵심 문제는 <strong>네트워크 지연</strong>입니다. A가 공격 버튼을 눌러도 B에게 도달하기까지 수십~수백 ms가 걸립니다.</p>
+                    <p class="highlight">동기화 전략은 "무엇을 보낼 것인가"와 "어떻게 일치시킬 것인가"를 결정하는 방법론입니다.</p>
+                </div>
+
+                <div class="q">동기화 전략에는 어떤 종류가 있나요?</div>
+                <div class="a">
+                    <p>크게 두 가지 철학이 있습니다:</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                    네트워크 동기화 전략                           │
+├─────────────────────────────┬───────────────────────────────────┤
+│    Deterministic Lockstep   │        State Synchronization      │
+├─────────────────────────────┼───────────────────────────────────┤
+│  "입력만 공유하면 결과는      │    "결과(상태)를 직접 공유"         │
+│   자동으로 같다"              │                                   │
+├─────────────────────────────┼───────────────────────────────────┤
+│  - 입력(Input)만 전송        │    - 게임 상태(State) 전송          │
+│  - 모든 클라이언트가 동일     │    - 서버가 권위자                  │
+│    시뮬레이션 실행            │    - 클라이언트는 보간/예측         │
+├─────────────────────────────┼───────────────────────────────────┤
+│  RTS, 격투 게임              │    FPS, MMORPG                    │
+└─────────────────────────────┴───────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Deterministic Lockstep</h2>
+            <div class="conversation">
+                <div class="q">Deterministic이 정확히 무슨 뜻인가요?</div>
+                <div class="a">
+                    <p><strong>Deterministic(결정론적)</strong>이란 같은 입력이 주어지면 <strong>항상 같은 결과</strong>가 나온다는 의미입니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>체스를 상상해보세요. 초기 배치가 같고, 두 사람이 같은 순서로 같은 수를 두면, 최종 배치는 항상 같습니다.</p>
+                        <p>게임에서도 마찬가지로, 초기 상태가 같고 입력 순서가 같으면 결과도 같아야 합니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">왜 Lockstep이라고 부르나요?</div>
+                <div class="a">
+                    <p><strong>Lockstep(발맞추기)</strong>은 모든 클라이언트가 같은 프레임에서 동시에 진행한다는 의미입니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+Frame N 처리:
+
+  Client A ──┬── Input: "유닛 이동" ──┐
+             │                        │
+  Client B ──┼── Input: "공격"  ──────┼──▶ 모든 입력 수집
+             │                        │
+  Client C ──┴── Input: "대기"  ──────┘
+                                      │
+                                      ▼
+                        ┌─────────────────────────┐
+                        │   모든 클라이언트에서     │
+                        │   Frame N 시뮬레이션     │
+                        │   (동일 결과 보장)        │
+                        └─────────────────────────┘
+                                      │
+                                      ▼
+                            Frame N+1로 진행
+                        </pre>
+                    </div>
+                    <p class="warning">한 명이라도 입력이 도착하지 않으면 <strong>모두가 대기</strong>합니다. 이것이 Lockstep의 단점입니다.</p>
+                </div>
+
+                <div class="q">Deterministic을 구현하기 어려운 이유는 무엇인가요?</div>
+                <div class="a">
+                    <p>컴퓨터마다 다른 결과를 내는 요소들이 많습니다:</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>비결정론적 요소</th>
+                                <th>문제점</th>
+                                <th>해결 방법</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>부동소수점 연산</td>
+                                <td>CPU마다 결과가 미세하게 다름</td>
+                                <td>고정소수점(Fixed Point) 사용</td>
+                            </tr>
+                            <tr>
+                                <td>난수 생성</td>
+                                <td>각자 다른 값 생성</td>
+                                <td>시드 동기화된 PRNG 사용</td>
+                            </tr>
+                            <tr>
+                                <td>물리 엔진</td>
+                                <td>반복 횟수에 따라 결과 다름</td>
+                                <td>고정 timestep, 커스텀 물리</td>
+                            </tr>
+                            <tr>
+                                <td>컬렉션 순회 순서</td>
+                                <td>HashMap 등 순서 비보장</td>
+                                <td>정렬된 컬렉션 사용</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">고정소수점이 어떻게 동작하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Fixed Point 구현 예시</div>
+                        <pre><code>// 16.16 고정소수점 (상위 16비트: 정수, 하위 16비트: 소수)
+struct Fixed32 {
+    int32_t raw;
+
+    static const int FRACTION_BITS = 16;
+    static const int ONE = 1 << FRACTION_BITS;  // 65536
+
+    static Fixed32 FromFloat(float f) {
+        Fixed32 result;
+        result.raw = static_cast<int32_t>(f * ONE);
+        return result;
+    }
+
+    float ToFloat() const {
+        return static_cast<float>(raw) / ONE;
+    }
+
+    // 덧셈은 그대로
+    Fixed32 operator+(Fixed32 other) const {
+        return { raw + other.raw };
+    }
+
+    // 곱셈은 시프트 필요
+    Fixed32 operator*(Fixed32 other) const {
+        int64_t result = static_cast<int64_t>(raw) * other.raw;
+        return { static_cast<int32_t>(result >> FRACTION_BITS) };
+    }
+};
+
+// 사용 예시
+Fixed32 pos = Fixed32::FromFloat(10.5f);
+Fixed32 speed = Fixed32::FromFloat(2.25f);
+Fixed32 newPos = pos + speed;  // 모든 기기에서 동일한 결과</code></pre>
+                    </div>
+                    <p class="key-point">모든 게임 로직을 고정소수점으로 구현하면 플랫폼 간 결과가 완벽히 일치합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: State Synchronization</h2>
+            <div class="conversation">
+                <div class="q">State Sync는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>서버가 게임 상태를 계산하고, 그 <strong>결과를 클라이언트에게 전송</strong>합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────┐
+│                    State Synchronization                     │
+└─────────────────────────────────────────────────────────────┘
+
+  Client A                    Server                    Client B
+     │                          │                          │
+     │── Input: 이동 ──────────▶│                          │
+     │                          │◀── Input: 공격 ──────────│
+     │                          │                          │
+     │                    ┌─────┴─────┐                    │
+     │                    │ 상태 계산  │                    │
+     │                    │(권위 서버) │                    │
+     │                    └─────┬─────┘                    │
+     │                          │                          │
+     │◀─── State Update ────────│────── State Update ─────▶│
+     │  Player A: (10, 5)       │      Player A: (10, 5)   │
+     │  Player B: (20, 3)       │      Player B: (20, 3)   │
+     │  HP: 80                  │      HP: 80              │
+     │                          │                          │
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">왜 서버가 권위자가 되어야 하나요?</div>
+                <div class="a">
+                    <p>클라이언트를 신뢰하면 <strong>치팅</strong>이 가능해집니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>시나리오</th>
+                                <th>클라이언트 권위</th>
+                                <th>서버 권위</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>"내 위치는 (999, 999)"</td>
+                                <td>❌ 순간이동 허용</td>
+                                <td>✅ 서버가 유효성 검증</td>
+                            </tr>
+                            <tr>
+                                <td>"내 공격력 1000"</td>
+                                <td>❌ 즉시 적용</td>
+                                <td>✅ 서버 데이터 사용</td>
+                            </tr>
+                            <tr>
+                                <td>"적 HP 0"</td>
+                                <td>❌ 원샷 킬</td>
+                                <td>✅ 서버가 데미지 계산</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">원칙: "Never trust the client" - 클라이언트 데이터는 항상 검증하세요.</p>
+                </div>
+
+                <div class="q">상태 전송 시 어떤 최적화가 필요한가요?</div>
+                <div class="a">
+                    <p>매번 전체 상태를 보내면 대역폭이 폭발합니다. 여러 최적화 기법이 있습니다:</p>
+                    <div class="code-block">
+                        <div class="code-header">Delta Compression</div>
+                        <pre><code>// 이전 상태
+struct PlayerState {
+    float x = 10.0f;
+    float y = 5.0f;
+    int hp = 100;
+    int ammo = 30;
+};
+
+// 변경된 부분만 전송하는 Delta
+struct PlayerDelta {
+    uint8_t changedFlags;  // 비트마스크
+    // flag & 0x01 -> x 변경
+    // flag & 0x02 -> y 변경
+    // flag & 0x04 -> hp 변경
+    // flag & 0x08 -> ammo 변경
+
+    // 변경된 필드만 포함
+    std::vector<uint8_t> changedData;
+};
+
+PlayerDelta CreateDelta(const PlayerState& prev, const PlayerState& curr) {
+    PlayerDelta delta;
+    delta.changedFlags = 0;
+
+    if (prev.x != curr.x) {
+        delta.changedFlags |= 0x01;
+        // x 데이터 추가
+    }
+    if (prev.y != curr.y) {
+        delta.changedFlags |= 0x02;
+        // y 데이터 추가
+    }
+    // ... 나머지 필드
+
+    return delta;
+}</code></pre>
+                    </div>
+
+                    <p>다른 최적화 기법들:</p>
+                    <ul>
+                        <li><strong>Quantization</strong>: float를 int16으로 압축 (정밀도 희생)</li>
+                        <li><strong>Interest Management</strong>: 관련된 객체만 전송</li>
+                        <li><strong>Snapshot Interpolation</strong>: 주기적 스냅샷만 전송, 사이는 보간</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 보간(Interpolation)과 예측(Prediction)</h2>
+            <div class="conversation">
+                <div class="q">State Sync에서 움직임이 끊겨 보이는 이유는?</div>
+                <div class="a">
+                    <p>서버에서 상태가 도착하는 간격(예: 20Hz = 50ms)과 클라이언트 렌더링 간격(60Hz = 16ms)이 다르기 때문입니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+서버 전송 (20Hz):    ●─────────────────●─────────────────●
+                    t=0              t=50ms            t=100ms
+
+클라이언트 렌더링 (60Hz):
+                    ●───●───●───●───●───●───●───●───●───●───●───●
+                    0  16  32  48  64  80  96 112 ...
+
+                    ↑   ↑   ↑
+                    이 시점들에서 위치를 어떻게 표시할까?
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">보간(Interpolation)은 어떻게 구현하나요?</div>
+                <div class="a">
+                    <p>과거의 두 스냅샷 사이를 부드럽게 연결합니다. 이를 위해 <strong>약간의 지연</strong>을 추가합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Snapshot Interpolation</div>
+                        <pre><code>class InterpolationBuffer {
+    struct Snapshot {
+        float time;
+        Vector3 position;
+        Quaternion rotation;
+    };
+
+    std::deque<Snapshot> snapshots;
+    const float INTERPOLATION_DELAY = 0.1f;  // 100ms 지연
+
+public:
+    void AddSnapshot(float serverTime, Vector3 pos, Quaternion rot) {
+        snapshots.push_back({ serverTime, pos, rot });
+
+        // 오래된 스냅샷 제거
+        while (snapshots.size() > 10) {
+            snapshots.pop_front();
+        }
+    }
+
+    void GetInterpolatedState(float currentTime,
+                              Vector3& outPos, Quaternion& outRot) {
+        // 보간 시점 = 현재 - 지연
+        float renderTime = currentTime - INTERPOLATION_DELAY;
+
+        // renderTime을 감싸는 두 스냅샷 찾기
+        Snapshot* before = nullptr;
+        Snapshot* after = nullptr;
+
+        for (int i = 0; i < snapshots.size() - 1; i++) {
+            if (snapshots[i].time <= renderTime &&
+                snapshots[i+1].time >= renderTime) {
+                before = &snapshots[i];
+                after = &snapshots[i+1];
+                break;
+            }
+        }
+
+        if (before && after) {
+            float t = (renderTime - before->time) /
+                      (after->time - before->time);
+
+            outPos = Vector3::Lerp(before->position, after->position, t);
+            outRot = Quaternion::Slerp(before->rotation, after->rotation, t);
+        }
+    }
+};</code></pre>
+                    </div>
+                    <p class="key-point">보간은 다른 플레이어(원격 엔티티)의 움직임을 부드럽게 합니다.</p>
+                </div>
+
+                <div class="q">예측(Prediction)은 언제 사용하나요?</div>
+                <div class="a">
+                    <p>예측은 <strong>내 캐릭터</strong>에 사용합니다. 서버 응답을 기다리지 않고 즉시 움직입니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+클라이언트 예측 (Client-Side Prediction):
+
+t=0: 플레이어가 "앞으로" 키 입력
+     │
+     ├── 서버에 입력 전송 ──────────────────────▶ 서버
+     │                                           │
+     ├── 클라이언트: 즉시 앞으로 이동 (예측)        │ 서버: 입력
+     │   Position: (10, 0) → (11, 0)              │ 처리 중
+     │                                           │
+t=50ms:                                          │
+     │                                           ▼
+     │◀──────────────────────────────── 서버 결과 수신
+     │                                  Position: (11, 0)
+     │
+     └── 예측이 맞음! 보정 불필요
+
+만약 예측이 틀렸다면?
+     └── 서버 위치로 "스냅" 또는 부드러운 보정
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">예측이 틀렸을 때 어떻게 보정하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Server Reconciliation</div>
+                        <pre><code>class ClientPrediction {
+    struct InputRecord {
+        uint32_t sequence;
+        PlayerInput input;
+        Vector3 predictedPosition;
+    };
+
+    std::deque<InputRecord> pendingInputs;
+    uint32_t lastAckedSequence = 0;
+
+public:
+    void SendInput(const PlayerInput& input) {
+        uint32_t seq = nextSequence++;
+
+        // 예측 실행
+        Vector3 predicted = SimulateMovement(currentPosition, input);
+
+        // 입력 기록 저장
+        pendingInputs.push_back({ seq, input, predicted });
+
+        // 서버에 전송
+        SendToServer(seq, input);
+
+        // 즉시 적용
+        currentPosition = predicted;
+    }
+
+    void OnServerState(uint32_t ackedSequence, Vector3 serverPosition) {
+        // 확인된 입력들 제거
+        while (!pendingInputs.empty() &&
+               pendingInputs.front().sequence <= ackedSequence) {
+            pendingInputs.pop_front();
+        }
+
+        // 서버 위치에서 시작하여 미확인 입력들 재시뮬레이션
+        Vector3 reconciledPos = serverPosition;
+        for (const auto& record : pendingInputs) {
+            reconciledPos = SimulateMovement(reconciledPos, record.input);
+        }
+
+        // 오차가 크면 보정
+        float error = Vector3::Distance(currentPosition, reconciledPos);
+        if (error > SNAP_THRESHOLD) {
+            currentPosition = reconciledPos;  // 즉시 스냅
+        } else if (error > SMOOTH_THRESHOLD) {
+            // 부드러운 보정
+            currentPosition = Vector3::Lerp(currentPosition,
+                                           reconciledPos, 0.1f);
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 방식 비교와 선택 기준</h2>
+            <div class="conversation">
+                <div class="q">두 방식을 비교하면 어떤 차이가 있나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>Deterministic Lockstep</th>
+                                <th>State Synchronization</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>대역폭</td>
+                                <td>✅ 매우 낮음 (입력만)</td>
+                                <td>❌ 높음 (상태 전체)</td>
+                            </tr>
+                            <tr>
+                                <td>레이턴시 민감도</td>
+                                <td>❌ 매우 민감 (가장 느린 사람)</td>
+                                <td>✅ 덜 민감 (예측 가능)</td>
+                            </tr>
+                            <tr>
+                                <td>중간 참여</td>
+                                <td>❌ 어려움 (전체 상태 재구성)</td>
+                                <td>✅ 쉬움 (현재 상태만 전송)</td>
+                            </tr>
+                            <tr>
+                                <td>관전 기능</td>
+                                <td>❌ 복잡</td>
+                                <td>✅ 쉬움</td>
+                            </tr>
+                            <tr>
+                                <td>리플레이</td>
+                                <td>✅ 입력만 저장</td>
+                                <td>❌ 전체 상태 저장</td>
+                            </tr>
+                            <tr>
+                                <td>치트 방지</td>
+                                <td>⚠️ P2P는 취약</td>
+                                <td>✅ 서버 권위</td>
+                            </tr>
+                            <tr>
+                                <td>구현 복잡도</td>
+                                <td>❌ 결정론 보장 어려움</td>
+                                <td>⚠️ 예측/보간 구현 필요</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">어떤 게임에 어떤 방식이 적합한가요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                      게임 장르별 권장 방식                         │
+├─────────────────────────────┬───────────────────────────────────┤
+│         Lockstep             │          State Sync              │
+├─────────────────────────────┼───────────────────────────────────┤
+│ 🎮 RTS (스타크래프트)         │ 🔫 FPS (배틀그라운드, 오버워치)    │
+│   - 수천 유닛, 상태 동기화     │   - 빠른 반응 필요                │
+│     비용 너무 큼               │   - 소수 플레이어                 │
+│   - 소수 플레이어 (2-8명)      │                                  │
+├─────────────────────────────┼───────────────────────────────────┤
+│ 🥊 격투 게임 (철권, 스트리트   │ 🌍 MMORPG (WoW, 리니지)          │
+│    파이터)                    │   - 수천 명 동시 접속             │
+│   - 프레임 단위 정밀도 필요     │   - 중간 참여 필수               │
+│   - 1:1 대전                  │                                  │
+├─────────────────────────────┼───────────────────────────────────┤
+│ 🏎️ 턴제 (하스스톤, 문명)      │ 🚗 레이싱, 스포츠                 │
+│   - 동시 액션 없음            │   - 물리 시뮬레이션               │
+│   - Lockstep 자연스러움       │   - 많은 동적 객체                │
+└─────────────────────────────┴───────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 하이브리드 접근법</h2>
+            <div class="conversation">
+                <div class="q">두 방식을 섞어서 사용할 수 있나요?</div>
+                <div class="a">
+                    <p>네, 많은 현대 게임이 하이브리드 방식을 사용합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">하이브리드 예시: 롤백 넷코드</div>
+                        <pre><code>// GGPO 스타일 롤백 넷코드
+// - 기본: Deterministic (입력만 전송)
+// - 예측: 상대 입력이 안 오면 이전 입력 반복 가정
+// - 롤백: 예측이 틀리면 되감기 후 재시뮬레이션
+
+class RollbackNetcode {
+    static const int MAX_ROLLBACK_FRAMES = 8;
+
+    struct FrameState {
+        GameState state;
+        std::array<PlayerInput, MAX_PLAYERS> inputs;
+        bool confirmed[MAX_PLAYERS];
+    };
+
+    std::array<FrameState, 256> frameHistory;  // 링 버퍼
+    int currentFrame = 0;
+
+public:
+    void Update() {
+        // 1. 로컬 입력 수집 및 전송
+        PlayerInput localInput = GetLocalInput();
+        SendInput(currentFrame, localInput);
+
+        // 2. 원격 입력 확인
+        PlayerInput remoteInput;
+        bool hasRemoteInput = TryGetRemoteInput(currentFrame, remoteInput);
+
+        if (!hasRemoteInput) {
+            // 예측: 이전 프레임 입력 반복
+            remoteInput = frameHistory[(currentFrame - 1) & 255]
+                          .inputs[REMOTE_PLAYER];
+        }
+
+        // 3. 시뮬레이션 진행
+        frameHistory[currentFrame & 255].inputs[LOCAL_PLAYER] = localInput;
+        frameHistory[currentFrame & 255].inputs[REMOTE_PLAYER] = remoteInput;
+        frameHistory[currentFrame & 255].confirmed[REMOTE_PLAYER] = hasRemoteInput;
+
+        AdvanceSimulation(localInput, remoteInput);
+        currentFrame++;
+    }
+
+    void OnRemoteInputReceived(int frame, PlayerInput input) {
+        int frameIndex = frame & 255;
+
+        // 예측이 맞았는지 확인
+        if (frameHistory[frameIndex].inputs[REMOTE_PLAYER] != input) {
+            // 롤백 필요!
+            Rollback(frame, input);
+        }
+
+        frameHistory[frameIndex].confirmed[REMOTE_PLAYER] = true;
+    }
+
+    void Rollback(int frame, PlayerInput correctInput) {
+        // 1. 해당 프레임 상태로 복원
+        LoadState(frameHistory[(frame - 1) & 255].state);
+
+        // 2. 올바른 입력으로 교체
+        frameHistory[frame & 255].inputs[REMOTE_PLAYER] = correctInput;
+
+        // 3. 현재 프레임까지 재시뮬레이션
+        for (int f = frame; f < currentFrame; f++) {
+            AdvanceSimulation(
+                frameHistory[f & 255].inputs[LOCAL_PLAYER],
+                frameHistory[f & 255].inputs[REMOTE_PLAYER]
+            );
+        }
+    }
+};</code></pre>
+                    </div>
+                    <p class="highlight">롤백 넷코드는 격투 게임에서 표준이 되었습니다. 지연 없이 반응하면서도 결과의 정확성을 보장합니다.</p>
+                </div>
+
+                <div class="q">MMORPG에서는 어떤 하이브리드를 사용하나요?</div>
+                <div class="a">
+                    <p>영역에 따라 다른 방식을 적용합니다:</p>
+                    <ul>
+                        <li><strong>이동</strong>: Client Prediction + Server Reconciliation</li>
+                        <li><strong>스킬/데미지</strong>: Server Authority (예측 없음)</li>
+                        <li><strong>UI/인벤토리</strong>: Optimistic Update + 서버 검증</li>
+                        <li><strong>NPC/몬스터</strong>: Server State + Interpolation</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Deterministic Lockstep</strong>: 입력만 공유, 모든 클라이언트가 동일 시뮬레이션. RTS/격투에 적합</li>
+                <li><strong>State Sync</strong>: 서버가 상태 계산 후 전송. FPS/MMO에 적합</li>
+                <li><strong>보간</strong>: 다른 플레이어의 움직임을 부드럽게 (과거 데이터 사용)</li>
+                <li><strong>예측</strong>: 내 캐릭터를 즉시 반응하게 (미래 예측)</li>
+                <li><strong>롤백 넷코드</strong>: 예측이 틀리면 되감기 후 재시뮬레이션</li>
+                <li>현대 게임은 상황에 맞게 <strong>하이브리드</strong> 방식을 사용</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

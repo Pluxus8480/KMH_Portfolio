@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRTP (Curiously Recurring Template Pattern) | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>자기 자신을 템플릿 인자로?</h1>
+            <p class="subtitle">CRTP로 정적 다형성과 Mixin 구현하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: CRTP란?</h2>
+            <div class="conversation">
+                <div class="q">CRTP가 뭔가요?</div>
+                <div class="a">
+                    <p class="highlight">파생 클래스가 자기 자신을 기반 클래스의 템플릿 인자로 전달하는 패턴입니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">CRTP 기본 형태</div>
+                        <pre><code>// CRTP 기반 클래스
+template&lt;typename Derived&gt;
+class Base {
+public:
+    void interface() {
+        // 파생 클래스의 구현 호출
+        static_cast&lt;Derived*&gt;(this)->implementation();
+    }
+
+    void defaultImplementation() {
+        std::cout << "Base default\n";
+    }
+};
+
+// 파생 클래스: 자신을 템플릿 인자로 전달
+class Derived : public Base&lt;Derived&gt; {  // 핵심!
+public:
+    void implementation() {
+        std::cout << "Derived implementation\n";
+    }
+};
+
+// 사용
+Derived d;
+d.interface();  // "Derived implementation" 출력
+
+// 가상 함수 없이 다형성 달성!</code></pre>
+                    </div>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>서류 양식에 "이름을 적으세요"라고 써 있으면, 각자 자기 이름을 적습니다. CRTP는 "네 타입을 알려줘"라고 해서 파생 클래스가 자기 타입을 알려주는 것입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 정적 다형성</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">가상 함수 vs CRTP</div>
+                    <pre><code>// 가상 함수 (동적 다형성)
+class VirtualShape {
+public:
+    virtual double area() const = 0;
+    virtual ~VirtualShape() = default;
+};
+
+class VirtualCircle : public VirtualShape {
+    double radius;
+public:
+    VirtualCircle(double r) : radius(r) {}
+    double area() const override { return 3.14159 * radius * radius; }
+};
+
+// vtable 조회 비용, 인라인 불가
+
+// CRTP (정적 다형성)
+template&lt;typename Derived&gt;
+class Shape {
+public:
+    double area() const {
+        return static_cast&lt;const Derived*&gt;(this)->areaImpl();
+    }
+};
+
+class Circle : public Shape&lt;Circle&gt; {
+    double radius;
+public:
+    Circle(double r) : radius(r) {}
+    double areaImpl() const { return 3.14159 * radius * radius; }
+};
+
+class Rectangle : public Shape&lt;Rectangle&gt; {
+    double width, height;
+public:
+    Rectangle(double w, double h) : width(w), height(h) {}
+    double areaImpl() const { return width * height; }
+};
+
+// 컴파일 타임에 타입 결정, 인라인 가능!
+
+// 템플릿 함수에서 사용
+template&lt;typename T&gt;
+void printArea(const Shape&lt;T&gt;& shape) {
+    std::cout << "Area: " << shape.area() << "\n";
+}
+
+Circle c(5.0);
+Rectangle r(3.0, 4.0);
+printArea(c);  // 인라인됨!
+printArea(r);  // 인라인됨!</code></pre>
+                </div>
+
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>항목</th>
+                            <th>가상 함수</th>
+                            <th>CRTP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>다형성 시점</td>
+                            <td>런타임</td>
+                            <td>컴파일타임</td>
+                        </tr>
+                        <tr>
+                            <td>vtable 오버헤드</td>
+                            <td>있음</td>
+                            <td>없음</td>
+                        </tr>
+                        <tr>
+                            <td>인라인</td>
+                            <td>어려움</td>
+                            <td>가능</td>
+                        </tr>
+                        <tr>
+                            <td>이질적 컬렉션</td>
+                            <td>가능</td>
+                            <td>불가</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Mixin 패턴</h2>
+            <div class="conversation">
+                <div class="q">CRTP로 기능을 추가할 수 있나요?</div>
+                <div class="a">
+                    <p class="highlight">Mixin: 상속을 통해 기능을 "믹스인"하는 패턴!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">CRTP Mixin</div>
+                        <pre><code>// 비교 연산 Mixin
+template&lt;typename Derived&gt;
+class Comparable {
+public:
+    friend bool operator!=(const Derived& a, const Derived& b) {
+        return !(a == b);  // Derived가 == 제공
+    }
+
+    friend bool operator&gt;(const Derived& a, const Derived& b) {
+        return b < a;  // Derived가 < 제공
+    }
+
+    friend bool operator&lt;=(const Derived& a, const Derived& b) {
+        return !(b < a);
+    }
+
+    friend bool operator&gt;=(const Derived& a, const Derived& b) {
+        return !(a < b);
+    }
+};
+
+class Point : public Comparable&lt;Point&gt; {
+    int x, y;
+public:
+    Point(int x, int y) : x(x), y(y) {}
+
+    // ==와 <만 구현
+    bool operator==(const Point& other) const {
+        return x == other.x && y == other.y;
+    }
+
+    bool operator<(const Point& other) const {
+        return std::tie(x, y) < std::tie(other.x, other.y);
+    }
+};
+
+// 자동으로 !=, >, <=, >= 사용 가능!
+Point p1{1, 2}, p2{3, 4};
+if (p1 < p2) { /* ... */ }
+if (p1 != p2) { /* ... */ }
+if (p1 >= p2) { /* ... */ }</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 실전 활용</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">싱글턴 CRTP</div>
+                    <pre><code>// 싱글턴 Mixin
+template&lt;typename Derived&gt;
+class Singleton {
+protected:
+    Singleton() = default;
+    ~Singleton() = default;
+
+public:
+    Singleton(const Singleton&) = delete;
+    Singleton& operator=(const Singleton&) = delete;
+
+    static Derived& getInstance() {
+        static Derived instance;
+        return instance;
+    }
+};
+
+class Logger : public Singleton&lt;Logger&gt; {
+    friend class Singleton&lt;Logger&gt;;  // 생성자 접근 허용
+    Logger() = default;
+
+public:
+    void log(const std::string& msg) {
+        std::cout << msg << "\n";
+    }
+};
+
+// 사용
+Logger::getInstance().log("Hello!");</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">Counter Mixin</div>
+                    <pre><code>// 객체 수 추적
+template&lt;typename Derived&gt;
+class Counter {
+    static inline size_t count = 0;
+
+protected:
+    Counter() { ++count; }
+    Counter(const Counter&) { ++count; }
+    ~Counter() { --count; }
+
+public:
+    static size_t getCount() { return count; }
+};
+
+class Enemy : public Counter&lt;Enemy&gt; {
+    // ...
+};
+
+class Bullet : public Counter&lt;Bullet&gt; {
+    // ...
+};
+
+// 사용
+void gameLoop() {
+    std::cout << "Enemies: " << Enemy::getCount() << "\n";
+    std::cout << "Bullets: " << Bullet::getCount() << "\n";
+}</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">Cloneable 패턴</div>
+                    <pre><code>// 다형적 복사
+template&lt;typename Derived&gt;
+class Cloneable {
+public:
+    std::unique_ptr&lt;Derived&gt; clone() const {
+        return std::make_unique&lt;Derived&gt;(
+            static_cast&lt;const Derived&amp;&gt;(*this)
+        );
+    }
+};
+
+class Document : public Cloneable&lt;Document&gt; {
+    std::string content;
+public:
+    Document(const std::string& c) : content(c) {}
+    Document(const Document&) = default;
+};
+
+// 사용
+Document doc("Hello");
+auto copy = doc.clone();  // 타입 안전한 복사!</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Chaining과 Builder</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">메서드 체이닝</div>
+                    <pre><code>// CRTP로 반환 타입을 파생 클래스로
+template&lt;typename Derived&gt;
+class Builder {
+protected:
+    Derived& self() { return static_cast&lt;Derived&amp;&gt;(*this); }
+
+public:
+    Derived& setName(const std::string& name) {
+        // 설정...
+        return self();
+    }
+
+    Derived& setValue(int value) {
+        // 설정...
+        return self();
+    }
+};
+
+class AdvancedBuilder : public Builder&lt;AdvancedBuilder&gt; {
+public:
+    AdvancedBuilder& setAdvancedOption(bool opt) {
+        // 설정...
+        return *this;
+    }
+};
+
+// 체이닝 가능!
+AdvancedBuilder builder;
+builder
+    .setName("Test")        // Builder 메서드
+    .setValue(42)           // Builder 메서드
+    .setAdvancedOption(true); // AdvancedBuilder 메서드
+
+// Base::setName이 Base& 반환하면 체이닝 끊김
+// CRTP로 Derived& 반환하여 해결!</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 주의사항</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">CRTP 함정들</div>
+                    <pre><code>// 1. 잘못된 파생 클래스 전달
+class Wrong : public Base&lt;OtherClass&gt; {  // 버그!
+    // ...
+};
+
+// 방지책: C++23 deducing this 또는 체크
+template&lt;typename Derived&gt;
+class Base {
+    Base() {
+        static_assert(std::is_base_of_v&lt;Base, Derived&gt;,
+                      "Invalid CRTP usage");
+    }
+};
+
+// 2. 불완전 타입 문제
+template&lt;typename Derived&gt;
+class Base {
+    void foo() {
+        // Derived가 아직 불완전할 수 있음
+        sizeof(Derived);  // 일부 컨텍스트에서 에러
+    }
+};
+
+// 3. 다이아몬드 상속
+class A : public Mixin1&lt;A&gt;, public Mixin2&lt;A&gt; {
+    // 두 Mixin이 같은 Base를 상속하면 문제
+};
+
+// 4. 코드 비대화
+// 각 파생 클래스마다 Base 코드가 인스턴스화됨
+
+// C++23 대안: deducing this
+class Modern {
+public:
+    // this 타입이 자동 추론됨
+    template&lt;typename Self&gt;
+    Self& setName(this Self& self, std::string name) {
+        // ...
+        return self;
+    }
+};</code></pre>
+                </div>
+
+                <p class="key-point">CRTP는 강력하지만 복잡합니다. C++23의 deducing this가 많은 경우를 대체할 수 있습니다!</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>CRTP</strong>: class Derived : public Base&lt;Derived&gt;</li>
+                <li><strong>정적 다형성</strong>: vtable 없이 다형적 동작</li>
+                <li><strong>Mixin</strong>: 공통 기능을 상속으로 추가</li>
+                <li><strong>체이닝</strong>: 반환 타입을 파생 클래스로</li>
+                <li><strong>활용</strong>: Singleton, Counter, Comparable, Cloneable</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

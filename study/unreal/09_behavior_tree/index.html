@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI에게 생각하는 법을 가르치다 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+
+        <header class="content-header">
+            <h1>AI에게 생각하는 법을 가르치다</h1>
+            <p class="subtitle">Behavior Tree와 AI 시스템</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: AI 시스템 개요</h2>
+            <div class="conversation">
+                <div class="q">언리얼의 AI 시스템은 어떻게 구성되어 있나요?</div>
+                <div class="a">
+                    <p>언리얼 AI는 세 가지 핵심 컴포넌트로 구성됩니다:</p>
+                    <p>• <span class="highlight">AI Controller</span> - AI의 "뇌", 의사결정 주체</p>
+                    <p>• <span class="highlight">Behavior Tree</span> - 행동 로직을 정의하는 "사고 과정"</p>
+                    <p>• <span class="highlight">Blackboard</span> - AI의 "기억", 데이터 저장소</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+┌─────────────────────────────────────────────────────────────┐
+│                    AI 시스템 구조                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌─────────────────┐                                        │
+│  │  AI Controller  │ ← AI의 뇌                              │
+│  │  (의사결정 주체)│                                        │
+│  └────────┬────────┘                                        │
+│           │ 소유                                             │
+│           ▼                                                  │
+│  ┌─────────────────┐                                        │
+│  │     Pawn        │ ← AI가 조종하는 캐릭터                 │
+│  │   (AI 캐릭터)   │                                        │
+│  └─────────────────┘                                        │
+│                                                              │
+│  AI Controller가 사용하는 것들:                             │
+│  ┌─────────────────┐    ┌─────────────────┐                │
+│  │  Behavior Tree  │    │   Blackboard    │                │
+│  │   (행동 로직)   │◄───│    (기억)       │                │
+│  └─────────────────┘    └─────────────────┘                │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">AI 시스템의 핵심 요소</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Behavior Tree 기초</h2>
+            <div class="conversation">
+                <div class="q">Behavior Tree는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>Behavior Tree는 <span class="highlight">트리 구조</span>로 행동을 정의합니다. 루트에서 시작해 왼쪽에서 오른쪽으로, 위에서 아래로 실행합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+                        [Root]
+                           │
+                      [Selector]  ← 하나라도 성공하면 OK
+                           │
+            ┌──────────────┼──────────────┐
+            │              │              │
+       [Sequence]    [Sequence]      [Task]
+      (공격 시퀀스)  (순찰 시퀀스)   (대기)
+            │              │
+      ┌─────┴─────┐  ┌─────┴─────┐
+      │           │  │           │
+   [Task]     [Task] [Task]   [Task]
+  (적 감지)  (공격)  (이동점) (이동)
+
+    실행 순서: 왼쪽 → 오른쪽, 위 → 아래
+                </pre>
+                <p class="diagram-caption">Behavior Tree 실행 흐름</p>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>노드 유형</th>
+                        <th>역할</th>
+                        <th>성공/실패 조건</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Selector</td>
+                        <td>OR 조건</td>
+                        <td>하나라도 성공하면 성공</td>
+                    </tr>
+                    <tr>
+                        <td>Sequence</td>
+                        <td>AND 조건</td>
+                        <td>모두 성공해야 성공</td>
+                    </tr>
+                    <tr>
+                        <td>Task</td>
+                        <td>실제 행동</td>
+                        <td>행동 수행 결과</td>
+                    </tr>
+                    <tr>
+                        <td>Decorator</td>
+                        <td>조건 체크</td>
+                        <td>조건 만족 여부</td>
+                    </tr>
+                    <tr>
+                        <td>Service</td>
+                        <td>주기적 업데이트</td>
+                        <td>-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Blackboard</h2>
+            <div class="conversation">
+                <div class="q">Blackboard는 무엇인가요?</div>
+                <div class="a">
+                    <p>Blackboard는 <span class="highlight">AI의 기억 저장소</span>입니다. 타겟 위치, 적 참조, 상태 플래그 등을 저장하고 Behavior Tree에서 읽어 사용합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Blackboard 설정</div>
+                <pre><code>// Blackboard Asset에서 정의
+Key Name: "TargetActor"
+Key Type: Object (Base Class: Actor)
+
+Key Name: "TargetLocation"
+Key Type: Vector
+
+Key Name: "HasLineOfSight"
+Key Type: Bool
+
+// C++에서 Blackboard 값 설정
+void AMyAIController::SetTargetActor(AActor* Target)
+{
+    if (UBlackboardComponent* BB = GetBlackboardComponent())
+    {
+        BB->SetValueAsObject(FName("TargetActor"), Target);
+        BB->SetValueAsVector(FName("TargetLocation"),
+            Target->GetActorLocation());
+    }
+}
+
+// Behavior Tree Task에서 값 읽기
+EBTNodeResult::Type UBTTask_Attack::ExecuteTask(
+    UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
+{
+    UBlackboardComponent* BB = OwnerComp.GetBlackboardComponent();
+    AActor* Target = Cast<AActor>(
+        BB->GetValueAsObject(TargetKey.SelectedKeyName));
+
+    if (Target)
+    {
+        // 공격 수행
+        return EBTNodeResult::Succeeded;
+    }
+    return EBTNodeResult::Failed;
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Task, Decorator, Service</h2>
+            <div class="conversation">
+                <div class="q">커스텀 Task는 어떻게 만드나요?</div>
+                <div class="a">
+                    <p>UBTTaskNode를 상속받아 구현합니다. <span class="highlight">ExecuteTask</span>에서 행동을 수행합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">커스텀 Task</div>
+                <pre><code>UCLASS()
+class UBTTask_FindPatrolPoint : public UBTTaskNode
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(EditAnywhere)
+    FBlackboardKeySelector PatrolPointKey;
+
+    virtual EBTNodeResult::Type ExecuteTask(
+        UBehaviorTreeComponent& OwnerComp,
+        uint8* NodeMemory) override
+    {
+        AMyAIController* AIController =
+            Cast<AMyAIController>(OwnerComp.GetAIOwner());
+
+        if (AIController)
+        {
+            FVector NextPoint = AIController->GetNextPatrolPoint();
+
+            OwnerComp.GetBlackboardComponent()->SetValueAsVector(
+                PatrolPointKey.SelectedKeyName, NextPoint);
+
+            return EBTNodeResult::Succeeded;
+        }
+
+        return EBTNodeResult::Failed;
+    }
+};</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">Decorator와 Service의 차이점은?</div>
+                <div class="a">
+                    <p><span class="highlight">Decorator</span>는 조건문입니다. 조건이 참이면 하위 노드 실행, 거짓이면 스킵합니다.</p>
+                    <p><span class="highlight">Service</span>는 주기적으로 실행되는 업데이트 로직입니다. Blackboard 값 갱신에 사용합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Service 예시 - 적 감지</div>
+                <pre><code>UCLASS()
+class UBTService_CheckForEnemy : public UBTService
+{
+    GENERATED_BODY()
+
+public:
+    UBTService_CheckForEnemy()
+    {
+        Interval = 0.5f;  // 0.5초마다 실행
+        RandomDeviation = 0.1f;
+    }
+
+protected:
+    virtual void TickNode(UBehaviorTreeComponent& OwnerComp,
+        uint8* NodeMemory, float DeltaSeconds) override
+    {
+        // 적 감지 로직
+        AActor* Enemy = FindNearestEnemy(OwnerComp);
+
+        // Blackboard 업데이트
+        OwnerComp.GetBlackboardComponent()->SetValueAsObject(
+            FName("TargetEnemy"), Enemy);
+    }
+};</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: EQS (Environment Query System)</h2>
+            <div class="conversation">
+                <div class="q">AI가 "어디로 이동할지"는 어떻게 결정하나요?</div>
+                <div class="a">
+                    <p><span class="highlight">EQS</span>를 사용합니다. 환경을 쿼리해서 최적의 위치를 찾습니다. 예: "적에게서 떨어지면서 엄폐물 뒤"</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+┌─────────────────────────────────────────────────────────────┐
+│                      EQS 쿼리 예시                          │
+│                  "엄폐 위치 찾기"                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│   1. Generator: 주변 포인트 생성                            │
+│      ┌─────────────────────────────┐                        │
+│      │  ●  ●  ●  ●  ●  ●  ●       │                        │
+│      │  ●  ●  ●  ●  ●  ●  ●       │ ← 그리드 포인트        │
+│      │  ●  ●  AI ●  ●  ●  ●       │                        │
+│      │  ●  ●  ●  ●  ●  ●  ●       │                        │
+│      └─────────────────────────────┘                        │
+│                                                              │
+│   2. Tests: 각 포인트 점수 계산                             │
+│      • 적과의 거리 (멀수록 +)                               │
+│      • 시야선 차단 여부 (차단되면 +)                        │
+│      • 네비게이션 가능 (불가능하면 제외)                    │
+│                                                              │
+│   3. 결과: 최고 점수 포인트 반환                            │
+│      ┌─────────────────────────────┐                        │
+│      │  30  40  50  60  70  X   X  │                        │
+│      │  40  50  ■  70  80  X   X  │ ← ■ = 엄폐물            │
+│      │  50  60  AI 80  90  X   X  │   X = 적 시야           │
+│      │  60  70  80  ★ 100 100 X  │   ★ = 최적 위치        │
+│      └─────────────────────────────┘                        │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">EQS로 엄폐 위치 찾기</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">EQS Query 사용</div>
+                <pre><code>// Behavior Tree에서 EQS Query 실행
+// Task: "Run EQS Query"
+// Query: EQS_FindCoverPoint
+// Blackboard Key: CoverLocation
+
+// EQS Query 설정 (에디터에서)
+Generator: Points in Grid
+  - Grid Size: 500
+  - Space Between: 100
+
+Tests:
+  - Distance: to Context "Enemy"
+    - Scoring: Inverse Linear
+  - Trace: to Context "Enemy"
+    - Scoring: Filter Only (차단되면 통과)
+  - Pathfinding: to Context "Querier"
+    - Filter: Require Navigable</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: AI Perception</h2>
+            <div class="conversation">
+                <div class="q">AI가 적을 감지하는 방법은?</div>
+                <div class="a">
+                    <p><span class="highlight">AI Perception Component</span>를 사용합니다. 시야, 청각, 촉각 등 다양한 감각을 시뮬레이션합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">AI Perception 설정</div>
+                <pre><code>// AI Controller에서 Perception 설정
+AMyAIController::AMyAIController()
+{
+    // Perception Component 생성
+    PerceptionComponent = CreateDefaultSubobject<UAIPerceptionComponent>(
+        TEXT("PerceptionComp"));
+
+    // 시야 감각 설정
+    SightConfig = CreateDefaultSubobject<UAISenseConfig_Sight>(
+        TEXT("SightConfig"));
+    SightConfig->SightRadius = 1500.0f;
+    SightConfig->LoseSightRadius = 2000.0f;
+    SightConfig->PeripheralVisionAngleDegrees = 60.0f;
+    SightConfig->DetectionByAffiliation.bDetectEnemies = true;
+
+    PerceptionComponent->ConfigureSense(*SightConfig);
+    PerceptionComponent->SetDominantSense(SightConfig->GetSenseImplementation());
+
+    // 감지 이벤트 바인딩
+    PerceptionComponent->OnTargetPerceptionUpdated.AddDynamic(
+        this, &AMyAIController::OnTargetPerceptionUpdated);
+}
+
+void AMyAIController::OnTargetPerceptionUpdated(
+    AActor* Actor, FAIStimulus Stimulus)
+{
+    if (Stimulus.WasSuccessfullySensed())
+    {
+        // 적 발견!
+        SetTargetEnemy(Actor);
+    }
+    else
+    {
+        // 적을 놓침
+        ClearTargetEnemy();
+    }
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>감각 유형</th>
+                        <th>용도</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Sight</td>
+                        <td>시야 내 Actor 감지</td>
+                    </tr>
+                    <tr>
+                        <td>Hearing</td>
+                        <td>소리 이벤트 감지</td>
+                    </tr>
+                    <tr>
+                        <td>Damage</td>
+                        <td>피해를 받았을 때</td>
+                    </tr>
+                    <tr>
+                        <td>Touch</td>
+                        <td>물리적 접촉</td>
+                    </tr>
+                    <tr>
+                        <td>Team</td>
+                        <td>같은 팀 감지</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Behavior Tree</strong>는 트리 구조로 AI 행동 로직을 정의합니다</li>
+                <li><strong>Blackboard</strong>는 AI의 기억, Behavior Tree와 데이터 공유</li>
+                <li><strong>Selector</strong>는 OR, <strong>Sequence</strong>는 AND 조건</li>
+                <li><strong>EQS</strong>로 환경을 쿼리해서 최적의 위치를 찾습니다</li>
+                <li><strong>AI Perception</strong>으로 시야, 청각 등 감각을 시뮬레이션합니다</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

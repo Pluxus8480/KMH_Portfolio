@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>데드락 탐지와 회피 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+            <h1>"게임이 갑자기 멈췄어요"</h1>
+            <p class="subtitle">데드락의 원인과 해결법</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 데드락이란?</h2>
+            <div class="conversation">
+                <div class="q">데드락은 어떻게 발생하나요?</div>
+                <div class="a">
+                    <p>두 개 이상의 스레드가 서로의 자원을 기다리며 <strong>영원히 대기</strong>하는 상태입니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    데드락 발생 시나리오                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Thread A                         Thread B                        │
+│   ─────────                        ─────────                        │
+│                                                                     │
+│   1. lock(mutexA) ✓                                                │
+│                                    2. lock(mutexB) ✓               │
+│   3. lock(mutexB) ... 대기 ──────▶                                 │
+│                                    4. lock(mutexA) ... 대기 ◀──────│
+│                                                                     │
+│   결과: 양쪽 모두 영원히 대기!                                      │
+│                                                                     │
+│   ┌─────────┐                    ┌─────────┐                       │
+│   │Thread A │ ─── 대기 ─────────▶│ mutexB  │◀─── 보유 ─┐          │
+│   │         │◀─── 보유 ─────────│         │           │          │
+│   └─────────┘                    └─────────┘           │          │
+│        │                              ▲                │          │
+│        │                              │                │          │
+│        ▼                              │                │          │
+│   ┌─────────┐                    ┌────┴────┐           │          │
+│   │ mutexA  │◀─── 대기 ─────────│Thread B │───────────┘          │
+│   └─────────┘                    └─────────┘                       │
+│                                                                     │
+│   순환 대기 (Circular Wait) 발생!                                   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">데드락 발생 조건은 무엇인가요?</div>
+                <div class="a">
+                    <p><strong>4가지 조건이 모두</strong> 만족해야 데드락이 발생합니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>조건</th>
+                                <th>설명</th>
+                                <th>게임 예시</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>상호 배제</td>
+                                <td>자원을 한 번에 하나만 사용</td>
+                                <td>Mutex로 보호된 자원</td>
+                            </tr>
+                            <tr>
+                                <td>점유 대기</td>
+                                <td>자원 보유하며 다른 자원 대기</td>
+                                <td>Lock A 보유, Lock B 대기</td>
+                            </tr>
+                            <tr>
+                                <td>비선점</td>
+                                <td>강제로 자원 뺏기 불가</td>
+                                <td>다른 스레드의 lock 해제 불가</td>
+                            </tr>
+                            <tr>
+                                <td>순환 대기</td>
+                                <td>자원 대기가 원형으로 연결</td>
+                                <td>A→B→C→A 대기 체인</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="key-point">하나의 조건만 깨면 데드락을 방지할 수 있습니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 데드락 방지 기법</h2>
+            <div class="conversation">
+                <div class="q">순환 대기를 방지하는 방법은?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">방법 1: Lock 순서 고정</div>
+                        <pre><code>// ❌ 데드락 가능
+void transferBad(Account& from, Account& to, int amount) {
+    std::lock_guard<std::mutex> lock1(from.mutex);
+    std::lock_guard<std::mutex> lock2(to.mutex);  // 반대 순서면 데드락!
+    // 이체 로직
+}
+
+// ✅ 항상 같은 순서로 lock (ID 기준)
+void transferGood(Account& from, Account& to, int amount) {
+    // 더 작은 ID를 먼저 lock
+    Account* first = (from.id < to.id) ? &from : &to;
+    Account* second = (from.id < to.id) ? &to : &from;
+
+    std::lock_guard<std::mutex> lock1(first->mutex);
+    std::lock_guard<std::mutex> lock2(second->mutex);
+    // 이체 로직
+}
+
+// ✅ std::lock 사용 (원자적으로 여러 lock 획득)
+void transferBest(Account& from, Account& to, int amount) {
+    std::scoped_lock lock(from.mutex, to.mutex);  // C++17
+    // 또는
+    // std::lock(from.mutex, to.mutex);
+    // std::lock_guard<std::mutex> lg1(from.mutex, std::adopt_lock);
+    // std::lock_guard<std::mutex> lg2(to.mutex, std::adopt_lock);
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">방법 2: try_lock으로 점유 대기 방지</div>
+                        <pre><code>bool tryTransfer(Account& from, Account& to, int amount) {
+    // 타임아웃 있는 시도
+    std::unique_lock<std::mutex> lock1(from.mutex, std::defer_lock);
+    std::unique_lock<std::mutex> lock2(to.mutex, std::defer_lock);
+
+    // 둘 다 획득 시도
+    if (std::try_lock(lock1, lock2) == -1) {  // 모두 성공
+        // 이체 로직
+        return true;
+    }
+    return false;  // 실패 시 나중에 재시도
+}
+
+// 백오프 전략
+void transferWithBackoff(Account& from, Account& to, int amount) {
+    int backoffMs = 1;
+    while (true) {
+        if (tryTransfer(from, to, amount)) {
+            return;
+        }
+        // 랜덤 백오프로 동시 재시도 방지
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(backoffMs + rand() % backoffMs)
+        );
+        backoffMs = std::min(backoffMs * 2, 100);  // 최대 100ms
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 데드락 탐지</h2>
+            <div class="conversation">
+                <div class="q">런타임에 데드락을 탐지할 수 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Lock 그래프 기반 탐지</div>
+                        <pre><code>// 디버그용 데드락 탐지기
+class DeadlockDetector {
+private:
+    struct LockInfo {
+        void* mutex;
+        std::thread::id owner;
+        std::string location;  // 파일:라인
+    };
+
+    std::mutex detectorMutex_;
+    std::map<void*, LockInfo> heldLocks_;
+    std::map<std::thread::id, std::vector<void*>> threadLocks_;
+    std::map<std::thread::id, void*> waitingFor_;
+
+public:
+    void beforeLock(void* mutex, const char* file, int line) {
+        std::lock_guard<std::mutex> guard(detectorMutex_);
+
+        auto tid = std::this_thread::get_id();
+        waitingFor_[tid] = mutex;
+
+        // 사이클 탐지
+        if (detectCycle(tid)) {
+            reportDeadlock(tid, mutex, file, line);
+        }
+    }
+
+    void afterLock(void* mutex, const char* file, int line) {
+        std::lock_guard<std::mutex> guard(detectorMutex_);
+
+        auto tid = std::this_thread::get_id();
+        waitingFor_.erase(tid);
+
+        heldLocks_[mutex] = {mutex, tid, std::string(file) + ":" + std::to_string(line)};
+        threadLocks_[tid].push_back(mutex);
+    }
+
+    void beforeUnlock(void* mutex) {
+        std::lock_guard<std::mutex> guard(detectorMutex_);
+
+        auto tid = std::this_thread::get_id();
+        heldLocks_.erase(mutex);
+
+        auto& locks = threadLocks_[tid];
+        locks.erase(std::remove(locks.begin(), locks.end(), mutex), locks.end());
+    }
+
+private:
+    bool detectCycle(std::thread::id startTid) {
+        std::set<std::thread::id> visited;
+        std::thread::id current = startTid;
+
+        while (true) {
+            if (visited.count(current)) {
+                return true;  // 사이클 발견!
+            }
+            visited.insert(current);
+
+            auto it = waitingFor_.find(current);
+            if (it == waitingFor_.end()) break;
+
+            auto lockIt = heldLocks_.find(it->second);
+            if (lockIt == heldLocks_.end()) break;
+
+            current = lockIt->second.owner;
+        }
+        return false;
+    }
+
+    void reportDeadlock(std::thread::id tid, void* mutex,
+                        const char* file, int line) {
+        std::cerr << "DEADLOCK DETECTED!\n";
+        std::cerr << "Thread " << tid << " waiting for lock at "
+                  << file << ":" << line << "\n";
+        // 사이클 정보 출력...
+        std::abort();  // 또는 예외 throw
+    }
+};
+
+// 매크로로 사용
+#ifdef DEBUG
+    #define LOCK(mtx) \
+        g_detector.beforeLock(&mtx, __FILE__, __LINE__); \
+        mtx.lock(); \
+        g_detector.afterLock(&mtx, __FILE__, __LINE__)
+    #define UNLOCK(mtx) \
+        g_detector.beforeUnlock(&mtx); \
+        mtx.unlock()
+#else
+    #define LOCK(mtx) mtx.lock()
+    #define UNLOCK(mtx) mtx.unlock()
+#endif</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 게임에서의 데드락 사례</h2>
+            <div class="conversation">
+                <div class="q">게임 개발에서 흔한 데드락 패턴은?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">사례 1: 이벤트 시스템</div>
+                        <pre><code>// ❌ 데드락 위험
+class EventSystem {
+    std::mutex mutex_;
+    std::vector<Handler> handlers_;
+
+public:
+    void subscribe(Handler h) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        handlers_.push_back(h);
+    }
+
+    void fire(Event& e) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (auto& h : handlers_) {
+            h(e);  // 핸들러가 subscribe() 호출하면 데드락!
+        }
+    }
+};
+
+// ✅ 복사 후 처리
+class SafeEventSystem {
+    std::mutex mutex_;
+    std::vector<Handler> handlers_;
+
+public:
+    void fire(Event& e) {
+        std::vector<Handler> handlersCopy;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            handlersCopy = handlers_;  // 복사
+        }
+        // lock 해제 후 처리
+        for (auto& h : handlersCopy) {
+            h(e);  // 안전하게 subscribe() 가능
+        }
+    }
+};</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">사례 2: 계층적 잠금</div>
+                        <pre><code>// 게임 월드 → 엔티티 → 컴포넌트 계층
+// ❌ 위험: 다른 순서로 lock 가능
+class World {
+    std::mutex worldMutex_;
+    std::vector<Entity*> entities_;
+
+    void removeEntity(Entity* e) {
+        std::lock_guard<std::mutex> worldLock(worldMutex_);
+        std::lock_guard<std::mutex> entityLock(e->mutex_);
+        // ...
+    }
+};
+
+class Entity {
+    std::mutex mutex_;
+    World* world_;
+
+    void destroy() {
+        std::lock_guard<std::mutex> entityLock(mutex_);
+        std::lock_guard<std::mutex> worldLock(world_->mutex_);  // 역순!
+        // ...
+    }
+};
+
+// ✅ 계층 수준(Level) 기반 잠금
+enum class LockLevel { World = 0, Entity = 1, Component = 2 };
+
+thread_local LockLevel currentLevel = LockLevel::World;
+
+class HierarchicalMutex {
+    std::mutex mutex_;
+    LockLevel level_;
+
+public:
+    explicit HierarchicalMutex(LockLevel level) : level_(level) {}
+
+    void lock() {
+        if (level_ <= currentLevel) {
+            throw std::runtime_error("Lock hierarchy violation!");
+        }
+        mutex_.lock();
+        currentLevel = level_;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 데드락 없는 설계</h2>
+            <div class="conversation">
+                <div class="q">처음부터 데드락이 안 생기게 설계하려면?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Lock-free 대안</div>
+                        <pre><code>// 싱글 스레드 이벤트 루프 패턴
+class GameThread {
+    SPSCQueue<std::function<void()>> taskQueue_;
+
+public:
+    // 다른 스레드에서 작업 요청
+    void post(std::function<void()> task) {
+        taskQueue_.push(std::move(task));
+    }
+
+    // 메인 루프에서 순차 처리
+    void processQueue() {
+        std::function<void()> task;
+        while (taskQueue_.pop(task)) {
+            task();  // 단일 스레드에서 실행 → 데드락 불가
+        }
+    }
+};
+
+// 사용 예시
+void otherThread() {
+    gameThread.post([&] {
+        // 게임 스레드에서 안전하게 실행
+        entity->damage(10);
+    });
+}</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>전략</th>
+                                <th>장점</th>
+                                <th>단점</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Lock 순서 고정</td>
+                                <td>간단, 이해 쉬움</td>
+                                <td>모든 코드에서 준수 필요</td>
+                            </tr>
+                            <tr>
+                                <td>try_lock + 백오프</td>
+                                <td>유연함</td>
+                                <td>성능 저하 가능</td>
+                            </tr>
+                            <tr>
+                                <td>Lock-free</td>
+                                <td>데드락 불가</td>
+                                <td>구현 어려움</td>
+                            </tr>
+                            <tr>
+                                <td>단일 스레드 처리</td>
+                                <td>가장 안전</td>
+                                <td>병렬성 감소</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>데드락 조건</strong>: 상호배제, 점유대기, 비선점, 순환대기 4가지 모두 필요</li>
+                <li><strong>방지</strong>: Lock 순서 고정, std::scoped_lock 사용</li>
+                <li><strong>탐지</strong>: Lock 그래프로 사이클 탐지 (디버그 빌드)</li>
+                <li><strong>게임 패턴</strong>: 이벤트 핸들러에서 lock 피하기, 계층적 잠금</li>
+                <li><strong>설계</strong>: 단일 스레드 이벤트 루프, Lock-free 자료구조 활용</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

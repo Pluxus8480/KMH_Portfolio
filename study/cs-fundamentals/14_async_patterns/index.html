@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>비동기 프로그래밍 패턴 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+            <h1>"로딩 중에도 게임이 돌아가요"</h1>
+            <p class="subtitle">비동기 프로그래밍 패턴과 활용</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 비동기의 필요성</h2>
+            <div class="conversation">
+                <div class="q">왜 비동기 처리가 필요한가요?</div>
+                <div class="a">
+                    <p>I/O나 긴 작업이 <strong>게임 루프를 블로킹</strong>하면 프레임이 끊깁니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    동기 vs 비동기 로딩                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   동기 로딩 (Blocking):                                             │
+│   ┌──────┬─────────────────────────────────────┬──────┬──────┐     │
+│   │Frame │           Loading...                │Frame │Frame │     │
+│   │  1   │     (100ms - 게임 멈춤!)            │  2   │  3   │     │
+│   └──────┴─────────────────────────────────────┴──────┴──────┘     │
+│                                                                     │
+│   비동기 로딩 (Non-blocking):                                        │
+│   ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐       │
+│   │Frame │Frame │Frame │Frame │Frame │Frame │Frame │Frame │       │
+│   │  1   │  2   │  3   │  4   │  5   │  6   │  7   │  8   │       │
+│   └──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘       │
+│       ↓      ↓      ↓      ↓      ↓      ↓                        │
+│   ┌─────────────────────────────────────────────┐                  │
+│   │  Background: Loading texture... (완료!)      │                  │
+│   └─────────────────────────────────────────────┘                  │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Future와 Promise</h2>
+            <div class="conversation">
+                <div class="q">C++에서 비동기 결과를 어떻게 받나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">std::future와 std::async</div>
+                        <pre><code>#include <future>
+
+// 가장 간단한 비동기 실행
+std::future<Texture*> loadTextureAsync(const char* path) {
+    return std::async(std::launch::async, [path] {
+        return loadTextureFromDisk(path);  // 백그라운드 실행
+    });
+}
+
+void gameLoop() {
+    // 로딩 시작
+    auto textureFuture = loadTextureAsync("player.png");
+
+    while (gameRunning) {
+        // 게임 업데이트/렌더 (블로킹 없음)
+        update();
+        render();
+
+        // 로딩 완료 확인 (논블로킹)
+        if (textureFuture.valid() &&
+            textureFuture.wait_for(std::chrono::milliseconds(0)) ==
+            std::future_status::ready) {
+
+            Texture* tex = textureFuture.get();  // 결과 획득
+            applyTexture(tex);
+        }
+    }
+}
+
+// Promise로 직접 제어
+std::promise<int> promise;
+std::future<int> future = promise.get_future();
+
+std::thread worker([&promise] {
+    int result = heavyComputation();
+    promise.set_value(result);  // 결과 설정
+});
+
+// 다른 곳에서
+int value = future.get();  // 결과 대기</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 콜백 패턴</h2>
+            <div class="conversation">
+                <div class="q">콜백 방식은 어떻게 구현하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">콜백 기반 비동기</div>
+                        <pre><code>// 콜백 타입 정의
+using LoadCallback = std::function<void(Texture*)>;
+
+class AsyncLoader {
+    struct LoadRequest {
+        std::string path;
+        LoadCallback callback;
+    };
+
+    std::queue<LoadRequest> pendingRequests_;
+    std::queue<std::pair<Texture*, LoadCallback>> completedResults_;
+    std::thread loaderThread_;
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    bool running_ = true;
+
+public:
+    // 비동기 로딩 요청
+    void loadAsync(const char* path, LoadCallback callback) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        pendingRequests_.push({path, callback});
+        cv_.notify_one();
+    }
+
+    // 메인 스레드에서 호출: 완료된 콜백 실행
+    void processCallbacks() {
+        std::queue<std::pair<Texture*, LoadCallback>> toProcess;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            std::swap(toProcess, completedResults_);
+        }
+
+        while (!toProcess.empty()) {
+            auto& [tex, callback] = toProcess.front();
+            callback(tex);  // 메인 스레드에서 안전하게 실행
+            toProcess.pop();
+        }
+    }
+
+private:
+    void loaderLoop() {
+        while (running_) {
+            LoadRequest request;
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                cv_.wait(lock, [this] {
+                    return !pendingRequests_.empty() || !running_;
+                });
+                if (!running_) break;
+                request = pendingRequests_.front();
+                pendingRequests_.pop();
+            }
+
+            // 백그라운드에서 로딩
+            Texture* tex = loadTextureFromDisk(request.path.c_str());
+
+            // 결과 큐에 추가
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                completedResults_.push({tex, request.callback});
+            }
+        }
+    }
+};
+
+// 사용 예시
+AsyncLoader loader;
+
+loader.loadAsync("enemy.png", [](Texture* tex) {
+    // 메인 스레드에서 실행됨
+    enemy->setTexture(tex);
+});
+
+// 게임 루프에서
+void gameLoop() {
+    while (running) {
+        loader.processCallbacks();  // 완료된 로딩 처리
+        update();
+        render();
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 코루틴 (C++20)</h2>
+            <div class="conversation">
+                <div class="q">코루틴은 비동기를 어떻게 단순화하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C++20 Coroutine</div>
+                        <pre><code>#include <coroutine>
+
+// 간단한 Task 코루틴
+template<typename T>
+struct Task {
+    struct promise_type {
+        T value;
+        std::exception_ptr exception;
+
+        Task get_return_object() {
+            return Task{std::coroutine_handle<promise_type>::from_promise(*this)};
+        }
+        std::suspend_never initial_suspend() { return {}; }
+        std::suspend_always final_suspend() noexcept { return {}; }
+        void return_value(T v) { value = v; }
+        void unhandled_exception() { exception = std::current_exception(); }
+    };
+
+    std::coroutine_handle<promise_type> handle;
+
+    T get() {
+        if (handle.promise().exception)
+            std::rethrow_exception(handle.promise().exception);
+        return handle.promise().value;
+    }
+};
+
+// 비동기 대기 객체
+struct AsyncLoad {
+    const char* path;
+    Texture* result = nullptr;
+
+    bool await_ready() { return false; }  // 항상 중단
+
+    void await_suspend(std::coroutine_handle<> h) {
+        // 백그라운드에서 로딩 후 재개
+        std::thread([this, h] {
+            result = loadTextureFromDisk(path);
+            h.resume();  // 코루틴 재개
+        }).detach();
+    }
+
+    Texture* await_resume() { return result; }
+};
+
+// 코루틴 사용 예시 (동기 코드처럼 읽힘!)
+Task<void> loadGameAssets() {
+    // 순차적으로 보이지만 비동기로 실행됨
+    Texture* player = co_await AsyncLoad{"player.png"};
+    Texture* enemy = co_await AsyncLoad{"enemy.png"};
+    Texture* background = co_await AsyncLoad{"bg.png"};
+
+    // 모든 로딩 완료 후 실행
+    setupGame(player, enemy, background);
+}</code></pre>
+                    </div>
+
+                    <p class="key-point">코루틴은 비동기 코드를 동기 코드처럼 읽기 쉽게 만들어줍니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 게임 에셋 스트리밍</h2>
+            <div class="conversation">
+                <div class="q">오픈월드 게임의 스트리밍은 어떻게 하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">우선순위 기반 스트리밍</div>
+                        <pre><code>class StreamingManager {
+    struct StreamRequest {
+        std::string path;
+        float priority;  // 거리 기반 우선순위
+        std::function<void(Asset*)> callback;
+
+        bool operator<(const StreamRequest& o) const {
+            return priority < o.priority;  // 높은 우선순위 먼저
+        }
+    };
+
+    std::priority_queue<StreamRequest> requestQueue_;
+    std::unordered_map<std::string, Asset*> loadedAssets_;
+    std::unordered_set<std::string> loadingAssets_;
+
+public:
+    void requestAsset(const char* path, float distance,
+                     std::function<void(Asset*)> callback) {
+        // 이미 로드됨
+        if (auto it = loadedAssets_.find(path); it != loadedAssets_.end()) {
+            callback(it->second);
+            return;
+        }
+
+        // 이미 로딩 중
+        if (loadingAssets_.count(path)) return;
+
+        // 우선순위 = 1 / (거리 + 1)
+        float priority = 1.0f / (distance + 1.0f);
+        requestQueue_.push({path, priority, callback});
+    }
+
+    void update() {
+        // 프레임당 제한된 수의 로딩 시작
+        const int MAX_LOADS_PER_FRAME = 2;
+        int loadsStarted = 0;
+
+        while (!requestQueue_.empty() && loadsStarted < MAX_LOADS_PER_FRAME) {
+            auto request = requestQueue_.top();
+            requestQueue_.pop();
+
+            if (loadingAssets_.count(request.path)) continue;
+
+            loadingAssets_.insert(request.path);
+            startAsyncLoad(request);
+            loadsStarted++;
+        }
+    }
+
+private:
+    void startAsyncLoad(const StreamRequest& request) {
+        std::async(std::launch::async, [this, request] {
+            Asset* asset = loadAssetFromDisk(request.path.c_str());
+
+            // 메인 스레드에서 콜백
+            postToMainThread([this, request, asset] {
+                loadedAssets_[request.path] = asset;
+                loadingAssets_.erase(request.path);
+                request.callback(asset);
+            });
+        });
+    }
+};</code></pre>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    LOD 기반 스트리밍                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Player                                                            │
+│     ●                                                               │
+│     │                                                               │
+│     ├── 근거리 (0-50m): 고해상도 텍스처 + 상세 메시                │
+│     │   [우선순위: 높음, 즉시 로드]                                 │
+│     │                                                               │
+│     ├── 중거리 (50-200m): 중해상도 텍스처 + 일반 메시             │
+│     │   [우선순위: 중간, 백그라운드 로드]                          │
+│     │                                                               │
+│     └── 원거리 (200m+): 저해상도 텍스처 + 간단 메시               │
+│         [우선순위: 낮음, 필요 시 로드]                              │
+│                                                                     │
+│   플레이어 이동 시:                                                  │
+│   - 다가가는 방향 에셋 미리 로드 (예측 로딩)                        │
+│   - 멀어지는 에셋 언로드 또는 LOD 낮춤                              │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>비동기 필요성</strong>: I/O가 게임 루프를 블로킹하면 프레임 드랍</li>
+                <li><strong>std::future</strong>: 간단한 비동기 결과 획득, wait_for로 논블로킹 체크</li>
+                <li><strong>콜백 패턴</strong>: 결과를 메인 스레드에서 안전하게 처리</li>
+                <li><strong>코루틴</strong>: 비동기 코드를 동기처럼 작성 (C++20)</li>
+                <li><strong>스트리밍</strong>: 우선순위 큐 + LOD로 필요한 것만 점진적 로드</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

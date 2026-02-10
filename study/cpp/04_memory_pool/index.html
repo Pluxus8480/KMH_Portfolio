@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메모리 풀 / Custom Allocator | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>new/delete가 느리다고?</h1>
+            <p class="subtitle">메모리 풀과 Custom Allocator로 할당 최적화하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 기본 할당자의 문제점</h2>
+            <div class="conversation">
+                <div class="q">new/delete가 왜 느린가요?</div>
+                <div class="a">
+                    <p class="warning">시스템 호출, 락, 단편화 등 여러 오버헤드가 있습니다.</p>
+
+                    <ul>
+                        <li><strong>시스템 호출</strong>: OS 커널에 메모리 요청</li>
+                        <li><strong>락 경쟁</strong>: 멀티스레드 환경에서 힙 락</li>
+                        <li><strong>단편화</strong>: 다양한 크기 할당/해제로 메모리 조각남</li>
+                        <li><strong>메타데이터</strong>: 할당 크기 정보 저장 오버헤드</li>
+                    </ul>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+힙 단편화 문제
+
+초기:  [████████████████████████]
+        연속된 메모리
+
+할당:  [A][B][C][D][E][F][G][H]
+       다양한 크기 할당
+
+해제:  [A][ ][C][ ][E][ ][G][ ]
+       B, D, F, H 해제
+
+문제:  [A][ ][C][ ][E][ ][G][ ]
+       빈 공간이 있지만, 큰 블록 할당 불가!
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">메모리 풀은 어떻게 해결하나요?</div>
+                <div class="a">
+                    <p class="highlight">미리 큰 메모리 블록을 할당해두고, 작은 조각으로 나눠 재사용합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>매번 종이를 살 때마다 문구점에 가는 대신, 종이 한 박스를 사서 책상에 두고 필요할 때 꺼내 쓰는 것과 같습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Fixed-Size Pool</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">고정 크기 메모리 풀</div>
+                    <pre><code>template&lt;typename T, size_t PoolSize = 1024&gt;
+class FixedPool {
+private:
+    union Block {
+        T data;
+        Block* next;
+    };
+
+    std::array&lt;Block, PoolSize&gt; pool;
+    Block* freeList;
+
+public:
+    FixedPool() {
+        // 프리 리스트 초기화
+        freeList = &pool[0];
+        for (size_t i = 0; i < PoolSize - 1; i++) {
+            pool[i].next = &pool[i + 1];
+        }
+        pool[PoolSize - 1].next = nullptr;
+    }
+
+    T* allocate() {
+        if (!freeList) {
+            throw std::bad_alloc();
+        }
+
+        Block* block = freeList;
+        freeList = block->next;
+        return reinterpret_cast&lt;T*&gt;(block);
+    }
+
+    void deallocate(T* ptr) {
+        Block* block = reinterpret_cast&lt;Block*&gt;(ptr);
+        block->next = freeList;
+        freeList = block;
+    }
+
+    template&lt;typename... Args&gt;
+    T* construct(Args&&... args) {
+        T* ptr = allocate();
+        new (ptr) T(std::forward&lt;Args&gt;(args)...);  // placement new
+        return ptr;
+    }
+
+    void destroy(T* ptr) {
+        ptr->~T();  // 소멸자 호출
+        deallocate(ptr);
+    }
+};</code></pre>
+                </div>
+
+                <div class="visual-section">
+                    <pre class="diagram">
+Fixed-Size Pool 구조
+
+초기 상태:
+freeList → [0] → [1] → [2] → [3] → ... → [N] → null
+
+할당 후:
+freeList → [1] → [2] → [3] → ... → [N] → null
+           [0] 사용 중
+
+해제 후:
+freeList → [0] → [1] → [2] → ... → [N] → null
+           [0] 다시 프리 리스트에
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Object Pool 패턴</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">객체 재사용 풀</div>
+                    <pre><code>template&lt;typename T&gt;
+class ObjectPool {
+private:
+    struct PoolBlock {
+        std::vector&lt;T&gt; objects;
+        std::vector&lt;bool&gt; inUse;
+        size_t nextFree = 0;
+    };
+
+    std::vector&lt;std::unique_ptr&lt;PoolBlock&gt;&gt; blocks;
+    size_t blockSize;
+
+    PoolBlock* currentBlock = nullptr;
+
+    void allocateNewBlock() {
+        auto block = std::make_unique&lt;PoolBlock&gt;();
+        block->objects.resize(blockSize);
+        block->inUse.resize(blockSize, false);
+        currentBlock = block.get();
+        blocks.push_back(std::move(block));
+    }
+
+public:
+    explicit ObjectPool(size_t blockSize = 64) : blockSize(blockSize) {
+        allocateNewBlock();
+    }
+
+    T* acquire() {
+        // 현재 블록에서 빈 슬롯 찾기
+        for (size_t i = currentBlock->nextFree; i < blockSize; i++) {
+            if (!currentBlock->inUse[i]) {
+                currentBlock->inUse[i] = true;
+                currentBlock->nextFree = i + 1;
+                return &currentBlock->objects[i];
+            }
+        }
+
+        // 다른 블록에서 찾기
+        for (auto& block : blocks) {
+            for (size_t i = 0; i < blockSize; i++) {
+                if (!block->inUse[i]) {
+                    block->inUse[i] = true;
+                    return &block->objects[i];
+                }
+            }
+        }
+
+        // 새 블록 할당
+        allocateNewBlock();
+        currentBlock->inUse[0] = true;
+        currentBlock->nextFree = 1;
+        return &currentBlock->objects[0];
+    }
+
+    void release(T* obj) {
+        for (auto& block : blocks) {
+            T* begin = block->objects.data();
+            T* end = begin + blockSize;
+            if (obj >= begin && obj < end) {
+                size_t index = obj - begin;
+                block->inUse[index] = false;
+                if (index < block->nextFree) {
+                    block->nextFree = index;
+                }
+                return;
+            }
+        }
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: STL Allocator 인터페이스</h2>
+            <div class="conversation">
+                <div class="q">STL 컨테이너에 커스텀 할당자를 적용하려면?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C++17 스타일 Allocator</div>
+                        <pre><code>template&lt;typename T&gt;
+class PoolAllocator {
+private:
+    static inline FixedPool&lt;T, 4096&gt; pool;
+
+public:
+    using value_type = T;
+
+    PoolAllocator() noexcept = default;
+
+    template&lt;typename U&gt;
+    PoolAllocator(const PoolAllocator&lt;U&gt;&) noexcept {}
+
+    T* allocate(size_t n) {
+        if (n != 1) {
+            // 여러 개 요청 시 기본 할당자 사용
+            return static_cast&lt;T*&gt;(::operator new(n * sizeof(T)));
+        }
+        return pool.allocate();
+    }
+
+    void deallocate(T* p, size_t n) noexcept {
+        if (n != 1) {
+            ::operator delete(p);
+            return;
+        }
+        pool.deallocate(p);
+    }
+
+    template&lt;typename U&gt;
+    struct rebind {
+        using other = PoolAllocator&lt;U&gt;;
+    };
+};
+
+template&lt;typename T, typename U&gt;
+bool operator==(const PoolAllocator&lt;T&gt;&, const PoolAllocator&lt;U&gt;&) {
+    return true;
+}
+
+template&lt;typename T, typename U&gt;
+bool operator!=(const PoolAllocator&lt;T&gt;&, const PoolAllocator&lt;U&gt;&) {
+    return false;
+}
+
+// 사용
+std::vector&lt;int, PoolAllocator&lt;int&gt;&gt; vec;
+std::list&lt;MyObject, PoolAllocator&lt;MyObject&gt;&gt; list;</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Arena Allocator</h2>
+            <div class="conversation">
+                <div class="q">대량의 객체를 한 번에 해제하려면?</div>
+                <div class="a">
+                    <p class="highlight">Arena(Stack) Allocator는 개별 해제 없이 전체를 한 번에 리셋합니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Arena Allocator</div>
+                        <pre><code>class ArenaAllocator {
+private:
+    char* buffer;
+    size_t capacity;
+    size_t offset = 0;
+
+public:
+    explicit ArenaAllocator(size_t size)
+        : buffer(new char[size]), capacity(size) {}
+
+    ~ArenaAllocator() {
+        delete[] buffer;
+    }
+
+    // 정렬된 할당
+    void* allocate(size_t size, size_t alignment = alignof(std::max_align_t)) {
+        // 정렬 조정
+        size_t padding = (alignment - (offset % alignment)) % alignment;
+        size_t newOffset = offset + padding + size;
+
+        if (newOffset > capacity) {
+            throw std::bad_alloc();
+        }
+
+        void* ptr = buffer + offset + padding;
+        offset = newOffset;
+        return ptr;
+    }
+
+    template&lt;typename T, typename... Args&gt;
+    T* create(Args&&... args) {
+        void* ptr = allocate(sizeof(T), alignof(T));
+        return new (ptr) T(std::forward&lt;Args&gt;(args)...);
+    }
+
+    // 개별 해제 없음! 전체 리셋만
+    void reset() {
+        offset = 0;
+    }
+
+    size_t used() const { return offset; }
+    size_t remaining() const { return capacity - offset; }
+};
+
+// 사용 예: 프레임당 임시 객체
+class Game {
+    ArenaAllocator frameArena{1024 * 1024};  // 1MB
+
+    void update() {
+        // 이번 프레임의 임시 객체들
+        auto* particles = frameArena.create&lt;Particle[]&gt;(100);
+        auto* effects = frameArena.create&lt;Effect[]&gt;(50);
+
+        // 처리...
+
+        // 프레임 끝: 모든 임시 객체 한 번에 해제
+        frameArena.reset();
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="key-point">게임 엔진에서 프레임당 임시 할당에 매우 유용합니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 성능 비교</h2>
+            <div class="conversation">
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>할당자</th>
+                            <th>할당 속도</th>
+                            <th>해제 속도</th>
+                            <th>용도</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>new/delete</td>
+                            <td>느림</td>
+                            <td>느림</td>
+                            <td>일반적인 경우</td>
+                        </tr>
+                        <tr>
+                            <td>Fixed Pool</td>
+                            <td>O(1)</td>
+                            <td>O(1)</td>
+                            <td>고정 크기 객체</td>
+                        </tr>
+                        <tr>
+                            <td>Arena</td>
+                            <td>O(1)</td>
+                            <td>O(1) 전체</td>
+                            <td>프레임/스테이지별</td>
+                        </tr>
+                        <tr>
+                            <td>Slab</td>
+                            <td>O(1)</td>
+                            <td>O(1)</td>
+                            <td>다양한 크기 객체</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="code-block">
+                    <div class="code-header">벤치마크 예시</div>
+                    <pre><code>void benchmark() {
+    const int N = 100000;
+
+    // new/delete
+    auto start1 = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < N; i++) {
+        auto* p = new MyObject();
+        delete p;
+    }
+    auto end1 = std::chrono::high_resolution_clock::now();
+
+    // Object Pool
+    ObjectPool&lt;MyObject&gt; pool;
+    auto start2 = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < N; i++) {
+        auto* p = pool.acquire();
+        pool.release(p);
+    }
+    auto end2 = std::chrono::high_resolution_clock::now();
+
+    // 결과: Pool이 10~100배 빠름!
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>new/delete 문제</strong>: 시스템 호출, 락, 단편화 오버헤드</li>
+                <li><strong>Fixed Pool</strong>: Free List로 O(1) 할당/해제</li>
+                <li><strong>Object Pool</strong>: 객체 재사용으로 생성자 비용 절감</li>
+                <li><strong>Arena Allocator</strong>: 개별 해제 없이 전체 리셋</li>
+                <li><strong>STL Allocator</strong>: rebind, allocate/deallocate 인터페이스</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

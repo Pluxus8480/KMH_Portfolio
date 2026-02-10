@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>초점의 미학 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>초점의 미학</h1>
+            <p class="subtitle">Depth of Field (피사계 심도) 효과</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 피사계 심도란?</h2>
+            <div class="conversation">
+                <div class="q">왜 사진에서 배경이 흐릿하게 나오나요?</div>
+                <div class="a">
+                    <p><span class="highlight">피사계 심도(DoF)</span>는 초점이 맞는 거리 범위입니다. 범위 밖의 물체는 렌즈 특성상 흐리게 보입니다.</p>
+                    <p>게임에서 DoF는 <span class="key-point">영화적 연출</span>, <span class="key-point">주의 유도</span>, <span class="key-point">미니어처 효과</span> 등에 사용됩니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+피사계 심도 (실제 카메라):
+
+      렌즈
+        ◎
+       ╱│╲
+      ╱ │ ╲
+     ╱  │  ╲
+    ╱   │   ╲
+   ╱    │    ╲
+  A     B     C
+  │     │     │
+흐림   선명   흐림
+(Near) (Focus)(Far)
+
+A: Near Blur - 초점 앞 (너무 가까움)
+B: In Focus - 초점 거리 (선명)
+C: Far Blur - 초점 뒤 (너무 멂)
+
+Circle of Confusion (CoC):
+- 초점 맞은 점 → 센서에 점으로 맺힘
+- 초점 안 맞은 점 → 원으로 퍼짐 (Bokeh)
+                </pre>
+                <p class="diagram-caption">카메라 DoF 원리</p>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>DoF는 <span class="highlight">눈의 초점</span>과 같습니다.</p>
+                <p>가까운 손가락에 초점을 맞추면 배경이 흐려지고, 멀리 보면 손가락이 흐려집니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: CoC (Circle of Confusion) 계산</h2>
+            <div class="conversation">
+                <div class="q">블러 크기는 어떻게 결정하나요?</div>
+                <div class="a">
+                    <p><span class="highlight">CoC</span>는 초점에서 벗어난 정도를 나타내는 원의 크기입니다. 이 값이 블러 강도가 됩니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">CoC 계산</div>
+                <pre><code>// DoF 파라미터
+cbuffer DoFParams : register(b0)
+{
+    float focusDistance;     // 초점 거리 (미터)
+    float focusRange;        // 선명한 범위
+    float nearBlurStart;     // Near blur 시작 거리
+    float farBlurStart;      // Far blur 시작 거리
+    float maxCoC;            // 최대 CoC (픽셀)
+};
+
+// 물리 기반 CoC
+float CalculateCoC_Physical(float depth, float aperture, float focalLength)
+{
+    // 실제 카메라 공식 (간략화)
+    // CoC = |S2 - S1| × (A / S1) × (f / (S1 - f))
+    // S1 = 초점 거리, S2 = 물체 거리
+    // A = 조리개, f = 렌즈 초점 거리
+
+    float coc = aperture * focalLength * (depth - focusDistance)
+                / (depth * (focusDistance - focalLength));
+
+    return clamp(coc, -maxCoC, maxCoC);
+}
+
+// 단순화된 CoC (게임용)
+float CalculateCoC_Simple(float depth)
+{
+    // 선형 보간 기반
+    float nearCoC = 0;
+    float farCoC = 0;
+
+    // Near blur (가까울수록 강함)
+    if (depth < focusDistance - focusRange)
+    {
+        nearCoC = saturate((focusDistance - focusRange - depth)
+                           / (focusDistance - focusRange - nearBlurStart));
+    }
+
+    // Far blur (멀수록 강함)
+    if (depth > focusDistance + focusRange)
+    {
+        farCoC = saturate((depth - focusDistance - focusRange)
+                          / (farBlurStart - focusDistance - focusRange));
+    }
+
+    // Near는 음수, Far는 양수 (구분용)
+    return (nearCoC > 0) ? -nearCoC * maxCoC : farCoC * maxCoC;
+}</code></pre>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+CoC 그래프:
+
+CoC
+(블러)
+  ↑
+  │   Near        Focus          Far
+  │   Blur        Range          Blur
+  │     │           │             │
+  │ ────┼───────────┼─────────────┼────
+  │   ╱ │           │             │ ╲
+  │  ╱  │           │             │  ╲
+  │ ╱   │     ═════════════       │   ╲
+  │╱    │                         │    ╲
+──┼─────┼─────────────────────────┼─────→ Depth
+  │     │                         │
+  │  nearStart    focus       farStart
+                </pre>
+                <p class="diagram-caption">깊이에 따른 CoC 값</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 가우시안 DoF (간단한 방식)</h2>
+            <div class="conversation">
+                <div class="q">가장 간단한 DoF 구현은?</div>
+                <div class="a">
+                    <p>CoC 크기에 따라 가우시안 블러를 적용합니다. 빠르지만 Bokeh 효과가 없습니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">가우시안 DoF</div>
+                <pre><code>// 1. CoC 버퍼 생성
+float PS_GenerateCoC(float2 uv : TEXCOORD) : SV_Target
+{
+    float depth = LinearizeDepth(depthBuffer.Sample(pointSamp, uv).r);
+    return CalculateCoC_Simple(depth);
+}
+
+// 2. 블러 (CoC에 따라 가변 커널)
+float4 PS_DoFBlur(float2 uv : TEXCOORD) : SV_Target
+{
+    float centerCoC = abs(cocBuffer.Sample(pointSamp, uv));
+
+    if (centerCoC < 0.5)  // CoC가 작으면 블러 안 함
+        return sceneTexture.Sample(linearSamp, uv);
+
+    float3 result = 0;
+    float totalWeight = 0;
+
+    // CoC 크기에 비례하는 반경
+    int radius = int(centerCoC);
+
+    for (int y = -radius; y <= radius; y++)
+    {
+        for (int x = -radius; x <= radius; x++)
+        {
+            float2 offset = float2(x, y) * texelSize;
+            float2 sampleUV = uv + offset;
+
+            float sampleCoC = abs(cocBuffer.Sample(pointSamp, sampleUV));
+            float3 sampleColor = sceneTexture.Sample(linearSamp, sampleUV).rgb;
+
+            // 가우시안 가중치
+            float dist = length(float2(x, y));
+            float weight = exp(-dist * dist / (2 * centerCoC * centerCoC));
+
+            // 작은 CoC 샘플이 큰 CoC에 누수되지 않도록
+            weight *= (sampleCoC >= centerCoC * 0.5) ? 1.0 : 0.0;
+
+            result += sampleColor * weight;
+            totalWeight += weight;
+        }
+    }
+
+    return float4(result / totalWeight, 1);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Bokeh DoF</h2>
+            <div class="conversation">
+                <div class="q">동그란 빛망울(Bokeh) 효과는 어떻게 만드나요?</div>
+                <div class="a">
+                    <p><span class="highlight">Bokeh</span>는 밝은 점이 조리개 모양으로 퍼지는 효과입니다. 산란 방식이나 수집 방식으로 구현합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Bokeh 효과:
+
+원본 이미지:              DoF 적용 후:
+┌─────────────────┐      ┌─────────────────┐
+│                 │      │                 │
+│    ★  ★  ★    │      │   ◉   ◉   ◉   │
+│                 │  →   │                 │
+│  (밝은 점들)    │      │  (동그란 원들)  │
+│                 │      │                 │
+└─────────────────┘      └─────────────────┘
+
+조리개 모양에 따라:
+원형 조리개 → ●
+육각형 조리개 → ⬡
+                </pre>
+                <p class="diagram-caption">Bokeh 효과 예시</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Scatter-Based Bokeh</div>
+                <pre><code>// Geometry Shader로 Bokeh 스프라이트 생성
+// 밝은 픽셀을 쿼드로 확장
+
+[maxvertexcount(4)]
+void GS_BokehScatter(point VS_OUTPUT input[1],
+                      inout TriangleStream<GS_OUTPUT> stream)
+{
+    float coc = abs(input[0].coc);
+    float brightness = GetLuminance(input[0].color);
+
+    // CoC가 작거나 어두우면 스킵
+    if (coc < 1.0 || brightness < brightnessThreshold)
+        return;
+
+    // 쿼드 크기 = CoC
+    float2 size = float2(coc, coc) * texelSize;
+
+    // 4개 정점 생성
+    float2 offsets[4] = {
+        float2(-1, -1), float2(1, -1),
+        float2(-1, 1), float2(1, 1)
+    };
+
+    for (int i = 0; i < 4; i++)
+    {
+        GS_OUTPUT output;
+        output.position = float4(input[0].position.xy + offsets[i] * size, 0, 1);
+        output.uv = offsets[i] * 0.5 + 0.5;
+        output.color = input[0].color * brightness;  // 밝기 가중
+        stream.Append(output);
+    }
+}
+
+// Bokeh 텍스처 샘플링
+float4 PS_BokehScatter(GS_OUTPUT input) : SV_Target
+{
+    // 원형 또는 육각형 Bokeh 텍스처
+    float alpha = bokehTexture.Sample(linearSamp, input.uv).a;
+    return float4(input.color.rgb, alpha);
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>방식</th>
+                        <th>장점</th>
+                        <th>단점</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>가우시안</td>
+                        <td>빠름, 간단</td>
+                        <td>Bokeh 효과 없음</td>
+                    </tr>
+                    <tr>
+                        <td>Scatter</td>
+                        <td>정확한 Bokeh</td>
+                        <td>오버드로우, 느림</td>
+                    </tr>
+                    <tr>
+                        <td>Gather</td>
+                        <td>효율적, Bokeh 가능</td>
+                        <td>구현 복잡</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Separable DoF (효율적 방식)</h2>
+            <div class="conversation">
+                <div class="q">성능과 품질을 모두 잡으려면?</div>
+                <div class="a">
+                    <p><span class="highlight">Separable Filter</span>는 2D 블러를 가로/세로 1D 패스로 분리합니다. 다운샘플링과 결합하면 효율적입니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Separable DoF 파이프라인:
+
+원본 (Full Res)
+     │
+     ▼
+┌────────────┐
+│ CoC 계산   │
+└────────────┘
+     │
+     ▼
+┌────────────┐    ┌────────────┐    ┌────────────┐
+│ 다운샘플   │ →  │ 가로 블러  │ →  │ 세로 블러  │
+│ (1/2 Res)  │    │            │    │            │
+└────────────┘    └────────────┘    └────────────┘
+                                          │
+                                          ▼
+                                   ┌────────────┐
+                                   │ 업샘플     │
+                                   │ + 합성     │
+                                   └────────────┘
+                                          │
+                                          ▼
+                                      최종 결과
+                </pre>
+                <p class="diagram-caption">효율적인 DoF 파이프라인</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Separable DoF 구현</div>
+                <pre><code>// 다운샘플 + CoC 전파
+float4 PS_DoFDownsample(float2 uv : TEXCOORD) : SV_Target
+{
+    // 4개 샘플 평균
+    float4 color = 0;
+    float coc = 0;
+
+    float2 offsets[4] = {
+        float2(-0.5, -0.5), float2(0.5, -0.5),
+        float2(-0.5, 0.5), float2(0.5, 0.5)
+    };
+
+    for (int i = 0; i < 4; i++)
+    {
+        float2 sampleUV = uv + offsets[i] * texelSize;
+        color += sceneTexture.Sample(linearSamp, sampleUV);
+        coc += cocBuffer.Sample(linearSamp, sampleUV);
+    }
+
+    color *= 0.25;
+    coc *= 0.25;
+
+    return float4(color.rgb, coc);
+}
+
+// 수평 블러 (원형 Bokeh 근사를 위한 디스크 커널)
+float4 PS_DoFHorizontal(float2 uv : TEXCOORD) : SV_Target
+{
+    float4 center = halfResTexture.Sample(pointSamp, uv);
+    float centerCoC = abs(center.a);
+
+    if (centerCoC < 0.5)
+        return center;
+
+    float4 result = 0;
+    float totalWeight = 0;
+
+    int radius = int(centerCoC);
+
+    for (int x = -radius; x <= radius; x++)
+    {
+        float2 sampleUV = uv + float2(x, 0) * texelSize;
+        float4 sample = halfResTexture.Sample(linearSamp, sampleUV);
+
+        // 원형 커널 가중치
+        float weight = 1.0 - abs(x) / (radius + 1.0);
+
+        result += sample * weight;
+        totalWeight += weight;
+    }
+
+    return result / totalWeight;
+}
+
+// 수직 블러 + Near/Far 분리
+float4 PS_DoFVertical(float2 uv : TEXCOORD) : SV_Target
+{
+    // 유사한 방식으로 수직 블러
+    // ...
+}
+
+// 최종 합성
+float4 PS_DoFComposite(float2 uv : TEXCOORD) : SV_Target
+{
+    float3 sharp = sceneTexture.Sample(linearSamp, uv).rgb;
+    float3 blurred = blurredTexture.Sample(linearSamp, uv).rgb;
+    float coc = abs(cocBuffer.Sample(linearSamp, uv));
+
+    // CoC에 따라 선명/흐림 블렌딩
+    float blend = saturate(coc / maxCoC);
+    return float4(lerp(sharp, blurred, blend), 1);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 자동 초점과 연출</h2>
+            <div class="conversation">
+                <div class="q">초점 거리를 자동으로 맞추려면?</div>
+                <div class="a">
+                    <p>화면 중앙 깊이를 읽거나, 특정 오브젝트를 추적해서 초점 거리를 결정합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">자동 초점</div>
+                <pre><code>// CPU 측: 자동 초점 계산
+void UpdateAutoFocus(float deltaTime)
+{
+    // 화면 중앙 깊이 읽기 (GPU → CPU)
+    float centerDepth = ReadDepthAtScreenCenter();
+
+    // 부드러운 전환
+    float targetFocus = centerDepth;
+    currentFocusDistance = lerp(currentFocusDistance, targetFocus,
+                                 1 - exp(-focusSpeed * deltaTime));
+}
+
+// 또는: 특정 타겟 추적
+void FocusOnTarget(AActor* target)
+{
+    float3 targetPos = target->GetLocation();
+    float distance = length(targetPos - cameraPos);
+    currentFocusDistance = distance;
+}
+
+// 연출용: 포커스 풀링 (Pull Focus)
+void StartFocusPull(float startDist, float endDist, float duration)
+{
+    // 시작 거리에서 끝 거리로 부드럽게 전환
+    // 영화에서 자주 사용하는 기법
+    focusPullTimer = 0;
+    focusPullDuration = duration;
+    focusPullStart = startDist;
+    focusPullEnd = endDist;
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 DoF 연출 팁</strong>
+                <p><span class="highlight">대화 장면</span>: 말하는 캐릭터에 초점, 얕은 DoF</p>
+                <p><span class="highlight">액션 장면</span>: 깊은 DoF 또는 DoF 비활성화</p>
+                <p><span class="highlight">미니어처 효과</span>: 극단적으로 얕은 DoF + 탑다운 뷰</p>
+                <p><span class="highlight">회상 장면</span>: 전체적으로 약간 흐리게</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>DoF</strong>: 초점 범위 밖의 흐림 효과, 영화적 연출에 필수</li>
+                <li><strong>CoC</strong>: 초점에서 벗어난 정도, 블러 크기 결정</li>
+                <li><strong>가우시안 DoF</strong>: 빠르지만 Bokeh 없음</li>
+                <li><strong>Bokeh DoF</strong>: Scatter(정확) / Gather(효율) 방식</li>
+                <li><strong>Separable + 다운샘플</strong>: 성능과 품질 균형</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>게임 서버의 뼈대를 세우다 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../server.html" class="back-link">← Game Server 목록으로</a>
+
+        <header class="content-header">
+            <h1>게임 서버의 뼈대를 세우다</h1>
+            <p class="subtitle">게임 서버 아키텍처 패턴</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 게임 서버의 역할</h2>
+            <div class="conversation">
+                <div class="q">게임 서버는 왜 필요한가요?</div>
+                <div class="a">
+                    <p>멀티플레이어 게임에서 서버는 <span class="highlight">신뢰할 수 있는 권위자(Authority)</span> 역할을 합니다.</p>
+                    <p>클라이언트가 조작할 수 없는 게임 상태를 관리하고, 모든 플레이어에게 일관된 경험을 제공합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+게임 서버의 핵심 역할:
+
+┌─────────────────────────────────────────────────────────┐
+│                      Game Server                         │
+├─────────────────────────────────────────────────────────┤
+│  1. 권위적 상태 관리  │  게임 월드의 "진짜" 상태        │
+│  2. 입력 검증        │  클라이언트 요청 유효성 확인     │
+│  3. 치트 방지        │  불가능한 행동 차단              │
+│  4. 상태 동기화      │  모든 클라이언트에게 상태 전파   │
+│  5. 매치 관리        │  게임 세션 생성/종료             │
+└─────────────────────────────────────────────────────────┘
+            │
+            │ 동기화
+            ▼
+┌──────────┐  ┌──────────┐  ┌──────────┐
+│ Client 1 │  │ Client 2 │  │ Client 3 │
+│ 플레이어A│  │ 플레이어B│  │ 플레이어C│
+└──────────┘  └──────────┘  └──────────┘
+                </pre>
+                <p class="diagram-caption">서버-클라이언트 구조</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 모놀리식 vs 마이크로서비스</h2>
+            <div class="conversation">
+                <div class="q">게임 서버도 마이크로서비스로 만들어야 하나요?</div>
+                <div class="a">
+                    <p>게임 특성에 따라 다릅니다. <span class="highlight">실시간 게임</span>은 레이턴시가 중요해 모놀리식이 유리하고, <span class="highlight">대규모 MMO</span>는 기능별 분리가 필요합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+모놀리식 (Monolithic):
+
+┌─────────────────────────────────────┐
+│           Game Server               │
+│  ┌─────────────────────────────────┐│
+│  │ 로직 + 네트워크 + DB + 매치    ││
+│  │ 모든 기능이 하나의 프로세스    ││
+│  └─────────────────────────────────┘│
+└─────────────────────────────────────┘
+
+장점: 낮은 레이턴시, 간단한 배포
+단점: 스케일링 어려움, 한 기능 장애 = 전체 장애
+
+
+마이크로서비스 (Microservices):
+
+┌──────────┐  ┌──────────┐  ┌──────────┐
+│ Auth     │  │ Match    │  │ Chat     │
+│ Service  │  │ Making   │  │ Service  │
+└────┬─────┘  └────┬─────┘  └────┬─────┘
+     │             │             │
+     └─────────────┼─────────────┘
+                   │
+           ┌───────┴───────┐
+           │   Game Server  │  (실시간 게임 로직)
+           │   (Stateful)   │
+           └───────────────┘
+
+장점: 독립적 스케일링, 장애 격리
+단점: 복잡한 인프라, 서비스 간 레이턴시
+                </pre>
+                <p class="diagram-caption">아키텍처 비교</p>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th>모놀리식</th>
+                        <th>마이크로서비스</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>적합한 게임</td>
+                        <td>FPS, 격투, 레이싱</td>
+                        <td>MMO, 소셜 게임</td>
+                    </tr>
+                    <tr>
+                        <td>레이턴시</td>
+                        <td>최소</td>
+                        <td>서비스 호출 오버헤드</td>
+                    </tr>
+                    <tr>
+                        <td>스케일링</td>
+                        <td>수직(장비 업그레이드)</td>
+                        <td>수평(서비스 복제)</td>
+                    </tr>
+                    <tr>
+                        <td>개발 복잡도</td>
+                        <td>낮음</td>
+                        <td>높음</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Zone/Room 기반 아키텍처</h2>
+            <div class="conversation">
+                <div class="q">수천 명이 동시 접속하면 서버 하나로 감당이 되나요?</div>
+                <div class="a">
+                    <p>월드를 <span class="highlight">Zone</span>이나 <span class="highlight">Room</span>으로 분할해 각 서버가 담당 영역만 처리합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Zone 기반 (MMO):
+
+    ┌────────────────────────────────────────────┐
+    │            게임 월드 (World)                │
+    │  ┌──────────┐ ┌──────────┐ ┌──────────┐   │
+    │  │  Zone 1  │ │  Zone 2  │ │  Zone 3  │   │
+    │  │ Server A │ │ Server B │ │ Server C │   │
+    │  │          │→│          │→│          │   │
+    │  │ 100명    │ │ 150명    │ │ 80명     │   │
+    │  └──────────┘ └──────────┘ └──────────┘   │
+    └────────────────────────────────────────────┘
+
+플레이어가 Zone 경계를 넘으면 → 서버 핸드오프
+
+
+Room/Session 기반 (세션 게임):
+
+┌─────────────────────────────────────────────────┐
+│                Lobby Server                      │
+│        (매치메이킹, 대기실 관리)                  │
+└───────────────────┬─────────────────────────────┘
+                    │ 매치 성사 시 Room 생성
+        ┌───────────┼───────────┐
+        ▼           ▼           ▼
+   ┌─────────┐ ┌─────────┐ ┌─────────┐
+   │ Room 1  │ │ Room 2  │ │ Room 3  │
+   │ 10명    │ │ 10명    │ │ 10명    │
+   │ 5vs5    │ │ 5vs5    │ │ 5vs5    │
+   └─────────┘ └─────────┘ └─────────┘
+                </pre>
+                <p class="diagram-caption">Zone vs Room 아키텍처</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Room 관리 예시 (개념)</div>
+                <pre><code>class RoomManager
+{
+    std::unordered_map<RoomId, std::unique_ptr<GameRoom>> rooms;
+    std::mutex roomsMutex;
+
+public:
+    RoomId CreateRoom(const GameSettings& settings)
+    {
+        std::lock_guard<std::mutex> lock(roomsMutex);
+
+        RoomId newId = GenerateRoomId();
+        rooms[newId] = std::make_unique<GameRoom>(settings);
+
+        return newId;
+    }
+
+    bool JoinRoom(RoomId roomId, PlayerId playerId)
+    {
+        std::lock_guard<std::mutex> lock(roomsMutex);
+
+        auto it = rooms.find(roomId);
+        if (it == rooms.end()) return false;
+
+        return it->second->AddPlayer(playerId);
+    }
+
+    void Update(float deltaTime)
+    {
+        // 각 Room 독립적으로 업데이트
+        for (auto& [id, room] : rooms)
+        {
+            room->Update(deltaTime);
+
+            // 게임 종료된 Room 정리
+            if (room->IsFinished())
+            {
+                pendingRemoval.push_back(id);
+            }
+        }
+    }
+};</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 게임 루프와 Tick Rate</h2>
+            <div class="conversation">
+                <div class="q">서버도 게임 루프가 있나요?</div>
+                <div class="a">
+                    <p>네! 서버는 일정 주기(Tick Rate)로 게임 상태를 업데이트합니다. <span class="highlight">64Hz</span>면 초당 64번 업데이트합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">서버 게임 루프</div>
+                <pre><code>class GameServer
+{
+    static constexpr int TICK_RATE = 64;  // Hz
+    static constexpr float TICK_INTERVAL = 1.0f / TICK_RATE;  // 15.625ms
+
+public:
+    void Run()
+    {
+        auto lastTime = std::chrono::high_resolution_clock::now();
+        float accumulator = 0.0f;
+
+        while (running)
+        {
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            float deltaTime = std::chrono::duration<float>(
+                currentTime - lastTime).count();
+            lastTime = currentTime;
+
+            accumulator += deltaTime;
+
+            // 고정 시간 간격으로 업데이트 (Fixed Timestep)
+            while (accumulator >= TICK_INTERVAL)
+            {
+                // 1. 클라이언트 입력 처리
+                ProcessPendingInputs();
+
+                // 2. 게임 로직 업데이트
+                UpdateGameState(TICK_INTERVAL);
+
+                // 3. 물리 시뮬레이션
+                UpdatePhysics(TICK_INTERVAL);
+
+                // 4. 상태 스냅샷 생성 & 전송
+                BroadcastStateSnapshot();
+
+                accumulator -= TICK_INTERVAL;
+                currentTick++;
+            }
+
+            // CPU 휴식 (다음 틱까지)
+            SleepUntilNextTick();
+        }
+    }
+};</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>Tick Rate</th>
+                        <th>간격</th>
+                        <th>적합한 게임</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>20 Hz</td>
+                        <td>50ms</td>
+                        <td>MMO, 전략 게임</td>
+                    </tr>
+                    <tr>
+                        <td>30 Hz</td>
+                        <td>33ms</td>
+                        <td>배틀로얄, 레이싱</td>
+                    </tr>
+                    <tr>
+                        <td>64 Hz</td>
+                        <td>15.6ms</td>
+                        <td>FPS (표준)</td>
+                    </tr>
+                    <tr>
+                        <td>128 Hz</td>
+                        <td>7.8ms</td>
+                        <td>경쟁 FPS (CS:GO 등)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 서버 컴포넌트 구조</h2>
+            <div class="conversation">
+                <div class="q">서버 내부는 어떤 컴포넌트로 구성되나요?</div>
+                <div class="a">
+                    <p>일반적으로 네트워크 계층, 세션 관리, 게임 로직, 데이터 저장 등으로 분리합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+게임 서버 내부 구조:
+
+┌─────────────────────────────────────────────────────────┐
+│                    Network Layer                         │
+│  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│  │ Socket Manager  │  │ Packet Serializer/Parser    │   │
+│  │ (Accept, I/O)   │  │ (프로토콜 처리)              │   │
+│  └─────────────────┘  └─────────────────────────────┘   │
+└───────────────────────────┬─────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────┐
+│                   Session Layer                          │
+│  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│  │ Session Manager │  │ Authentication              │   │
+│  │ (연결 관리)      │  │ (로그인, 토큰 검증)         │   │
+│  └─────────────────┘  └─────────────────────────────┘   │
+└───────────────────────────┬─────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────┐
+│                    Game Layer                            │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐   │
+│  │ Room/    │ │ Entity   │ │ Physics  │ │ Game     │   │
+│  │ World    │ │ Manager  │ │ Engine   │ │ Rules    │   │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘   │
+└───────────────────────────┬─────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────┐
+│                   Data Layer                             │
+│  ┌─────────────────┐  ┌─────────────────────────────┐   │
+│  │ Database Client │  │ Cache (Redis)               │   │
+│  │ (MySQL, etc)    │  │ (세션, 랭킹)                 │   │
+│  └─────────────────┘  └─────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">계층별 역할 분리</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실제 사례 분석</h2>
+            <div class="conversation">
+                <div class="q">유명한 게임들은 어떤 아키텍처를 사용하나요?</div>
+                <div class="a">
+                    <p>장르와 규모에 따라 다양한 아키텍처가 사용됩니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>게임/엔진</th>
+                        <th>아키텍처</th>
+                        <th>특징</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>League of Legends</td>
+                        <td>Room + 마이크로서비스</td>
+                        <td>매치당 독립 서버, 10명 세션</td>
+                    </tr>
+                    <tr>
+                        <td>World of Warcraft</td>
+                        <td>Zone 기반</td>
+                        <td>영역별 서버, 서버 간 이동</td>
+                    </tr>
+                    <tr>
+                        <td>Fortnite</td>
+                        <td>Room + AWS</td>
+                        <td>100명 세션, 동적 스케일링</td>
+                    </tr>
+                    <tr>
+                        <td>Counter-Strike</td>
+                        <td>Dedicated Room</td>
+                        <td>128 tick, 10명 세션</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="analogy-box">
+                <strong>🎯 아키텍처 선택 가이드</strong>
+                <p><span class="highlight">세션 기반 (FPS, MOBA)</span>: Room 서버 + 로비 서버</p>
+                <p><span class="highlight">오픈 월드 (MMO)</span>: Zone 서버 + 월드 서버</p>
+                <p><span class="highlight">소셜/캐주얼</span>: 마이크로서비스 + API 서버</p>
+                <p><span class="warning">주의</span>: 초기에 과도한 복잡성은 피하고, 필요에 따라 분리</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>게임 서버</strong>는 신뢰할 수 있는 권위자로서 게임 상태 관리</li>
+                <li><strong>모놀리식</strong>: 실시간 게임에 적합, 낮은 레이턴시</li>
+                <li><strong>Zone/Room</strong> 분할로 부하 분산 및 스케일링</li>
+                <li><strong>Tick Rate</strong>: 게임 특성에 맞게 20~128Hz 선택</li>
+                <li>계층 분리로 <strong>유지보수성과 확장성</strong> 확보</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

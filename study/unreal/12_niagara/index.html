@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수백만 입자로 마법을 그리다 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+
+        <header class="content-header">
+            <h1>수백만 입자로 마법을 그리다</h1>
+            <p class="subtitle">Niagara 파티클 시스템</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Niagara vs Cascade</h2>
+            <div class="conversation">
+                <div class="q">Niagara가 기존 Cascade와 다른 점은 무엇인가요?</div>
+                <div class="a">
+                    <p>Cascade는 노드 기반이 아닌 <span class="highlight">모듈 스택</span>으로 제한적이었습니다. Niagara는 완전한 <span class="key-point">노드 기반 시스템</span>으로 훨씬 유연합니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th>Cascade</th>
+                        <th>Niagara</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>구조</td>
+                        <td>고정 모듈 스택</td>
+                        <td>완전 노드 기반</td>
+                    </tr>
+                    <tr>
+                        <td>커스텀 로직</td>
+                        <td>제한적 (C++ 필요)</td>
+                        <td>노드로 자유롭게</td>
+                    </tr>
+                    <tr>
+                        <td>GPU 시뮬레이션</td>
+                        <td>제한적 지원</td>
+                        <td>완전 지원</td>
+                    </tr>
+                    <tr>
+                        <td>데이터 인터페이스</td>
+                        <td>없음</td>
+                        <td>메시, 스켈레톤 등 접근</td>
+                    </tr>
+                    <tr>
+                        <td>이벤트</td>
+                        <td>제한적</td>
+                        <td>완전한 이벤트 시스템</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Niagara 구조</h2>
+            <div class="conversation">
+                <div class="q">Niagara System은 어떻게 구성되나요?</div>
+                <div class="a">
+                    <p>Niagara는 계층적 구조를 가집니다:</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+┌─────────────────────────────────────────────────────────────┐
+│                    Niagara System                            │
+│                   (최상위 컨테이너)                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │               Emitter 1 (불꽃)                       │   │
+│  │  ┌────────────────────────────────────────────┐     │   │
+│  │  │ Emitter Properties │ System에서의 설정     │     │   │
+│  │  ├────────────────────────────────────────────┤     │   │
+│  │  │ Emitter Spawn     │ 에미터 초기화          │     │   │
+│  │  │ Emitter Update    │ 에미터 업데이트        │     │   │
+│  │  ├────────────────────────────────────────────┤     │   │
+│  │  │ Particle Spawn    │ 파티클 생성 시         │     │   │
+│  │  │ Particle Update   │ 파티클 매 프레임       │     │   │
+│  │  └────────────────────────────────────────────┘     │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │               Emitter 2 (연기)                       │   │
+│  │  ...                                                 │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">Niagara System 계층 구조</p>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>스택</th>
+                        <th>실행 시점</th>
+                        <th>용도</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>System Spawn</td>
+                        <td>시스템 시작 시 한 번</td>
+                        <td>시스템 변수 초기화</td>
+                    </tr>
+                    <tr>
+                        <td>System Update</td>
+                        <td>매 프레임</td>
+                        <td>에미터 간 공유 로직</td>
+                    </tr>
+                    <tr>
+                        <td>Emitter Spawn</td>
+                        <td>에미터 시작 시</td>
+                        <td>에미터 설정</td>
+                    </tr>
+                    <tr>
+                        <td>Emitter Update</td>
+                        <td>매 프레임</td>
+                        <td>스폰 제어, 상태 관리</td>
+                    </tr>
+                    <tr>
+                        <td>Particle Spawn</td>
+                        <td>파티클 생성 시</td>
+                        <td>초기 위치, 속도, 색상</td>
+                    </tr>
+                    <tr>
+                        <td>Particle Update</td>
+                        <td>파티클 매 프레임</td>
+                        <td>이동, 색상 변화, 수명</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 모듈과 파라미터</h2>
+            <div class="conversation">
+                <div class="q">모듈은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>모듈은 <span class="highlight">재사용 가능한 로직 블록</span>입니다. 내장 모듈을 조합하거나 커스텀 모듈을 만들 수 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">주요 내장 모듈</div>
+                <pre><code>// Particle Spawn 스택
+Initialize Particle      // 파티클 기본 설정
+Sphere Location         // 구 형태로 위치 초기화
+Add Velocity            // 초기 속도 추가
+Set Color               // 초기 색상
+
+// Particle Update 스택
+Particle State          // 수명, 활성 상태
+Gravity Force           // 중력 적용
+Drag                    // 공기저항
+Scale Color             // 수명에 따른 색상 변화
+Scale Sprite Size       // 수명에 따른 크기 변화
+Solve Forces and Velocity // 힘 → 속도 → 위치 계산
+
+// Render
+Sprite Renderer         // 빌보드 스프라이트
+Mesh Renderer           // 3D 메시
+Ribbon Renderer         // 리본/트레일</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">파라미터 네임스페이스는 무엇인가요?</div>
+                <div class="a">
+                    <p>Niagara는 네임스페이스로 파라미터를 분류합니다:</p>
+                    <p>• <span class="highlight">System.</span> - 시스템 전체에서 공유</p>
+                    <p>• <span class="highlight">Emitter.</span> - 에미터 레벨</p>
+                    <p>• <span class="highlight">Particles.</span> - 개별 파티클</p>
+                    <p>• <span class="highlight">User.</span> - 외부에서 설정 가능</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: GPU 시뮬레이션</h2>
+            <div class="conversation">
+                <div class="q">CPU vs GPU 시뮬레이션의 차이는?</div>
+                <div class="a">
+                    <p>CPU 시뮬레이션은 유연하지만 수천 개가 한계입니다. GPU 시뮬레이션은 <span class="highlight">수백만 개의 파티클</span>을 처리할 수 있습니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th>CPU Sim</th>
+                        <th>GPU Sim</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>파티클 수</td>
+                        <td>~수천</td>
+                        <td>수백만</td>
+                    </tr>
+                    <tr>
+                        <td>게임 데이터 접근</td>
+                        <td>쉬움</td>
+                        <td>Data Interface 필요</td>
+                    </tr>
+                    <tr>
+                        <td>콜리전</td>
+                        <td>정확한 물리</td>
+                        <td>Depth Buffer 기반</td>
+                    </tr>
+                    <tr>
+                        <td>이벤트</td>
+                        <td>완전 지원</td>
+                        <td>제한적</td>
+                    </tr>
+                    <tr>
+                        <td>사용 예</td>
+                        <td>소규모 이펙트</td>
+                        <td>대규모 시뮬레이션</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">GPU Sim 활성화</div>
+                <pre><code>// Emitter Properties에서
+Sim Target: GPUCompute Sim
+
+// GPU 시뮬레이션 제약사항
+• 모든 모듈이 GPU 호환이어야 함
+• 이벤트 발생 제한
+• 게임 오브젝트 직접 접근 불가
+  → Data Interface 사용
+
+// GPU에서 Depth Collision
+Modules: Collision (GPU)
+  → Depth Buffer 기반 충돌
+  → 정확도 낮지만 빠름</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Data Interface</h2>
+            <div class="conversation">
+                <div class="q">외부 데이터를 Niagara에서 어떻게 사용하나요?</div>
+                <div class="a">
+                    <p><span class="highlight">Data Interface</span>를 통해 메시, 스켈레톤, 텍스처 등의 외부 데이터에 접근합니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>Data Interface</th>
+                        <th>용도</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Static Mesh</td>
+                        <td>메시 표면에서 파티클 스폰</td>
+                    </tr>
+                    <tr>
+                        <td>Skeletal Mesh</td>
+                        <td>본 위치, 스키닝된 표면 접근</td>
+                    </tr>
+                    <tr>
+                        <td>Texture Sample</td>
+                        <td>텍스처에서 색상/데이터 읽기</td>
+                    </tr>
+                    <tr>
+                        <td>Particle Attribute Reader</td>
+                        <td>다른 에미터의 파티클 읽기</td>
+                    </tr>
+                    <tr>
+                        <td>Collision Query</td>
+                        <td>월드 콜리전 체크</td>
+                    </tr>
+                    <tr>
+                        <td>Audio Spectrum</td>
+                        <td>오디오 반응 이펙트</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">Skeletal Mesh에서 스폰 예시</div>
+                <pre><code>// Emitter에 Data Interface 추가
+User Parameters:
+  → SkeletalMeshDI (Skeletal Mesh Data Interface)
+
+// Particle Spawn에서
+Get Skinned Triangle Data
+  → 스키닝된 메시 표면에서 위치, 노멀 가져오기
+
+// 결과: 캐릭터 표면을 따라 파티클 스폰
+// (불타는 캐릭터, 마법 오라 등)</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 이벤트와 통신</h2>
+            <div class="conversation">
+                <div class="q">파티클 간, 에미터 간 통신은 어떻게 하나요?</div>
+                <div class="a">
+                    <p>Niagara는 강력한 <span class="highlight">이벤트 시스템</span>을 제공합니다. 파티클 충돌, 사망 등의 이벤트로 다른 에미터를 트리거할 수 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+이벤트 기반 이펙트 체인:
+
+┌──────────────────┐
+│  Emitter: 총알   │
+│                  │
+│  Death Event ────┼──────────────────────────────┐
+│  (파티클 사망시) │                              │
+└──────────────────┘                              │
+                                                  │
+                               ┌──────────────────┼──────────────┐
+                               │  Emitter: 폭발  │              │
+                               │                  │ Event Handler│
+                               │  스폰 위치 =     │ ◀────────────┘
+                               │  총알 사망 위치  │
+                               │                  │
+                               │  Collision ──────┼─────────────┐
+                               └──────────────────┘             │
+                                                                │
+                                               ┌────────────────┼───┐
+                                               │ Emitter: 파편 │   │
+                                               │                │   │
+                                               │ 충돌 위치에서  │◀──┘
+                                               │ 파편 생성      │
+                                               └────────────────────┘
+                </pre>
+                <p class="diagram-caption">이벤트로 연결된 이펙트 체인</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">이벤트 설정</div>
+                <pre><code>// Emitter A: 이벤트 발생
+Particle Update:
+  Generate Death Event
+    → Event Name: "OnBulletDeath"
+    → Payload: Position, Velocity
+
+// Emitter B: 이벤트 수신
+Event Handler:
+  Source: EmitterA.OnBulletDeath
+
+Particle Spawn:
+  Set Position (Event의 Position 사용)
+  Set Velocity (Event의 Velocity 기반)</code></pre>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Niagara</strong>는 완전한 노드 기반 파티클 시스템입니다</li>
+                <li><strong>System > Emitter > Particle</strong> 계층 구조로 구성됩니다</li>
+                <li><strong>GPU 시뮬레이션</strong>으로 수백만 파티클 처리 가능</li>
+                <li><strong>Data Interface</strong>로 메시, 스켈레톤 등 외부 데이터 접근</li>
+                <li><strong>이벤트</strong>로 파티클 간, 에미터 간 통신 가능</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

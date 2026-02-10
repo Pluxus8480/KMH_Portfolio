@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메모리 배리어와 순서 보장 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+            <h1>"코드 순서대로 실행 안 된다고요?"</h1>
+            <p class="subtitle">메모리 순서와 배리어의 이해</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 메모리 재정렬 문제</h2>
+            <div class="conversation">
+                <div class="q">코드가 순서대로 실행 안 되는 경우가 있나요?</div>
+                <div class="a">
+                    <p>네! <strong>컴파일러와 CPU 모두</strong> 성능을 위해 순서를 바꿀 수 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">재정렬 문제 예시</div>
+                        <pre><code>// 원래 코드
+int data = 0;
+bool ready = false;
+
+// Thread 1 (Producer)
+void producer() {
+    data = 42;      // (1)
+    ready = true;   // (2)
+}
+
+// Thread 2 (Consumer)
+void consumer() {
+    while (!ready);  // (3) ready가 true가 될 때까지 대기
+    assert(data == 42);  // (4) 항상 성공할까?
+}
+
+// 문제: 컴파일러 또는 CPU가 (1)과 (2)를 재정렬할 수 있음!
+// 실행 순서가 (2) → (1)이 되면:
+// - Consumer가 ready=true를 보고 루프 탈출
+// - 하지만 data는 아직 42가 아닐 수 있음!
+// - assert 실패!</code></pre>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    재정렬이 발생하는 이유                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   1. 컴파일러 최적화                                                │
+│      - 의존성 없는 명령어는 순서 변경 가능                          │
+│      - 더 효율적인 명령어 스케줄링                                  │
+│                                                                     │
+│   2. CPU Out-of-Order Execution                                    │
+│      - 대기 중인 명령어를 건너뛰고 다른 명령어 먼저 실행            │
+│      - 파이프라인 효율 최대화                                       │
+│                                                                     │
+│   3. Store Buffer                                                   │
+│      - 쓰기 연산을 버퍼에 저장하고 나중에 반영                      │
+│      - 쓰기 순서가 바뀔 수 있음                                     │
+│                                                                     │
+│   4. CPU 캐시                                                        │
+│      - 캐시 일관성 프로토콜의 지연                                  │
+│      - 다른 코어에서 보는 순서가 다를 수 있음                       │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 메모리 배리어 종류</h2>
+            <div class="conversation">
+                <div class="q">메모리 배리어는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>배리어 이전/이후의 메모리 연산 순서를 강제합니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>배리어 종류</th>
+                                <th>효과</th>
+                                <th>사용 상황</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Load Barrier</td>
+                                <td>이전 읽기 완료 보장</td>
+                                <td>데이터 읽기 후 조건 확인</td>
+                            </tr>
+                            <tr>
+                                <td>Store Barrier</td>
+                                <td>이전 쓰기 완료 보장</td>
+                                <td>데이터 쓰기 후 플래그 설정</td>
+                            </tr>
+                            <tr>
+                                <td>Full Barrier</td>
+                                <td>모든 연산 완료 보장</td>
+                                <td>완전한 동기화 필요 시</td>
+                            </tr>
+                            <tr>
+                                <td>Acquire</td>
+                                <td>이후 읽기가 앞으로 안 옴</td>
+                                <td>Lock 획득 시</td>
+                            </tr>
+                            <tr>
+                                <td>Release</td>
+                                <td>이전 쓰기가 뒤로 안 감</td>
+                                <td>Lock 해제 시</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                  Acquire / Release 의미                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Release (쓰기 측)                                                 │
+│   ─────────────────                                                 │
+│                                                                     │
+│   data = 42;        ──┐                                             │
+│   moreData = 100;   ──┼── 이 쓰기들이                               │
+│   ──── RELEASE ─────  │                                             │
+│   ready = true;     ◀─┘   ready 이전에 완료됨                       │
+│                                                                     │
+│   ─────────────────────────────────────────────────────────────    │
+│                                                                     │
+│   Acquire (읽기 측)                                                 │
+│   ─────────────────                                                 │
+│                                                                     │
+│   if (ready) {      ──┐                                             │
+│   ──── ACQUIRE ─────  │                                             │
+│     use(data);      ◀─┼── 이 읽기들이                               │
+│     use(moreData);  ◀─┘   ready 이후에 실행됨                       │
+│   }                                                                 │
+│                                                                     │
+│   Acquire-Release 쌍으로 동기화 지점 형성                           │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: C++ 메모리 순서</h2>
+            <div class="conversation">
+                <div class="q">C++에서 메모리 순서는 어떻게 사용하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">std::memory_order 사용</div>
+                        <pre><code>#include <atomic>
+
+std::atomic<int> data{0};
+std::atomic<bool> ready{false};
+
+// Producer
+void producer() {
+    data.store(42, std::memory_order_relaxed);  // 순서 상관없이 저장
+    ready.store(true, std::memory_order_release);  // release: 이전 쓰기 완료 보장
+}
+
+// Consumer
+void consumer() {
+    while (!ready.load(std::memory_order_acquire));  // acquire: 이후 읽기 보호
+    int d = data.load(std::memory_order_relaxed);
+    assert(d == 42);  // 항상 성공!
+}
+
+// memory_order 종류:
+// memory_order_relaxed  : 순서 보장 없음, 원자성만
+// memory_order_acquire  : 이후 읽기가 앞으로 안 옴
+// memory_order_release  : 이전 쓰기가 뒤로 안 감
+// memory_order_acq_rel  : acquire + release
+// memory_order_seq_cst  : 전체 순서 보장 (기본값, 가장 안전하지만 느림)</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">실제 적용 예시</div>
+                        <pre><code>// Double-Checked Locking Pattern
+class Singleton {
+    static std::atomic<Singleton*> instance;
+    static std::mutex mutex;
+
+public:
+    static Singleton* getInstance() {
+        Singleton* tmp = instance.load(std::memory_order_acquire);
+        if (tmp == nullptr) {
+            std::lock_guard<std::mutex> lock(mutex);
+            tmp = instance.load(std::memory_order_relaxed);
+            if (tmp == nullptr) {
+                tmp = new Singleton();
+                instance.store(tmp, std::memory_order_release);
+            }
+        }
+        return tmp;
+    }
+};
+
+// Spinlock 구현
+class Spinlock {
+    std::atomic<bool> locked{false};
+
+public:
+    void lock() {
+        while (locked.exchange(true, std::memory_order_acquire)) {
+            // busy wait
+        }
+        // acquire: 이후 임계구역 코드가 앞으로 안 옴
+    }
+
+    void unlock() {
+        locked.store(false, std::memory_order_release);
+        // release: 임계구역 코드가 이 뒤로 안 감
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">seq_cst를 항상 쓰면 안 되나요?</div>
+                <div class="a">
+                    <p class="warning">seq_cst는 가장 안전하지만 성능 비용이 있습니다!</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>Memory Order</th>
+                                <th>x86 비용</th>
+                                <th>ARM 비용</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>relaxed</td>
+                                <td>최소</td>
+                                <td>최소</td>
+                            </tr>
+                            <tr>
+                                <td>acquire/release</td>
+                                <td>거의 무료</td>
+                                <td>배리어 명령어</td>
+                            </tr>
+                            <tr>
+                                <td>seq_cst</td>
+                                <td>MFENCE or LOCK</td>
+                                <td>전체 배리어</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="key-point">x86은 강한 메모리 모델이라 acquire/release가 거의 무료지만, ARM은 약한 모델이라 비용이 큽니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 컴파일러 배리어</h2>
+            <div class="conversation">
+                <div class="q">CPU 배리어 외에 컴파일러 배리어도 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">컴파일러 배리어</div>
+                        <pre><code>// volatile은 컴파일러 최적화만 방지, CPU 재정렬은 막지 못함!
+volatile int flag;  // 매번 메모리에서 읽기는 하지만 순서 보장 없음
+
+// 컴파일러 배리어 (순서 보장 없이 최적화만 방지)
+#ifdef _MSC_VER
+    _ReadWriteBarrier();  // MSVC
+#else
+    asm volatile("" ::: "memory");  // GCC/Clang
+#endif
+
+// 올바른 동기화: atomic + memory_order
+std::atomic<bool> flag{false};
+flag.store(true, std::memory_order_release);
+
+// std::atomic_thread_fence
+int data = 0;
+std::atomic<bool> ready{false};
+
+void producer() {
+    data = 42;
+    std::atomic_thread_fence(std::memory_order_release);
+    ready.store(true, std::memory_order_relaxed);
+}
+
+void consumer() {
+    while (!ready.load(std::memory_order_relaxed));
+    std::atomic_thread_fence(std::memory_order_acquire);
+    assert(data == 42);
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 게임 프로그래밍 패턴</h2>
+            <div class="conversation">
+                <div class="q">게임에서 메모리 순서가 중요한 경우는?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">스레드 간 데이터 전달</div>
+                        <pre><code>// 렌더 스레드와 게임 스레드 간 프레임 데이터 전달
+struct FrameData {
+    Matrix4x4 viewMatrix;
+    std::vector<RenderCommand> commands;
+    // ... 많은 데이터
+};
+
+class DoubleBuffer {
+    FrameData buffers[2];
+    std::atomic<int> readyIndex{-1};
+
+public:
+    // 게임 스레드: 데이터 준비 후 공개
+    void submitFrame(int index) {
+        // 모든 데이터 쓰기가 완료된 후 인덱스 공개
+        readyIndex.store(index, std::memory_order_release);
+    }
+
+    // 렌더 스레드: 데이터 사용
+    FrameData* getReadyFrame() {
+        int index = readyIndex.load(std::memory_order_acquire);
+        if (index < 0) return nullptr;
+        // acquire 덕분에 buffers[index]의 모든 데이터가 보임
+        return &buffers[index];
+    }
+};
+
+// Lock-free 메시지 큐
+template<typename T>
+class SPSCQueue {
+    // ... (이전 예제 참조)
+
+    void push(const T& item) {
+        buffer[tail] = item;
+        // 데이터 쓰기 후 tail 업데이트
+        tail_.store(tail + 1, std::memory_order_release);
+    }
+
+    bool pop(T& item) {
+        size_t tail = tail_.load(std::memory_order_acquire);
+        if (head == tail) return false;
+        // acquire 덕분에 buffer[head] 데이터가 보임
+        item = buffer[head];
+        head_.store(head + 1, std::memory_order_release);
+        return true;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>재정렬</strong>: 컴파일러와 CPU 모두 성능을 위해 순서 변경 가능</li>
+                <li><strong>Acquire</strong>: 이후 읽기가 배리어 이전으로 이동 방지 (lock 획득)</li>
+                <li><strong>Release</strong>: 이전 쓰기가 배리어 이후로 이동 방지 (lock 해제)</li>
+                <li><strong>seq_cst</strong>: 가장 안전하지만 성능 비용 있음</li>
+                <li><strong>게임 적용</strong>: 스레드 간 데이터 전달 시 release/acquire 쌍 사용</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

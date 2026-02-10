@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concepts (C++20) 활용 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>템플릿 에러 메시지가 너무 길다면?</h1>
+            <p class="subtitle">C++20 Concepts로 타입 제약을 명확하게</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Concepts가 필요한 이유</h2>
+            <div class="conversation">
+                <div class="q">기존 템플릿의 문제점은?</div>
+                <div class="a">
+                    <p class="warning">템플릿 에러 메시지가 수백 줄에 달하고 이해하기 어렵습니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">기존 템플릿 문제</div>
+                        <pre><code>// 정렬 함수
+template&lt;typename Container&gt;
+void sortContainer(Container& c) {
+    std::sort(c.begin(), c.end());
+}
+
+// 잘못된 사용
+int x = 42;
+sortContainer(x);  // 에러!
+
+// 에러 메시지 (축약)
+// error: no member named 'begin' in 'int'
+// error: no member named 'end' in 'int'
+// ... (수십 줄의 템플릿 인스턴스화 정보)
+// ... iterator_category ...
+// ... value_type ...
+// 실제 문제가 뭔지 파악하기 어려움!</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Concepts 해결책</div>
+                        <pre><code>#include &lt;concepts&gt;
+#include &lt;ranges&gt;
+
+// Concept으로 제약
+template&lt;std::ranges::range Container&gt;
+void sortContainer(Container& c) {
+    std::sort(c.begin(), c.end());
+}
+
+int x = 42;
+sortContainer(x);
+
+// 에러 메시지:
+// error: constraints not satisfied
+// note: 'int' does not satisfy 'range'
+// 명확하고 간단!</code></pre>
+                    </div>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>Concepts는 구인 공고의 "지원 자격"과 같습니다. "C++ 경력 3년 이상"처럼 조건을 명시하면, 자격 미달 시 즉시 알 수 있습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Concept 정의</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">Concept 문법</div>
+                    <pre><code>// 기본 문법: concept 이름 = 제약조건;
+template&lt;typename T&gt;
+concept Integral = std::is_integral_v&lt;T&gt;;
+
+template&lt;typename T&gt;
+concept SignedIntegral = Integral&lt;T&gt; && std::is_signed_v&lt;T&gt;;
+
+// requires 표현식
+template&lt;typename T&gt;
+concept Addable = requires(T a, T b) {
+    a + b;  // 이 표현식이 유효해야 함
+};
+
+// 반환 타입 제약
+template&lt;typename T&gt;
+concept Hashable = requires(T a) {
+    { std::hash&lt;T&gt;{}(a) } -> std::convertible_to&lt;std::size_t&gt;;
+};
+
+// 복합 요구사항
+template&lt;typename T&gt;
+concept Container = requires(T c) {
+    // 타입 요구사항
+    typename T::value_type;
+    typename T::iterator;
+
+    // 표현식 요구사항
+    { c.begin() } -> std::input_or_output_iterator;
+    { c.end() } -> std::sentinel_for&lt;decltype(c.begin())&gt;;
+    { c.size() } -> std::convertible_to&lt;std::size_t&gt;;
+};
+
+// 중첩 요구사항
+template&lt;typename T&gt;
+concept Sortable = requires(T c) {
+    requires std::ranges::random_access_range&lt;T&gt;;
+    requires std::sortable&lt;std::ranges::iterator_t&lt;T&gt;&gt;;
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Concept 적용 방법</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">4가지 적용 방법</div>
+                    <pre><code>// 1. requires 절
+template&lt;typename T&gt;
+    requires std::integral&lt;T&gt;
+T add(T a, T b) {
+    return a + b;
+}
+
+// 2. 후위 requires 절
+template&lt;typename T&gt;
+T multiply(T a, T b) requires std::integral&lt;T&gt; {
+    return a * b;
+}
+
+// 3. 제약된 템플릿 파라미터
+template&lt;std::integral T&gt;
+T subtract(T a, T b) {
+    return a - b;
+}
+
+// 4. 축약 함수 템플릿 (auto + concept)
+auto divide(std::integral auto a, std::integral auto b) {
+    return a / b;
+}
+
+// 모두 동일하게 동작
+add(1, 2);        // OK
+add(1.5, 2.5);    // 에러: double은 integral이 아님
+
+// 클래스 템플릿에도 적용
+template&lt;std::integral T&gt;
+class Counter {
+    T value = 0;
+public:
+    void increment() { ++value; }
+    T get() const { return value; }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 표준 Concepts</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">주요 표준 Concepts</div>
+                    <pre><code>#include &lt;concepts&gt;
+
+// 기본 타입 Concepts
+std::same_as&lt;T, U&gt;          // T와 U가 같은 타입
+std::derived_from&lt;D, B&gt;     // D가 B에서 파생
+std::convertible_to&lt;F, T&gt;   // F에서 T로 변환 가능
+std::integral&lt;T&gt;            // 정수형
+std::floating_point&lt;T&gt;      // 부동소수점
+std::signed_integral&lt;T&gt;     // 부호 있는 정수
+std::unsigned_integral&lt;T&gt;   // 부호 없는 정수
+
+// 비교 Concepts
+std::equality_comparable&lt;T&gt; // == 비교 가능
+std::totally_ordered&lt;T&gt;     // <, >, <=, >= 비교 가능
+std::three_way_comparable&lt;T&gt; // <=> 비교 가능
+
+// 객체 Concepts
+std::movable&lt;T&gt;             // 이동 가능
+std::copyable&lt;T&gt;            // 복사 가능
+std::semiregular&lt;T&gt;         // 기본 생성 + 복사 가능
+std::regular&lt;T&gt;             // semiregular + equality_comparable
+
+// 호출 가능 Concepts
+std::invocable&lt;F, Args...&gt;  // F(Args...) 호출 가능
+std::predicate&lt;F, Args...&gt;  // bool 반환하는 호출 가능
+
+// Iterator Concepts (&lt;iterator&gt;)
+std::input_iterator&lt;I&gt;
+std::output_iterator&lt;I, T&gt;
+std::forward_iterator&lt;I&gt;
+std::bidirectional_iterator&lt;I&gt;
+std::random_access_iterator&lt;I&gt;
+std::contiguous_iterator&lt;I&gt;
+
+// Range Concepts (&lt;ranges&gt;)
+std::ranges::range&lt;R&gt;
+std::ranges::input_range&lt;R&gt;
+std::ranges::forward_range&lt;R&gt;
+std::ranges::bidirectional_range&lt;R&gt;
+std::ranges::random_access_range&lt;R&gt;
+std::ranges::contiguous_range&lt;R&gt;</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 실전 활용</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">커스텀 Concepts 예제</div>
+                    <pre><code>// 1. 게임 엔티티 Concept
+template&lt;typename T&gt;
+concept GameEntity = requires(T e) {
+    { e.update(0.0f) };
+    { e.render() };
+    { e.getPosition() } -> std::same_as&lt;Vector3&gt;;
+    { e.isAlive() } -> std::convertible_to&lt;bool&gt;;
+};
+
+template&lt;GameEntity E&gt;
+void updateAll(std::vector&lt;E*&gt;& entities, float dt) {
+    for (auto* e : entities) {
+        if (e->isAlive()) {
+            e->update(dt);
+        }
+    }
+}
+
+// 2. 직렬화 가능 Concept
+template&lt;typename T&gt;
+concept Serializable = requires(T obj, std::ostream& os, std::istream& is) {
+    { obj.serialize(os) } -> std::same_as&lt;void&gt;;
+    { T::deserialize(is) } -> std::same_as&lt;T&gt;;
+};
+
+template&lt;Serializable T&gt;
+void saveToFile(const T& obj, const std::string& path) {
+    std::ofstream file(path);
+    obj.serialize(file);
+}
+
+// 3. 수학 연산 Concept
+template&lt;typename T&gt;
+concept Arithmetic = requires(T a, T b) {
+    { a + b } -> std::convertible_to&lt;T&gt;;
+    { a - b } -> std::convertible_to&lt;T&gt;;
+    { a * b } -> std::convertible_to&lt;T&gt;;
+    { a / b } -> std::convertible_to&lt;T&gt;;
+};
+
+template&lt;Arithmetic T&gt;
+T lerp(T a, T b, float t) {
+    return a + (b - a) * t;
+}
+
+// 4. 콜백 Concept
+template&lt;typename F, typename... Args&gt;
+concept Callback = std::invocable&lt;F, Args...&gt;;
+
+template&lt;typename T&gt;
+concept EventHandler = requires(T handler) {
+    { handler.onEvent() } -> std::same_as&lt;void&gt;;
+};
+
+// 오버로딩으로 분기
+void process(std::integral auto x) {
+    std::cout << "정수: " << x << "\n";
+}
+
+void process(std::floating_point auto x) {
+    std::cout << "실수: " << x << "\n";
+}
+
+void process(auto x) {
+    std::cout << "기타: " << x << "\n";
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: Concept vs 이전 기법</h2>
+            <div class="conversation">
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>기법</th>
+                            <th>가독성</th>
+                            <th>에러 메시지</th>
+                            <th>유연성</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>무제약 템플릿</td>
+                            <td>높음</td>
+                            <td>매우 나쁨</td>
+                            <td>높음</td>
+                        </tr>
+                        <tr>
+                            <td>SFINAE</td>
+                            <td>낮음</td>
+                            <td>보통</td>
+                            <td>높음</td>
+                        </tr>
+                        <tr>
+                            <td>static_assert</td>
+                            <td>보통</td>
+                            <td>좋음</td>
+                            <td>낮음</td>
+                        </tr>
+                        <tr>
+                            <td>Concepts</td>
+                            <td>높음</td>
+                            <td>매우 좋음</td>
+                            <td>높음</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="code-block">
+                    <div class="code-header">비교 예제</div>
+                    <pre><code>// SFINAE 방식 (C++17 이전)
+template&lt;typename T,
+         std::enable_if_t&lt;std::is_integral_v&lt;T&gt;, int&gt; = 0&gt;
+T oldAdd(T a, T b) { return a + b; }
+
+// Concepts 방식 (C++20)
+template&lt;std::integral T&gt;
+T newAdd(T a, T b) { return a + b; }
+
+// 또는
+std::integral auto autoAdd(std::integral auto a, std::integral auto b) {
+    return a + b;
+}
+
+// Concept 조합
+template&lt;typename T&gt;
+concept NumericContainer =
+    std::ranges::range&lt;T&gt; &&
+    std::is_arithmetic_v&lt;std::ranges::range_value_t&lt;T&gt;&gt;;
+
+template&lt;NumericContainer C&gt;
+auto sum(const C& container) {
+    using T = std::ranges::range_value_t&lt;C&gt;;
+    T result{};
+    for (const auto& elem : container) {
+        result += elem;
+    }
+    return result;
+}</code></pre>
+                </div>
+
+                <p class="key-point">Concepts는 템플릿 프로그래밍을 더 읽기 쉽고 디버깅하기 쉽게 만듭니다!</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Concept</strong>: 템플릿 파라미터의 타입 제약 조건</li>
+                <li><strong>requires</strong>: 타입이 만족해야 할 표현식/타입 정의</li>
+                <li><strong>적용 방법</strong>: requires 절, 제약된 파라미터, auto + concept</li>
+                <li><strong>장점</strong>: 명확한 에러 메시지, 높은 가독성</li>
+                <li><strong>표준 Concepts</strong>: integral, range, invocable 등</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가상 함수 테이블 (vtable) 분석 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>virtual 함수는 어떻게 동작할까?</h1>
+            <p class="subtitle">vtable과 vptr의 내부 구조 파헤치기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 다형성과 가상 함수</h2>
+            <div class="conversation">
+                <div class="q">가상 함수가 왜 필요한가요?</div>
+                <div class="a">
+                    <p class="highlight">런타임에 실제 객체 타입에 맞는 함수를 호출하기 위해 필요합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">가상 함수 없이</div>
+                        <pre><code>class Animal {
+public:
+    void speak() { std::cout << "..."; }  // 비가상
+};
+
+class Dog : public Animal {
+public:
+    void speak() { std::cout << "Woof!"; }
+};
+
+Animal* animal = new Dog();
+animal->speak();  // "..." 출력! (Animal::speak 호출)</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">가상 함수 사용</div>
+                        <pre><code>class Animal {
+public:
+    virtual void speak() { std::cout << "..."; }  // 가상
+};
+
+class Dog : public Animal {
+public:
+    void speak() override { std::cout << "Woof!"; }
+};
+
+Animal* animal = new Dog();
+animal->speak();  // "Woof!" 출력! (Dog::speak 호출)</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: vtable과 vptr 구조</h2>
+            <div class="conversation">
+                <div class="q">vtable은 어떤 구조인가요?</div>
+                <div class="a">
+                    <p><strong>vptr (virtual pointer)</strong>: 각 객체가 가진 vtable 포인터</p>
+                    <p><strong>vtable</strong>: 클래스당 하나, 가상 함수 포인터 배열</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+vtable 구조
+
+Animal 객체                  Animal vtable
+┌────────────┐              ┌─────────────────┐
+│   vptr ────┼─────────────▶│ &Animal::speak  │
+├────────────┤              │ &Animal::eat    │
+│  멤버 변수  │              │ &Animal::~Animal│
+└────────────┘              └─────────────────┘
+
+Dog 객체                     Dog vtable
+┌────────────┐              ┌─────────────────┐
+│   vptr ────┼─────────────▶│ &Dog::speak     │ ← 오버라이드
+├────────────┤              │ &Animal::eat    │ ← 상속
+│  멤버 변수  │              │ &Dog::~Dog      │ ← 오버라이드
+└────────────┘              └─────────────────┘
+
+가상 함수 호출:
+animal->speak()
+→ (*(animal->vptr[0]))()
+→ Dog::speak() 호출!
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: vtable 직접 들여다보기</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">vtable 메모리 분석</div>
+                    <pre><code>class Base {
+public:
+    virtual void func1() { std::cout << "Base::func1\n"; }
+    virtual void func2() { std::cout << "Base::func2\n"; }
+    virtual ~Base() {}
+
+    int data = 42;
+};
+
+class Derived : public Base {
+public:
+    void func1() override { std::cout << "Derived::func1\n"; }
+    void func3() { std::cout << "Derived::func3\n"; }  // 비가상
+};
+
+void analyzeVtable() {
+    Base base;
+    Derived derived;
+
+    std::cout << "sizeof(Base): " << sizeof(Base) << "\n";      // 16 (vptr + int + padding)
+    std::cout << "sizeof(Derived): " << sizeof(Derived) << "\n"; // 16
+
+    // vptr 주소 (객체의 첫 8바이트)
+    void** baseVptr = *(void***)&base;
+    void** derivedVptr = *(void***)&derived;
+
+    std::cout << "Base vptr: " << baseVptr << "\n";
+    std::cout << "Derived vptr: " << derivedVptr << "\n";
+
+    // vtable의 함수 포인터들
+    using FuncPtr = void(*)();
+
+    std::cout << "\nBase vtable:\n";
+    std::cout << "  func1: " << baseVptr[0] << "\n";
+    std::cout << "  func2: " << baseVptr[1] << "\n";
+
+    std::cout << "\nDerived vtable:\n";
+    std::cout << "  func1: " << derivedVptr[0] << "\n";  // 다른 주소 (오버라이드)
+    std::cout << "  func2: " << derivedVptr[1] << "\n";  // 같은 주소 (상속)
+
+    // 직접 호출 (위험! 데모용)
+    reinterpret_cast&lt;FuncPtr&gt;(derivedVptr[0])();  // "Derived::func1"
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 다중 상속과 vtable</h2>
+            <div class="conversation">
+                <div class="q">다중 상속에서는 어떻게 되나요?</div>
+                <div class="a">
+                    <p class="warning">다중 상속 시 vptr이 여러 개 생깁니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">다중 상속 vtable</div>
+                        <pre><code>class A {
+public:
+    virtual void funcA() { std::cout << "A::funcA\n"; }
+    virtual ~A() {}
+    int dataA = 1;
+};
+
+class B {
+public:
+    virtual void funcB() { std::cout << "B::funcB\n"; }
+    virtual ~B() {}
+    int dataB = 2;
+};
+
+class C : public A, public B {
+public:
+    void funcA() override { std::cout << "C::funcA\n"; }
+    void funcB() override { std::cout << "C::funcB\n"; }
+    virtual void funcC() { std::cout << "C::funcC\n"; }
+    int dataC = 3;
+};</code></pre>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+다중 상속 메모리 레이아웃
+
+C 객체
+┌────────────┐      ┌─────────────────┐
+│ A::vptr ───┼─────▶│ C vtable (A부분)│
+├────────────┤      │ &C::funcA       │
+│ A::dataA   │      │ &C::~C          │
+├────────────┤      │ &C::funcC       │
+│ B::vptr ───┼──┐   └─────────────────┘
+├────────────┤  │
+│ B::dataB   │  │   ┌─────────────────┐
+├────────────┤  └──▶│ C vtable (B부분)│
+│ C::dataC   │      │ &C::funcB       │
+└────────────┘      │ &C::~C (thunk)  │
+                    └─────────────────┘
+
+포인터 조정 (thunk):
+B* b = new C();  // 포인터가 B 부분을 가리키도록 조정
+b->funcB();      // C::funcB 호출
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 가상 함수의 비용</h2>
+            <div class="conversation">
+                <div class="q">가상 함수는 얼마나 느린가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>비용 요소</th>
+                                <th>설명</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>메모리</td>
+                                <td>객체당 vptr (8바이트), 클래스당 vtable</td>
+                            </tr>
+                            <tr>
+                                <td>간접 호출</td>
+                                <td>vtable 조회 (1~2 메모리 접근)</td>
+                            </tr>
+                            <tr>
+                                <td>캐시 미스</td>
+                                <td>vtable이 캐시에 없으면 느림</td>
+                            </tr>
+                            <tr>
+                                <td>인라인 불가</td>
+                                <td>컴파일러가 인라인 최적화 못 함</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">가상 함수 vs 직접 호출</div>
+                        <pre><code>// 직접 호출 (인라인 가능)
+class Direct {
+public:
+    void update() { x += 1; }  // 인라인됨
+    int x = 0;
+};
+
+// 가상 함수 (인라인 불가)
+class Virtual {
+public:
+    virtual void update() { x += 1; }
+    int x = 0;
+};
+
+void benchmark() {
+    Direct d;
+    Virtual v;
+
+    // 직접 호출: ~0.5ns
+    for (int i = 0; i < 1000000; i++) {
+        d.update();  // 인라인, 매우 빠름
+    }
+
+    // 가상 호출: ~2-5ns
+    for (int i = 0; i < 1000000; i++) {
+        v.update();  // vtable 조회 필요
+    }
+}
+
+// devirtualization: 컴파일러가 타입을 알면 최적화
+Virtual v;
+v.update();  // 타입이 확실하면 직접 호출로 최적화될 수 있음</code></pre>
+                    </div>
+
+                    <p class="key-point">현대 CPU에서 가상 함수 오버헤드는 대부분 무시할 수 있습니다. 하지만 핫 루프에서는 주의!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 가상 함수 대안</h2>
+            <div class="conversation">
+                <div class="q">가상 함수를 피하는 방법은?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">CRTP (정적 다형성)</div>
+                        <pre><code>// Curiously Recurring Template Pattern
+template&lt;typename Derived&gt;
+class Base {
+public:
+    void interface() {
+        static_cast&lt;Derived*&gt;(this)->implementation();
+    }
+};
+
+class Concrete : public Base&lt;Concrete&gt; {
+public:
+    void implementation() {
+        std::cout << "Concrete implementation\n";
+    }
+};
+
+// 컴파일 타임에 타입 결정 → 인라인 가능!</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">std::variant (타입 안전 union)</div>
+                        <pre><code>struct Circle { float radius; };
+struct Rectangle { float width, height; };
+struct Triangle { float base, height; };
+
+using Shape = std::variant&lt;Circle, Rectangle, Triangle&gt;;
+
+float area(const Shape& shape) {
+    return std::visit([](const auto& s) {
+        using T = std::decay_t&lt;decltype(s)&gt;;
+        if constexpr (std::is_same_v&lt;T, Circle&gt;) {
+            return 3.14159f * s.radius * s.radius;
+        } else if constexpr (std::is_same_v&lt;T, Rectangle&gt;) {
+            return s.width * s.height;
+        } else {
+            return 0.5f * s.base * s.height;
+        }
+    }, shape);
+}
+
+// 가상 함수 없이 다형성!
+// 더 빠르고 캐시 친화적</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">함수 포인터 / std::function</div>
+                        <pre><code>// 함수 포인터 테이블 (수동 vtable)
+struct Entity {
+    void (*update)(Entity*);
+    void (*render)(Entity*);
+    // 데이터...
+};
+
+// std::function (더 유연하지만 오버헤드 있음)
+class Callback {
+    std::function&lt;void()&gt; onUpdate;
+    std::function&lt;void()&gt; onRender;
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>vptr</strong>: 객체마다 vtable을 가리키는 포인터</li>
+                <li><strong>vtable</strong>: 클래스당 하나, 가상 함수 포인터 배열</li>
+                <li><strong>다중 상속</strong>: vptr이 여러 개, thunk로 조정</li>
+                <li><strong>비용</strong>: 간접 호출 + 인라인 불가 + 캐시 미스</li>
+                <li><strong>대안</strong>: CRTP, std::variant, 함수 포인터</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

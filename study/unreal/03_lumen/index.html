@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>빛이 벽을 타고 퍼지는 마법 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+
+        <header class="content-header">
+            <h1>빛이 벽을 타고 퍼지는 마법</h1>
+            <p class="subtitle">Lumen 글로벌 일루미네이션의 원리</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 글로벌 일루미네이션이란?</h2>
+            <div class="conversation">
+                <div class="q">직접 조명만으로는 왜 부족한가요?</div>
+                <div class="a">
+                    <p>현실의 빛은 물체에 부딪혀 <span class="highlight">반사(bounce)</span>됩니다. 빨간 벽 옆에 서면 피부가 붉게 보이는 것처럼요. 이걸 <span class="highlight">간접 조명(Indirect Lighting)</span>이라고 합니다.</p>
+                    <p>직접 조명만 있으면 그림자 영역이 완전히 검게 되고, 비현실적으로 보입니다. 글로벌 일루미네이션(GI)은 이 간접 조명을 시뮬레이션합니다.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>직접 조명은 <span class="highlight">손전등으로 직접 비추는 것</span>입니다.</p>
+                <p>글로벌 일루미네이션은 <span class="highlight">흰 천장이 빛을 반사해서 방 전체가 밝아지는 것</span>입니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Lumen의 핵심 기술</h2>
+            <div class="conversation">
+                <div class="q">Lumen은 어떻게 실시간으로 GI를 계산하나요?</div>
+                <div class="a">
+                    <p>Lumen은 <span class="highlight">Software Ray Tracing</span>과 <span class="highlight">Hardware Ray Tracing</span>을 하이브리드로 사용합니다. 핵심은 "충분히 좋은" 근사치를 빠르게 계산하는 것입니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+┌─────────────────────────────────────────────────────────┐
+│                    Lumen 파이프라인                      │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  1. Surface Cache 생성                                  │
+│     ┌─────────────────────────────────────────────┐    │
+│     │ 메시 표면의 Material 정보를 캐시            │    │
+│     │ (Albedo, Normal, Emissive 등)               │    │
+│     └─────────────────────────────────────────────┘    │
+│                         │                               │
+│                         ▼                               │
+│  2. Ray Tracing (광선 추적)                             │
+│     ┌─────────────────────────────────────────────┐    │
+│     │ 화면 픽셀에서 광선 발사                     │    │
+│     │ → SDF / Mesh Card에서 히트 검출             │    │
+│     └─────────────────────────────────────────────┘    │
+│                         │                               │
+│                         ▼                               │
+│  3. Radiance Cache                                      │
+│     ┌─────────────────────────────────────────────┐    │
+│     │ 월드 공간에 프로브 배치                     │    │
+│     │ 주변 조명 정보 저장 및 보간                 │    │
+│     └─────────────────────────────────────────────┘    │
+│                         │                               │
+│                         ▼                               │
+│  4. Final Gather + Denoising                            │
+│     ┌─────────────────────────────────────────────┐    │
+│     │ 최종 결과 합성 및 노이즈 제거               │    │
+│     └─────────────────────────────────────────────┘    │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">Lumen의 처리 단계</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Surface Cache와 Mesh Cards</h2>
+            <div class="conversation">
+                <div class="q">Surface Cache는 무엇인가요?</div>
+                <div class="a">
+                    <p>모든 메시의 표면 정보를 <span class="highlight">아틀라스 텍스처</span>에 저장합니다. 광선이 표면에 닿았을 때, 복잡한 머티리얼 계산 대신 캐시된 값을 바로 읽어옵니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Surface Cache 개념</div>
+                <pre><code>// Surface Cache에 저장되는 정보
+struct SurfaceCacheData {
+    float3 Albedo;        // 기본 색상
+    float3 Normal;        // 노멀 방향
+    float3 Emissive;      // 발광 색상
+    float Roughness;      // 거칠기
+    float Metallic;       // 금속성
+};
+
+// 광선이 표면에 닿았을 때
+HitResult hit = TraceRay(ray);
+if (hit.Valid) {
+    // 복잡한 머티리얼 계산 대신 캐시 조회
+    SurfaceCacheData data = SampleSurfaceCache(hit.UV);
+    return CalculateLighting(data, lightDirection);
+}</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">Mesh Cards는 뭔가요?</div>
+                <div class="a">
+                    <p>메시를 <span class="highlight">6방향 카드(직육면체)</span>로 단순화한 표현입니다. 복잡한 메시 대신 이 카드에서 빠르게 조명 정보를 샘플링합니다.</p>
+                    <p class="warning">Mesh Cards가 너무 단순화되면 조명 누수(Light Leaking)가 발생할 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Software vs Hardware Ray Tracing</h2>
+            <div class="conversation">
+                <div class="q">Lumen의 두 가지 레이 트레이싱 방식은 뭐가 다른가요?</div>
+                <div class="a">
+                    <p>Software 방식은 <span class="highlight">Signed Distance Field(SDF)</span>를 사용하고, Hardware 방식은 <span class="highlight">RTX 코어</span>를 사용합니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th>Software (SDF)</th>
+                        <th>Hardware (RT Core)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>필요 하드웨어</td>
+                        <td>일반 GPU</td>
+                        <td>RTX GPU 필요</td>
+                    </tr>
+                    <tr>
+                        <td>정확도</td>
+                        <td>근사치 (SDF 해상도 제한)</td>
+                        <td>정확한 지오메트리</td>
+                    </tr>
+                    <tr>
+                        <td>성능</td>
+                        <td>더 빠름 (단순 기하)</td>
+                        <td>더 느림 (복잡 기하)</td>
+                    </tr>
+                    <tr>
+                        <td>디테일</td>
+                        <td>세밀한 디테일 손실</td>
+                        <td>완전한 디테일</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">SDF Ray Marching 개념</div>
+                <pre><code>// SDF를 이용한 레이 마칭
+float TraceSDF(Ray ray) {
+    float t = 0.0;
+
+    for (int i = 0; i < MAX_STEPS; i++) {
+        float3 p = ray.Origin + ray.Direction * t;
+
+        // SDF 샘플링 - 가장 가까운 표면까지의 거리
+        float d = SampleSDF(p);
+
+        if (d < HIT_THRESHOLD) {
+            return t;  // 히트!
+        }
+
+        // 안전하게 d만큼 전진 가능
+        t += d;
+
+        if (t > MAX_DISTANCE) break;
+    }
+
+    return -1.0;  // 미스
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Radiance Cache</h2>
+            <div class="conversation">
+                <div class="q">Radiance Cache는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>월드 공간에 <span class="highlight">프로브(probe)</span>를 배치하고, 각 프로브가 주변 조명 정보를 저장합니다. 렌더링할 때는 가까운 프로브들의 값을 보간해서 사용합니다.</p>
+                    <p class="key-point">매 프레임 모든 프로브를 업데이트하는 게 아니라, 점진적으로 갱신합니다. 그래서 조명이 변하면 약간의 지연이 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+        ┌─────────────────────────────────────┐
+        │        Radiance Cache 구조          │
+        │                                     │
+        │   ●─────●─────●─────●              │
+        │   │     │     │     │              │
+        │   ●─────●─────●─────●    ● = 프로브 │
+        │   │     │     │     │              │
+        │   ●─────●─────●─────●              │
+        │         ↓                          │
+        │   각 프로브에 저장되는 정보:        │
+        │   • 6방향 조명 색상                 │
+        │   • 스카이 가시성                   │
+        │   • 이전 프레임 히스토리            │
+        └─────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">3D 공간에 배치된 Radiance Cache 프로브</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 반사(Reflections)</h2>
+            <div class="conversation">
+                <div class="q">Lumen에서 반사는 어떻게 처리되나요?</div>
+                <div class="a">
+                    <p>Lumen Reflections는 <span class="highlight">Screen Space</span>와 <span class="highlight">Ray Traced</span> 반사를 조합합니다.</p>
+                    <p>화면에 보이는 영역은 SSR로, 화면 밖은 레이 트레이싱으로 처리합니다. 거친 표면은 Radiance Cache를 사용하고, 매끄러운 표면은 정확한 반사를 계산합니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>표면 거칠기</th>
+                        <th>반사 방식</th>
+                        <th>품질/성능</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Roughness > 0.4</td>
+                        <td>Radiance Cache 사용</td>
+                        <td>빠름, 부드러운 반사</td>
+                    </tr>
+                    <tr>
+                        <td>Roughness 0.2~0.4</td>
+                        <td>SSR + Ray Traced 혼합</td>
+                        <td>중간</td>
+                    </tr>
+                    <tr>
+                        <td>Roughness < 0.2</td>
+                        <td>정확한 Ray Traced</td>
+                        <td>고품질, 느림</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Lumen</strong>은 실시간 글로벌 일루미네이션과 반사를 제공합니다</li>
+                <li><strong>Surface Cache</strong>가 표면 정보를 미리 계산해 빠른 조회를 가능하게 합니다</li>
+                <li><strong>Software RT</strong>는 SDF 기반으로 일반 GPU에서, <strong>Hardware RT</strong>는 RTX 코어를 사용합니다</li>
+                <li><strong>Radiance Cache</strong>가 공간의 조명 정보를 저장하고 보간합니다</li>
+                <li>조명 변화에 <strong>약간의 지연</strong>이 있지만, 실시간으로 동적 GI를 구현합니다</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

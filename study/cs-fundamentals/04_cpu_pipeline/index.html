@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU 파이프라인과 분기 예측 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+            <h1>"if문이 왜 느려요?"</h1>
+            <p class="subtitle">CPU 파이프라인과 분기 예측의 비밀</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: CPU 파이프라인 기초</h2>
+            <div class="conversation">
+                <div class="q">파이프라인이란 무엇인가요?</div>
+                <div class="a">
+                    <p>명령어 처리를 <strong>여러 단계로 분할</strong>하여 동시에 처리하는 기법입니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>세탁을 생각해보세요. 세탁→건조→정리 3단계가 있다면:</p>
+                        <p>파이프라인 없이: 첫 번째 빨래 3단계 완료 → 두 번째 시작</p>
+                        <p>파이프라인 사용: 첫 번째가 건조 중일 때 두 번째가 세탁 시작!</p>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    5단계 파이프라인 예시                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   단계:   IF      ID      EX      MEM     WB                        │
+│          (Fetch) (Decode) (Execute) (Memory) (WriteBack)            │
+│                                                                     │
+│   사이클 1: [I1-IF]                                                 │
+│   사이클 2: [I1-ID] [I2-IF]                                         │
+│   사이클 3: [I1-EX] [I2-ID] [I3-IF]                                 │
+│   사이클 4: [I1-MEM][I2-EX] [I3-ID] [I4-IF]                         │
+│   사이클 5: [I1-WB] [I2-MEM][I3-EX] [I4-ID] [I5-IF]                 │
+│   사이클 6:        [I2-WB] [I3-MEM][I4-EX] [I5-ID] [I6-IF]          │
+│   ...                                                               │
+│                                                                     │
+│   파이프라인 없이: 5명령어 × 5사이클 = 25사이클                     │
+│   파이프라인 사용: 5 + 4 = 9사이클 (거의 1 IPC!)                    │
+│                                                                     │
+│   ※ 현대 CPU는 10~20단계 파이프라인 사용                           │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">파이프라인 깊이가 깊으면 무조건 좋은 건가요?</div>
+                <div class="a">
+                    <p>아닙니다. <strong>파이프라인 해저드(Hazard)</strong> 발생 시 손실이 커집니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>해저드 유형</th>
+                                <th>원인</th>
+                                <th>해결책</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>구조적 해저드</td>
+                                <td>하드웨어 리소스 충돌</td>
+                                <td>리소스 복제</td>
+                            </tr>
+                            <tr>
+                                <td>데이터 해저드</td>
+                                <td>이전 결과가 필요</td>
+                                <td>포워딩, 스톨</td>
+                            </tr>
+                            <tr>
+                                <td>제어 해저드</td>
+                                <td>분기 결과 미확정</td>
+                                <td>분기 예측</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 분기 예측 (Branch Prediction)</h2>
+            <div class="conversation">
+                <div class="q">분기 예측이 왜 필요한가요?</div>
+                <div class="a">
+                    <p>if문의 결과를 알기 전에 다음 명령어를 미리 가져와야 하기 때문입니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    분기로 인한 파이프라인 스톨                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   코드:                                                             │
+│   1: CMP r1, r2      // 비교                                        │
+│   2: JE label        // 같으면 점프                                  │
+│   3: ADD r3, 1       // 점프 안 하면 실행                           │
+│   ...                                                               │
+│   label:                                                            │
+│   10: SUB r3, 1      // 점프하면 실행                               │
+│                                                                     │
+│   예측 실패 시:                                                      │
+│   ┌────┬────┬────┬────┬────┬────┬────┬────┬────┬────┐             │
+│   │I1-F│I1-D│I1-E│I1-M│I1-W│    │    │    │    │    │             │
+│   │    │I2-F│I2-D│I2-E│MISS│FLUSH│    │    │    │    │ ← 파이프   │
+│   │    │    │I3-F│I3-D│XXXX│XXXX│I10-F│I10-D│I10-E│    │   라인    │
+│   └────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘   비움!    │
+│                                                                     │
+│   예측 실패 페널티: 10~20 사이클 (파이프라인 깊이만큼)              │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <p class="highlight">현대 CPU는 90% 이상의 예측 정확도를 가집니다!</p>
+                </div>
+
+                <div class="q">분기 예측은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>과거 패턴을 기억하고 예측합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    2비트 포화 카운터 예측기                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   상태 전이:                                                         │
+│                                                                     │
+│              Taken                    Taken                         │
+│          ┌──────────┐            ┌──────────┐                      │
+│          │          ▼            │          ▼                      │
+│   ┌──────┴───┐  ┌───┴──────┐  ┌─┴────────┐  ┌───────────┐         │
+│   │ Strongly │  │  Weakly  │  │  Weakly  │  │ Strongly  │         │
+│   │ Not      │──│ Not      │──│  Taken   │──│  Taken    │         │
+│   │ Taken    │  │ Taken    │  │          │  │           │         │
+│   │  (00)    │  │  (01)    │  │  (10)    │  │   (11)    │         │
+│   └──────────┘  └──────────┘  └──────────┘  └───────────┘         │
+│          ▲          │              │              ▲                 │
+│          └──────────┘              └──────────────┘                 │
+│           Not Taken                  Not Taken                      │
+│                                                                     │
+│   루프 예시 (for 100회):                                            │
+│   - 처음 1~2회: 예측 실패 가능                                      │
+│   - 이후: Strongly Taken 상태 유지 → 99% 예측 성공                 │
+│   - 마지막: 1회 예측 실패 (루프 탈출)                               │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 분기 예측 실패의 비용</h2>
+            <div class="conversation">
+                <div class="q">실제로 얼마나 차이가 나나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">정렬 vs 비정렬 데이터의 분기 성능</div>
+                        <pre><code>#include <algorithm>
+#include <chrono>
+
+// 0~255 범위의 랜덤 값
+int data[32768];
+
+void benchmark() {
+    // 분기: 128보다 크면 더하기
+    long long sum = 0;
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    for (int i = 0; i < 100000; ++i) {
+        for (int j = 0; j < 32768; ++j) {
+            if (data[j] >= 128)  // 분기!
+                sum += data[j];
+        }
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    // 시간 측정
+}
+
+int main() {
+    // 랜덤 데이터 생성
+    for (int& d : data) d = rand() % 256;
+
+    // 테스트 1: 비정렬 (랜덤)
+    benchmark();  // 약 10초
+
+    // 테스트 2: 정렬 후
+    std::sort(data, data + 32768);
+    benchmark();  // 약 3초 (3배 이상 빠름!)
+}
+
+// 왜?
+// 비정렬: 128 미만/이상이 랜덤하게 섞여 있음 → 예측 50% 실패
+// 정렬 후: [0,0,0,...,128,129,...,255] → 예측 거의 100% 성공</code></pre>
+                    </div>
+
+                    <p class="warning">같은 연산인데 데이터 정렬 여부에 따라 3배 성능 차이!</p>
+                </div>
+
+                <div class="q">분기를 피하는 방법은?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Branch-free 코드 기법</div>
+                        <pre><code>// ❌ 분기 있는 코드
+int max_branch(int a, int b) {
+    if (a > b) return a;
+    else return b;
+}
+
+// ✅ 분기 없는 코드 (비트 연산)
+int max_branchless(int a, int b) {
+    int diff = a - b;
+    int mask = diff >> 31;  // a < b면 -1(0xFFFFFFFF), 아니면 0
+    return a - (diff & mask);  // a가 크면 a, b가 크면 b
+}
+
+// ✅ 조건부 이동 명령어 활용 (컴파일러 최적화)
+int max_cmov(int a, int b) {
+    return a > b ? a : b;  // 컴파일러가 CMOV 명령어로 변환
+}
+
+// ❌ 조건부 더하기 (분기)
+void sumIf_branch(const int* data, int count, int threshold, int& sum) {
+    for (int i = 0; i < count; ++i) {
+        if (data[i] >= threshold)
+            sum += data[i];
+    }
+}
+
+// ✅ 조건부 더하기 (분기 없음)
+void sumIf_branchless(const int* data, int count, int threshold, int& sum) {
+    for (int i = 0; i < count; ++i) {
+        // 조건을 0 또는 1로 변환
+        int cond = (data[i] >= threshold);
+        sum += data[i] * cond;  // 조건이 0이면 0 더함
+    }
+}
+
+// ✅ SIMD 활용 (더 효율적)
+void sumIf_simd(const int* data, int count, int threshold, int& sum) {
+    __m128i thresh = _mm_set1_epi32(threshold);
+    __m128i sumVec = _mm_setzero_si128();
+
+    for (int i = 0; i < count; i += 4) {
+        __m128i values = _mm_loadu_si128((__m128i*)(data + i));
+        __m128i mask = _mm_cmpgt_epi32(values, thresh);
+        sumVec = _mm_add_epi32(sumVec, _mm_and_si128(values, mask));
+    }
+    // ... 합산
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 게임에서의 분기 최적화</h2>
+            <div class="conversation">
+                <div class="q">게임에서 분기 예측 실패가 문제가 되는 경우는?</div>
+                <div class="a">
+                    <p>대량의 엔티티를 처리하는 <strong>핫 루프</strong>에서 영향이 큽니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">엔티티 타입별 처리 최적화</div>
+                        <pre><code>// ❌ 타입 검사 분기 (예측 어려움)
+void updateEntities_bad(std::vector<Entity>& entities) {
+    for (auto& e : entities) {
+        switch (e.type) {  // 매번 분기!
+            case ENEMY:   updateEnemy(e);   break;
+            case PLAYER:  updatePlayer(e);  break;
+            case BULLET:  updateBullet(e);  break;
+            case ITEM:    updateItem(e);    break;
+        }
+    }
+}
+
+// ✅ 타입별로 정렬하여 처리
+struct EntityManager {
+    std::vector<Entity> enemies;
+    std::vector<Entity> players;
+    std::vector<Entity> bullets;
+    std::vector<Entity> items;
+
+    void update() {
+        // 같은 타입끼리 연속 처리 → 분기 예측 성공률 높음
+        for (auto& e : enemies)  updateEnemy(e);
+        for (auto& e : players)  updatePlayer(e);
+        for (auto& e : bullets)  updateBullet(e);
+        for (auto& e : items)    updateItem(e);
+    }
+};
+
+// ✅ 가상 함수 대신 함수 포인터 테이블
+using UpdateFunc = void(*)(Entity&);
+UpdateFunc updateTable[] = {
+    updateEnemy,
+    updatePlayer,
+    updateBullet,
+    updateItem
+};
+
+void updateEntities_table(std::vector<Entity>& entities) {
+    // 타입별로 정렬된 상태라면 분기 예측 가능
+    for (auto& e : entities) {
+        updateTable[e.type](e);
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">충돌 검사에서 분기를 줄이는 방법은?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">충돌 검사 최적화</div>
+                        <pre><code>// ❌ Early-out 분기 많음
+bool checkCollision_branch(const AABB& a, const AABB& b) {
+    if (a.maxX < b.minX) return false;  // 분기
+    if (a.minX > b.maxX) return false;  // 분기
+    if (a.maxY < b.minY) return false;  // 분기
+    if (a.minY > b.maxY) return false;  // 분기
+    if (a.maxZ < b.minZ) return false;  // 분기
+    if (a.minZ > b.maxZ) return false;  // 분기
+    return true;
+}
+
+// ✅ 분기 없는 SIMD 버전
+bool checkCollision_simd(const AABB& a, const AABB& b) {
+    // min/max를 128비트 벡터로 로드
+    __m128 aMin = _mm_loadu_ps(&a.minX);  // [minX, minY, minZ, ?]
+    __m128 aMax = _mm_loadu_ps(&a.maxX);
+    __m128 bMin = _mm_loadu_ps(&b.minX);
+    __m128 bMax = _mm_loadu_ps(&b.maxX);
+
+    // 모든 축을 동시에 비교
+    __m128 test1 = _mm_cmpge_ps(aMax, bMin);  // a.max >= b.min
+    __m128 test2 = _mm_cmpge_ps(bMax, aMin);  // b.max >= a.min
+
+    // AND 연산으로 모든 조건 확인
+    __m128 result = _mm_and_ps(test1, test2);
+
+    // 모든 비트가 1이면 충돌
+    return _mm_movemask_ps(result) == 0xF;
+}
+
+// ✅ 충돌 가능성이 낮을 때의 전략
+void processCollisions(std::vector<Entity>& entities) {
+    // 1단계: 빠른 브로드페이즈 (공간 분할)
+    auto pairs = spatialHash.getPotentialPairs(entities);
+
+    // 2단계: 정밀 검사 (쌍이 적음)
+    for (auto& [a, b] : pairs) {
+        if (checkCollision_simd(a.aabb, b.aabb)) {
+            handleCollision(a, b);
+        }
+    }
+}</code></pre>
+                    </div>
+
+                    <p class="key-point">분기를 완전히 없애는 것보다 예측하기 쉽게 만드는 것이 중요합니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 프로파일링</h2>
+            <div class="conversation">
+                <div class="q">분기 예측 실패를 어떻게 측정하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">perf를 이용한 분기 예측 분석</div>
+                        <pre><code># 분기 예측 관련 이벤트 측정
+perf stat -e branches,branch-misses,instructions,cycles ./game
+
+# 출력 예시:
+#     1,234,567,890  branches
+#        12,345,678  branch-misses  # 1.00% of all branches
+#     5,000,000,000  instructions   # 1.25 IPC
+#     4,000,000,000  cycles
+
+# 핫스팟 분석
+perf record -e branch-misses ./game
+perf report
+
+# 특정 함수의 분기 예측 분석
+perf annotate --symbol=updateEntities</code></pre>
+                    </div>
+
+                    <p class="highlight">분기 실패율 1%면 양호, 5% 이상이면 최적화 대상입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>파이프라인</strong>: 명령어를 단계별로 분할하여 병렬 처리, 현대 CPU는 10~20단계</li>
+                <li><strong>분기 예측</strong>: 다음 명령어를 미리 가져오기 위해 분기 결과를 예측</li>
+                <li><strong>예측 실패 비용</strong>: 파이프라인 깊이만큼 사이클 손실 (10~20 사이클)</li>
+                <li><strong>최적화 기법</strong>: 데이터 정렬, 분기 없는 코드, 같은 타입 연속 처리</li>
+                <li><strong>측정</strong>: perf로 branch-misses 이벤트 확인</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

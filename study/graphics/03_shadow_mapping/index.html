@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>그림자를 만드는 기술 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>그림자를 만드는 기술</h1>
+            <p class="subtitle">Shadow Mapping 기법 비교</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Shadow Mapping의 원리</h2>
+            <div class="conversation">
+                <div class="q">그림자는 어떻게 렌더링하나요?</div>
+                <div class="a">
+                    <p>Shadow Mapping의 핵심 아이디어: <span class="highlight">"빛의 관점에서 보이지 않으면 그림자"</span></p>
+                    <p>1. 빛의 위치에서 씬을 렌더링하여 <span class="key-point">깊이 맵(Shadow Map)</span>을 생성</p>
+                    <p>2. 실제 렌더링 시 픽셀의 깊이를 Shadow Map과 비교</p>
+                    <p>3. 더 멀리 있으면 → 그림자!</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Shadow Mapping 2단계:
+
+1단계: Shadow Map 생성 (빛의 시점)
+   ┌─────────────────────────────────┐
+   │  💡 Light                       │
+   │    │                            │
+   │    ▼                            │
+   │  ┌─────┐     ┌─────┐           │
+   │  │ A   │     │ B   │ ← 오브젝트│
+   │  └─────┘     └─────┘           │
+   │                                 │
+   │  Shadow Map (깊이 저장):        │
+   │  [깊이A][깊이A][깊이B][깊이B]   │
+   └─────────────────────────────────┘
+
+2단계: 그림자 테스트 (카메라 시점)
+   ┌─────────────────────────────────┐
+   │  🎥 Camera                      │
+   │    │                            │
+   │    ▼                            │
+   │  ┌─────┐ 그림자 ┌─────┐        │
+   │  │ A   │███████│ B   │        │
+   │  └─────┘       └─────┘         │
+   │                                 │
+   │  픽셀 P의 깊이 > Shadow Map 값  │
+   │  → 그림자 영역!                 │
+   └─────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">Shadow Mapping의 기본 원리</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 기본 구현</h2>
+            <div class="conversation">
+                <div class="q">코드로는 어떻게 구현하나요?</div>
+                <div class="a">
+                    <p>두 개의 렌더 패스가 필요합니다:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">HLSL - Shadow Map 생성</div>
+                <pre><code>// Pass 1: Light의 관점에서 깊이만 렌더링
+float4 ShadowMapVS(float3 pos : POSITION) : SV_Position
+{
+    return mul(float4(pos, 1), lightViewProj);
+}
+
+// Fragment shader 없음 - 깊이만 기록
+// 또는 명시적으로:
+float ShadowMapPS(float4 pos : SV_Position) : SV_Depth
+{
+    return pos.z / pos.w;
+}</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">HLSL - 그림자 테스트</div>
+                <pre><code>// Pass 2: 실제 렌더링에서 그림자 테스트
+float ShadowTest(float4 worldPos)
+{
+    // 월드 좌표를 라이트 공간으로 변환
+    float4 lightSpacePos = mul(worldPos, lightViewProj);
+
+    // NDC → 텍스처 좌표로 변환
+    float2 shadowUV = lightSpacePos.xy / lightSpacePos.w;
+    shadowUV = shadowUV * 0.5 + 0.5;
+    shadowUV.y = 1.0 - shadowUV.y;  // Y 뒤집기
+
+    // Shadow Map에서 깊이 샘플링
+    float shadowMapDepth = shadowMap.Sample(sampler, shadowUV);
+
+    // 현재 픽셀의 깊이 (라이트 관점)
+    float currentDepth = lightSpacePos.z / lightSpacePos.w;
+
+    // 비교 (bias로 Shadow Acne 방지)
+    float bias = 0.005;
+    return (currentDepth - bias > shadowMapDepth) ? 0.3 : 1.0;
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Shadow Acne와 Peter Panning</h2>
+            <div class="conversation">
+                <div class="q">Shadow Acne는 무엇인가요?</div>
+                <div class="a">
+                    <p>표면에 얼룩덜룩한 그림자 패턴이 생기는 현상입니다. <span class="highlight">깊이 정밀도 문제</span>로 발생합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Shadow Acne 원인:
+
+       Shadow Map 해상도
+        ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼
+       ─────────────────── 표면
+       ↑↓↑↓↑↓↑↓↑↓↑↓↑↓↑↓  ← 깊이값 미세 차이
+       │ │ │ │ │ │ │ │
+       S L S L S L S L    S=Shadow, L=Light
+
+해결: Depth Bias 적용
+       ─────────────────── 표면
+       ───────────────────  ← Bias만큼 오프셋
+       │ │ │ │ │ │ │ │
+       L L L L L L L L    모두 밝음
+                </pre>
+                <p class="diagram-caption">Depth Bias로 Shadow Acne 해결</p>
+            </div>
+
+            <div class="conversation">
+                <div class="q">Peter Panning은 뭔가요?</div>
+                <div class="a">
+                    <p>Bias를 너무 크게 하면 <span class="warning">그림자가 떠다니는 현상</span>입니다. 오브젝트가 바닥에서 떨어져 보입니다.</p>
+                    <p class="key-point">적절한 Bias 값을 찾는 것이 중요합니다. 또는 Slope-Scale Bias를 사용합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Slope-Scale Bias</div>
+                <pre><code>// 표면 기울기에 따라 동적 Bias
+float CalculateBias(float3 normal, float3 lightDir)
+{
+    float cosTheta = dot(normal, lightDir);
+    float slopeBias = 0.005 * tan(acos(cosTheta));
+    return clamp(0.001 + slopeBias, 0.0, 0.01);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: PCF (Percentage Closer Filtering)</h2>
+            <div class="conversation">
+                <div class="q">그림자 가장자리가 딱딱한데 부드럽게 할 수 없나요?</div>
+                <div class="a">
+                    <p>PCF는 주변 여러 샘플을 비교하고 <span class="highlight">평균</span>을 내서 부드러운 그림자를 만듭니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">PCF 구현</div>
+                <pre><code>float PCF(float4 lightSpacePos, float2 shadowUV)
+{
+    float currentDepth = lightSpacePos.z / lightSpacePos.w;
+    float shadow = 0.0;
+    float2 texelSize = 1.0 / shadowMapSize;
+
+    // 3x3 커널로 샘플링
+    for (int x = -1; x <= 1; x++)
+    {
+        for (int y = -1; y <= 1; y++)
+        {
+            float2 offset = float2(x, y) * texelSize;
+            float depth = shadowMap.Sample(sampler, shadowUV + offset);
+            shadow += (currentDepth - bias > depth) ? 0.0 : 1.0;
+        }
+    }
+
+    return shadow / 9.0;  // 평균
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>필터 크기</th>
+                        <th>품질</th>
+                        <th>성능</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>3×3</td>
+                        <td>약간 부드러움</td>
+                        <td>9 샘플</td>
+                    </tr>
+                    <tr>
+                        <td>5×5</td>
+                        <td>적당히 부드러움</td>
+                        <td>25 샘플</td>
+                    </tr>
+                    <tr>
+                        <td>7×7</td>
+                        <td>매우 부드러움</td>
+                        <td>49 샘플</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: CSM (Cascaded Shadow Maps)</h2>
+            <div class="conversation">
+                <div class="q">멀리까지 그림자를 렌더링하려면?</div>
+                <div class="a">
+                    <p>가까이는 고해상도, 멀리는 저해상도가 필요합니다. <span class="highlight">CSM</span>은 거리에 따라 여러 Shadow Map을 사용합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Cascaded Shadow Maps:
+
+           카메라 →
+
+    Cascade 0   Cascade 1    Cascade 2     Cascade 3
+   ┌─────────┐ ┌─────────┐ ┌─────────────┐ ┌──────────────┐
+   │ 고해상도│ │ 중해상도│ │  저해상도   │ │  최저해상도  │
+   │ 0~10m  │ │ 10~30m  │ │  30~100m    │ │  100~500m    │
+   └─────────┘ └─────────┘ └─────────────┘ └──────────────┘
+
+   각 Cascade는 같은 해상도(예: 2048²)지만
+   커버하는 영역이 다름 → 거리별 품질 조절
+                </pre>
+                <p class="diagram-caption">CSM의 거리별 Cascade 분할</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">CSM 적용</div>
+                <pre><code>float GetShadowCSM(float3 worldPos, float viewDepth)
+{
+    // 거리에 따라 Cascade 선택
+    int cascadeIndex = 0;
+    for (int i = 0; i < CASCADE_COUNT; i++)
+    {
+        if (viewDepth < cascadeSplits[i])
+        {
+            cascadeIndex = i;
+            break;
+        }
+    }
+
+    // 해당 Cascade의 Shadow Map 사용
+    float4 lightSpacePos = mul(float4(worldPos, 1),
+                               lightViewProj[cascadeIndex]);
+    return SampleShadowMap(cascadeIndex, lightSpacePos);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 다양한 그림자 기법</h2>
+            <div class="conversation">
+                <div class="q">다른 그림자 기법들도 있나요?</div>
+                <div class="a">
+                    <p>상황에 따라 다양한 기법을 사용합니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>기법</th>
+                        <th>특징</th>
+                        <th>사용 사례</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>VSM (Variance)</td>
+                        <td>블러 가능, Light Bleeding</td>
+                        <td>소프트 섀도</td>
+                    </tr>
+                    <tr>
+                        <td>ESM (Exponential)</td>
+                        <td>빠른 블러, 아티팩트 적음</td>
+                        <td>모바일</td>
+                    </tr>
+                    <tr>
+                        <td>PCSS</td>
+                        <td>거리에 따라 부드러움 변화</td>
+                        <td>AAA 게임</td>
+                    </tr>
+                    <tr>
+                        <td>Ray Traced</td>
+                        <td>가장 정확, 비용 높음</td>
+                        <td>RTX 지원 플랫폼</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="analogy-box">
+                <strong>🎯 기법 선택 가이드</strong>
+                <p><span class="highlight">모바일</span>: 기본 Shadow Map + ESM</p>
+                <p><span class="highlight">PC (중간)</span>: CSM + PCF</p>
+                <p><span class="highlight">PC (고급)</span>: CSM + PCSS 또는 Ray Traced Shadows</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Shadow Mapping</strong>: 빛의 시점에서 깊이 맵 생성 → 비교로 그림자 결정</li>
+                <li><strong>Shadow Acne</strong>는 Depth Bias로, <strong>Peter Panning</strong>은 적절한 Bias로 해결</li>
+                <li><strong>PCF</strong>: 여러 샘플 평균으로 부드러운 그림자</li>
+                <li><strong>CSM</strong>: 거리별 여러 Shadow Map으로 넓은 범위 커버</li>
+                <li>고급 기법: <strong>VSM, PCSS, Ray Traced Shadows</strong></li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

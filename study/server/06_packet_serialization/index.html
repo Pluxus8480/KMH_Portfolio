@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>패킷 직렬화와 압축 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../server.html" class="back-link">← 목록으로</a>
+            <h1>1바이트를 아끼기 위한 전쟁</h1>
+            <p class="subtitle">게임 패킷 직렬화와 대역폭 최적화 기법</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 직렬화가 필요한 이유</h2>
+            <div class="conversation">
+                <div class="q">직렬화(Serialization)가 뭔가요?</div>
+                <div class="a">
+                    <p>메모리의 데이터를 <strong>바이트 스트림</strong>으로 변환하는 과정입니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+메모리 → 네트워크 전송 → 메모리
+
+┌─────────────────┐                     ┌─────────────────┐
+│ struct Player { │                     │ struct Player { │
+│   int id = 42   │──▶ [바이트 스트림] ──▶│   int id = ?    │
+│   float x = 1.5 │    2A 00 00 00      │   float x = ?   │
+│   float y = 2.0 │    00 00 C0 3F      │   float y = ?   │
+│ }               │    00 00 00 40      │ }               │
+└─────────────────┘                     └─────────────────┘
+    직렬화                                  역직렬화
+ (Serialize)                            (Deserialize)
+                        </pre>
+                    </div>
+                    <p class="highlight">직렬화 없이는 구조체를 네트워크로 보낼 수 없습니다.</p>
+                </div>
+
+                <div class="q">왜 그냥 struct를 보내면 안 되나요?</div>
+                <div class="a">
+                    <p>여러 문제가 있습니다:</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>문제</th>
+                                <th>설명</th>
+                                <th>예시</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>패딩</td>
+                                <td>컴파일러가 정렬을 위해 빈 바이트 삽입</td>
+                                <td>char + int = 5바이트가 아닌 8바이트</td>
+                            </tr>
+                            <tr>
+                                <td>엔디안</td>
+                                <td>바이트 순서가 CPU마다 다름</td>
+                                <td>Little vs Big Endian</td>
+                            </tr>
+                            <tr>
+                                <td>포인터</td>
+                                <td>메모리 주소는 다른 기기에서 무의미</td>
+                                <td>string, vector 등</td>
+                            </tr>
+                            <tr>
+                                <td>버전</td>
+                                <td>구조체가 변경되면 호환 불가</td>
+                                <td>필드 추가/삭제 시</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">패딩 문제 예시</div>
+                        <pre><code>struct BadPacket {
+    char type;    // 1 byte
+    // 3 bytes padding (정렬을 위해)
+    int id;       // 4 bytes
+    char flag;    // 1 byte
+    // 3 bytes padding
+    float value;  // 4 bytes
+};
+// sizeof(BadPacket) = 16 bytes (실제 데이터는 10 bytes)
+
+#pragma pack(push, 1)  // 패딩 제거
+struct PackedPacket {
+    char type;    // 1 byte
+    int id;       // 4 bytes
+    char flag;    // 1 byte
+    float value;  // 4 bytes
+};
+#pragma pack(pop)
+// sizeof(PackedPacket) = 10 bytes
+// ⚠️ 하지만 정렬 문제로 성능 저하 가능!</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 직렬화 방식 비교</h2>
+            <div class="conversation">
+                <div class="q">어떤 직렬화 방식들이 있나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>방식</th>
+                                <th>크기</th>
+                                <th>속도</th>
+                                <th>스키마</th>
+                                <th>용도</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>JSON</td>
+                                <td>❌ 큼</td>
+                                <td>❌ 느림</td>
+                                <td>없음</td>
+                                <td>디버깅, 설정</td>
+                            </tr>
+                            <tr>
+                                <td>Protocol Buffers</td>
+                                <td>✅ 작음</td>
+                                <td>✅ 빠름</td>
+                                <td>필수 (.proto)</td>
+                                <td>범용</td>
+                            </tr>
+                            <tr>
+                                <td>FlatBuffers</td>
+                                <td>✅ 작음</td>
+                                <td>⭐ 매우 빠름</td>
+                                <td>필수 (.fbs)</td>
+                                <td>게임, 실시간</td>
+                            </tr>
+                            <tr>
+                                <td>MessagePack</td>
+                                <td>✅ 작음</td>
+                                <td>✅ 빠름</td>
+                                <td>없음</td>
+                                <td>JSON 대체</td>
+                            </tr>
+                            <tr>
+                                <td>수동 구현</td>
+                                <td>⭐ 최소</td>
+                                <td>⭐ 최대</td>
+                                <td>코드로 정의</td>
+                                <td>극한 최적화</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">FlatBuffers가 빠른 이유는?</div>
+                <div class="a">
+                    <p><strong>Zero-copy deserialization</strong> - 역직렬화 없이 바로 접근합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+일반 직렬화 (Protobuf 등):
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  네트워크    │────▶│   파싱       │────▶│   메모리     │
+│  버퍼        │     │   (복사)     │     │   객체       │
+└──────────────┘     └──────────────┘     └──────────────┘
+                          비용 발생!
+
+FlatBuffers:
+┌──────────────┐     ┌──────────────┐
+│  네트워크    │────▶│  직접 접근    │  (복사 없음!)
+│  버퍼        │◀────│  (포인터)    │
+└──────────────┘     └──────────────┘
+                        </pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">FlatBuffers 사용 예시</div>
+                        <pre><code>// schema.fbs
+table PlayerState {
+    id: uint;
+    position: Vec3;
+    health: short;
+}
+
+// 직렬화 (한 번만)
+flatbuffers::FlatBufferBuilder builder(256);
+auto pos = CreateVec3(builder, 1.5f, 2.0f, 0.0f);
+auto player = CreatePlayerState(builder, 42, pos, 100);
+builder.Finish(player);
+
+// 네트워크 전송
+Send(builder.GetBufferPointer(), builder.GetSize());
+
+// 역직렬화 (파싱 없음!)
+auto playerState = GetPlayerState(receivedBuffer);
+uint32_t id = playerState->id();          // 직접 접근
+float x = playerState->position()->x();   // 복사 없음!</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 수동 직렬화 최적화</h2>
+            <div class="conversation">
+                <div class="q">게임에서 수동 직렬화가 좋은 이유는?</div>
+                <div class="a">
+                    <p>바이트 단위 제어로 <strong>극한의 압축</strong>이 가능합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">BitStream 구현</div>
+                        <pre><code>class BitWriter {
+    std::vector<uint8_t> buffer;
+    int bitPos = 0;
+
+public:
+    // 지정된 비트 수만큼만 기록
+    void WriteBits(uint32_t value, int numBits) {
+        for (int i = 0; i < numBits; i++) {
+            int byteIndex = bitPos / 8;
+            int bitIndex = bitPos % 8;
+
+            if (byteIndex >= buffer.size()) {
+                buffer.push_back(0);
+            }
+
+            if (value & (1 << i)) {
+                buffer[byteIndex] |= (1 << bitIndex);
+            }
+            bitPos++;
+        }
+    }
+
+    void WriteBool(bool value) {
+        WriteBits(value ? 1 : 0, 1);
+    }
+
+    // 범위 제한 정수 (0~max)
+    void WriteRangedInt(int value, int min, int max) {
+        int range = max - min;
+        int bits = (int)ceil(log2(range + 1));
+        WriteBits(value - min, bits);
+    }
+
+    // 양자화된 float (정밀도 제한)
+    void WriteQuantizedFloat(float value, float min, float max, int bits) {
+        float normalized = (value - min) / (max - min);
+        int quantized = (int)(normalized * ((1 << bits) - 1));
+        WriteBits(quantized, bits);
+    }
+};
+
+class BitReader {
+    const uint8_t* buffer;
+    int bitPos = 0;
+
+public:
+    BitReader(const uint8_t* data) : buffer(data) {}
+
+    uint32_t ReadBits(int numBits) {
+        uint32_t value = 0;
+        for (int i = 0; i < numBits; i++) {
+            int byteIndex = bitPos / 8;
+            int bitIndex = bitPos % 8;
+
+            if (buffer[byteIndex] & (1 << bitIndex)) {
+                value |= (1 << i);
+            }
+            bitPos++;
+        }
+        return value;
+    }
+
+    bool ReadBool() {
+        return ReadBits(1) != 0;
+    }
+
+    int ReadRangedInt(int min, int max) {
+        int range = max - min;
+        int bits = (int)ceil(log2(range + 1));
+        return ReadBits(bits) + min;
+    }
+
+    float ReadQuantizedFloat(float min, float max, int bits) {
+        int quantized = ReadBits(bits);
+        float normalized = (float)quantized / ((1 << bits) - 1);
+        return min + normalized * (max - min);
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">실제로 얼마나 압축이 되나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+플레이어 상태 패킷 비교:
+
+[일반 직렬화]
+struct PlayerState {
+    uint32_t id;           // 4 bytes
+    float x, y, z;         // 12 bytes
+    float pitch, yaw;      // 8 bytes
+    uint32_t health;       // 4 bytes
+    uint32_t armor;        // 4 bytes
+    bool isCrouching;      // 1 byte (+3 padding)
+    bool isAiming;         // 1 byte (+3 padding)
+};
+// Total: 40 bytes
+
+[비트 패킹 직렬화]
+- id: 10 bits (최대 1024명)
+- x, y: 각 16 bits (-1000~1000m, 3cm 정밀도)
+- z: 12 bits (0~100m, 2.5cm 정밀도)
+- pitch: 9 bits (-90~90도, 0.35도 정밀도)
+- yaw: 10 bits (0~360도, 0.35도 정밀도)
+- health: 7 bits (0~100)
+- armor: 7 bits (0~100)
+- isCrouching: 1 bit
+- isAiming: 1 bit
+// Total: 10+16+16+12+9+10+7+7+1+1 = 89 bits = 12 bytes
+
+절약: 40 - 12 = 28 bytes (70% 감소!)
+                        </pre>
+                    </div>
+                    <p class="highlight">60틱 서버에서 100명이면: 28 * 100 * 60 = 초당 168KB 절약</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Delta Compression</h2>
+            <div class="conversation">
+                <div class="q">매번 전체 상태를 보내야 하나요?</div>
+                <div class="a">
+                    <p>아니요, <strong>변경된 부분만</strong> 보내면 됩니다. 이것이 Delta Compression입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Delta Compression 구현</div>
+                        <pre><code>struct EntityState {
+    uint32_t entityId;
+    Vector3 position;
+    Quaternion rotation;
+    uint8_t health;
+    uint8_t ammo;
+    uint8_t state;  // idle, moving, attacking, etc.
+};
+
+class DeltaEncoder {
+public:
+    void EncodeDelta(BitWriter& writer,
+                     const EntityState& baseline,
+                     const EntityState& current) {
+        // 변경된 필드 플래그
+        uint8_t changedFlags = 0;
+
+        if (current.position != baseline.position) changedFlags |= 0x01;
+        if (current.rotation != baseline.rotation) changedFlags |= 0x02;
+        if (current.health != baseline.health)     changedFlags |= 0x04;
+        if (current.ammo != baseline.ammo)         changedFlags |= 0x08;
+        if (current.state != baseline.state)       changedFlags |= 0x10;
+
+        writer.WriteBits(changedFlags, 5);
+
+        // 변경된 필드만 기록
+        if (changedFlags & 0x01) {
+            // 위치 델타 (차이값)
+            Vector3 delta = current.position - baseline.position;
+            WriteQuantizedVector(writer, delta, -10.0f, 10.0f, 12);
+        }
+
+        if (changedFlags & 0x02) {
+            // 회전 (smallest three 인코딩)
+            WriteSmallestThreeQuaternion(writer, current.rotation);
+        }
+
+        if (changedFlags & 0x04) {
+            writer.WriteBits(current.health, 7);
+        }
+
+        if (changedFlags & 0x08) {
+            writer.WriteBits(current.ammo, 8);
+        }
+
+        if (changedFlags & 0x10) {
+            writer.WriteBits(current.state, 3);
+        }
+    }
+
+    EntityState DecodeDelta(BitReader& reader,
+                            const EntityState& baseline) {
+        EntityState result = baseline;
+
+        uint8_t changedFlags = reader.ReadBits(5);
+
+        if (changedFlags & 0x01) {
+            Vector3 delta = ReadQuantizedVector(reader, -10.0f, 10.0f, 12);
+            result.position = baseline.position + delta;
+        }
+
+        if (changedFlags & 0x02) {
+            result.rotation = ReadSmallestThreeQuaternion(reader);
+        }
+
+        if (changedFlags & 0x04) {
+            result.health = reader.ReadBits(7);
+        }
+
+        if (changedFlags & 0x08) {
+            result.ammo = reader.ReadBits(8);
+        }
+
+        if (changedFlags & 0x10) {
+            result.state = reader.ReadBits(3);
+        }
+
+        return result;
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">Baseline은 어떻게 관리하나요?</div>
+                <div class="a">
+                    <p>서버와 클라이언트가 같은 baseline을 유지해야 합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+Delta Snapshot 시스템:
+
+Server                                        Client
+  │                                              │
+  ├── Snapshot #10 (전체) ──────────────────────▶│ baseline = #10
+  │                                              │
+  ├── Delta #11 (vs #10) ──────────────────────▶│ 적용 → #11
+  │                                              │
+  ├── Delta #12 (vs #10) ──────────────────────▶│ 적용 → #12
+  │                                              │
+  │◀────────────────────────── ACK #12 ─────────│
+  │                                              │
+  │   baseline 업데이트: #12                      │
+  │                                              │
+  ├── Delta #13 (vs #12) ──────────────────────▶│ 적용 → #13
+  │                                              │
+  │   만약 #11, #12가 손실되면?                   │
+  │                                              │
+  ├── Delta #13 (vs #10) ──────────────────────▶│ #10 baseline
+  │   ↑ ACK 안 온 가장 오래된 baseline 사용        │ 에서 적용
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 고급 압축 기법</h2>
+            <div class="conversation">
+                <div class="q">Quaternion은 어떻게 압축하나요?</div>
+                <div class="a">
+                    <p><strong>Smallest Three</strong> 기법을 사용합니다. 4개 중 3개만 보내면 됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Smallest Three 인코딩</div>
+                        <pre><code>// Quaternion: w² + x² + y² + z² = 1
+// 가장 큰 컴포넌트를 제외한 3개로 복원 가능
+
+void WriteSmallestThreeQuaternion(BitWriter& writer, Quaternion q) {
+    // 가장 큰 절대값 컴포넌트 찾기
+    float absValues[4] = { abs(q.w), abs(q.x), abs(q.y), abs(q.z) };
+    int largestIndex = 0;
+    for (int i = 1; i < 4; i++) {
+        if (absValues[i] > absValues[largestIndex]) {
+            largestIndex = i;
+        }
+    }
+
+    // 가장 큰 컴포넌트가 양수가 되도록 (부호 정규화)
+    float* components = &q.w;
+    if (components[largestIndex] < 0) {
+        q.w = -q.w; q.x = -q.x; q.y = -q.y; q.z = -q.z;
+    }
+
+    // 어떤 컴포넌트가 생략됐는지 (2 bits)
+    writer.WriteBits(largestIndex, 2);
+
+    // 나머지 3개 컴포넌트 기록 (각 10 bits, 범위 -0.707~0.707)
+    for (int i = 0; i < 4; i++) {
+        if (i != largestIndex) {
+            writer.WriteQuantizedFloat(components[i], -0.707f, 0.707f, 10);
+        }
+    }
+}
+
+Quaternion ReadSmallestThreeQuaternion(BitReader& reader) {
+    int largestIndex = reader.ReadBits(2);
+
+    float components[4];
+    float sumSquares = 0;
+
+    for (int i = 0; i < 4; i++) {
+        if (i != largestIndex) {
+            components[i] = reader.ReadQuantizedFloat(-0.707f, 0.707f, 10);
+            sumSquares += components[i] * components[i];
+        }
+    }
+
+    // 네 번째 컴포넌트 복원
+    components[largestIndex] = sqrt(1.0f - sumSquares);
+
+    return Quaternion(components[0], components[1],
+                     components[2], components[3]);
+}
+
+// 크기: 2 + 10*3 = 32 bits (vs float*4 = 128 bits)
+// 75% 절약!</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">VLQ(Variable Length Quantity)는 뭔가요?</div>
+                <div class="a">
+                    <p>값의 크기에 따라 <strong>가변 길이</strong>로 인코딩합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Variable Length Encoding</div>
+                        <pre><code>// 작은 값은 적은 비트, 큰 값은 많은 비트
+void WriteVarInt(BitWriter& writer, uint32_t value) {
+    do {
+        uint8_t byte = value & 0x7F;  // 하위 7비트
+        value >>= 7;
+        if (value > 0) {
+            byte |= 0x80;  // 더 있음 표시
+        }
+        writer.WriteBits(byte, 8);
+    } while (value > 0);
+}
+
+uint32_t ReadVarInt(BitReader& reader) {
+    uint32_t result = 0;
+    int shift = 0;
+    uint8_t byte;
+
+    do {
+        byte = reader.ReadBits(8);
+        result |= (uint32_t)(byte & 0x7F) << shift;
+        shift += 7;
+    } while (byte & 0x80);
+
+    return result;
+}
+
+// 예시:
+// 127 이하: 1 byte
+// 16383 이하: 2 bytes
+// 2097151 이하: 3 bytes
+// 고정 4 bytes 대비, 작은 값에서 큰 절약!</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">Run-Length Encoding은 언제 쓰나요?</div>
+                <div class="a">
+                    <p>같은 값이 연속될 때 효과적입니다. 예: 빈 공간이 많은 맵 데이터</p>
+                    <div class="code-block">
+                        <div class="code-header">RLE 예시</div>
+                        <pre><code>// 원본: [0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,2]
+// RLE:  [(0,5), (1,2), (0,8), (2,1)]
+// 16 bytes → 8 bytes
+
+void WriteRLE(BitWriter& writer, const std::vector<uint8_t>& data) {
+    int i = 0;
+    while (i < data.size()) {
+        uint8_t value = data[i];
+        int count = 1;
+
+        while (i + count < data.size() &&
+               data[i + count] == value &&
+               count < 255) {
+            count++;
+        }
+
+        writer.WriteBits(value, 8);
+        writer.WriteBits(count, 8);
+
+        i += count;
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 패킷 설계</h2>
+            <div class="conversation">
+                <div class="q">실제 게임 패킷은 어떻게 설계하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">게임 패킷 시스템</div>
+                        <pre><code>// 패킷 헤더 (최소화)
+struct PacketHeader {
+    uint8_t type : 6;      // 최대 64개 패킷 타입
+    uint8_t compressed : 1; // 압축 여부
+    uint8_t reliable : 1;   // 신뢰성 여부
+    uint16_t sequence;      // 시퀀스 번호
+};
+
+// 패킷 타입별 직렬화
+class PacketSerializer {
+public:
+    void Serialize(BitWriter& writer, const Packet& packet) {
+        // 헤더
+        writer.WriteBits(packet.header.type, 6);
+        writer.WriteBits(packet.header.compressed, 1);
+        writer.WriteBits(packet.header.reliable, 1);
+        writer.WriteBits(packet.header.sequence, 16);
+
+        // 페이로드
+        switch ((PacketType)packet.header.type) {
+            case PacketType::PlayerMove:
+                SerializePlayerMove(writer, packet);
+                break;
+            case PacketType::Shoot:
+                SerializeShoot(writer, packet);
+                break;
+            case PacketType::WorldState:
+                SerializeWorldState(writer, packet);
+                break;
+            // ...
+        }
+
+        // 압축 (옵션)
+        if (writer.GetSize() > COMPRESSION_THRESHOLD) {
+            CompressPayload(writer);
+        }
+    }
+
+private:
+    void SerializePlayerMove(BitWriter& writer, const Packet& packet) {
+        auto& move = packet.playerMove;
+
+        // Delta from predicted position
+        writer.WriteQuantizedFloat(move.deltaX, -2.0f, 2.0f, 8);
+        writer.WriteQuantizedFloat(move.deltaY, -2.0f, 2.0f, 8);
+        writer.WriteQuantizedFloat(move.deltaZ, -1.0f, 1.0f, 6);
+
+        // 입력 상태 (비트 플래그)
+        writer.WriteBits(move.inputFlags, 8);  // WASD, jump, crouch, etc.
+
+        // 시점 (작은 범위로 충분)
+        writer.WriteQuantizedFloat(move.pitch, -90.0f, 90.0f, 8);
+        writer.WriteQuantizedFloat(move.yaw, 0.0f, 360.0f, 9);
+    }
+
+    void SerializeWorldState(BitWriter& writer, const Packet& packet) {
+        auto& world = packet.worldState;
+
+        // 엔티티 수
+        writer.WriteVarInt(world.entities.size());
+
+        for (const auto& entity : world.entities) {
+            writer.WriteVarInt(entity.id);
+
+            // Delta compression (baseline 기반)
+            const auto& baseline = GetBaseline(entity.id);
+            deltaEncoder.EncodeDelta(writer, baseline, entity);
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">대역폭 예산은 어떻게 계획하나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+대역폭 예산 예시 (FPS, 60틱, 32명):
+
+[클라이언트 → 서버] (업로드)
+- 입력 패킷: ~20 bytes * 60/s = 1.2 KB/s
+
+[서버 → 클라이언트] (다운로드)
+- 월드 스냅샷: ~12 bytes/entity * 32명 * 20/s = 7.5 KB/s
+- 이벤트: ~200 bytes/s (평균)
+- 합계: ~8 KB/s
+
+대역폭 최적화 체크리스트:
+□ 위치: float(4B) → quantized(2B)
+□ 회전: quaternion(16B) → smallest-three(4B)
+□ 델타 압축 적용
+□ Interest Management로 불필요한 엔티티 제외
+□ 틱레이트 조절 (가까운 적: 60Hz, 먼 적: 10Hz)
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>직렬화 필요성</strong>: 패딩, 엔디안, 포인터, 버전 문제 해결</li>
+                <li><strong>BitStream</strong>: 비트 단위 제어로 극한의 압축 가능</li>
+                <li><strong>Quantization</strong>: float를 범위 제한 정수로 (정밀도 vs 크기)</li>
+                <li><strong>Delta Compression</strong>: 변경된 필드만 전송 (baseline 관리 필요)</li>
+                <li><strong>Smallest Three</strong>: Quaternion 75% 압축</li>
+                <li><strong>VLQ</strong>: 작은 값은 적은 바이트로</li>
+                <li>FlatBuffers: Zero-copy로 파싱 비용 제거</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

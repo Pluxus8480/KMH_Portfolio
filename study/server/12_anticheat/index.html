@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>안티치트 시스템 기초 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../server.html" class="back-link">← 목록으로</a>
+            <h1>치터는 어떻게 막을까?</h1>
+            <p class="subtitle">게임 안티치트 시스템의 원리와 서버 측 검증</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 치트의 종류</h2>
+            <div class="conversation">
+                <div class="q">게임에서 어떤 종류의 치트가 있나요?</div>
+                <div class="a">
+                    <p>크게 클라이언트 측과 네트워크 측으로 나눕니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+치트 유형 분류:
+
+클라이언트 측:
+├─ 메모리 조작
+│   ├─ Wallhack (벽투시)
+│   ├─ Speed hack (이동 속도)
+│   ├─ God mode (무적)
+│   └─ Item duplication
+│
+├─ 입력 자동화
+│   ├─ Aimbot (자동 조준)
+│   ├─ Triggerbot (자동 사격)
+│   └─ Macro/봇
+│
+└─ 클라이언트 파일 변조
+    ├─ 텍스처 변경 (투명화)
+    └─ 모델 변경 (히트박스 확대)
+
+네트워크 측:
+├─ 패킷 조작
+│   ├─ 위치 조작
+│   ├─ 데미지 조작
+│   └─ 아이템 조작
+│
+└─ 네트워크 조작
+    ├─ Lag switch (의도적 지연)
+    └─ 패킷 복제
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">가장 효과적인 방어 원칙은 뭔가요?</div>
+                <div class="a">
+                    <p class="highlight">"Never Trust the Client" - 클라이언트는 절대 신뢰하지 않습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 방어 철학</strong>
+                        <p>클라이언트는 해커의 영역입니다. 서버만이 진실입니다.</p>
+                        <p>클라이언트가 "나 100 데미지 줬어"라고 해도, 서버가 직접 계산한 결과만 믿습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 서버 권한 모델</h2>
+            <div class="conversation">
+                <div class="q">서버 권한(Server Authority)이란?</div>
+                <div class="a">
+                    <p>모든 게임 로직의 최종 결정권이 서버에 있는 것입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">서버 권한 모델 구현</div>
+                        <pre><code>class AuthoritativeServer {
+public:
+    // 클라이언트: "위치 (100, 200)으로 이동했어"
+    // 서버: "그거 유효한지 내가 확인할게"
+    void OnClientMove(PlayerID id, Vector3 reportedPos) {
+        auto& player = players[id];
+
+        // 1. 서버에서 이동 시뮬레이션
+        Vector3 serverCalculatedPos = SimulateMovement(
+            player.position,
+            player.lastInput,
+            deltaTime
+        );
+
+        // 2. 클라이언트 보고와 비교
+        float error = Vector3::Distance(reportedPos, serverCalculatedPos);
+
+        if (error < TOLERANCE) {
+            // 오차 범위 내 → 정상
+            player.position = serverCalculatedPos;
+        }
+        else if (error < SUSPICIOUS_THRESHOLD) {
+            // 의심스러움 → 서버 값 강제 적용
+            player.position = serverCalculatedPos;
+            player.suspicionScore += 1;
+        }
+        else {
+            // 명백한 치트 → 경고/밴
+            player.position = serverCalculatedPos;
+            player.suspicionScore += 10;
+            LogCheatAttempt(id, "Position mismatch", error);
+        }
+    }
+
+    // 클라이언트: "적에게 100 데미지 줬어"
+    // 서버: "데미지는 내가 계산해"
+    void OnClientShoot(PlayerID shooterId, const ShootData& shot) {
+        // 클라이언트가 보낸 "데미지 값"은 무시
+        // 서버가 직접 계산
+
+        // 1. 사격 유효성 검증
+        if (!ValidateShot(shooterId, shot)) {
+            LogCheatAttempt(shooterId, "Invalid shot");
+            return;
+        }
+
+        // 2. 히트 판정 (Lag Compensation 적용)
+        HitResult hit = PerformHitDetection(shooterId, shot);
+
+        if (hit.didHit) {
+            // 3. 서버가 데미지 계산
+            int damage = CalculateDamage(
+                GetWeapon(shooterId),
+                hit.hitPart,
+                hit.distance
+            );
+
+            ApplyDamage(hit.targetId, damage);
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">클라이언트가 뭘 해도 서버가 막을 수 있나요?</div>
+                <div class="a">
+                    <p>대부분 막을 수 있지만, <strong>정보 치트</strong>(wallhack 등)는 서버만으로 완전히 막기 어렵습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>치트 유형</th>
+                                <th>서버 방어 가능?</th>
+                                <th>방어 방법</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>스피드핵</td>
+                                <td>✅ 완전</td>
+                                <td>이동 속도 서버 검증</td>
+                            </tr>
+                            <tr>
+                                <td>텔레포트</td>
+                                <td>✅ 완전</td>
+                                <td>위치 변화량 서버 검증</td>
+                            </tr>
+                            <tr>
+                                <td>무한 탄약</td>
+                                <td>✅ 완전</td>
+                                <td>탄약 서버에서 관리</td>
+                            </tr>
+                            <tr>
+                                <td>데미지 핵</td>
+                                <td>✅ 완전</td>
+                                <td>데미지 서버 계산</td>
+                            </tr>
+                            <tr>
+                                <td>월핵</td>
+                                <td>⚠️ 부분</td>
+                                <td>안 보이는 적 정보 안 보냄</td>
+                            </tr>
+                            <tr>
+                                <td>에임봇</td>
+                                <td>⚠️ 부분</td>
+                                <td>통계 분석, 패턴 탐지</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 입력 및 이동 검증</h2>
+            <div class="conversation">
+                <div class="q">스피드핵은 어떻게 탐지하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">이동 속도 검증</div>
+                        <pre><code>class MovementValidator {
+    struct PlayerMovementHistory {
+        std::deque<Vector3> positions;
+        std::deque<float> timestamps;
+        float suspicionScore = 0;
+    };
+
+    std::map<PlayerID, PlayerMovementHistory> histories;
+
+public:
+    bool ValidateMovement(PlayerID id, Vector3 newPos, float serverTime) {
+        auto& history = histories[id];
+        auto& player = GetPlayer(id);
+
+        if (history.positions.empty()) {
+            history.positions.push_back(newPos);
+            history.timestamps.push_back(serverTime);
+            return true;
+        }
+
+        // 마지막 위치와 비교
+        Vector3 lastPos = history.positions.back();
+        float lastTime = history.timestamps.back();
+        float deltaTime = serverTime - lastTime;
+
+        if (deltaTime <= 0) return false;  // 시간 조작
+
+        float distance = Vector3::Distance(lastPos, newPos);
+        float speed = distance / deltaTime;
+
+        // 최대 허용 속도 계산
+        float maxSpeed = player.baseSpeed;
+        if (player.isSprinting) maxSpeed *= 1.5f;
+        if (player.hasSpeedBuff) maxSpeed *= player.buffMultiplier;
+
+        // 약간의 여유 (네트워크 지터 보정)
+        maxSpeed *= 1.15f;
+
+        if (speed > maxSpeed) {
+            history.suspicionScore += (speed / maxSpeed - 1.0f) * 10;
+
+            if (history.suspicionScore > CHEAT_THRESHOLD) {
+                BanPlayer(id, "Speed hack detected");
+                return false;
+            }
+
+            // 클라이언트 위치 무시, 서버 계산 위치로 강제
+            return false;
+        }
+
+        // 정상 이동
+        history.suspicionScore = std::max(0.0f, history.suspicionScore - 0.5f);
+        history.positions.push_back(newPos);
+        history.timestamps.push_back(serverTime);
+
+        // 오래된 히스토리 제거
+        while (history.positions.size() > 100) {
+            history.positions.pop_front();
+            history.timestamps.pop_front();
+        }
+
+        return true;
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">공중 점프나 벽 통과는 어떻게 막나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">물리적 유효성 검증</div>
+                        <pre><code>class PhysicsValidator {
+public:
+    bool ValidatePosition(PlayerID id, Vector3 newPos) {
+        auto& player = GetPlayer(id);
+
+        // 1. 맵 경계 체크
+        if (!IsWithinMapBounds(newPos)) {
+            LogCheat(id, "Out of bounds");
+            return false;
+        }
+
+        // 2. 충돌 체크 (벽 통과)
+        if (IsInsideCollider(newPos)) {
+            LogCheat(id, "Inside collision");
+            return false;
+        }
+
+        // 3. 경로 체크 (순간이동 통해 벽 뚫기)
+        if (Physics::Raycast(player.position, newPos)) {
+            LogCheat(id, "Path blocked by collision");
+            return false;
+        }
+
+        // 4. 높이 체크 (플라이핵)
+        float groundHeight = GetGroundHeight(newPos.x, newPos.z);
+        float heightAboveGround = newPos.y - groundHeight;
+
+        if (heightAboveGround > MAX_JUMP_HEIGHT && !player.isFlying) {
+            player.floatingTime += deltaTime;
+            if (player.floatingTime > MAX_FLOAT_TIME) {
+                LogCheat(id, "Fly hack - floating too long");
+                return false;
+            }
+        } else {
+            player.floatingTime = 0;
+        }
+
+        // 5. 점프 검증
+        if (player.wantsToJump) {
+            if (!player.isGrounded && player.jumpsInAir >= MAX_AIR_JUMPS) {
+                LogCheat(id, "Air jump without ability");
+                return false;
+            }
+        }
+
+        return true;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 에임봇 탐지</h2>
+            <div class="conversation">
+                <div class="q">에임봇은 어떻게 탐지하나요?</div>
+                <div class="a">
+                    <p>에임봇은 <strong>통계적 분석</strong>으로 탐지합니다. 인간과 다른 패턴을 찾습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">에임봇 탐지 시스템</div>
+                        <pre><code>class AimbotDetector {
+    struct PlayerAimStats {
+        // 기본 통계
+        float averageAccuracy;
+        float headshotRate;
+        int totalShots;
+        int hits;
+        int headshots;
+
+        // 고급 통계
+        std::deque<float> aimTimes;        // 조준까지 걸린 시간
+        std::deque<float> aimAngles;       // 조준 각도 변화
+        std::deque<float> aimSmoothness;   // 조준 부드러움
+
+        float suspicionScore = 0;
+    };
+
+    std::map<PlayerID, PlayerAimStats> stats;
+
+public:
+    void OnShot(PlayerID id, const ShootData& shot, bool hit, bool headshot) {
+        auto& s = stats[id];
+
+        s.totalShots++;
+        if (hit) s.hits++;
+        if (headshot) s.headshots++;
+
+        s.averageAccuracy = (float)s.hits / s.totalShots;
+        s.headshotRate = s.hits > 0 ? (float)s.headshots / s.hits : 0;
+
+        // 1. 비정상적인 정확도
+        if (s.totalShots > 100) {
+            if (s.averageAccuracy > 0.8f) {  // 80% 이상 적중률
+                s.suspicionScore += 1;
+            }
+            if (s.headshotRate > 0.6f) {  // 60% 이상 헤드샷률
+                s.suspicionScore += 2;
+            }
+        }
+
+        // 2. 조준 시간 분석 (너무 빠른 조준)
+        float aimTime = shot.timestamp - GetLastTargetAcquiredTime(id);
+        s.aimTimes.push_back(aimTime);
+
+        if (s.aimTimes.size() > 50) {
+            float avgAimTime = Average(s.aimTimes);
+            if (avgAimTime < 0.1f) {  // 평균 100ms 미만 조준
+                s.suspicionScore += 5;
+            }
+        }
+
+        // 3. 조준 패턴 분석 (불자연스러운 움직임)
+        AnalyzeAimPattern(id, shot);
+
+        // 판정
+        if (s.suspicionScore > AIMBOT_THRESHOLD) {
+            FlagForReview(id, "Possible aimbot");
+        }
+    }
+
+    void AnalyzeAimPattern(PlayerID id, const ShootData& shot) {
+        auto& s = stats[id];
+        auto& history = aimHistory[id];
+
+        // 조준 각도 변화 계산
+        if (!history.empty()) {
+            float angleDelta = AngleBetween(history.back().direction,
+                                            shot.direction);
+            s.aimAngles.push_back(angleDelta);
+
+            // 인간은 부드럽게 움직이지만, 에임봇은 "스냅"함
+            // 갑자기 큰 각도 변화 후 정확한 적중 = 의심
+
+            if (angleDelta > 30.0f && shot.wasHit) {
+                // 30도 이상 급격히 움직여서 적중
+                s.suspicionScore += 3;
+            }
+        }
+
+        history.push_back(shot);
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">인간과 에임봇의 차이점은?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+인간 vs 에임봇 조준 패턴:
+
+[인간]
+각도
+  │     ╱──────  목표 근처에서
+  │   ╱          천천히 미세 조정
+  │  ╱
+  │╱
+  └────────────── 시간
+
+- 점진적 가속/감속
+- 목표 근처에서 미세 조정
+- 개인차 있는 반응 시간
+
+[에임봇]
+각도
+  │         ┌────  순간적으로 정확히
+  │         │      목표에 도달
+  │         │
+  │─────────┘
+  └────────────── 시간
+
+- 순간적인 "스냅"
+- 완벽한 정확도
+- 일정한 반응 시간
+- 목표 전환 시 급격한 각도 변화
+
+탐지 포인트:
+✓ 각속도 분포 (인간은 정규분포)
+✓ 조준 도달 시간 (인간은 300ms~, 봇은 <100ms)
+✓ 미세 조정 패턴 (인간은 오버슈팅)
+✓ 타겟 전환 시 움직임 (인간은 부드러움)
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 월핵 방어</h2>
+            <div class="conversation">
+                <div class="q">월핵은 서버에서 막을 수 있나요?</div>
+                <div class="a">
+                    <p>완전히는 못 막지만, <strong>정보 자체를 안 보내면</strong> 크게 줄일 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">가시성 기반 정보 필터링</div>
+                        <pre><code>class VisibilityFilter {
+public:
+    std::vector<EntityState> GetVisibleEntities(PlayerID viewer) {
+        std::vector<EntityState> result;
+        auto& viewerPlayer = GetPlayer(viewer);
+
+        for (auto& [id, entity] : allEntities) {
+            if (id == viewer) continue;
+
+            // 1. 거리 체크
+            float distance = Vector3::Distance(viewerPlayer.position,
+                                               entity.position);
+            if (distance > MAX_RENDER_DISTANCE) continue;
+
+            // 2. 실제 가시성 체크 (레이캐스트)
+            bool canSee = CanPlayerSee(viewerPlayer, entity);
+
+            // 3. 소리 범위 체크 (발소리, 총소리)
+            bool canHear = CanPlayerHear(viewerPlayer, entity);
+
+            // 4. 최근 가시성 (잠시 전까지 보였음)
+            bool recentlyVisible = WasRecentlyVisible(viewer, id);
+
+            if (canSee || canHear || recentlyVisible) {
+                result.push_back(entity.GetState());
+            }
+            // 안 보이고, 안 들리고, 최근에도 안 보였으면
+            // → 정보 자체를 보내지 않음!
+        }
+
+        return result;
+    }
+
+private:
+    bool CanPlayerSee(const Player& viewer, const Entity& target) {
+        // FOV 체크
+        Vector3 toTarget = Normalize(target.position - viewer.position);
+        float dot = Dot(viewer.forward, toTarget);
+        if (dot < cos(viewer.fov / 2)) return false;
+
+        // 장애물 체크 (레이캐스트)
+        if (Physics::Raycast(viewer.eyePosition, target.position)) {
+            return false;  // 벽에 막힘
+        }
+
+        return true;
+    }
+
+    bool WasRecentlyVisible(PlayerID viewer, EntityID target) {
+        // 3초 이내에 본 적 있으면 계속 정보 전송
+        // (갑자기 사라지면 부자연스러우므로)
+        auto& visHistory = visibilityHistory[viewer][target];
+        return (GetTime() - visHistory.lastSeenTime) < 3.0f;
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">그래도 뚫리는 경우는?</div>
+                <div class="a">
+                    <p>몇 가지 한계가 있습니다:</p>
+                    <ul>
+                        <li><strong>발소리 정보</strong>: 소리 범위 내에 있으면 위치 대략 알 수 있음</li>
+                        <li><strong>최근 가시성</strong>: 부드러운 게임플레이를 위해 약간의 정보 유지</li>
+                        <li><strong>서버 레이캐스트 비용</strong>: 모든 플레이어 쌍을 검사하면 비용 높음</li>
+                    </ul>
+                    <p class="warning">완벽한 월핵 방어는 없습니다. 클라이언트 안티치트와 함께 사용해야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 클라이언트 안티치트</h2>
+            <div class="conversation">
+                <div class="q">클라이언트 측 안티치트는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+클라이언트 안티치트 계층:
+
+┌─────────────────────────────────────────┐
+│           Anti-Cheat Software           │
+│  (EAC, BattlEye, Vanguard, etc.)       │
+├─────────────────────────────────────────┤
+│                                         │
+│  1. 커널 드라이버                        │
+│     - 메모리 보호                        │
+│     - 프로세스 감시                      │
+│     - 드라이버 무결성                    │
+│                                         │
+│  2. 프로세스 모니터링                    │
+│     - 의심스러운 프로세스 탐지            │
+│     - DLL 인젝션 탐지                    │
+│     - 디버거 탐지                        │
+│                                         │
+│  3. 메모리 스캐닝                        │
+│     - 알려진 치트 시그니처               │
+│     - 코드 변조 탐지                     │
+│     - 값 변조 탐지                       │
+│                                         │
+│  4. 파일 무결성                          │
+│     - 게임 파일 해시 검증                │
+│     - 변조된 에셋 탐지                   │
+│                                         │
+│  5. 행동 분석                           │
+│     - 입력 패턴 분석                     │
+│     - 비정상 API 호출 탐지               │
+│                                         │
+└─────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">서버와 클라이언트 안티치트를 함께 쓰는 이유는?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>치트 유형</th>
+                                <th>서버 방어</th>
+                                <th>클라이언트 방어</th>
+                                <th>함께 사용</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>스피드핵</td>
+                                <td>✅ 완전</td>
+                                <td>✅ 탐지</td>
+                                <td>⭐ 즉시 차단</td>
+                            </tr>
+                            <tr>
+                                <td>에임봇</td>
+                                <td>⚠️ 통계 분석</td>
+                                <td>✅ 프로세스 탐지</td>
+                                <td>⭐ 빠른 탐지</td>
+                            </tr>
+                            <tr>
+                                <td>월핵</td>
+                                <td>⚠️ 정보 제한</td>
+                                <td>✅ 메모리 보호</td>
+                                <td>⭐ 효과적 방어</td>
+                            </tr>
+                            <tr>
+                                <td>매크로</td>
+                                <td>❌ 구분 어려움</td>
+                                <td>✅ 입력 분석</td>
+                                <td>⭐ 탐지 가능</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">서버는 "막고", 클라이언트는 "탐지"합니다. 둘 다 필요합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Never Trust the Client</strong>: 클라이언트 데이터는 항상 검증</li>
+                <li><strong>서버 권한</strong>: 데미지, 위치, 아이템 등 중요 로직은 서버에서 처리</li>
+                <li><strong>이동 검증</strong>: 속도, 충돌, 물리적 유효성 검사</li>
+                <li><strong>에임봇 탐지</strong>: 통계 분석, 패턴 분석 (정확도, 반응시간, 각속도)</li>
+                <li><strong>월핵 방어</strong>: 안 보이는 적 정보를 아예 보내지 않음</li>
+                <li><strong>클라이언트 안티치트</strong>: 메모리 보호, 프로세스 감시, 시그니처 탐지</li>
+                <li>서버 + 클라이언트 <strong>함께 사용</strong>이 가장 효과적</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

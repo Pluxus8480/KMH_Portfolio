@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>끝없이 펼쳐진 세계를 담는 법 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+
+        <header class="content-header">
+            <h1>끝없이 펼쳐진 세계를 담는 법</h1>
+            <p class="subtitle">World Partition과 레벨 스트리밍</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 왜 World Partition이 필요한가?</h2>
+            <div class="conversation">
+                <div class="q">기존 레벨 스트리밍 방식의 문제점은 무엇인가요?</div>
+                <div class="a">
+                    <p>기존 방식에서는 레벨 디자이너가 <span class="highlight">수동으로 레벨을 분할</span>하고 스트리밍 볼륨을 배치해야 했습니다. 오픈 월드처럼 거대한 맵에서는 관리가 매우 어려웠죠.</p>
+                    <p>또한 여러 사람이 같은 레벨을 편집하면 <span class="warning">충돌</span>이 발생했습니다.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>기존 방식은 <span class="highlight">거대한 퍼즐을 수동으로 조각내는 것</span>입니다.</p>
+                <p>World Partition은 <span class="highlight">자동으로 그리드를 그려서 필요한 조각만 보여주는 것</span>입니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: World Partition 개요</h2>
+            <div class="conversation">
+                <div class="q">World Partition은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>World Partition은 월드를 <span class="highlight">자동으로 그리드 셀로 분할</span>합니다. 각 셀은 독립적으로 로드/언로드되며, 플레이어 근처 셀만 메모리에 유지됩니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+┌─────────────────────────────────────────────────────────────┐
+│                 World Partition 그리드                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│   ┌─────┬─────┬─────┬─────┬─────┬─────┐                    │
+│   │     │     │     │     │     │     │                    │
+│   │     │     │     │     │     │     │                    │
+│   ├─────┼─────┼─────┼─────┼─────┼─────┤                    │
+│   │     │█████│█████│█████│     │     │                    │
+│   │     │█████│█ P █│█████│     │     │ ← 로드된 셀       │
+│   ├─────┼─────┼─────┼─────┼─────┼─────┤   P = 플레이어    │
+│   │     │█████│█████│█████│     │     │                    │
+│   │     │█████│█████│█████│     │     │                    │
+│   ├─────┼─────┼─────┼─────┼─────┼─────┤                    │
+│   │     │     │     │     │     │     │                    │
+│   │     │     │     │     │     │     │                    │
+│   └─────┴─────┴─────┴─────┴─────┴─────┘                    │
+│                                                              │
+│   플레이어 주변 셀만 로드됨 (스트리밍 거리 기반)           │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">플레이어 위치 기반 셀 스트리밍</p>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th>기존 Level Streaming</th>
+                        <th>World Partition</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>레벨 분할</td>
+                        <td>수동</td>
+                        <td>자동 (그리드)</td>
+                    </tr>
+                    <tr>
+                        <td>스트리밍 제어</td>
+                        <td>볼륨, 블루프린트</td>
+                        <td>거리 기반 자동</td>
+                    </tr>
+                    <tr>
+                        <td>협업</td>
+                        <td>충돌 위험</td>
+                        <td>One File Per Actor</td>
+                    </tr>
+                    <tr>
+                        <td>에디터 성능</td>
+                        <td>전체 로드 필요</td>
+                        <td>필요한 셀만 로드</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: One File Per Actor (OFPA)</h2>
+            <div class="conversation">
+                <div class="q">여러 사람이 같은 맵을 어떻게 동시에 편집하나요?</div>
+                <div class="a">
+                    <p>OFPA는 <span class="highlight">각 Actor를 별도의 파일로 저장</span>합니다. 서로 다른 Actor를 편집하면 충돌 없이 동시 작업이 가능합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">OFPA 파일 구조</div>
+                <pre><code>// 기존 방식
+Maps/
+  MyLevel.umap          // 모든 Actor가 한 파일에
+
+// World Partition + OFPA
+Maps/
+  MyLevel.umap          // 레벨 설정만
+  __ExternalActors__/
+    MyLevel/
+      A/
+        Actor_001.uasset
+        Actor_002.uasset
+      B/
+        Actor_003.uasset
+        ...
+
+// 장점
+• Actor별 독립적 버전 관리
+• 충돌 최소화
+• 필요한 Actor만 로드 (에디터 성능 향상)</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Data Layers</h2>
+            <div class="conversation">
+                <div class="q">런타임에 콘텐츠를 선택적으로 로드하려면?</div>
+                <div class="a">
+                    <p><span class="highlight">Data Layers</span>를 사용합니다. 같은 위치에 여러 버전의 콘텐츠를 두고 조건에 따라 다른 것을 로드합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Data Layers 예시: 시간대별 마을
+
+┌─────────────────────────────────────────────────┐
+│                같은 위치                        │
+├─────────────────────────────────────────────────┤
+│                                                  │
+│  Layer: Daytime (낮)                            │
+│  ┌─────────────────────────────────┐           │
+│  │  🌳 나무들                       │           │
+│  │  🏠 밝은 집                      │           │
+│  │  👥 NPC들이 돌아다님             │           │
+│  └─────────────────────────────────┘           │
+│                                                  │
+│  Layer: Nighttime (밤)                          │
+│  ┌─────────────────────────────────┐           │
+│  │  🌙 어두운 조명                  │           │
+│  │  🏚️ 창문에 불빛                  │           │
+│  │  🦇 밤 NPC들                     │           │
+│  └─────────────────────────────────┘           │
+│                                                  │
+│  게임 시간에 따라 Layer 전환                    │
+│                                                  │
+└─────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">Data Layer로 낮/밤 전환</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Data Layer 제어</div>
+                <pre><code>// Blueprint에서 Data Layer 활성화
+void AMyGameMode::SwitchToNight()
+{
+    UDataLayerSubsystem* DataLayerSubsystem =
+        GetWorld()->GetSubsystem<UDataLayerSubsystem>();
+
+    // 낮 레이어 비활성화
+    DataLayerSubsystem->SetDataLayerRuntimeState(
+        DaytimeLayer,
+        EDataLayerRuntimeState::Unloaded);
+
+    // 밤 레이어 활성화
+    DataLayerSubsystem->SetDataLayerRuntimeState(
+        NighttimeLayer,
+        EDataLayerRuntimeState::Activated);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: HLOD (Hierarchical LOD)</h2>
+            <div class="conversation">
+                <div class="q">먼 거리의 오브젝트는 어떻게 최적화하나요?</div>
+                <div class="a">
+                    <p><span class="highlight">HLOD</span>는 먼 거리의 여러 메시를 <span class="key-point">하나의 단순화된 메시로 병합</span>합니다. 드로우콜을 크게 줄일 수 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+HLOD 동작 방식:
+
+가까운 거리: 개별 메시 렌더링
+┌─────────────────────────────────────┐
+│   🏠  🏠  🏠  🌳  🌳  🏠  🏠       │
+│   각각 별도 드로우콜 (7 calls)     │
+└─────────────────────────────────────┘
+                │
+                │ 거리 증가
+                ▼
+먼 거리: HLOD 프록시 메시
+┌─────────────────────────────────────┐
+│   ┌─────────────────────────┐       │
+│   │  ████████████████████  │       │
+│   │   (병합된 프록시 메시)  │       │
+│   └─────────────────────────┘       │
+│   1 드로우콜                        │
+└─────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">HLOD로 원거리 최적화</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">World Partition HLOD 설정</div>
+                <pre><code>// World Settings에서 HLOD 설정
+World Partition:
+  ☑ Enable HLOD
+  HLOD Layer: Default HLOD Layer
+
+// HLOD Layer 설정
+Layer Type: Instancing  // 또는 MeshMerge, MeshSimplify
+Cell Size: 25600        // HLOD 셀 크기
+Loading Range: 50000    // HLOD 활성화 거리
+
+// HLOD 빌드
+World Partition → Build HLOD
+
+// 결과
+• 원거리: HLOD 프록시 렌더링
+• 근거리: 원본 메시로 전환
+• 전환은 자동으로 처리됨</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 스트리밍 소스 설정</h2>
+            <div class="conversation">
+                <div class="q">무엇을 기준으로 셀이 로드되나요?</div>
+                <div class="a">
+                    <p><span class="highlight">Streaming Source</span>가 스트리밍의 기준점입니다. 기본적으로 플레이어 카메라지만, 커스터마이징 가능합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">커스텀 스트리밍 소스</div>
+                <pre><code>// 플레이어 외에 추가 스트리밍 소스
+// 예: 원거리 스나이퍼 스코프
+
+UCLASS()
+class AMyStreamingSource : public AActor
+{
+    GENERATED_BODY()
+
+public:
+    AMyStreamingSource()
+    {
+        // 스트리밍 소스 컴포넌트 추가
+        StreamingSourceComponent =
+            CreateDefaultSubobject<UWorldPartitionStreamingSourceComponent>(
+                TEXT("StreamingSource"));
+
+        StreamingSourceComponent->bStreamingSourceEnabled = true;
+        StreamingSourceComponent->TargetGrids.Add(FName("MainGrid"));
+    }
+};
+
+// 스나이퍼 스코프 조준 시
+void AMyCharacter::AimSniper()
+{
+    // 조준점에 스트리밍 소스 생성
+    // → 조준 위치의 셀도 미리 로드
+    StreamingSource->SetActorLocation(AimLocation);
+    StreamingSource->StreamingSourceComponent->
+        bStreamingSourceEnabled = true;
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>스트리밍 소스 용도</th>
+                        <th>예시</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>기본 플레이어</td>
+                        <td>카메라 위치 기준</td>
+                    </tr>
+                    <tr>
+                        <td>원거리 조준</td>
+                        <td>스나이퍼 스코프</td>
+                    </tr>
+                    <tr>
+                        <td>컷신</td>
+                        <td>컷신 카메라 경로</td>
+                    </tr>
+                    <tr>
+                        <td>AI</td>
+                        <td>중요 AI 위치</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>World Partition</strong>은 월드를 그리드 셀로 자동 분할합니다</li>
+                <li><strong>OFPA</strong>로 Actor별 파일 저장 → 팀 협업 용이</li>
+                <li><strong>Data Layers</strong>로 조건부 콘텐츠 로드 (낮/밤, 퀘스트 전/후)</li>
+                <li><strong>HLOD</strong>로 원거리 메시를 병합해 드로우콜 감소</li>
+                <li><strong>Streaming Source</strong>로 로드 기준점 커스터마이징</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

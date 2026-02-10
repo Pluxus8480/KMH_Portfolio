@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dedicated vs Listen Server | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../server.html" class="back-link">← 목록으로</a>
+            <h1>서버를 누가 돌리지?</h1>
+            <p class="subtitle">Dedicated Server vs Listen Server vs P2P 아키텍처 비교</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 서버 호스팅 방식 개요</h2>
+            <div class="conversation">
+                <div class="q">게임 서버를 호스팅하는 방식에는 뭐가 있나요?</div>
+                <div class="a">
+                    <p>크게 세 가지 방식이 있습니다:</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                     서버 호스팅 방식                              │
+├─────────────────────┬─────────────────────┬─────────────────────┤
+│   Dedicated Server  │    Listen Server    │        P2P          │
+├─────────────────────┼─────────────────────┼─────────────────────┤
+│  ┌───────────┐      │  ┌───────────┐      │                     │
+│  │  Server   │      │  │Host+Client│      │  ┌───┐   ┌───┐     │
+│  │(전용 서버)│      │  │ (플레이어)│      │  │ A │◀─▶│ B │     │
+│  └─────┬─────┘      │  └─────┬─────┘      │  └─┬─┘   └─┬─┘     │
+│        │            │        │            │    │       │        │
+│    ┌───┼───┐        │    ┌───┼───┐        │    └───┬───┘        │
+│    ▼   ▼   ▼        │    ▼   ▼   ▼        │        ▼            │
+│   A    B    C       │   A    B    C       │   ┌───────┐         │
+│   (클라이언트)       │   (클라이언트)       │   │   C   │         │
+│                     │                     │   └───────┘         │
+├─────────────────────┼─────────────────────┼─────────────────────┤
+│ 서버 비용 있음       │ 호스트가 서버 역할   │ 서버 없음 (메쉬)     │
+│ 공정함              │ 호스트 유리          │ 완전 대칭            │
+└─────────────────────┴─────────────────────┴─────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">각 방식의 장단점을 비교해주세요.</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>Dedicated</th>
+                                <th>Listen</th>
+                                <th>P2P</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>서버 비용</td>
+                                <td>❌ 높음</td>
+                                <td>✅ 없음</td>
+                                <td>✅ 없음</td>
+                            </tr>
+                            <tr>
+                                <td>공정성</td>
+                                <td>✅ 완전</td>
+                                <td>⚠️ 호스트 유리</td>
+                                <td>⚠️ 연결 품질 의존</td>
+                            </tr>
+                            <tr>
+                                <td>치트 방지</td>
+                                <td>✅ 쉬움</td>
+                                <td>⚠️ 호스트 신뢰</td>
+                                <td>❌ 어려움</td>
+                            </tr>
+                            <tr>
+                                <td>안정성</td>
+                                <td>✅ 높음</td>
+                                <td>⚠️ 호스트 의존</td>
+                                <td>⚠️ NAT 문제</td>
+                            </tr>
+                            <tr>
+                                <td>지연</td>
+                                <td>일정</td>
+                                <td>호스트 0ms</td>
+                                <td>가변적</td>
+                            </tr>
+                            <tr>
+                                <td>확장성</td>
+                                <td>✅ 높음</td>
+                                <td>⚠️ 제한적</td>
+                                <td>❌ 낮음</td>
+                            </tr>
+                            <tr>
+                                <td>대표 게임</td>
+                                <td>Overwatch, PUBG</td>
+                                <td>Call of Duty (콘솔)</td>
+                                <td>격투 게임, RTS</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Dedicated Server</h2>
+            <div class="conversation">
+                <div class="q">Dedicated Server는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>게임사가 운영하는 <strong>전용 서버</strong>에 모든 클라이언트가 접속합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Dedicated Server 구조</div>
+                        <pre><code>// 서버 (렌더링 없음, 게임 로직만)
+class DedicatedServer {
+    std::vector<ClientConnection> clients;
+    GameSimulation simulation;
+
+public:
+    void Run() {
+        while (running) {
+            float deltaTime = GetDeltaTime();
+
+            // 1. 모든 클라이언트 입력 수집
+            for (auto& client : clients) {
+                auto inputs = client.ReceiveInputs();
+                simulation.QueueInputs(client.playerId, inputs);
+            }
+
+            // 2. 게임 시뮬레이션 (권위적)
+            simulation.Tick(deltaTime);
+
+            // 3. 상태 브로드캐스트
+            GameState state = simulation.GetState();
+            for (auto& client : clients) {
+                auto relevantState = FilterByAOI(state, client.playerId);
+                client.SendState(relevantState);
+            }
+
+            // 4. 틱 레이트 유지
+            SleepUntilNextTick();
+        }
+    }
+
+    // 서버는 렌더링하지 않음 (헤드리스)
+    // CPU만 사용, GPU 불필요
+    // 한 머신에서 여러 인스턴스 실행 가능
+};
+
+// 클라이언트 (렌더링 + 예측)
+class GameClient {
+    NetworkConnection serverConnection;
+    LocalPrediction prediction;
+    RemoteEntityInterpolation interpolation;
+
+public:
+    void Update() {
+        // 1. 로컬 입력 처리 및 예측
+        auto input = GetPlayerInput();
+        prediction.PredictMove(input);
+        serverConnection.SendInput(input);
+
+        // 2. 서버 상태 수신
+        if (auto state = serverConnection.ReceiveState()) {
+            prediction.Reconcile(*state);
+            interpolation.AddSnapshot(*state);
+        }
+
+        // 3. 렌더링
+        RenderLocalPlayer(prediction.GetPosition());
+        RenderRemotePlayers(interpolation.GetStates());
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">Dedicated Server의 비용은 얼마나 드나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+Dedicated Server 비용 예시:
+
+FPS 게임 (64명, 60틱):
+├─ CPU: ~0.5 vCPU per match
+├─ RAM: ~500MB per match
+├─ 대역폭: ~500KB/s per match
+└─ 월 비용 (1000 동시 매치): ~$3,000-5,000
+
+MMORPG (5000명 동시접속):
+├─ CPU: 8-16 vCPU
+├─ RAM: 32-64GB
+├─ 대역폭: ~50MB/s
+└─ 월 비용: ~$2,000-5,000 per server
+
+비용 최적화 전략:
+✓ Auto-scaling (플레이어 적을 때 서버 축소)
+✓ Spot instances (저렴한 스팟 인스턴스)
+✓ 지역별 서버 배치 (가까운 서버로 연결)
+✓ 매치 완료 후 빠른 서버 재활용
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Listen Server</h2>
+            <div class="conversation">
+                <div class="q">Listen Server는 어떻게 다른가요?</div>
+                <div class="a">
+                    <p><strong>플레이어 중 한 명</strong>이 서버와 클라이언트 역할을 동시에 합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+Listen Server 구조:
+
+┌───────────────────────────────────────┐
+│           Host (서버 + 클라이언트)      │
+│  ┌─────────────┐  ┌─────────────┐     │
+│  │   Server    │──│   Client    │     │
+│  │  (게임로직)  │  │  (렌더링)   │     │
+│  └──────┬──────┘  └─────────────┘     │
+│         │                             │
+└─────────┼─────────────────────────────┘
+          │
+    ┌─────┴─────┐
+    ▼           ▼
+ Client A    Client B
+(게스트)     (게스트)
+
+호스트의 이점:
+- 0ms 지연 (자기 서버니까)
+- 호스트 이탈 = 게임 종료
+- 치트 가능 (서버 권한 보유)
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">호스트 유리 문제는 어떻게 해결하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Host Disadvantage Compensation</div>
+                        <pre><code>// 호스트 불이익 보정 (역방향 Lag Compensation)
+class HostCompensation {
+    static const float ARTIFICIAL_DELAY = 0.05f;  // 50ms 인위적 지연
+
+public:
+    void ProcessHostInput(const PlayerInput& input) {
+        // 호스트 입력에 인위적 지연 추가
+        delayedInputQueue.push({ input, GetTime() + ARTIFICIAL_DELAY });
+    }
+
+    void Tick() {
+        float currentTime = GetTime();
+
+        // 지연된 입력 처리
+        while (!delayedInputQueue.empty() &&
+               delayedInputQueue.front().executeTime <= currentTime) {
+            ProcessInput(delayedInputQueue.front().input);
+            delayedInputQueue.pop();
+        }
+    }
+
+    // Lag Compensation도 호스트에게 적용
+    void OnHostShoot(const ShootData& shot) {
+        // 호스트도 다른 플레이어와 동일하게 되감기 적용
+        // (자기 자신과의 핑은 0이지만, 같은 방식으로 처리)
+        float fakeLatency = GetAverageClientLatency();  // 평균 핑 사용
+        ProcessShotWithLagComp(shot, fakeLatency);
+    }
+};
+
+// 완전한 공정성은 불가능하지만, 차이를 줄일 수 있음</code></pre>
+                    </div>
+                    <p class="warning">완전한 공정성 보장은 어렵습니다. 경쟁 게임에서는 Dedicated Server가 권장됩니다.</p>
+                </div>
+
+                <div class="q">호스트 이탈 시 어떻게 하나요?</div>
+                <div class="a">
+                    <p><strong>Host Migration</strong>으로 다른 플레이어가 호스트를 이어받습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Host Migration 구현</div>
+                        <pre><code>class HostMigration {
+    std::vector<ClientInfo> clients;
+    GameState lastKnownState;
+
+public:
+    void OnHostDisconnected() {
+        // 1. 새 호스트 선정 (가장 좋은 연결 품질)
+        ClientInfo* newHost = SelectBestHost();
+        if (!newHost) {
+            EndGame("No suitable host found");
+            return;
+        }
+
+        // 2. 게임 일시 정지
+        PauseGame();
+        ShowMigrationUI("호스트 이전 중...");
+
+        // 3. 새 호스트에게 서버 역할 전달
+        newHost->BecomeHost(lastKnownState);
+
+        // 4. 다른 클라이언트들 재연결
+        for (auto& client : clients) {
+            if (&client != newHost) {
+                client.ReconnectTo(newHost->address);
+            }
+        }
+
+        // 5. 상태 동기화 확인 후 게임 재개
+        if (VerifyStateSync()) {
+            ResumeGame();
+        }
+    }
+
+private:
+    ClientInfo* SelectBestHost() {
+        ClientInfo* best = nullptr;
+        float bestScore = -1;
+
+        for (auto& client : clients) {
+            float score = CalculateHostScore(client);
+            // 점수: 대역폭, NAT 타입, 하드웨어 성능 등 고려
+            if (score > bestScore) {
+                bestScore = score;
+                best = &client;
+            }
+        }
+        return best;
+    }
+
+    float CalculateHostScore(const ClientInfo& client) {
+        float score = 0;
+        score += client.uploadBandwidth * 0.3f;
+        score += (client.natType == NATType::Open) ? 100 : 0;
+        score += client.cpuScore * 0.2f;
+        score += (100 - client.averagePing) * 0.2f;  // 핑 낮을수록 좋음
+        return score;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: P2P (Peer-to-Peer)</h2>
+            <div class="conversation">
+                <div class="q">P2P는 어떤 게임에 적합한가요?</div>
+                <div class="a">
+                    <p><strong>1:1 또는 소수 인원</strong>의 게임에 적합합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+P2P 적합 사례:
+
+격투 게임 (1v1):
+┌─────┐         ┌─────┐
+│  A  │◀───────▶│  B  │
+└─────┘  직접   └─────┘
+         연결
+
+- 서버 비용 없음
+- 지연 최소화 (직접 연결)
+- 롤백 넷코드와 궁합 좋음
+
+RTS (2-8명, Lockstep):
+┌─────┐    ┌─────┐
+│  A  │◀──▶│  B  │
+└──┬──┘    └──┬──┘
+   │          │
+   └────┬─────┘
+        ▼
+     ┌─────┐
+     │  C  │
+     └─────┘
+
+- 입력만 공유 (대역폭 낮음)
+- 모두가 같은 시뮬레이션
+- 한 명이라도 느리면 모두 대기
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">P2P의 NAT 문제는 어떻게 해결하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">P2P NAT Traversal</div>
+                        <pre><code>class P2PConnection {
+    enum class NATType {
+        Open,           // 직접 연결 가능
+        Moderate,       // Hole punching 필요
+        Strict          // 릴레이 필수
+    };
+
+public:
+    bool EstablishConnection(const PeerInfo& peer) {
+        // 1. NAT 타입 확인 (STUN 서버 이용)
+        NATType myType = DetectNATType();
+        NATType peerType = peer.natType;
+
+        // 2. 연결 방법 결정
+        if (myType == NATType::Open || peerType == NATType::Open) {
+            // 직접 연결 가능
+            return DirectConnect(peer.publicAddress);
+        }
+
+        if (myType != NATType::Strict && peerType != NATType::Strict) {
+            // UDP Hole Punching 시도
+            if (TryHolePunching(peer)) {
+                return true;
+            }
+        }
+
+        // 3. 모든 방법 실패 시 릴레이 사용
+        return UseRelayServer(peer);
+    }
+
+private:
+    bool TryHolePunching(const PeerInfo& peer) {
+        // 양쪽이 동시에 상대 공인 IP로 패킷 전송
+        // 타이밍이 맞으면 NAT가 "구멍"을 뚫어줌
+
+        for (int attempt = 0; attempt < MAX_PUNCH_ATTEMPTS; attempt++) {
+            // 동시 전송을 위해 중계 서버가 시그널
+            WaitForPunchSignal();
+
+            socket.SendTo(peer.publicAddress, PUNCH_PACKET);
+
+            if (WaitForResponse(PUNCH_TIMEOUT)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool UseRelayServer(const PeerInfo& peer) {
+        // TURN 서버를 통한 릴레이
+        // 모든 패킷이 서버를 경유 (지연 증가)
+        return relayServer.CreateRelay(myId, peer.id);
+    }
+};</code></pre>
+                    </div>
+                    <p class="key-point">NAT 타입에 따라 15-30%의 플레이어는 직접 연결이 불가능합니다. 릴레이 서버가 필수입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 하이브리드 접근법</h2>
+            <div class="conversation">
+                <div class="q">실제 게임들은 어떤 방식을 사용하나요?</div>
+                <div class="a">
+                    <p>많은 게임이 <strong>하이브리드</strong> 방식을 사용합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+하이브리드 예시들:
+
+1. Fortnite / PUBG:
+   ├─ 랭크 매치: Dedicated Server (공정성)
+   └─ 커스텀 매치: Listen Server (비용 절감)
+
+2. Call of Duty:
+   ├─ PC: Dedicated Server
+   └─ 콘솔: Listen Server + Host Migration
+
+3. 격투 게임 (Street Fighter 6):
+   ├─ 온라인: P2P + 롤백 넷코드
+   └─ 토너먼트: Dedicated Server
+
+4. MMO (WoW):
+   └─ 전체: Dedicated Server (필수)
+
+5. 인디 게임:
+   └─ Steam Relay (Valve 서버 이용)
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">Steam Relay는 뭔가요?</div>
+                <div class="a">
+                    <p>Valve가 제공하는 <strong>무료 릴레이 서비스</strong>입니다. P2P의 NAT 문제를 해결해줍니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Steam Networking Sockets 사용</div>
+                        <pre><code>// Steamworks SDK 사용
+class SteamP2PConnection {
+    ISteamNetworkingSockets* sockets;
+
+public:
+    void Initialize() {
+        sockets = SteamNetworkingSockets();
+
+        // Steam Relay 자동 사용 설정
+        SteamNetworkingUtils()->SetGlobalConfigValueInt32(
+            k_ESteamNetworkingConfig_P2P_Transport_SDR_Relay,
+            1  // 자동으로 릴레이 사용
+        );
+    }
+
+    void ConnectToPeer(CSteamID peerSteamId) {
+        SteamNetworkingIdentity identity;
+        identity.SetSteamID(peerSteamId);
+
+        // Steam이 최적의 연결 방법 자동 선택
+        // - 직접 연결 가능 → P2P
+        // - 불가능 → Steam Relay 서버 경유
+        connection = sockets->ConnectP2P(identity, 0, 0, nullptr);
+    }
+
+    void SendData(const void* data, int size) {
+        sockets->SendMessageToConnection(
+            connection,
+            data, size,
+            k_nSteamNetworkingSend_Reliable,  // 또는 Unreliable
+            nullptr
+        );
+    }
+};
+
+// 장점:
+// - NAT traversal 자동 처리
+// - 전 세계 릴레이 서버 (지연 최소화)
+// - 무료 (Steam 게임이면)
+// - DDoS 보호</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 선택 가이드</h2>
+            <div class="conversation">
+                <div class="q">어떤 방식을 선택해야 하나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+서버 방식 선택 플로우차트:
+
+                    ┌───────────────┐
+                    │ 경쟁/랭크 게임? │
+                    └───────┬───────┘
+                    Yes ↙     ↘ No
+         ┌─────────────┐    ┌───────────────┐
+         │  Dedicated  │    │  플레이어 수?  │
+         │   Server    │    └───────┬───────┘
+         └─────────────┘      ≤4 ↙     ↘ >4
+                    ┌───────────┐    ┌───────────┐
+                    │   P2P     │    │  Listen   │
+                    │ (격투,RTS)│    │  Server   │
+                    └───────────┘    └───────────┘
+
+예산 고려:
+├─ 예산 충분: Dedicated Server
+├─ 예산 제한: Listen + Host Migration
+└─ 예산 없음: P2P + Steam Relay
+                        </pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>게임 유형</th>
+                                <th>권장 방식</th>
+                                <th>이유</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>경쟁 FPS</td>
+                                <td>Dedicated</td>
+                                <td>공정성 필수, 치트 방지</td>
+                            </tr>
+                            <tr>
+                                <td>MMO/배틀로얄</td>
+                                <td>Dedicated</td>
+                                <td>많은 플레이어, 지속성</td>
+                            </tr>
+                            <tr>
+                                <td>격투 게임</td>
+                                <td>P2P + 롤백</td>
+                                <td>최소 지연, 1:1</td>
+                            </tr>
+                            <tr>
+                                <td>파티 게임</td>
+                                <td>Listen</td>
+                                <td>비용 절감, 캐주얼</td>
+                            </tr>
+                            <tr>
+                                <td>협동 게임</td>
+                                <td>Listen/P2P</td>
+                                <td>경쟁 아님, 비용 절감</td>
+                            </tr>
+                            <tr>
+                                <td>RTS</td>
+                                <td>P2P Lockstep</td>
+                                <td>입력만 전송, 대역폭 낮음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Dedicated Server</strong>: 게임사 서버, 공정함, 치트 방지 용이, 비용 높음</li>
+                <li><strong>Listen Server</strong>: 플레이어가 호스트, 비용 없음, 호스트 유리</li>
+                <li><strong>P2P</strong>: 서버 없이 직접 연결, 최소 지연, NAT 문제</li>
+                <li><strong>Host Migration</strong>: Listen Server 호스트 이탈 시 다른 플레이어가 계승</li>
+                <li><strong>NAT Traversal</strong>: STUN/TURN, Hole Punching으로 P2P 연결</li>
+                <li><strong>Steam Relay</strong>: 무료 릴레이 서비스, NAT 문제 해결</li>
+                <li><strong>하이브리드</strong>: 상황에 따라 다른 방식 혼용 (랭크: Dedicated, 캐주얼: Listen)</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

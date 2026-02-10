@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>틈새의 어둠을 표현하다 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>틈새의 어둠을 표현하다</h1>
+            <p class="subtitle">Ambient Occlusion (SSAO, HBAO+, GTAO)</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Ambient Occlusion이란?</h2>
+            <div class="conversation">
+                <div class="q">왜 모서리나 구석이 더 어둡게 보이나요?</div>
+                <div class="a">
+                    <p>현실에서 <span class="highlight">주변 환경광(Ambient Light)</span>은 모든 방향에서 오지만, 좁은 공간이나 모서리는 빛이 덜 도달합니다.</p>
+                    <p><span class="key-point">Ambient Occlusion</span>은 이 "막힌 정도"를 계산해 더 사실적인 음영을 만듭니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Ambient Occlusion 개념:
+
+AO 없음:                         AO 적용:
+┌──────────────────────┐        ┌──────────────────────┐
+│                      │        │                      │
+│    ┌─────┐           │        │    ┌─────┐           │
+│    │     │           │        │  ▓▓│     │           │
+│    │     │           │        │  ▓▓│     │           │
+│    └─────┘           │        │  ▓▓└─────┘▓▓         │
+│                      │        │    ▓▓▓▓▓▓▓▓          │
+│══════════════════════│        │▓▓══════════════════▓▓│
+└──────────────────────┘        └──────────────────────┘
+
+▓ = 어두운 영역 (빛이 차단됨)
+
+구석, 틈새, 접촉점 = 주변 지오메트리가 빛을 차단
+                </pre>
+                <p class="diagram-caption">AO가 추가하는 현실감</p>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>AO는 <span class="highlight">"먼지가 쌓이는 곳"</span>을 어둡게 만드는 것과 같습니다.</p>
+                <p>구석, 틈새, 접촉점 - 청소하기 힘든 곳이 더 어둡습니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: SSAO (Screen Space Ambient Occlusion)</h2>
+            <div class="conversation">
+                <div class="q">SSAO는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p><span class="highlight">SSAO</span>는 2007년 Crytek이 발표한 기법입니다. 각 픽셀 주변에 랜덤 샘플을 배치하고, 깊이 버퍼와 비교해 "막힌 비율"을 계산합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+SSAO 샘플링:
+
+            법선 방향
+               ↑
+               │
+        ●  ●   │   ●  ●
+          ●    │    ●
+        ●      │      ●      ● = 샘플 포인트
+    ───────────●───────────   ● = 현재 픽셀
+          (현재 픽셀)
+
+반구 내 랜덤 샘플 배치
+→ 각 샘플의 깊이 vs 실제 깊이 비교
+→ 샘플이 표면 뒤에 있으면 "차폐됨"
+
+차폐율 = 차폐된 샘플 수 / 전체 샘플 수
+                </pre>
+                <p class="diagram-caption">SSAO 반구 샘플링</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">SSAO 구현 (HLSL)</div>
+                <pre><code>// 커널 샘플 (미리 계산된 반구 내 랜덤 방향)
+static const float3 kernel[16] = {
+    float3(0.2, 0.1, 0.3), float3(-0.3, 0.2, 0.1),
+    // ... 더 많은 샘플
+};
+
+float SSAO_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    // 현재 픽셀 정보
+    float depth = depthBuffer.Sample(pointSamp, uv).r;
+    float3 position = ReconstructViewPosition(uv, depth);
+    float3 normal = normalBuffer.Sample(pointSamp, uv).rgb * 2.0 - 1.0;
+
+    // 랜덤 회전 벡터 (노이즈 텍스처에서)
+    float3 randomVec = noiseTexture.Sample(wrapSamp, uv * noiseScale).rgb;
+
+    // TBN 행렬 (법선 기준 반구 방향)
+    float3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
+    float3 bitangent = cross(normal, tangent);
+    float3x3 TBN = float3x3(tangent, bitangent, normal);
+
+    float occlusion = 0.0;
+    float radius = 0.5;  // 샘플링 반경
+
+    for (int i = 0; i < 16; i++)
+    {
+        // 샘플 위치 계산
+        float3 sampleDir = mul(kernel[i], TBN);
+        float3 samplePos = position + sampleDir * radius;
+
+        // 뷰 공간 → 클립 → UV
+        float4 offset = mul(float4(samplePos, 1), projMatrix);
+        float2 sampleUV = offset.xy / offset.w * 0.5 + 0.5;
+
+        // 깊이 비교
+        float sampleDepth = depthBuffer.Sample(pointSamp, sampleUV).r;
+        float3 sampleViewPos = ReconstructViewPosition(sampleUV, sampleDepth);
+
+        // 샘플이 표면 뒤에 있는지 체크
+        float rangeCheck = smoothstep(0.0, 1.0,
+            radius / abs(position.z - sampleViewPos.z));
+
+        if (sampleViewPos.z >= samplePos.z + 0.025)
+            occlusion += rangeCheck;
+    }
+
+    occlusion = 1.0 - (occlusion / 16.0);
+    return pow(occlusion, 2.0);  // 강도 조절
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: SSAO 블러와 노이즈 제거</h2>
+            <div class="conversation">
+                <div class="q">SSAO 결과가 노이즈가 심한데요?</div>
+                <div class="a">
+                    <p>샘플 수가 적으면 노이즈가 발생합니다. <span class="highlight">4x4 노이즈 패턴</span>과 <span class="highlight">Edge-Aware Blur</span>로 해결합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Edge-Preserving Blur</div>
+                <pre><code>// 깊이/법선 경계를 보존하는 블러
+float BlurSSAO(float2 uv)
+{
+    float centerAO = ssaoBuffer.Sample(pointSamp, uv).r;
+    float centerDepth = depthBuffer.Sample(pointSamp, uv).r;
+    float3 centerNormal = normalBuffer.Sample(pointSamp, uv).rgb;
+
+    float result = 0.0;
+    float totalWeight = 0.0;
+
+    // 4x4 블러 커널
+    for (int x = -2; x <= 2; x++)
+    {
+        for (int y = -2; y <= 2; y++)
+        {
+            float2 offset = float2(x, y) * texelSize;
+            float2 sampleUV = uv + offset;
+
+            float sampleAO = ssaoBuffer.Sample(pointSamp, sampleUV).r;
+            float sampleDepth = depthBuffer.Sample(pointSamp, sampleUV).r;
+            float3 sampleNormal = normalBuffer.Sample(pointSamp, sampleUV).rgb;
+
+            // 깊이 차이 가중치
+            float depthWeight = exp(-abs(centerDepth - sampleDepth) * 100.0);
+
+            // 법선 차이 가중치
+            float normalWeight = max(dot(centerNormal, sampleNormal), 0.0);
+
+            float weight = depthWeight * normalWeight;
+            result += sampleAO * weight;
+            totalWeight += weight;
+        }
+    }
+
+    return result / totalWeight;
+}</code></pre>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+SSAO 파이프라인:
+
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│  Depth +     │ → │    SSAO      │ → │   Blur       │
+│  Normal      │    │  (노이즈 有)  │    │ (Edge-Aware) │
+└──────────────┘    └──────────────┘    └──────────────┘
+                                              │
+                                              ▼
+                                   ┌──────────────┐
+                                   │ Final AO     │
+                                   │ (깨끗한 결과) │
+                                   └──────────────┘
+                </pre>
+                <p class="diagram-caption">SSAO 처리 단계</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: HBAO (Horizon-Based Ambient Occlusion)</h2>
+            <div class="conversation">
+                <div class="q">HBAO는 SSAO와 어떻게 다른가요?</div>
+                <div class="a">
+                    <p><span class="highlight">HBAO</span>는 지평선 각도를 기반으로 차폐를 계산합니다. 물리적으로 더 정확하고, 넓은 영역의 AO를 잘 표현합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+HBAO 원리:
+
+SSAO: 반구 내 랜덤 샘플링
+┌─────────────────────────────┐
+│     ●    ●                  │
+│  ●     ●    ●               │
+│    ●  P  ●                  │  P = 현재 픽셀
+│  ●     ●                    │  불규칙한 샘플 분포
+└─────────────────────────────┘
+
+HBAO: 방사형 방향별 최대 지평선 각도
+┌─────────────────────────────┐
+│         ↑                   │
+│       ↗ │ ↖                 │
+│     ←   P   →               │  각 방향으로 레이 마칭
+│       ↙ │ ↘                 │  가장 높은 지평선 찾기
+│         ↓                   │
+└─────────────────────────────┘
+
+θ = horizon angle (지평선 각도)
+AO = sin(θ) 기반 계산
+                </pre>
+                <p class="diagram-caption">SSAO vs HBAO 접근 방식</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">HBAO 핵심 개념</div>
+                <pre><code>// HBAO 간략 구현
+float HBAO(float2 uv)
+{
+    float3 position = ReconstructViewPosition(uv);
+    float3 normal = GetNormal(uv);
+
+    float ao = 0.0;
+    const int numDirections = 8;
+    const int numSteps = 4;
+
+    for (int dir = 0; dir < numDirections; dir++)
+    {
+        // 각 방향 (45도 간격)
+        float angle = dir * (2.0 * PI / numDirections);
+        float2 direction = float2(cos(angle), sin(angle));
+
+        float maxHorizon = -1.0;  // 최대 지평선 각도의 sin
+
+        for (int step = 1; step <= numSteps; step++)
+        {
+            float2 sampleUV = uv + direction * step * stepSize;
+            float3 samplePos = ReconstructViewPosition(sampleUV);
+
+            // 현재 픽셀에서 샘플까지의 벡터
+            float3 horizonVec = samplePos - position;
+            float horizonLen = length(horizonVec);
+            horizonVec /= horizonLen;
+
+            // 지평선 각도 (법선과의 내적)
+            float horizonAngle = dot(normal, horizonVec);
+
+            // 거리 기반 감쇠
+            float attenuation = 1.0 - saturate(horizonLen / aoRadius);
+
+            maxHorizon = max(maxHorizon, horizonAngle * attenuation);
+        }
+
+        // 지평선 각도에서 AO 계산
+        // 높은 지평선 = 더 많이 차폐됨
+        ao += saturate(maxHorizon);
+    }
+
+    return 1.0 - (ao / numDirections);
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>기법</th>
+                        <th>장점</th>
+                        <th>단점</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>SSAO</td>
+                        <td>간단, 빠름</td>
+                        <td>물리적 정확도 낮음</td>
+                    </tr>
+                    <tr>
+                        <td>HBAO</td>
+                        <td>물리 기반, 품질 좋음</td>
+                        <td>SSAO보다 느림</td>
+                    </tr>
+                    <tr>
+                        <td>HBAO+</td>
+                        <td>HBAO 개선, GPU 최적화</td>
+                        <td>NVIDIA 전용</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: GTAO (Ground Truth Ambient Occlusion)</h2>
+            <div class="conversation">
+                <div class="q">가장 최신 기법은 무엇인가요?</div>
+                <div class="a">
+                    <p><span class="highlight">GTAO</span>는 2016년 Activision이 발표한 기법입니다. 레이트레이싱 AO에 가까운 품질을 Screen Space에서 달성합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">GTAO 핵심 개념</div>
+                <pre><code>// GTAO는 적분을 해석적으로 계산
+// Ground Truth: ∫ V(ω) * cos(θ) dω
+
+// 슬라이스 기반 접근
+float GTAO(float2 uv)
+{
+    float3 viewPos = ReconstructViewPosition(uv);
+    float3 viewNormal = GetViewNormal(uv);
+
+    float ao = 0.0;
+    const int slices = 2;  // 수평/수직 슬라이스
+
+    for (int slice = 0; slice < slices; slice++)
+    {
+        // 슬라이스 방향
+        float phi = (slice + 0.5) * PI / slices;
+        float3 sliceDir = float3(cos(phi), sin(phi), 0);
+
+        // 법선을 슬라이스 평면에 투영
+        float3 projNormal = viewNormal - sliceDir * dot(viewNormal, sliceDir);
+        float projNormalLen = length(projNormal);
+
+        // 슬라이스 내에서 지평선 검색
+        float2 horizons = SearchHorizons(uv, sliceDir, viewPos);
+
+        // 적분 계산 (해석적 공식)
+        float h1 = horizons.x;  // 한쪽 방향 지평선
+        float h2 = horizons.y;  // 반대쪽 방향 지평선
+
+        // Ground Truth 적분 근사
+        float n = acos(projNormal.z / projNormalLen);
+        ao += IntegrateArc(h1, h2, n) * projNormalLen;
+    }
+
+    return ao / slices;
+}
+
+// 해석적 적분
+float IntegrateArc(float h1, float h2, float n)
+{
+    float sinN = sin(n);
+    float cosN = cos(n);
+
+    // 적분 공식 (논문 참조)
+    return 0.25 * (
+        -cos(2.0 * h1 - n) + cosN + 2.0 * h1 * sinN
+        -cos(2.0 * h2 - n) + cosN + 2.0 * h2 * sinN
+    );
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 GTAO의 장점</strong>
+                <p><span class="highlight">물리적 정확성</span>: 레이트레이싱 결과와 유사</p>
+                <p><span class="highlight">적은 샘플</span>: 해석적 계산으로 샘플 수 감소</p>
+                <p><span class="highlight">시간적 안정성</span>: 노이즈 적음</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: AO 적용과 최적화</h2>
+            <div class="conversation">
+                <div class="q">AO를 어떻게 최종 이미지에 적용하나요?</div>
+                <div class="a">
+                    <p>AO는 보통 <span class="highlight">Ambient Light에만 곱합니다</span>. 직접광에는 적용하지 않습니다 (그림자가 따로 있으므로).</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">AO 적용</div>
+                <pre><code>// 라이팅에 AO 적용
+float3 ApplyLighting(float3 albedo, float3 normal,
+                      float3 lightDir, float ao)
+{
+    // Ambient (AO 적용)
+    float3 ambient = ambientColor * albedo * ao;
+
+    // Diffuse (AO 적용 안함 - 직접광)
+    float NdotL = max(dot(normal, lightDir), 0);
+    float3 diffuse = lightColor * albedo * NdotL;
+
+    // Specular (AO 적용 안함)
+    float3 specular = CalculateSpecular(normal, lightDir);
+
+    return ambient + diffuse + specular;
+}
+
+// 또는 Indirect Light 전체에 적용
+float3 FinalColor = directLight + indirectLight * ao;</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>최적화 기법</th>
+                        <th>설명</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>절반 해상도</td>
+                        <td>1/2 해상도에서 계산 후 업샘플</td>
+                    </tr>
+                    <tr>
+                        <td>Interleaved Rendering</td>
+                        <td>체커보드 패턴으로 분할 계산</td>
+                    </tr>
+                    <tr>
+                        <td>Temporal Filter</td>
+                        <td>이전 프레임 결과 재사용</td>
+                    </tr>
+                    <tr>
+                        <td>Compute Shader</td>
+                        <td>GPU 병렬 처리 활용</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="visual-section">
+                <pre class="diagram">
+AO 품질 비교:
+
+              품질
+               ↑
+        GTAO   │     ●
+               │
+        HBAO+  │   ●
+               │
+        HBAO   │  ●
+               │
+        SSAO   │ ●
+               │
+               └────────────→ 성능 비용
+                 낮음      높음
+
+선택 기준:
+- 모바일/저사양: SSAO
+- PC 중간: HBAO
+- PC 고사양: GTAO
+                </pre>
+                <p class="diagram-caption">AO 기법별 품질/성능</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Ambient Occlusion</strong>은 주변 환경에 의한 빛 차단을 표현</li>
+                <li><strong>SSAO</strong>: 반구 내 랜덤 샘플링, 간단하지만 노이즈 있음</li>
+                <li><strong>HBAO</strong>: 지평선 각도 기반, 물리적으로 더 정확</li>
+                <li><strong>GTAO</strong>: 해석적 적분으로 레이트레이싱급 품질</li>
+                <li>AO는 <strong>Ambient/Indirect Light에만</strong> 적용, Edge-Aware 블러 필수</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

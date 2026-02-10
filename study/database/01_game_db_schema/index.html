@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>게임 DB 스키마 설계 패턴 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../database.html" class="back-link">← 목록으로</a>
+            <h1>캐릭터 데이터를 어떻게 저장할까?</h1>
+            <p class="subtitle">게임 데이터베이스 스키마 설계 패턴과 Best Practice</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 게임 DB의 특수성</h2>
+            <div class="conversation">
+                <div class="q">게임 DB는 일반 웹 DB와 뭐가 다른가요?</div>
+                <div class="a">
+                    <p>게임 DB는 <strong>높은 동시성, 빈번한 업데이트, 복잡한 관계</strong>가 특징입니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+게임 DB의 특징:
+
+┌─────────────────────────────────────────────────────────────┐
+│                      게임 데이터 특성                         │
+├──────────────────┬──────────────────────────────────────────┤
+│ 동시성 높음       │ 수천 명이 동시에 데이터 읽기/쓰기         │
+├──────────────────┼──────────────────────────────────────────┤
+│ 쓰기 빈번        │ 위치, HP, 경험치 등 초당 수십 회 업데이트 │
+├──────────────────┼──────────────────────────────────────────┤
+│ 실시간 응답 필요  │ 100ms 이상 지연되면 플레이어 체감         │
+├──────────────────┼──────────────────────────────────────────┤
+│ 데이터 무결성    │ 아이템 복사, 재화 음수 등 버그 치명적     │
+├──────────────────┼──────────────────────────────────────────┤
+│ 스키마 유연성    │ 패치마다 새 필드 추가, 아이템 속성 변경   │
+└──────────────────┴──────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">어떤 데이터를 저장해야 하나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+게임 데이터 분류:
+
+┌─────────────────────────────────────────────────────────────┐
+│                    정적 데이터 (Game Data)                   │
+│  읽기 전용, 서버 시작 시 로드, 클라이언트에도 동일 데이터     │
+├─────────────────────────────────────────────────────────────┤
+│  - 아이템 정의 (ItemTable)                                  │
+│  - 스킬 정보 (SkillTable)                                   │
+│  - 몬스터 스탯 (MonsterTable)                               │
+│  - 퀘스트 정보 (QuestTable)                                 │
+│  - 레벨업 테이블 (LevelTable)                               │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    동적 데이터 (User Data)                   │
+│  읽기/쓰기, 실시간 업데이트, DB에 영구 저장                  │
+├─────────────────────────────────────────────────────────────┤
+│  - 캐릭터 정보 (Character)                                  │
+│  - 인벤토리 (Inventory)                                     │
+│  - 퀘스트 진행 (QuestProgress)                              │
+│  - 친구/길드 (Social)                                       │
+│  - 업적 (Achievement)                                       │
+│  - 우편함 (Mail)                                            │
+└─────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 기본 스키마 설계</h2>
+            <div class="conversation">
+                <div class="q">유저와 캐릭터 테이블은 어떻게 설계하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">기본 유저/캐릭터 스키마</div>
+                        <pre><code>-- 계정 테이블 (인증 정보)
+CREATE TABLE accounts (
+    account_id      BIGINT PRIMARY KEY AUTO_INCREMENT,
+    email           VARCHAR(255) UNIQUE NOT NULL,
+    password_hash   VARCHAR(255) NOT NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login      TIMESTAMP,
+    status          ENUM('active', 'banned', 'dormant') DEFAULT 'active',
+    INDEX idx_email (email),
+    INDEX idx_status (status)
+);
+
+-- 캐릭터 테이블 (1계정 N캐릭터)
+CREATE TABLE characters (
+    character_id    BIGINT PRIMARY KEY AUTO_INCREMENT,
+    account_id      BIGINT NOT NULL,
+    name            VARCHAR(50) UNIQUE NOT NULL,
+    class_type      TINYINT NOT NULL,  -- 0: 전사, 1: 마법사, ...
+    level           SMALLINT DEFAULT 1,
+    exp             BIGINT DEFAULT 0,
+    gold            BIGINT DEFAULT 0,
+    cash            INT DEFAULT 0,     -- 유료 재화
+    hp              INT,
+    mp              INT,
+    strength        SMALLINT,
+    dexterity       SMALLINT,
+    intelligence    SMALLINT,
+    position_map    INT,
+    position_x      FLOAT,
+    position_y      FLOAT,
+    position_z      FLOAT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    played_time     INT DEFAULT 0,     -- 초 단위 플레이 시간
+
+    FOREIGN KEY (account_id) REFERENCES accounts(account_id),
+    INDEX idx_account (account_id),
+    INDEX idx_name (name),
+    INDEX idx_level (level)
+);</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">자주 변하는 데이터와 안 변하는 데이터를 분리해야 하나요?</div>
+                <div class="a">
+                    <p>네, <strong>핫 데이터/콜드 데이터 분리</strong>는 성능에 중요합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">핫/콜드 데이터 분리</div>
+                        <pre><code>-- 핫 데이터 (자주 읽고 쓰는 것)
+CREATE TABLE character_stats (
+    character_id    BIGINT PRIMARY KEY,
+    level           SMALLINT,
+    exp             BIGINT,
+    hp_current      INT,
+    mp_current      INT,
+    position_map    INT,
+    position_x      FLOAT,
+    position_y      FLOAT,
+    updated_at      TIMESTAMP,
+
+    FOREIGN KEY (character_id) REFERENCES characters(character_id)
+);
+
+-- 콜드 데이터 (거의 안 변함)
+CREATE TABLE character_profile (
+    character_id    BIGINT PRIMARY KEY,
+    name            VARCHAR(50),
+    class_type      TINYINT,
+    created_at      TIMESTAMP,
+    appearance      JSON,  -- 외형 데이터
+    title           VARCHAR(100),
+    biography       TEXT,
+
+    FOREIGN KEY (character_id) REFERENCES characters(character_id)
+);
+
+-- 장점:
+-- 1. 핫 테이블은 Row 크기가 작아 캐시 효율 높음
+-- 2. 핫 테이블만 SSD에, 콜드는 HDD에 가능
+-- 3. 백업/복구 전략 분리 가능</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: EAV 패턴 vs JSON</h2>
+            <div class="conversation">
+                <div class="q">아이템마다 속성이 다른데 어떻게 저장하나요?</div>
+                <div class="a">
+                    <p>두 가지 접근법이 있습니다: <strong>EAV 패턴</strong>과 <strong>JSON 컬럼</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">방법 1: EAV (Entity-Attribute-Value)</div>
+                        <pre><code>-- 아이템 기본 정보
+CREATE TABLE items (
+    item_id         BIGINT PRIMARY KEY,
+    item_type       INT,
+    name            VARCHAR(100),
+    rarity          TINYINT
+);
+
+-- 아이템 속성 (유연한 구조)
+CREATE TABLE item_attributes (
+    item_id         BIGINT,
+    attribute_name  VARCHAR(50),  -- 'attack', 'defense', 'speed', ...
+    attribute_value VARCHAR(255),
+    PRIMARY KEY (item_id, attribute_name),
+    FOREIGN KEY (item_id) REFERENCES items(item_id)
+);
+
+-- 조회 예시: 아이템의 모든 속성
+SELECT i.*, a.attribute_name, a.attribute_value
+FROM items i
+LEFT JOIN item_attributes a ON i.item_id = a.item_id
+WHERE i.item_id = 12345;
+
+-- 단점: JOIN 필요, 쿼리 복잡, 타입 안전성 없음</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">방법 2: JSON 컬럼</div>
+                        <pre><code>-- 아이템 테이블 (JSON 속성)
+CREATE TABLE items (
+    item_id         BIGINT PRIMARY KEY,
+    item_type       INT,
+    name            VARCHAR(100),
+    rarity          TINYINT,
+    attributes      JSON  -- 유연한 속성 저장
+);
+
+-- 무기 아이템 예시
+INSERT INTO items VALUES (
+    1, 1, '불꽃의 검', 4,
+    '{
+        "attack": 150,
+        "fire_damage": 30,
+        "critical_rate": 0.15,
+        "enchant_level": 7,
+        "sockets": [101, 102, null]
+    }'
+);
+
+-- 방어구 아이템 예시
+INSERT INTO items VALUES (
+    2, 2, '빙결의 갑옷', 4,
+    '{
+        "defense": 200,
+        "ice_resist": 50,
+        "hp_bonus": 500,
+        "set_id": 10
+    }'
+);
+
+-- JSON 필드 조회
+SELECT item_id, name,
+       JSON_EXTRACT(attributes, '$.attack') as attack,
+       JSON_EXTRACT(attributes, '$.fire_damage') as fire_damage
+FROM items
+WHERE JSON_EXTRACT(attributes, '$.attack') > 100;
+
+-- 장점: 간단한 쿼리, 유연한 스키마
+-- 단점: 인덱싱 제한, 유효성 검사 어려움</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">어떤 방식을 선택해야 하나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>기준</th>
+                                <th>EAV</th>
+                                <th>JSON</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>속성 검색</td>
+                                <td>✅ 인덱스 가능</td>
+                                <td>⚠️ 제한적 인덱스</td>
+                            </tr>
+                            <tr>
+                                <td>쿼리 복잡도</td>
+                                <td>❌ JOIN 필요</td>
+                                <td>✅ 단순</td>
+                            </tr>
+                            <tr>
+                                <td>스키마 유연성</td>
+                                <td>✅ 매우 유연</td>
+                                <td>✅ 매우 유연</td>
+                            </tr>
+                            <tr>
+                                <td>애플리케이션 코드</td>
+                                <td>❌ 복잡</td>
+                                <td>✅ 간단 (객체 매핑)</td>
+                            </tr>
+                            <tr>
+                                <td>권장 상황</td>
+                                <td>속성 검색이 많을 때</td>
+                                <td>아이템 전체 로드가 많을 때</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">대부분의 게임에서는 <strong>JSON</strong>이 더 실용적입니다. 아이템은 보통 통째로 로드하기 때문입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 인벤토리 설계</h2>
+            <div class="conversation">
+                <div class="q">인벤토리는 어떻게 설계하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">인벤토리 스키마</div>
+                        <pre><code>-- 인벤토리 아이템 (보유 아이템)
+CREATE TABLE inventory (
+    inventory_id    BIGINT PRIMARY KEY AUTO_INCREMENT,
+    character_id    BIGINT NOT NULL,
+    item_template_id INT NOT NULL,     -- 아이템 정의 참조
+    slot_index      SMALLINT,          -- 인벤토리 슬롯 위치
+    quantity        INT DEFAULT 1,     -- 스택 가능 아이템 수량
+    instance_data   JSON,              -- 인스턴스별 데이터 (강화, 소켓)
+    acquired_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    bound           BOOLEAN DEFAULT FALSE,  -- 귀속 여부
+    expires_at      TIMESTAMP NULL,    -- 기간제 아이템
+
+    FOREIGN KEY (character_id) REFERENCES characters(character_id),
+    INDEX idx_character (character_id),
+    INDEX idx_slot (character_id, slot_index),
+    UNIQUE KEY uk_slot (character_id, slot_index)  -- 같은 슬롯 중복 방지
+);
+
+-- instance_data 예시
+{
+    "enchant_level": 7,
+    "enchant_exp": 450,
+    "sockets": [
+        {"gem_id": 101, "gem_level": 3},
+        {"gem_id": null, "gem_level": null},
+        {"gem_id": 205, "gem_level": 5}
+    ],
+    "random_options": [
+        {"stat": "strength", "value": 15},
+        {"stat": "critical", "value": 0.05}
+    ],
+    "durability": 85,
+    "max_durability": 100,
+    "creator_name": "홍길동"
+}
+
+-- 장착 장비 테이블
+CREATE TABLE equipment (
+    character_id    BIGINT NOT NULL,
+    slot_type       TINYINT NOT NULL,  -- 0: 무기, 1: 투구, 2: 갑옷...
+    inventory_id    BIGINT,
+
+    PRIMARY KEY (character_id, slot_type),
+    FOREIGN KEY (character_id) REFERENCES characters(character_id),
+    FOREIGN KEY (inventory_id) REFERENCES inventory(inventory_id)
+);</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">아이템 이동/교환 시 무결성은 어떻게 보장하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">트랜잭션으로 무결성 보장</div>
+                        <pre><code>-- 아이템 이동 (인벤토리 내)
+BEGIN TRANSACTION;
+
+-- 대상 슬롯 비어있는지 확인
+SELECT inventory_id FROM inventory
+WHERE character_id = @char_id AND slot_index = @target_slot
+FOR UPDATE;  -- 락 획득
+
+-- 이동
+UPDATE inventory
+SET slot_index = @target_slot
+WHERE inventory_id = @item_id AND character_id = @char_id;
+
+COMMIT;
+
+-- 아이템 교환 (플레이어 간)
+BEGIN TRANSACTION;
+
+-- 양쪽 아이템 락
+SELECT * FROM inventory
+WHERE inventory_id IN (@item_a, @item_b)
+FOR UPDATE;
+
+-- 소유자 교환
+UPDATE inventory SET character_id = @char_b WHERE inventory_id = @item_a;
+UPDATE inventory SET character_id = @char_a WHERE inventory_id = @item_b;
+
+-- 로그 기록 (감사 추적용)
+INSERT INTO trade_log (from_char, to_char, item_id, traded_at)
+VALUES (@char_a, @char_b, @item_a, NOW()),
+       (@char_b, @char_a, @item_b, NOW());
+
+COMMIT;</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 로그 테이블 설계</h2>
+            <div class="conversation">
+                <div class="q">게임 로그는 왜 중요하고 어떻게 설계하나요?</div>
+                <div class="a">
+                    <p>로그는 <strong>버그 추적, 치트 탐지, CS 대응, 분석</strong>에 필수입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">재화 로그 테이블</div>
+                        <pre><code>-- 골드 변동 로그
+CREATE TABLE gold_log (
+    log_id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    character_id    BIGINT NOT NULL,
+    change_type     TINYINT NOT NULL,  -- 1: 획득, 2: 소비
+    change_reason   VARCHAR(50) NOT NULL,  -- 'quest_reward', 'shop_buy', 'trade'
+    amount          BIGINT NOT NULL,
+    balance_before  BIGINT NOT NULL,
+    balance_after   BIGINT NOT NULL,
+    related_id      BIGINT,  -- 관련 퀘스트ID, 아이템ID 등
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_character_time (character_id, created_at),
+    INDEX idx_reason (change_reason, created_at)
+) PARTITION BY RANGE (UNIX_TIMESTAMP(created_at)) (
+    PARTITION p202401 VALUES LESS THAN (UNIX_TIMESTAMP('2024-02-01')),
+    PARTITION p202402 VALUES LESS THAN (UNIX_TIMESTAMP('2024-03-01')),
+    -- ... 월별 파티션
+    PARTITION p_future VALUES LESS THAN MAXVALUE
+);
+
+-- 아이템 로그
+CREATE TABLE item_log (
+    log_id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    character_id    BIGINT NOT NULL,
+    action_type     ENUM('acquire', 'use', 'drop', 'trade_give',
+                        'trade_receive', 'enhance', 'destroy'),
+    item_template_id INT NOT NULL,
+    item_instance_id BIGINT,
+    quantity        INT DEFAULT 1,
+    item_snapshot   JSON,  -- 아이템 상태 스냅샷
+    related_char_id BIGINT,  -- 거래 상대
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_character_time (character_id, created_at),
+    INDEX idx_action (action_type, created_at)
+);</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">로그 테이블이 너무 커지면 어떻게 하나요?</div>
+                <div class="a">
+                    <p><strong>파티셔닝</strong>과 <strong>아카이빙</strong>으로 관리합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+로그 데이터 생명주기:
+
+┌───────────────────────────────────────────────────────────┐
+│                  Hot Data (최근 1주)                       │
+│                     Primary DB, SSD                        │
+│   빠른 조회 필요 (CS 대응, 실시간 분석)                     │
+└───────────────────────────────────────────────────────────┘
+                        │
+                        ▼ (1주 경과)
+┌───────────────────────────────────────────────────────────┐
+│                  Warm Data (최근 3개월)                    │
+│                   Secondary DB, HDD                        │
+│   가끔 조회 (분석, 조사)                                    │
+└───────────────────────────────────────────────────────────┘
+                        │
+                        ▼ (3개월 경과)
+┌───────────────────────────────────────────────────────────┐
+│                  Cold Data (이전 데이터)                   │
+│              압축 파일 (S3, 장기 보관소)                    │
+│   거의 안 봄 (법적 보관 의무용)                             │
+└───────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 설계 Best Practice</h2>
+            <div class="conversation">
+                <div class="q">게임 DB 설계할 때 꼭 지켜야 할 것들은?</div>
+                <div class="a">
+                    <ul>
+                        <li><strong>BIGINT 사용</strong>: ID는 항상 BIGINT (나중에 INT 부족 방지)</li>
+                        <li><strong>UTF8MB4</strong>: 이모지 등 모든 문자 지원</li>
+                        <li><strong>시간대 명시</strong>: TIMESTAMP는 서버 시간대 기록</li>
+                        <li><strong>Soft Delete</strong>: 삭제는 플래그로 (deleted_at)</li>
+                        <li><strong>감사 컬럼</strong>: created_at, updated_at 필수</li>
+                    </ul>
+                    <div class="code-block">
+                        <div class="code-header">Best Practice 적용 예시</div>
+                        <pre><code>CREATE TABLE characters (
+    -- ID는 BIGINT
+    character_id    BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+    -- 문자열은 UTF8MB4
+    name            VARCHAR(50) CHARACTER SET utf8mb4
+                    COLLATE utf8mb4_unicode_ci UNIQUE NOT NULL,
+
+    -- 금액은 음수 방지
+    gold            BIGINT UNSIGNED DEFAULT 0,
+
+    -- 감사 컬럼
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    ON UPDATE CURRENT_TIMESTAMP,
+
+    -- Soft Delete
+    deleted_at      TIMESTAMP NULL,
+
+    -- 버전 (낙관적 락용)
+    version         INT DEFAULT 1
+);
+
+-- 애플리케이션 레벨에서:
+-- 조회 시 항상 WHERE deleted_at IS NULL 추가
+-- UPDATE 시 version 체크</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>정적/동적 데이터 분리</strong>: 게임 테이블은 읽기 전용, 유저 데이터는 DB 저장</li>
+                <li><strong>핫/콜드 분리</strong>: 자주 변하는 데이터는 별도 테이블로</li>
+                <li><strong>JSON 컬럼</strong>: 유연한 속성 저장에 효과적 (아이템, 설정)</li>
+                <li><strong>트랜잭션 필수</strong>: 재화, 아이템 이동은 반드시 트랜잭션으로</li>
+                <li><strong>로그 파티셔닝</strong>: 시간 기반 파티션으로 대용량 로그 관리</li>
+                <li><strong>BIGINT, UTF8MB4</strong>: 확장성과 호환성을 위한 기본</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

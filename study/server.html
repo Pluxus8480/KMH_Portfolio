@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Server Study | KMH Portfolio</title>
+    <meta name="description" content="게임 서버 학습 기록">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+</head>
+<body>
+    <header class="header" id="header">
+        <nav class="nav container">
+            <a href="../index.html" class="nav__logo"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></a>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item"><a href="../index.html#about" class="nav__link">About</a></li>
+                <li class="nav__item"><a href="../index.html#projects" class="nav__link">Projects</a></li>
+                <li class="nav__item"><a href="../index.html#skills" class="nav__link">Skills</a></li>
+                <li class="nav__item"><a href="../study.html" class="nav__link active">Study</a></li>
+                <li class="nav__item"><a href="../index.html#contact" class="nav__link">Contact</a></li>
+            </ul>
+            <button class="nav__toggle" id="nav-toggle"><span></span><span></span><span></span></button>
+        </nav>
+    </header>
+    <main class="main">
+        <section class="study-detail section">
+            <div class="container">
+                <nav class="breadcrumb"><a href="../study.html">Study</a><span>/</span><span>Game Server</span></nav>
+                <div class="study-detail__header">
+                    <span class="study-detail__icon">🖥️</span>
+                    <h1 class="study-detail__title">Game Server</h1>
+                </div>
+                <p class="study-detail__desc">게임 서버 아키텍처와 네트워크 학습 기록</p>
+                <div class="study-detail__content">
+                    <div class="study-topics">
+                        <h2 class="study-topics__title">학습 주제 목록</h2>
+                        <ul class="study-topics__list">
+                            <a href="server/01_server_architecture/index.html" class="study-topic">
+                                <span class="study-topic__number">01</span>
+                                <span class="study-topic__name">게임 서버 아키텍처 패턴</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="server/02_network_sync/index.html" class="study-topic">
+                                <span class="study-topic__number">02</span>
+                                <span class="study-topic__name">네트워크 동기화 전략 (Deterministic vs State)</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="server/03_lag_compensation/index.html" class="study-topic">
+                                <span class="study-topic__number">03</span>
+                                <span class="study-topic__name">Lag Compensation 구현</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="server/04_matchmaking/index.html" class="study-topic">
+                                <span class="study-topic__number">04</span>
+                                <span class="study-topic__name">매치메이킹 시스템 설계</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="server/05_tcp_udp/index.html" class="study-topic">
+                                <span class="study-topic__number">05</span>
+                                <span class="study-topic__name">TCP vs UDP 게임별 선택 기준</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="server/06_packet_serialization/index.html" class="study-topic">
+                                <span class="study-topic__number">06</span>
+                                <span class="study-topic__name">패킷 직렬화와 압축</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="server/07_interest_management/index.html" class="study-topic">
+                                <span class="study-topic__number">07</span>
+                                <span class="study-topic__name">Interest Management와 Area of Interest</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="server/08_client_prediction/index.html" class="study-topic">
+                                <span class="study-topic__number">08</span>
+                                <span class="study-topic__name">클라이언트 예측과 서버 권한</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="server/09_dedicated_vs_listen/index.html" class="study-topic">
+                                <span class="study-topic__number">09</span>
+                                <span class="study-topic__name">Dedicated Server vs Listen Server</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="server/10_server_scaling/index.html" class="study-topic">
+                                <span class="study-topic__number">10</span>
+                                <span class="study-topic__name">게임 서버 스케일링 전략</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="server/11_iocp/index.html" class="study-topic">
+                                <span class="study-topic__number">11</span>
+                                <span class="study-topic__name">IOCP와 비동기 네트워크 프로그래밍</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="server/12_anticheat/index.html" class="study-topic">
+                                <span class="study-topic__number">12</span>
+                                <span class="study-topic__name">안티치트 시스템 기초</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <footer class="footer"><div class="container"><div class="footer__content"><p class="footer__name"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></p><p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p></div></div></footer>
+    <script src="../js/study.js"></script>
+</body>
+</html>

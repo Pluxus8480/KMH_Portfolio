@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수천 개를 하나처럼 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>수천 개를 하나처럼</h1>
+            <p class="subtitle">Instancing과 Batching 최적화</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Draw Call의 비용</h2>
+            <div class="conversation">
+                <div class="q">왜 Draw Call을 줄여야 하나요?</div>
+                <div class="a">
+                    <p>각 Draw Call은 <span class="highlight">CPU와 GPU 사이의 통신 비용</span>이 발생합니다. 상태 변경, 드라이버 검증, 커맨드 버퍼 전송 등이 필요합니다.</p>
+                    <p>오브젝트가 1000개라면 1000번의 Draw Call? <span class="warning">CPU 병목이 발생</span>합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Draw Call 비용 분석:
+
+CPU 작업 (각 Draw Call마다):
+┌──────────────────────────────────────────────────┐
+│  1. 상태 검증 (Validation)                        │
+│  2. 셰이더/텍스처 바인딩 변경                      │
+│  3. 상수 버퍼 업데이트                             │
+│  4. 드라이버 API 호출                              │
+│  5. 커맨드 버퍼에 기록                             │
+└──────────────────────────────────────────────────┘
+                    │
+                    ▼ GPU에 제출
+┌──────────────────────────────────────────────────┐
+│  GPU: 실제 렌더링 (상대적으로 빠름)               │
+└──────────────────────────────────────────────────┘
+
+Draw Call이 많으면 → CPU가 병목
+Draw Call이 적으면 → GPU 활용 극대화
+                </pre>
+                <p class="diagram-caption">Draw Call의 CPU 오버헤드</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Static Batching</h2>
+            <div class="conversation">
+                <div class="q">Static Batching은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>움직이지 않는 오브젝트들의 메시를 <span class="highlight">하나의 큰 메시로 합칩니다</span>. 빌드 타임 또는 로드 타임에 수행됩니다.</p>
+                    <p>메모리는 증가하지만 Draw Call이 크게 감소합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Static Batching 전:
+
+오브젝트 A    오브젝트 B    오브젝트 C
+┌───┐        ┌───┐        ┌───┐
+│ △ │        │ △ │        │ △ │
+└───┘        └───┘        └───┘
+Draw 1       Draw 2       Draw 3
+(같은 머티리얼이라도 3번의 Draw Call)
+
+Static Batching 후:
+
+┌─────────────────────────────────┐
+│  Combined Mesh (A + B + C)      │
+│  ┌───┐  ┌───┐  ┌───┐           │
+│  │ △ │  │ △ │  │ △ │           │
+│  └───┘  └───┘  └───┘           │
+└─────────────────────────────────┘
+              Draw 1
+    (1번의 Draw Call로 모두 렌더링)
+                </pre>
+                <p class="diagram-caption">Static Batching 개념</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Static Batching 구현 (개념)</div>
+                <pre><code>// 같은 머티리얼을 사용하는 Static Mesh 합치기
+void StaticBatch(std::vector<StaticMesh*>& meshes)
+{
+    std::vector<Vertex> combinedVertices;
+    std::vector<uint32_t> combinedIndices;
+
+    uint32_t baseVertex = 0;
+
+    for (StaticMesh* mesh : meshes)
+    {
+        // 월드 변환 적용 (더 이상 움직이지 않으므로)
+        Matrix worldMatrix = mesh->GetWorldMatrix();
+
+        for (const Vertex& v : mesh->vertices)
+        {
+            Vertex transformed = v;
+            transformed.position = worldMatrix * v.position;
+            transformed.normal = worldMatrix.GetRotation() * v.normal;
+            combinedVertices.push_back(transformed);
+        }
+
+        for (uint32_t index : mesh->indices)
+        {
+            combinedIndices.push_back(index + baseVertex);
+        }
+
+        baseVertex += mesh->vertices.size();
+    }
+
+    // 하나의 버퍼로 생성
+    CreateCombinedMesh(combinedVertices, combinedIndices);
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 Static Batching의 트레이드오프</strong>
+                <p><span class="highlight">장점</span>: Draw Call 대폭 감소, 렌더링 성능 향상</p>
+                <p><span class="warning">단점</span>: 메모리 증가 (각 인스턴스 정점이 복사됨), 오브젝트 개별 이동 불가</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Dynamic Batching</h2>
+            <div class="conversation">
+                <div class="q">움직이는 오브젝트도 배칭할 수 있나요?</div>
+                <div class="a">
+                    <p><span class="highlight">Dynamic Batching</span>은 매 프레임 CPU에서 메시를 합칩니다. 작은 메시에만 효과적이고, 오버헤드가 발생할 수 있습니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th>Static Batching</th>
+                        <th>Dynamic Batching</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>적용 시점</td>
+                        <td>빌드/로드 타임</td>
+                        <td>매 프레임</td>
+                    </tr>
+                    <tr>
+                        <td>오브젝트 이동</td>
+                        <td>불가</td>
+                        <td>가능</td>
+                    </tr>
+                    <tr>
+                        <td>CPU 오버헤드</td>
+                        <td>없음</td>
+                        <td>있음 (정점 변환)</td>
+                    </tr>
+                    <tr>
+                        <td>메모리</td>
+                        <td>증가</td>
+                        <td>임시 버퍼</td>
+                    </tr>
+                    <tr>
+                        <td>적합한 대상</td>
+                        <td>배경, 건물</td>
+                        <td>작은 동적 오브젝트</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: GPU Instancing</h2>
+            <div class="conversation">
+                <div class="q">같은 메시를 수천 개 그려야 한다면?</div>
+                <div class="a">
+                    <p><span class="highlight">GPU Instancing</span>이 정답입니다! 하나의 Draw Call로 동일한 메시를 수천 번 그립니다. 각 인스턴스의 변환 정보만 버퍼로 전달합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+GPU Instancing 구조:
+
+       Mesh Data (1개)              Instance Data (N개)
+┌─────────────────────────┐    ┌──────────────────────────┐
+│  Vertex Buffer          │    │  Instance Buffer         │
+│  ┌───────────────────┐  │    │  ┌────────────────────┐  │
+│  │ Position, Normal  │  │    │  │ World Matrix [0]   │  │
+│  │ UV, Tangent       │  │    │  │ World Matrix [1]   │  │
+│  └───────────────────┘  │    │  │ World Matrix [2]   │  │
+│                         │    │  │ ...                │  │
+│  Index Buffer           │    │  │ World Matrix [N-1] │  │
+│  ┌───────────────────┐  │    │  └────────────────────┘  │
+│  │ 0, 1, 2, ...      │  │    │                          │
+│  └───────────────────┘  │    │  + Color, Scale, etc.   │
+└─────────────────────────┘    └──────────────────────────┘
+            │                              │
+            └──────────────┬───────────────┘
+                           │
+                           ▼
+              DrawIndexedInstanced(N)
+              (1번의 Draw Call로 N개 렌더링)
+                </pre>
+                <p class="diagram-caption">GPU Instancing 데이터 구조</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">GPU Instancing - C++ 설정</div>
+                <pre><code>// 인스턴스 데이터 구조체
+struct InstanceData
+{
+    XMFLOAT4X4 worldMatrix;
+    XMFLOAT4 color;  // 인스턴스별 색상
+};
+
+// 인스턴스 버퍼 생성
+void CreateInstanceBuffer(int instanceCount)
+{
+    std::vector<InstanceData> instances(instanceCount);
+
+    // 각 인스턴스 데이터 설정
+    for (int i = 0; i < instanceCount; i++)
+    {
+        instances[i].worldMatrix = CalculateWorldMatrix(i);
+        instances[i].color = GetInstanceColor(i);
+    }
+
+    D3D11_BUFFER_DESC desc = {};
+    desc.ByteWidth = sizeof(InstanceData) * instanceCount;
+    desc.Usage = D3D11_USAGE_DYNAMIC;
+    desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    D3D11_SUBRESOURCE_DATA initData = {};
+    initData.pSysMem = instances.data();
+
+    device->CreateBuffer(&desc, &initData, &instanceBuffer);
+}
+
+// 렌더링
+void RenderInstanced()
+{
+    // 버텍스 버퍼 + 인스턴스 버퍼 바인딩
+    ID3D11Buffer* buffers[] = { vertexBuffer, instanceBuffer };
+    UINT strides[] = { sizeof(Vertex), sizeof(InstanceData) };
+    UINT offsets[] = { 0, 0 };
+
+    context->IASetVertexBuffers(0, 2, buffers, strides, offsets);
+    context->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+
+    // 인스턴스 드로우
+    context->DrawIndexedInstanced(
+        indexCount,      // 인덱스 수
+        instanceCount,   // 인스턴스 수
+        0, 0, 0
+    );
+}</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">GPU Instancing - HLSL Shader</div>
+                <pre><code>// 입력 구조체
+struct VSInput
+{
+    // Per-Vertex 데이터
+    float3 position : POSITION;
+    float3 normal   : NORMAL;
+    float2 uv       : TEXCOORD0;
+
+    // Per-Instance 데이터
+    float4x4 worldMatrix : WORLD;      // 인스턴스별 월드 행렬
+    float4 instanceColor : INST_COLOR; // 인스턴스별 색상
+    uint instanceID : SV_InstanceID;   // 시스템 제공 ID
+};
+
+struct PSInput
+{
+    float4 position : SV_Position;
+    float3 worldPos : TEXCOORD0;
+    float3 normal   : TEXCOORD1;
+    float2 uv       : TEXCOORD2;
+    float4 color    : TEXCOORD3;
+};
+
+PSInput VS_Instanced(VSInput input)
+{
+    PSInput output;
+
+    // 인스턴스별 월드 행렬 사용
+    float4 worldPos = mul(float4(input.position, 1), input.worldMatrix);
+    output.position = mul(worldPos, viewProj);
+    output.worldPos = worldPos.xyz;
+    output.normal = mul(input.normal, (float3x3)input.worldMatrix);
+    output.uv = input.uv;
+    output.color = input.instanceColor;
+
+    return output;
+}
+
+float4 PS_Instanced(PSInput input) : SV_Target
+{
+    float3 albedo = diffuseTexture.Sample(samp, input.uv).rgb;
+    albedo *= input.color.rgb;  // 인스턴스별 색상 적용
+
+    // 라이팅 계산...
+    return float4(finalColor, 1);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Indirect Drawing</h2>
+            <div class="conversation">
+                <div class="q">인스턴스 수를 GPU에서 결정하고 싶다면?</div>
+                <div class="a">
+                    <p><span class="highlight">Indirect Drawing</span>을 사용합니다. GPU가 컬링 결과에 따라 실제로 그릴 인스턴스 수를 결정합니다. CPU 라운드트립이 없습니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Indirect Drawing 파이프라인:
+
+┌─────────────────────────────────────────────────────┐
+│  Compute Shader (GPU Culling)                       │
+│  ┌───────────────────────────────────────────────┐  │
+│  │  For each instance:                           │  │
+│  │    if (FrustumCull(instance) == VISIBLE)     │  │
+│  │      AppendToVisibleBuffer(instance)          │  │
+│  │      atomicAdd(drawArgs.instanceCount, 1)     │  │
+│  └───────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────┐
+│  Indirect Arguments Buffer (GPU에서 작성)           │
+│  ┌───────────────────────────────────────────────┐  │
+│  │  IndexCountPerInstance: 36                    │  │
+│  │  InstanceCount: ??? (GPU가 결정)              │  │
+│  │  StartIndexLocation: 0                        │  │
+│  │  BaseVertexLocation: 0                        │  │
+│  │  StartInstanceLocation: 0                     │  │
+│  └───────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+                         │
+                         ▼
+         DrawIndexedInstancedIndirect()
+         (CPU는 인스턴스 수를 모르고 그냥 호출)
+                </pre>
+                <p class="diagram-caption">GPU-Driven Rendering</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Indirect Drawing 구현</div>
+                <pre><code>// Indirect Arguments 구조체
+struct DrawIndexedInstancedIndirectArgs
+{
+    UINT IndexCountPerInstance;
+    UINT InstanceCount;
+    UINT StartIndexLocation;
+    UINT BaseVertexLocation;
+    UINT StartInstanceLocation;
+};
+
+// Indirect 버퍼 생성
+void CreateIndirectBuffer()
+{
+    D3D11_BUFFER_DESC desc = {};
+    desc.ByteWidth = sizeof(DrawIndexedInstancedIndirectArgs);
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+    desc.MiscFlags = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+
+    device->CreateBuffer(&desc, nullptr, &indirectArgsBuffer);
+}
+
+// 렌더링
+void RenderIndirect()
+{
+    // 1. Compute Shader로 GPU 컬링
+    context->CSSetShader(cullingShader, nullptr, 0);
+    context->Dispatch(instanceCount / 64 + 1, 1, 1);
+
+    // 2. Indirect Draw
+    context->DrawIndexedInstancedIndirect(
+        indirectArgsBuffer,
+        0  // offset
+    );
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 최적화 가이드라인</h2>
+            <div class="conversation">
+                <div class="q">어떤 상황에서 어떤 기법을 써야 하나요?</div>
+                <div class="a">
+                    <p>상황에 따라 최적의 기법이 다릅니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>상황</th>
+                        <th>추천 기법</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>움직이지 않는 배경 오브젝트</td>
+                        <td>Static Batching</td>
+                    </tr>
+                    <tr>
+                        <td>같은 메시, 다른 위치 (풀, 나무)</td>
+                        <td>GPU Instancing</td>
+                    </tr>
+                    <tr>
+                        <td>작은 동적 오브젝트</td>
+                        <td>Dynamic Batching</td>
+                    </tr>
+                    <tr>
+                        <td>대규모 인스턴싱 + GPU 컬링</td>
+                        <td>Indirect Drawing</td>
+                    </tr>
+                    <tr>
+                        <td>다양한 메시, 같은 머티리얼</td>
+                        <td>SRP Batcher / Material Batching</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="analogy-box">
+                <strong>🎯 성능 팁</strong>
+                <p><span class="highlight">Draw Call 목표</span>: 모바일 100-300, PC 1000-3000</p>
+                <p><span class="highlight">인스턴싱 최소 수</span>: 10개 이상부터 효과적</p>
+                <p><span class="warning">주의</span>: 배칭으로 합친 메시는 개별 컬링이 안됨</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Draw Call</strong>은 CPU 오버헤드가 크므로 줄이는 것이 중요</li>
+                <li><strong>Static Batching</strong>: 정적 오브젝트를 하나의 메시로 합침</li>
+                <li><strong>Dynamic Batching</strong>: 작은 동적 오브젝트를 매 프레임 합침</li>
+                <li><strong>GPU Instancing</strong>: 같은 메시를 1 Draw Call로 수천 개 렌더링</li>
+                <li><strong>Indirect Drawing</strong>: GPU가 인스턴스 수를 결정, GPU-Driven 렌더링</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

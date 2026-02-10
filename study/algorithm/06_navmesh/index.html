@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>네비게이션 메시 생성 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>NPC는 울퉁불퉁한 지형을 어떻게 걸을까?</h1>
+            <p class="subtitle">3D 지형에서 네비게이션 메시(NavMesh) 생성하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 왜 NavMesh가 필요한가?</h2>
+            <div class="conversation">
+                <div class="q">그리드 기반 길찾기로는 안 되나요?</div>
+                <div class="a">
+                    <p>3D 게임에서 그리드는 한계가 있습니다:</p>
+                    <p class="warning">경사면, 계단, 다리 등 복잡한 지형을 표현하기 어렵습니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+그리드 vs NavMesh
+
+그리드 방식:                NavMesh 방식:
+┌─┬─┬─┬─┬─┐               ┌───────────┐
+│ │ │█│ │ │               │ Polygon A │
+├─┼─┼─┼─┼─┤               └─────┬─────┘
+│ │ │█│ │ │                     │ 연결
+├─┼─┼─┼─┼─┤               ┌─────┴─────┐
+│ │ │ │ │ │               │ Polygon B │
+└─┴─┴─┴─┴─┘               └───────────┘
+
+• 해상도에 따른 정밀도    • 자유로운 형태
+• 메모리 낭비             • 적은 메모리
+• 대각선 이동 부자연스러움  • 부드러운 경로
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">NavMesh란 정확히 무엇인가요?</div>
+                <div class="a">
+                    <p class="highlight">NavMesh는 AI가 이동 가능한 영역을 볼록 다각형(Convex Polygon)으로 표현한 것입니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>방 바닥을 여러 개의 타일로 덮는다고 생각하세요.</p>
+                        <p>각 타일(폴리곤) 안에서는 자유롭게 이동 가능하고, 타일 사이에는 "문"(Edge)이 있어 연결됩니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: NavMesh 생성 파이프라인</h2>
+            <div class="conversation">
+                <div class="q">NavMesh는 어떤 과정으로 만들어지나요?</div>
+                <div class="a">
+                    <p>Recast 라이브러리의 파이프라인을 기준으로:</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+NavMesh 생성 파이프라인
+
+┌─────────────────────────────────────────────┐
+│ 1. 복셀화 (Voxelization)                      │
+│    3D 메시 → 복셀 그리드 변환                   │
+└─────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────┐
+│ 2. 영역 생성 (Region Generation)              │
+│    이동 가능 영역 식별                          │
+└─────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────┐
+│ 3. 윤곽선 추출 (Contour Generation)           │
+│    영역 경계를 단순화된 폴리곤으로                │
+└─────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────┐
+│ 4. 폴리곤 메시 생성 (Polygon Mesh)            │
+│    윤곽선을 볼록 다각형으로 분할                  │
+└─────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────┐
+│ 5. 디테일 메시 (Detail Mesh)                  │
+│    지형 높이 정보 추가                          │
+└─────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 복셀화 (Voxelization)</h2>
+            <div class="conversation">
+                <div class="q">복셀화란 무엇인가요?</div>
+                <div class="a">
+                    <p>3D 공간을 작은 정육면체(복셀)로 나누어 "솔리드/빈 공간"을 구분합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++ 복셀화 기본 구조</div>
+                        <pre><code>struct Voxel {
+    uint16_t spanMin;  // 시작 높이
+    uint16_t spanMax;  // 끝 높이
+    uint8_t area;      // 영역 타입 (walkable, obstacle, etc.)
+    uint8_t flags;
+};
+
+class Heightfield {
+public:
+    int width, height;      // XZ 그리드 크기
+    float cellSize;         // 복셀 수평 크기
+    float cellHeight;       // 복셀 수직 크기
+    Vec3 bmin, bmax;        // 바운딩 박스
+
+    std::vector&lt;std::list&lt;Voxel&gt;&gt; spans;  // 높이별 스팬
+
+    void rasterizeTriangle(const Vec3& v0, const Vec3& v1, const Vec3& v2) {
+        // 1. 삼각형의 2D 바운딩 박스 계산
+        int minX = worldToCell(std::min({v0.x, v1.x, v2.x}));
+        int maxX = worldToCell(std::max({v0.x, v1.x, v2.x}));
+        int minZ = worldToCell(std::min({v0.z, v1.z, v2.z}));
+        int maxZ = worldToCell(std::max({v0.z, v1.z, v2.z}));
+
+        // 2. 각 셀에서 삼각형과 교차하는 높이 범위 계산
+        for (int z = minZ; z <= maxZ; z++) {
+            for (int x = minX; x <= maxX; x++) {
+                float cellMinY, cellMaxY;
+                if (intersectTriangleCell(v0, v1, v2, x, z, cellMinY, cellMaxY)) {
+                    addSpan(x, z, cellMinY, cellMaxY);
+                }
+            }
+        }
+    }
+
+    void addSpan(int x, int z, float minY, float maxY) {
+        int idx = z * width + x;
+        Voxel span;
+        span.spanMin = heightToCell(minY);
+        span.spanMax = heightToCell(maxY);
+        span.area = AREA_WALKABLE;  // 나중에 필터링
+
+        // 기존 스팬과 병합
+        mergeSpan(spans[idx], span);
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Walkable 영역 판별</h2>
+            <div class="conversation">
+                <div class="q">어떤 영역이 "걸을 수 있는" 영역인가요?</div>
+                <div class="a">
+                    <p><strong>판별 조건:</strong></p>
+                    <ul>
+                        <li><strong>경사도</strong>: 표면 법선이 임계값 이하 (예: 45도)</li>
+                        <li><strong>높이</strong>: 캐릭터가 서 있을 수 있는 공간 (예: 2m)</li>
+                        <li><strong>낙하</strong>: 점프로 건널 수 없는 절벽 (예: 2m 초과)</li>
+                    </ul>
+
+                    <div class="code-block">
+                        <div class="code-header">Walkable 필터링</div>
+                        <pre><code>void filterWalkableSurfaces(Heightfield& hf, float maxSlope,
+                            float agentHeight, float maxClimb) {
+    float maxSlopeCos = std::cos(maxSlope * DEG2RAD);
+
+    for (int z = 0; z < hf.height; z++) {
+        for (int x = 0; x < hf.width; x++) {
+            for (auto& span : hf.spans[z * hf.width + x]) {
+                // 1. 경사도 체크
+                Vec3 normal = calculateSurfaceNormal(hf, x, z, span);
+                if (normal.y < maxSlopeCos) {
+                    span.area = AREA_UNWALKABLE;  // 너무 가파름
+                    continue;
+                }
+
+                // 2. 머리 위 공간 체크
+                float headroom = getHeadroomAbove(hf, x, z, span);
+                if (headroom < agentHeight) {
+                    span.area = AREA_UNWALKABLE;  // 천장이 낮음
+                    continue;
+                }
+
+                // 3. 인접 셀과의 높이 차이 체크
+                for (int dir = 0; dir < 4; dir++) {
+                    int nx = x + DX[dir];
+                    int nz = z + DZ[dir];
+                    float heightDiff = getHeightDifference(hf, x, z, nx, nz, span);
+                    if (heightDiff > maxClimb) {
+                        // 이 방향으로는 이동 불가 (나중에 엣지 처리)
+                    }
+                }
+            }
+        }
+    }
+}</code></pre>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Walkable 조건
+
+         정상              너무 가파름         공간 부족
+        ╱────╲              │              ┌──────┐
+       ╱      ╲             │╲             │      │
+      ╱   ✓    ╲            │ ╲ ✗          │  ✗  │
+     ─────────────       ───│──╲───       ─┴──────┴─
+
+    경사 &lt; 45°          경사 &gt; 45°       높이 &lt; 2m
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 영역 분할과 윤곽선 생성</h2>
+            <div class="conversation">
+                <div class="q">Walkable 복셀을 어떻게 폴리곤으로 만드나요?</div>
+                <div class="a">
+                    <p><strong>1단계: 거리 필드 생성</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">거리 필드 계산</div>
+                        <pre><code>// 경계로부터의 거리 계산 (Chamfer Distance)
+void buildDistanceField(CompactHeightfield& chf) {
+    // 모든 셀을 무한대로 초기화
+    for (int i = 0; i < chf.spanCount; i++) {
+        chf.dist[i] = 0xFFFF;
+    }
+
+    // 경계 셀은 거리 0
+    for (int i = 0; i < chf.spanCount; i++) {
+        if (isBorderSpan(chf, i)) {
+            chf.dist[i] = 0;
+        }
+    }
+
+    // 전파 (2패스 알고리즘)
+    // Pass 1: 왼쪽 위에서 오른쪽 아래로
+    for (int z = 0; z < chf.height; z++) {
+        for (int x = 0; x < chf.width; x++) {
+            propagateDistance(chf, x, z, -1, 0);
+            propagateDistance(chf, x, z, 0, -1);
+        }
+    }
+
+    // Pass 2: 오른쪽 아래에서 왼쪽 위로
+    for (int z = chf.height - 1; z >= 0; z--) {
+        for (int x = chf.width - 1; x >= 0; x--) {
+            propagateDistance(chf, x, z, 1, 0);
+            propagateDistance(chf, x, z, 0, 1);
+        }
+    }
+}</code></pre>
+                    </div>
+
+                    <p><strong>2단계: 영역 확장 (Watershed)</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">Watershed 알고리즘</div>
+                        <pre><code>void buildRegions(CompactHeightfield& chf, int minRegionArea) {
+    int regionId = 1;
+
+    // 거리 필드 기준 내림차순 정렬 (높은 곳부터)
+    std::vector&lt;int&gt; sortedSpans = sortByDistance(chf);
+
+    for (int spanIdx : sortedSpans) {
+        if (chf.regionId[spanIdx] != 0) continue;
+
+        // 새 영역 시드
+        chf.regionId[spanIdx] = regionId;
+        int regionSize = 1;
+
+        // 이웃으로 영역 확장
+        std::queue&lt;int&gt; flood;
+        flood.push(spanIdx);
+
+        while (!flood.empty()) {
+            int current = flood.front();
+            flood.pop();
+
+            for (int dir = 0; dir < 4; dir++) {
+                int neighbor = getNeighbor(chf, current, dir);
+                if (neighbor == -1) continue;
+                if (chf.regionId[neighbor] != 0) continue;
+
+                // 높이 차이가 허용 범위 내면 같은 영역
+                if (canMerge(chf, current, neighbor)) {
+                    chf.regionId[neighbor] = regionId;
+                    flood.push(neighbor);
+                    regionSize++;
+                }
+            }
+        }
+
+        // 너무 작은 영역 제거
+        if (regionSize < minRegionArea) {
+            removeRegion(chf, regionId);
+        } else {
+            regionId++;
+        }
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 폴리곤 메시 생성</h2>
+            <div class="conversation">
+                <div class="q">최종 NavMesh는 어떻게 만들어지나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">윤곽선에서 폴리곤 메시 생성</div>
+                        <pre><code>struct NavMeshPoly {
+    std::vector&lt;int&gt; vertIndices;  // 정점 인덱스들
+    std::vector&lt;int&gt; neighbors;    // 인접 폴리곤 (엣지별)
+    uint16_t flags;                // 영역 플래그
+};
+
+class NavMesh {
+public:
+    std::vector&lt;Vec3&gt; vertices;
+    std::vector&lt;NavMeshPoly&gt; polys;
+
+    void buildFromContours(const ContourSet& contours) {
+        for (const Contour& contour : contours) {
+            // 1. 윤곽선 단순화 (Douglas-Peucker)
+            std::vector&lt;Vec3&gt; simplified = simplifyContour(contour);
+
+            // 2. 삼각분할 (Ear Clipping or Delaunay)
+            std::vector&lt;Triangle&gt; tris = triangulate(simplified);
+
+            // 3. 삼각형 병합하여 볼록 다각형 생성
+            std::vector&lt;NavMeshPoly&gt; convexPolys = mergeTriangles(tris);
+
+            // 4. 정점과 폴리곤 추가
+            int baseVertex = vertices.size();
+            for (const Vec3& v : simplified) {
+                vertices.push_back(v);
+            }
+
+            for (auto& poly : convexPolys) {
+                // 정점 인덱스 오프셋 적용
+                for (int& idx : poly.vertIndices) {
+                    idx += baseVertex;
+                }
+                polys.push_back(poly);
+            }
+        }
+
+        // 5. 인접 폴리곤 연결 정보 구축
+        buildAdjacency();
+    }
+
+    void buildAdjacency() {
+        // 엣지 해시맵: (v1, v2) → (poly, edgeIdx)
+        std::unordered_map&lt;uint64_t, std::pair&lt;int, int&gt;&gt; edgeMap;
+
+        for (int polyIdx = 0; polyIdx < polys.size(); polyIdx++) {
+            NavMeshPoly& poly = polys[polyIdx];
+            int vertCount = poly.vertIndices.size();
+            poly.neighbors.resize(vertCount, -1);
+
+            for (int i = 0; i < vertCount; i++) {
+                int v1 = poly.vertIndices[i];
+                int v2 = poly.vertIndices[(i + 1) % vertCount];
+
+                // 정규화된 엣지 키
+                uint64_t key = makeEdgeKey(std::min(v1, v2), std::max(v1, v2));
+
+                auto it = edgeMap.find(key);
+                if (it != edgeMap.end()) {
+                    // 이미 존재 → 인접 관계 설정
+                    int otherPoly = it->second.first;
+                    int otherEdge = it->second.second;
+
+                    poly.neighbors[i] = otherPoly;
+                    polys[otherPoly].neighbors[otherEdge] = polyIdx;
+                } else {
+                    edgeMap[key] = {polyIdx, i};
+                }
+            }
+        }
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="highlight">생성된 NavMesh는 A* 알고리즘으로 길찾기에 사용됩니다!</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+NavMesh 길찾기
+
+    Start ●
+           \
+            ╲ Poly A
+             ╲─────────┐
+              ╲        │
+               ╲ Edge  │ Poly B
+                ╲      │
+                 ╲─────┼───────┐
+                       │       │
+                       │ Poly C│
+                       │   ●   │
+                       └───────┘
+                         Goal
+
+경로: Poly A → Edge → Poly B → Edge → Poly C
+Funnel 알고리즘으로 실제 경로 최적화
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>NavMesh</strong>: 이동 가능 영역을 볼록 다각형으로 표현</li>
+                <li><strong>복셀화</strong>: 3D 메시를 높이 필드로 변환</li>
+                <li><strong>Walkable 판별</strong>: 경사도, 높이, 낙하 거리 기준</li>
+                <li><strong>Watershed</strong>: 거리 필드 기반 영역 분할</li>
+                <li><strong>폴리곤 메시</strong>: 윤곽선 → 삼각분할 → 볼록 폴리곤 병합</li>
+                <li><strong>활용</strong>: A* + Funnel 알고리즘으로 부드러운 경로</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Graphics Study | KMH Portfolio</title>
+    <meta name="description" content="그래픽스 프로그래밍 학습 기록">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>">
+</head>
+<body>
+    <header class="header" id="header">
+        <nav class="nav container">
+            <a href="../index.html" class="nav__logo"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></a>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item"><a href="../index.html#about" class="nav__link">About</a></li>
+                <li class="nav__item"><a href="../index.html#projects" class="nav__link">Projects</a></li>
+                <li class="nav__item"><a href="../index.html#skills" class="nav__link">Skills</a></li>
+                <li class="nav__item"><a href="../study.html" class="nav__link active">Study</a></li>
+                <li class="nav__item"><a href="../index.html#contact" class="nav__link">Contact</a></li>
+            </ul>
+            <button class="nav__toggle" id="nav-toggle"><span></span><span></span><span></span></button>
+        </nav>
+    </header>
+    <main class="main">
+        <section class="study-detail section">
+            <div class="container">
+                <nav class="breadcrumb"><a href="../study.html">Study</a><span>/</span><span>Graphics / Rendering</span></nav>
+                <div class="study-detail__header">
+                    <span class="study-detail__icon">🖼️</span>
+                    <h1 class="study-detail__title">Graphics / Rendering</h1>
+                </div>
+                <p class="study-detail__desc">그래픽스 프로그래밍과 렌더링 학습 기록</p>
+                <div class="study-detail__content">
+                    <div class="study-topics">
+                        <h2 class="study-topics__title">학습 주제 목록</h2>
+                        <ul class="study-topics__list">
+                            <a href="graphics/01_deferred_forward/index.html" class="study-topic">
+                                <span class="study-topic__number">01</span>
+                                <span class="study-topic__name">Deferred vs Forward 렌더링</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/02_pbr/index.html" class="study-topic">
+                                <span class="study-topic__number">02</span>
+                                <span class="study-topic__name">PBR (Physically Based Rendering) 재질 시스템</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/03_shadow_mapping/index.html" class="study-topic">
+                                <span class="study-topic__number">03</span>
+                                <span class="study-topic__name">Shadow Mapping 기법 비교</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/04_post_processing/index.html" class="study-topic">
+                                <span class="study-topic__number">04</span>
+                                <span class="study-topic__name">Post-Processing 파이프라인</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/05_hlsl_basics/index.html" class="study-topic">
+                                <span class="study-topic__number">05</span>
+                                <span class="study-topic__name">HLSL 셰이더 프로그래밍 기초</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/06_instancing_batching/index.html" class="study-topic">
+                                <span class="study-topic__number">06</span>
+                                <span class="study-topic__name">Instancing과 배칭 최적화</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/07_normal_parallax_mapping/index.html" class="study-topic">
+                                <span class="study-topic__number">07</span>
+                                <span class="study-topic__name">Normal Mapping과 Parallax Mapping</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/08_ssr/index.html" class="study-topic">
+                                <span class="study-topic__number">08</span>
+                                <span class="study-topic__name">Screen Space Reflections (SSR)</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/09_ambient_occlusion/index.html" class="study-topic">
+                                <span class="study-topic__number">09</span>
+                                <span class="study-topic__name">Ambient Occlusion (SSAO, HBAO)</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/10_hdr_bloom/index.html" class="study-topic">
+                                <span class="study-topic__number">10</span>
+                                <span class="study-topic__name">Bloom과 HDR 렌더링</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/11_skeletal_animation/index.html" class="study-topic">
+                                <span class="study-topic__number">11</span>
+                                <span class="study-topic__name">Skeletal Animation과 GPU Skinning</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/12_tessellation/index.html" class="study-topic">
+                                <span class="study-topic__number">12</span>
+                                <span class="study-topic__name">Tessellation과 Displacement</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/13_gbuffer_optimization/index.html" class="study-topic">
+                                <span class="study-topic__number">13</span>
+                                <span class="study-topic__name">G-Buffer 구조와 최적화</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/14_compute_shader/index.html" class="study-topic">
+                                <span class="study-topic__number">14</span>
+                                <span class="study-topic__name">Compute Shader 활용</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/15_light_culling/index.html" class="study-topic">
+                                <span class="study-topic__number">15</span>
+                                <span class="study-topic__name">Light Culling 기법 (Tiled, Clustered)</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/16_volume_rendering/index.html" class="study-topic">
+                                <span class="study-topic__number">16</span>
+                                <span class="study-topic__name">Volume Rendering과 Fog</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/17_anti_aliasing/index.html" class="study-topic">
+                                <span class="study-topic__number">17</span>
+                                <span class="study-topic__name">Anti-Aliasing 기법 (MSAA, FXAA, TAA)</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/18_motion_blur/index.html" class="study-topic">
+                                <span class="study-topic__number">18</span>
+                                <span class="study-topic__name">Motion Blur 구현</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/19_depth_of_field/index.html" class="study-topic">
+                                <span class="study-topic__number">19</span>
+                                <span class="study-topic__name">Depth of Field 효과</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                            <a href="graphics/20_color_grading/index.html" class="study-topic">
+                                <span class="study-topic__number">20</span>
+                                <span class="study-topic__name">Color Grading과 Tone Mapping</span>
+                                <span class="study-topic__status study-topic__status--done">완료</span>
+                            </a>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <footer class="footer"><div class="container"><div class="footer__content"><p class="footer__name"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></p><p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p></div></div></footer>
+    <script src="../js/study.js"></script>
+</body>
+</html>

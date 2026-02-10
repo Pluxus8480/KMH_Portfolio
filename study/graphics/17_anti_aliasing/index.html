@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>계단 현상과의 전쟁 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>계단 현상과의 전쟁</h1>
+            <p class="subtitle">Anti-Aliasing 기법 (MSAA, FXAA, TAA)</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 앨리어싱이란?</h2>
+            <div class="conversation">
+                <div class="q">왜 대각선 모서리가 계단처럼 보이나요?</div>
+                <div class="a">
+                    <p><span class="highlight">앨리어싱(Aliasing)</span>은 연속적인 신호를 이산적인 픽셀로 샘플링할 때 발생하는 오류입니다.</p>
+                    <p>픽셀은 "켜짐/꺼짐"만 있어서, 경계선이 계단처럼 보이게 됩니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+앨리어싱 발생 원리:
+
+이상적인 대각선:          픽셀 샘플링 결과:
+     ╲                    ┌─┬─┬─┬─┐
+      ╲                   │ │ │ │█│
+       ╲                  ├─┼─┼─┼─┤
+        ╲                 │ │ │█│ │
+         ╲                ├─┼─┼─┼─┤
+          ╲               │ │█│ │ │
+                          ├─┼─┼─┼─┤
+                          │█│ │ │ │
+                          └─┴─┴─┴─┘
+
+픽셀 중심이 선 안에 있으면 채움,
+없으면 비움 → 계단 현상!
+                </pre>
+                <p class="diagram-caption">앨리어싱 발생 원리</p>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>앨리어싱은 <span class="highlight">타일로 곡선을 표현하는 것</span>과 같습니다.</p>
+                <p>정사각형 타일로는 부드러운 곡선을 만들 수 없어서, 계단 모양이 됩니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: SSAA (Supersampling)</h2>
+            <div class="conversation">
+                <div class="q">가장 직관적인 해결책은?</div>
+                <div class="a">
+                    <p><span class="highlight">SSAA</span>는 더 높은 해상도로 렌더링 후 다운샘플합니다. 완벽하지만 <span class="warning">비용이 4배 이상</span>입니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+SSAA 4x:
+
+1. 4배 해상도로 렌더링
+┌───────┬───────┬───────┬───────┐
+│   │   │   │   │   │   │███│███│
+│───┼───│───┼───│───┼───│███│███│
+├───────┼───────┼───────┼───────┤
+│   │   │   │   │███│███│   │   │
+│───┼───│───┼───│███│███│───┼───│
+├───────┼───────┼───────┼───────┤
+│   │   │███│███│   │   │   │   │
+│───┼───│███│███│───┼───│───┼───│
+├───────┼───────┼───────┼───────┤
+│███│███│   │   │   │   │   │   │
+│███│███│───┼───│───┼───│───┼───│
+└───────┴───────┴───────┴───────┘
+
+2. 4픽셀 평균 → 1픽셀
+┌───┬───┬───┬───┐
+│   │░░░│███│███│  ← 부드러운 그라데이션
+├───┼───┼───┼───┤
+│   │███│██░│░░░│
+├───┼───┼───┼───┤
+│░░░│███│░░░│   │
+├───┼───┼───┼───┤
+│███│░░░│   │   │
+└───┴───┴───┴───┘
+                </pre>
+                <p class="diagram-caption">SSAA의 원리</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: MSAA (Multisample Anti-Aliasing)</h2>
+            <div class="conversation">
+                <div class="q">MSAA는 SSAA와 어떻게 다른가요?</div>
+                <div class="a">
+                    <p><span class="highlight">MSAA</span>는 각 픽셀 내 여러 샘플 위치에서 커버리지만 체크하고, 셰이딩은 한 번만 합니다. SSAA보다 훨씬 효율적입니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+MSAA 4x 동작:
+
+하나의 픽셀 (4개 서브샘플):
+┌─────────────────┐
+│  ●           ●  │  ● = 샘플 포인트
+│                 │
+│        ◉        │  ◉ = 셰이딩 위치 (픽셀 중심)
+│                 │
+│  ●           ●  │
+└─────────────────┘
+
+삼각형 경계가 지나갈 때:
+┌─────────────────┐
+│  ●───────────█  │  ● = 커버되지 않음 (0)
+│   ╲          │  │  █ = 커버됨 (1)
+│    ╲   ◉     │  │
+│     ╲        │  │  커버리지: 2/4 = 50%
+│  ●───╲───────█  │
+└─────────────────┘
+
+결과: 셰이딩 색상 × 50% = 부분적으로 채워진 픽셀
+                </pre>
+                <p class="diagram-caption">MSAA 커버리지 테스트</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">MSAA 설정 (DirectX 11)</div>
+                <pre><code>// MSAA 렌더 타겟 생성
+D3D11_TEXTURE2D_DESC msaaDesc = {};
+msaaDesc.Width = width;
+msaaDesc.Height = height;
+msaaDesc.MipLevels = 1;
+msaaDesc.ArraySize = 1;
+msaaDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+msaaDesc.SampleDesc.Count = 4;    // 4x MSAA
+msaaDesc.SampleDesc.Quality = 0;
+msaaDesc.Usage = D3D11_USAGE_DEFAULT;
+msaaDesc.BindFlags = D3D11_BIND_RENDER_TARGET;
+
+device->CreateTexture2D(&msaaDesc, nullptr, &msaaRenderTarget);
+
+// MSAA Resolve (다운샘플)
+context->ResolveSubresource(
+    resolvedTexture, 0,     // 대상 (1x)
+    msaaRenderTarget, 0,    // 소스 (4x MSAA)
+    DXGI_FORMAT_R8G8B8A8_UNORM
+);</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th>SSAA</th>
+                        <th>MSAA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>셰이딩 횟수</td>
+                        <td>4× (4x일 때)</td>
+                        <td>1×</td>
+                    </tr>
+                    <tr>
+                        <td>지오메트리 처리</td>
+                        <td>4×</td>
+                        <td>4×</td>
+                    </tr>
+                    <tr>
+                        <td>메모리</td>
+                        <td>4×</td>
+                        <td>4× (샘플 저장)</td>
+                    </tr>
+                    <tr>
+                        <td>Deferred 호환</td>
+                        <td>가능</td>
+                        <td>복잡함</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: FXAA (Fast Approximate Anti-Aliasing)</h2>
+            <div class="conversation">
+                <div class="q">Post-Process로 앨리어싱을 제거할 수 있나요?</div>
+                <div class="a">
+                    <p><span class="highlight">FXAA</span>는 렌더링된 이미지에서 경계선을 찾아 블러 처리합니다. 빠르고 Deferred에서도 쉽게 사용 가능합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+FXAA 동작:
+
+1. 휘도 차이로 경계 감지
+┌───┬───┬───┬───┬───┐
+│ 0 │ 0 │ 0 │ 1 │ 1 │  휘도 값
+├───┼───┼───┼───┼───┤
+│ 0 │ 0 │ 1▼│ 1 │ 1 │  ▼ = 경계 감지!
+├───┼───┼───┼───┼───┤
+│ 0 │ 1▼│ 1 │ 1 │ 1 │
+└───┴───┴───┴───┴───┘
+
+2. 경계 방향 판단
+┌───┬───┬───┐
+│ 0 │ 0 │ 1 │  수직 기울기 > 수평 기울기
+├───┼───┼───┤  → 수평 경계
+│ 0 │ ● │ 1 │
+├───┼───┼───┤
+│ 0 │ 1 │ 1 │
+└───┴───┴───┘
+
+3. 경계선 따라 블렌딩
+   원래 색상과 이웃 픽셀 혼합
+                </pre>
+                <p class="diagram-caption">FXAA 경계 감지</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">FXAA 간략 구현</div>
+                <pre><code>// FXAA (간략화)
+float4 FXAA_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    // 현재 픽셀과 주변 휘도
+    float lumaM = GetLuma(sceneTexture.Sample(samp, uv));
+    float lumaN = GetLuma(sceneTexture.Sample(samp, uv + float2(0, -texelSize.y)));
+    float lumaS = GetLuma(sceneTexture.Sample(samp, uv + float2(0, texelSize.y)));
+    float lumaE = GetLuma(sceneTexture.Sample(samp, uv + float2(texelSize.x, 0)));
+    float lumaW = GetLuma(sceneTexture.Sample(samp, uv + float2(-texelSize.x, 0)));
+
+    // 휘도 범위 (최대 - 최소)
+    float lumaMin = min(lumaM, min(min(lumaN, lumaS), min(lumaE, lumaW)));
+    float lumaMax = max(lumaM, max(max(lumaN, lumaS), max(lumaE, lumaW)));
+    float lumaRange = lumaMax - lumaMin;
+
+    // 경계가 아니면 원본 반환
+    if (lumaRange < max(EDGE_THRESHOLD_MIN, lumaMax * EDGE_THRESHOLD))
+    {
+        return sceneTexture.Sample(samp, uv);
+    }
+
+    // 경계 방향 판단
+    float lumaH = abs(lumaN + lumaS - 2 * lumaM);
+    float lumaV = abs(lumaE + lumaW - 2 * lumaM);
+    bool isHorizontal = lumaH >= lumaV;
+
+    // 블렌딩 방향과 거리 계산
+    float2 blendDir = isHorizontal ?
+        float2(0, texelSize.y) : float2(texelSize.x, 0);
+
+    // 서브픽셀 블렌딩 강도
+    float blend = ComputeBlendFactor(lumaM, lumaN, lumaS, lumaE, lumaW);
+
+    // 최종 색상 (블렌딩)
+    float3 colorN = sceneTexture.Sample(samp, uv - blendDir * blend).rgb;
+    float3 colorP = sceneTexture.Sample(samp, uv + blendDir * blend).rgb;
+
+    return float4((colorN + colorP) * 0.5, 1);
+}
+
+float GetLuma(float3 color)
+{
+    return dot(color, float3(0.299, 0.587, 0.114));
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: TAA (Temporal Anti-Aliasing)</h2>
+            <div class="conversation">
+                <div class="q">시간 정보를 활용한 AA는?</div>
+                <div class="a">
+                    <p><span class="highlight">TAA</span>는 매 프레임 서브픽셀 오프셋(지터)을 적용하고, 이전 프레임과 누적합니다. 현대 게임에서 가장 인기 있는 기법입니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+TAA 원리:
+
+Frame 1 (지터 A):      Frame 2 (지터 B):      Frame 3 (지터 C):
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│                 │    │                 │    │                 │
+│  ●              │    │    ●            │    │      ●          │
+│                 │    │                 │    │                 │
+│                 │    │                 │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+
+매 프레임 다른 위치에서 샘플링
+↓
+시간에 걸쳐 누적 → 사실상 슈퍼샘플링 효과!
+
+Temporal Accumulation:
+currentFrame × 0.1 + previousResult × 0.9
+                </pre>
+                <p class="diagram-caption">TAA 시간 누적</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">TAA 구현</div>
+                <pre><code>// 지터 패턴 (Halton Sequence 등)
+static const float2 jitterPattern[8] = {
+    float2(-0.5, -0.5), float2(0.5, -0.5),
+    float2(-0.5, 0.5), float2(0.5, 0.5),
+    // ...
+};
+
+// 프로젝션 행렬에 지터 적용
+float4x4 ApplyJitter(float4x4 proj, int frameIndex)
+{
+    float2 jitter = jitterPattern[frameIndex % 8];
+    jitter /= float2(screenWidth, screenHeight);
+
+    float4x4 jitteredProj = proj;
+    jitteredProj[2][0] += jitter.x;
+    jitteredProj[2][1] += jitter.y;
+
+    return jitteredProj;
+}
+
+// TAA Resolve
+float4 TAA_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    // 현재 프레임 색상
+    float3 currentColor = currentFrame.Sample(pointSamp, uv).rgb;
+
+    // 모션 벡터로 이전 프레임 위치 계산
+    float2 motion = motionVector.Sample(pointSamp, uv).xy;
+    float2 prevUV = uv - motion;
+
+    // 이전 프레임 색상
+    float3 historyColor = historyBuffer.Sample(linearSamp, prevUV).rgb;
+
+    // Neighborhood Clamping (고스팅 방지)
+    float3 nearMin, nearMax;
+    GetNeighborhoodMinMax(uv, nearMin, nearMax);
+    historyColor = clamp(historyColor, nearMin, nearMax);
+
+    // 블렌딩 (모션에 따라 가중치 조절)
+    float blendFactor = 0.9;
+    if (any(prevUV < 0) || any(prevUV > 1))
+        blendFactor = 0;  // 화면 밖이면 이전 프레임 무시
+
+    float3 result = lerp(currentColor, historyColor, blendFactor);
+
+    return float4(result, 1);
+}
+
+// 3×3 이웃 색상 범위 계산
+void GetNeighborhoodMinMax(float2 uv, out float3 minC, out float3 maxC)
+{
+    float3 colors[9];
+    int idx = 0;
+
+    for (int y = -1; y <= 1; y++)
+    {
+        for (int x = -1; x <= 1; x++)
+        {
+            colors[idx++] = currentFrame.Sample(pointSamp,
+                uv + float2(x, y) * texelSize).rgb;
+        }
+    }
+
+    minC = min(min(colors[0], colors[1]), /* ... */ colors[8]);
+    maxC = max(max(colors[0], colors[1]), /* ... */ colors[8]);
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>기법</th>
+                        <th>장점</th>
+                        <th>단점</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>MSAA</td>
+                        <td>지오메트리 경계 선명</td>
+                        <td>셰이더 앨리어싱 안됨, Deferred 어려움</td>
+                    </tr>
+                    <tr>
+                        <td>FXAA</td>
+                        <td>빠름, 어디서나 적용</td>
+                        <td>블러 발생, 텍스트 뭉개짐</td>
+                    </tr>
+                    <tr>
+                        <td>TAA</td>
+                        <td>모든 앨리어싱 처리, 고품질</td>
+                        <td>고스팅, 빠른 움직임 블러</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 현대 AA 조합</h2>
+            <div class="conversation">
+                <div class="q">실제 게임에서는 어떻게 사용하나요?</div>
+                <div class="a">
+                    <p>현대 게임은 여러 기법을 조합합니다. <span class="highlight">TAA + 선명화</span>가 가장 일반적입니다.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 일반적인 AA 파이프라인</strong>
+                <p><span class="highlight">TAA</span>: 메인 AA, 대부분의 앨리어싱 처리</p>
+                <p><span class="highlight">MSAA</span>: Forward 패스 (반투명)에 선택적 적용</p>
+                <p><span class="highlight">Sharpening</span>: TAA 블러 보정 (AMD CAS, NVIDIA Image Sharpening)</p>
+                <p><span class="highlight">DLSS/FSR</span>: 업스케일링 + AA 통합 (AI 기반)</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">간단한 Sharpening</div>
+                <pre><code>// TAA 후 선명화 적용
+float4 Sharpen_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    float3 center = inputTexture.Sample(samp, uv).rgb;
+    float3 up = inputTexture.Sample(samp, uv + float2(0, -texelSize.y)).rgb;
+    float3 down = inputTexture.Sample(samp, uv + float2(0, texelSize.y)).rgb;
+    float3 left = inputTexture.Sample(samp, uv + float2(-texelSize.x, 0)).rgb;
+    float3 right = inputTexture.Sample(samp, uv + float2(texelSize.x, 0)).rgb;
+
+    // Unsharp Mask
+    float3 neighbors = (up + down + left + right) * 0.25;
+    float3 sharpened = center + (center - neighbors) * sharpenStrength;
+
+    return float4(saturate(sharpened), 1);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>앨리어싱</strong>: 연속 신호의 이산 샘플링으로 발생하는 계단 현상</li>
+                <li><strong>MSAA</strong>: 커버리지 멀티샘플링, 셰이딩 1회, 지오메트리 경계만</li>
+                <li><strong>FXAA</strong>: Post-Process 기반, 빠르지만 블러 발생</li>
+                <li><strong>TAA</strong>: 시간 누적으로 고품질, 고스팅 주의, 현대 표준</li>
+                <li>실전에서는 <strong>TAA + Sharpening</strong> 조합이 일반적</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

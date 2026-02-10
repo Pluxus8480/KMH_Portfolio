@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>캐시 친화적 프로그래밍 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+            <h1>"같은 코드인데 왜 100배 느리죠?"</h1>
+            <p class="subtitle">CPU 캐시를 이해하면 성능이 보인다</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 메모리 계층 구조</h2>
+            <div class="conversation">
+                <div class="q">CPU는 왜 직접 RAM에서 데이터를 읽지 않나요?</div>
+                <div class="a">
+                    <p>RAM은 CPU에 비해 <strong>너무 느립니다</strong>. 그 격차를 캐시가 메웁니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    메모리 계층 구조와 지연 시간                       │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   레벨        용량         지연시간      CPU 사이클     비유         │
+│   ─────────────────────────────────────────────────────────────    │
+│                                                                     │
+│   Register    ~1KB         0.25ns        1 cycle      뇌            │
+│      ▲                                                              │
+│      │        ×2~4                                                  │
+│   L1 Cache    64KB         1ns           4 cycles     메모장       │
+│      ▲                                                              │
+│      │        ×3~4                                                  │
+│   L2 Cache    256KB        4ns           12 cycles    책상 위 서류  │
+│      ▲                                                              │
+│      │        ×10~15                                                │
+│   L3 Cache    8~32MB       40ns          120 cycles   책장          │
+│      ▲                                                              │
+│      │        ×100~200                                              │
+│   RAM         16~64GB      100ns         300 cycles   창고          │
+│      ▲                                                              │
+│      │        ×100,000                                              │
+│   SSD/HDD     1~4TB        10-100ms      수천만 cycles  다른 도시   │
+│                                                                     │
+│   ※ L1 캐시 미스 1번 = L1 히트 100번 시간                          │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <p class="highlight">캐시 히트율 90%→95%로 올리면 성능이 2배 향상될 수 있습니다!</p>
+                </div>
+
+                <div class="q">캐시는 어떤 단위로 데이터를 가져오나요?</div>
+                <div class="a">
+                    <p><strong>캐시 라인(Cache Line)</strong> 단위입니다. 보통 64바이트입니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                       캐시 라인 구조                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   메모리 주소 0x1000 요청 시:                                       │
+│                                                                     │
+│   RAM:                                                              │
+│   ┌────────────────────────────────────────────────────────────┐   │
+│   │ 0x0FC0      │ 0x1000 ← 요청    │ 0x1040      │ 0x1080     │   │
+│   │ (64 bytes)  │ (64 bytes)       │ (64 bytes)  │ (64 bytes) │   │
+│   └─────────────┴──────────────────┴─────────────┴────────────┘   │
+│                        │                                            │
+│                        │ 64바이트 전체를 캐시로 복사                 │
+│                        ▼                                            │
+│   Cache Line:                                                       │
+│   ┌────────────────────────────────────────────────────────────┐   │
+│   │ 0x1000-0x103F (64 bytes) : byte0 byte1 ... byte63          │   │
+│   └────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│   → 1바이트만 필요해도 64바이트 전체가 로드됨                       │
+│   → 인접 데이터도 함께 캐시에 있음 (공간 지역성 활용)               │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 지역성 (Locality) 원리</h2>
+            <div class="conversation">
+                <div class="q">캐시가 효과적인 이유는 무엇인가요?</div>
+                <div class="a">
+                    <p>프로그램은 <strong>지역성</strong>을 보이기 때문입니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>지역성 유형</th>
+                                <th>설명</th>
+                                <th>예시</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>시간적 지역성</td>
+                                <td>최근 접근한 데이터를 곧 다시 접근</td>
+                                <td>루프 카운터, 함수 변수</td>
+                            </tr>
+                            <tr>
+                                <td>공간적 지역성</td>
+                                <td>인접한 메모리를 연속 접근</td>
+                                <td>배열 순회, 구조체 필드</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">실제로 얼마나 차이가 나나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">배열 순회 방향에 따른 성능 차이</div>
+                        <pre><code>// 2D 배열 (Row-major 저장: C/C++ 기본)
+constexpr int ROWS = 10000;
+constexpr int COLS = 10000;
+int matrix[ROWS][COLS];
+
+// ✅ 캐시 친화적 순회 (행 우선 - Row-major)
+// 메모리: [0][0], [0][1], [0][2], ... , [1][0], [1][1], ...
+void rowMajorSum() {
+    int sum = 0;
+    for (int i = 0; i < ROWS; ++i) {       // 행 먼저
+        for (int j = 0; j < COLS; ++j) {   // 열 나중
+            sum += matrix[i][j];           // 연속 메모리 접근!
+        }
+    }
+    // 시간: ~50ms
+}
+
+// ❌ 캐시 비친화적 순회 (열 우선)
+void colMajorSum() {
+    int sum = 0;
+    for (int j = 0; j < COLS; ++j) {       // 열 먼저
+        for (int i = 0; i < ROWS; ++i) {   // 행 나중
+            sum += matrix[i][j];           // 매번 10000*4=40KB 점프!
+        }
+    }
+    // 시간: ~500ms (10배 느림!)
+}
+
+// 메모리 접근 패턴 비교:
+// Row-major: [0][0] → [0][1] → [0][2]  (4바이트 간격)
+// Col-major: [0][0] → [1][0] → [2][0]  (40,000바이트 간격!)</code></pre>
+                    </div>
+
+                    <p class="warning">같은 연산인데 순서만 바꿔도 10배 차이!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 데이터 지향 설계 (DOD)</h2>
+            <div class="conversation">
+                <div class="q">게임에서 캐시 효율을 높이는 설계 방법은?</div>
+                <div class="a">
+                    <p><strong>Data-Oriented Design (DOD)</strong>: 데이터 배치를 최적화합니다.</p>
+                    <p>전통적인 OOP와 반대로 생각합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    AoS vs SoA 비교                                   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  AoS (Array of Structures) - 전통적 OOP                             │
+│  ┌───────────────────────────────────────────────────────────────┐ │
+│  │ Entity0                │ Entity1                │ Entity2     │ │
+│  │ [pos][vel][hp][name]   │ [pos][vel][hp][name]   │ [pos]...   │ │
+│  │ ← 64바이트 →           │ ← 64바이트 →           │            │ │
+│  └───────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+│  위치만 업데이트하면? → 캐시 라인마다 필요한 건 pos(12B)뿐!         │
+│  나머지 52바이트는 낭비 (캐시 효율 18%)                             │
+│                                                                     │
+│  ─────────────────────────────────────────────────────────────────  │
+│                                                                     │
+│  SoA (Structure of Arrays) - DOD                                    │
+│  ┌───────────────────────────────────────────────────────────────┐ │
+│  │ positions[]    │ [pos0][pos1][pos2][pos3][pos4][pos5]...      │ │
+│  │ velocities[]   │ [vel0][vel1][vel2][vel3][vel4][vel5]...      │ │
+│  │ healths[]      │ [hp0][hp1][hp2][hp3][hp4][hp5][hp6]...       │ │
+│  │ names[]        │ [name0][name1][name2]...                     │ │
+│  └───────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+│  위치만 업데이트하면? → positions 배열만 순차 접근                  │
+│  캐시 라인 100% 활용!                                               │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">AoS vs SoA 코드 비교</div>
+                        <pre><code>// ❌ AoS (Array of Structures) - 캐시 비효율
+struct Entity {
+    Vector3 position;    // 12 bytes
+    Vector3 velocity;    // 12 bytes
+    float health;        // 4 bytes
+    char name[32];       // 32 bytes
+    // 패딩 4 bytes
+};  // 총 64 bytes
+
+std::vector<Entity> entities(10000);
+
+void updatePositions_AoS() {
+    for (auto& e : entities) {
+        e.position += e.velocity * deltaTime;
+        // 64바이트 구조체에서 24바이트만 사용
+        // 캐시 효율: 37.5%
+    }
+}
+
+// ✅ SoA (Structure of Arrays) - 캐시 친화적
+struct Entities {
+    std::vector<Vector3> positions;
+    std::vector<Vector3> velocities;
+    std::vector<float> healths;
+    std::vector<std::string> names;
+    size_t count;
+};
+
+Entities entities;
+
+void updatePositions_SoA() {
+    Vector3* pos = entities.positions.data();
+    Vector3* vel = entities.velocities.data();
+
+    for (size_t i = 0; i < entities.count; ++i) {
+        pos[i] += vel[i] * deltaTime;
+        // 연속된 Vector3만 접근
+        // 캐시 효율: 100%
+    }
+}
+
+// 벤치마크 결과 (10만 엔티티):
+// AoS: 3.2ms
+// SoA: 0.8ms (4배 빠름!)</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">항상 SoA가 좋은 건가요?</div>
+                <div class="a">
+                    <p>아닙니다. <strong>접근 패턴</strong>에 따라 선택해야 합니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>상황</th>
+                                <th>추천</th>
+                                <th>이유</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>전체 순회, 일부 필드만 사용</td>
+                                <td>SoA</td>
+                                <td>필요한 필드만 캐시에 로드</td>
+                            </tr>
+                            <tr>
+                                <td>개별 객체의 모든 필드 접근</td>
+                                <td>AoS</td>
+                                <td>한 번에 전체 데이터 로드</td>
+                            </tr>
+                            <tr>
+                                <td>삽입/삭제가 빈번</td>
+                                <td>AoS</td>
+                                <td>SoA는 여러 배열 동기화 필요</td>
+                            </tr>
+                            <tr>
+                                <td>SIMD 최적화 대상</td>
+                                <td>SoA</td>
+                                <td>벡터 연산에 최적</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 캐시 미스 유형과 대응</h2>
+            <div class="conversation">
+                <div class="q">캐시 미스는 왜 발생하나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>미스 유형</th>
+                                <th>원인</th>
+                                <th>대응 방법</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Cold Miss (강제적)</td>
+                                <td>첫 접근</td>
+                                <td>프리페치, 웜업</td>
+                            </tr>
+                            <tr>
+                                <td>Capacity Miss</td>
+                                <td>캐시 용량 초과</td>
+                                <td>데이터 분할, 크기 축소</td>
+                            </tr>
+                            <tr>
+                                <td>Conflict Miss</td>
+                                <td>같은 캐시 라인에 매핑</td>
+                                <td>데이터 정렬, 패딩</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">프리페치(Prefetch)는 어떻게 사용하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">소프트웨어 프리페치</div>
+                        <pre><code>#include <xmmintrin.h>  // SSE intrinsics
+
+// 미리 다음 데이터를 캐시에 로드
+void processWithPrefetch(float* data, int count) {
+    constexpr int PREFETCH_DISTANCE = 16;  // 캐시 라인 수
+
+    for (int i = 0; i < count; ++i) {
+        // 앞으로 접근할 데이터를 미리 로드 요청
+        if (i + PREFETCH_DISTANCE < count) {
+            _mm_prefetch(
+                reinterpret_cast<const char*>(&data[i + PREFETCH_DISTANCE]),
+                _MM_HINT_T0  // L1 캐시에 프리페치
+            );
+        }
+
+        // 실제 처리 (이 시점에 데이터는 이미 캐시에 있음)
+        processElement(data[i]);
+    }
+}
+
+// 프리페치 힌트 종류:
+// _MM_HINT_T0: L1 캐시 (가장 빠름)
+// _MM_HINT_T1: L2 캐시
+// _MM_HINT_T2: L3 캐시
+// _MM_HINT_NTA: Non-temporal (재사용 안 할 데이터)</code></pre>
+                    </div>
+
+                    <p class="warning">과도한 프리페치는 오히려 역효과! 유용한 데이터를 캐시에서 밀어낼 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 핫/콜드 데이터 분리</h2>
+            <div class="conversation">
+                <div class="q">자주 쓰는 데이터와 가끔 쓰는 데이터를 분리해야 하나요?</div>
+                <div class="a">
+                    <p>네! <strong>핫/콜드 분리</strong>로 캐시 효율을 높입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">핫/콜드 데이터 분리</div>
+                        <pre><code>// ❌ 모든 데이터가 한 구조체에
+struct GameObjectBad {
+    // Hot data (매 프레임 사용)
+    Vector3 position;
+    Vector3 velocity;
+    Quaternion rotation;
+    float health;
+
+    // Cold data (가끔 사용)
+    std::string name;
+    std::string description;
+    int64_t creationTime;
+    int64_t lastModified;
+    std::vector<std::string> tags;
+    // ... 100바이트 이상
+};
+// 크기: ~200바이트, 매 프레임 접근 시 캐시 낭비
+
+// ✅ 핫/콜드 분리
+struct GameObjectHot {
+    Vector3 position;
+    Vector3 velocity;
+    Quaternion rotation;
+    float health;
+    uint32_t coldDataIndex;  // 콜드 데이터 인덱스
+};  // 크기: 52바이트 → 캐시 라인 1개
+
+struct GameObjectCold {
+    std::string name;
+    std::string description;
+    int64_t creationTime;
+    int64_t lastModified;
+    std::vector<std::string> tags;
+};
+
+// 별도 배열로 관리
+std::vector<GameObjectHot> hotObjects;   // 매 프레임 순회
+std::vector<GameObjectCold> coldObjects; // 필요할 때만 접근
+
+void updateAllObjects() {
+    // Hot 데이터만 순회 - 캐시 효율 최대화
+    for (auto& obj : hotObjects) {
+        obj.position += obj.velocity * deltaTime;
+    }
+}
+
+GameObjectCold& getColdData(const GameObjectHot& hot) {
+    return coldObjects[hot.coldDataIndex];
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">실제 게임 엔진에서는 어떻게 적용되나요?</div>
+                <div class="a">
+                    <p>Unity의 ECS(DOTS), Unreal의 Mass 시스템 등이 이 원리를 활용합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">ECS 스타일 컴포넌트 시스템</div>
+                        <pre><code>// 컴포넌트는 데이터만
+struct TransformComponent {
+    Vector3 position;
+    Quaternion rotation;
+    Vector3 scale;
+};
+
+struct VelocityComponent {
+    Vector3 linear;
+    Vector3 angular;
+};
+
+struct HealthComponent {
+    float current;
+    float max;
+};
+
+// 시스템은 특정 컴포넌트 조합만 처리
+class MovementSystem {
+public:
+    void update(
+        std::span<TransformComponent> transforms,
+        std::span<VelocityComponent> velocities,
+        float deltaTime
+    ) {
+        // 필요한 컴포넌트만 순회
+        // 완벽한 캐시 활용
+        for (size_t i = 0; i < transforms.size(); ++i) {
+            transforms[i].position += velocities[i].linear * deltaTime;
+        }
+    }
+};
+
+class HealthSystem {
+public:
+    void update(std::span<HealthComponent> healths) {
+        // Health 컴포넌트만 접근
+        for (auto& h : healths) {
+            if (h.current <= 0) {
+                handleDeath(h);
+            }
+        }
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="key-point">ECS는 캐시 친화적 설계의 정점입니다. 수만 개 엔티티도 빠르게 처리!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 캐시 프로파일링</h2>
+            <div class="conversation">
+                <div class="q">캐시 미스를 어떻게 측정하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Linux perf를 이용한 캐시 분석</div>
+                        <pre><code># L1 캐시 미스 측정
+perf stat -e L1-dcache-loads,L1-dcache-load-misses ./game
+
+# 출력 예시:
+#  1,234,567,890  L1-dcache-loads
+#     12,345,678  L1-dcache-load-misses  #  1.00% of all L1-dcache hits
+
+# LLC (Last Level Cache) 미스 측정
+perf stat -e LLC-loads,LLC-load-misses ./game
+
+# 상세 캐시 이벤트
+perf stat -e cache-references,cache-misses,instructions,cycles ./game
+
+# 핫스팟 찾기
+perf record -e cache-misses ./game
+perf report</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Intel VTune 스타일 분석</div>
+                        <pre><code>// RDPMC를 이용한 프로그래밍 방식 측정 (리눅스)
+#include <linux/perf_event.h>
+#include <sys/ioctl.h>
+
+class CacheProfiler {
+    int fd_;
+    struct perf_event_attr pe_;
+
+public:
+    CacheProfiler() {
+        memset(&pe_, 0, sizeof(pe_));
+        pe_.type = PERF_TYPE_HW_CACHE;
+        pe_.config = PERF_COUNT_HW_CACHE_L1D |
+                    (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+                    (PERF_COUNT_HW_CACHE_RESULT_MISS << 16);
+        pe_.disabled = 1;
+        pe_.exclude_kernel = 1;
+
+        fd_ = syscall(__NR_perf_event_open, &pe_, 0, -1, -1, 0);
+    }
+
+    void start() {
+        ioctl(fd_, PERF_EVENT_IOC_RESET, 0);
+        ioctl(fd_, PERF_EVENT_IOC_ENABLE, 0);
+    }
+
+    uint64_t stop() {
+        ioctl(fd_, PERF_EVENT_IOC_DISABLE, 0);
+        uint64_t count;
+        read(fd_, &count, sizeof(count));
+        return count;
+    }
+};
+
+// 사용 예시
+CacheProfiler profiler;
+profiler.start();
+
+// 측정할 코드
+processData();
+
+uint64_t misses = profiler.stop();
+printf("L1 cache misses: %lu\n", misses);</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>캐시 라인</strong>: 64바이트 단위로 데이터 이동, 인접 데이터는 "공짜"</li>
+                <li><strong>지역성</strong>: 연속 메모리 접근(공간적), 반복 접근(시간적)이 성능 핵심</li>
+                <li><strong>DOD</strong>: SoA 구조로 필요한 데이터만 캐시에 로드</li>
+                <li><strong>핫/콜드 분리</strong>: 자주 쓰는 데이터는 작고 밀집되게</li>
+                <li><strong>배열 순회</strong>: Row-major 순서로 순회 (C/C++ 기준)</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>게임 서버 스케일링 전략 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../server.html" class="back-link">← 목록으로</a>
+            <h1>100만 명이 동시에 접속하면?</h1>
+            <p class="subtitle">게임 서버 수평/수직 확장과 분산 아키텍처</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 스케일링의 필요성</h2>
+            <div class="conversation">
+                <div class="q">왜 서버 스케일링이 중요한가요?</div>
+                <div class="a">
+                    <p>게임 출시, 이벤트 등으로 <strong>트래픽이 급증</strong>할 때 서버가 버텨야 합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+게임 트래픽 패턴:
+
+동시접속자
+   │
+   │       ╱╲  출시 피크
+   │      ╱  ╲
+   │     ╱    ╲____  이벤트
+   │    ╱         ╲__╱╲
+   │___╱                ╲_____ 안정화
+   │
+   └──────────────────────────── 시간
+
+문제 상황:
+- 출시: 예상의 10배 접속 → 서버 다운
+- 이벤트: 갑자기 2배 접속 → 지연 급증
+- 평상시: 과도한 서버 → 비용 낭비
+
+해결: 동적 스케일링 (필요할 때 늘리고, 줄이고)
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">수직 vs 수평 확장이 뭔가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>수직 확장 (Scale Up)</th>
+                                <th>수평 확장 (Scale Out)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>방법</td>
+                                <td>더 좋은 서버로 교체</td>
+                                <td>서버 대수를 늘림</td>
+                            </tr>
+                            <tr>
+                                <td>예시</td>
+                                <td>4코어 → 32코어</td>
+                                <td>서버 1대 → 10대</td>
+                            </tr>
+                            <tr>
+                                <td>장점</td>
+                                <td>간단, 코드 변경 불필요</td>
+                                <td>무한 확장 가능</td>
+                            </tr>
+                            <tr>
+                                <td>단점</td>
+                                <td>한계 있음, 비용 급증</td>
+                                <td>분산 시스템 복잡도</td>
+                            </tr>
+                            <tr>
+                                <td>적합</td>
+                                <td>초기, 소규모</td>
+                                <td>대규모, 장기 운영</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">대부분의 대규모 게임은 <strong>수평 확장</strong>을 기본으로 설계합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 게임 서버 분산 아키텍처</h2>
+            <div class="conversation">
+                <div class="q">게임 서버를 어떻게 분산하나요?</div>
+                <div class="a">
+                    <p>기능별, 지역별로 서버를 분리합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+분산 게임 서버 아키텍처:
+
+┌─────────────────────────────────────────────────────────────┐
+│                        Load Balancer                         │
+└─────────────────────────────┬───────────────────────────────┘
+                              │
+         ┌────────────────────┼────────────────────┐
+         ▼                    ▼                    ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   Login Server  │  │  Lobby Server   │  │  Match Server   │
+│   (인증, 세션)   │  │   (대기실)       │  │   (매치메이킹)   │
+│    Stateless    │  │    Stateless    │  │    Stateless    │
+└────────┬────────┘  └────────┬────────┘  └────────┬────────┘
+         │                    │                    │
+         └────────────────────┼────────────────────┘
+                              │
+                              ▼
+         ┌────────────────────────────────────────┐
+         │            Game Server Pool            │
+         │  ┌──────┐  ┌──────┐  ┌──────┐         │
+         │  │Zone 1│  │Zone 2│  │Zone 3│ ...     │
+         │  │ (KR) │  │ (JP) │  │ (US) │         │
+         │  └──────┘  └──────┘  └──────┘         │
+         │         Stateful (게임 상태)           │
+         └────────────────────────────────────────┘
+                              │
+         ┌────────────────────┼────────────────────┐
+         ▼                    ▼                    ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   Redis Cluster │  │     MySQL       │  │  Message Queue  │
+│   (캐시, 세션)   │  │   (영구저장)     │  │  (이벤트 버스)   │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">Stateless vs Stateful 서버의 차이는?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Stateless 서버 (쉬운 확장)</div>
+                        <pre><code>// Stateless: 상태를 서버에 저장하지 않음
+// 모든 요청이 독립적, 어떤 서버로 가도 됨
+
+class LoginServer {
+    // 서버에 상태 없음
+    // 모든 데이터는 DB/Redis에서 조회
+
+public:
+    LoginResponse HandleLogin(const LoginRequest& req) {
+        // 1. 인증 확인 (DB 조회)
+        auto user = db.GetUser(req.username);
+        if (!user || !VerifyPassword(req.password, user.hash)) {
+            return { false, "Invalid credentials" };
+        }
+
+        // 2. 세션 생성 (Redis에 저장)
+        string sessionId = GenerateSessionId();
+        redis.Set("session:" + sessionId, user.id, TTL_1_HOUR);
+
+        // 3. 응답 (서버에 아무것도 저장 안 함)
+        return { true, sessionId };
+    }
+};
+
+// 장점:
+// - 서버 추가/제거가 자유로움
+// - 한 서버 죽어도 다른 서버로 요청 가능
+// - Load balancer가 아무 서버로나 보내도 됨</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">Stateful 서버 (게임 서버)</div>
+                        <pre><code>// Stateful: 서버에 게임 상태 유지
+// 특정 매치는 특정 서버에서만 처리
+
+class GameServer {
+    // 서버 메모리에 게임 상태 유지
+    std::map<MatchID, GameState> activeMatches;
+
+public:
+    void HandlePlayerAction(PlayerID player, const Action& action) {
+        // 1. 이 플레이어가 속한 매치 찾기
+        auto match = FindMatchForPlayer(player);
+        if (!match) return;
+
+        // 2. 게임 상태 업데이트 (메모리에서)
+        match->ApplyAction(player, action);
+
+        // 3. 변경사항 브로드캐스트
+        BroadcastToMatch(match->id, match->GetSnapshot());
+    }
+};
+
+// 단점:
+// - 플레이어는 항상 같은 서버로 가야 함 (Sticky Session)
+// - 서버 죽으면 진행 중인 게임 손실
+// - 스케일링이 복잡함</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 자동 스케일링</h2>
+            <div class="conversation">
+                <div class="q">서버를 자동으로 늘리고 줄일 수 있나요?</div>
+                <div class="a">
+                    <p><strong>Auto Scaling</strong>으로 부하에 따라 자동 조절합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Auto Scaling 정책</div>
+                        <pre><code>// Kubernetes HPA (Horizontal Pod Autoscaler) 예시
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: game-server-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: game-server
+  minReplicas: 10        # 최소 10대
+  maxReplicas: 100       # 최대 100대
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70  # CPU 70% 넘으면 확장
+  - type: Pods
+    pods:
+      metric:
+        name: active_matches
+      target:
+        type: AverageValue
+        averageValue: 50  # 서버당 매치 50개 넘으면 확장
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60  # 1분 안정화 후 확장
+      policies:
+      - type: Percent
+        value: 50         # 한 번에 50%까지 확장
+        periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300  # 5분 안정화 후 축소
+      policies:
+      - type: Percent
+        value: 25         # 한 번에 25%까지 축소
+        periodSeconds: 120</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">게임 서버 스케일링의 어려운 점은?</div>
+                <div class="a">
+                    <p><strong>Stateful</strong> 게임 서버는 단순히 죽이면 안 됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Graceful Shutdown 구현</div>
+                        <pre><code>class GameServerLifecycle {
+    enum class State {
+        Running,      // 정상 운영
+        Draining,     // 신규 매치 안 받음
+        Terminating   // 종료 중
+    };
+
+    State state = State::Running;
+
+public:
+    // Scale-down 시 호출됨
+    void OnShutdownSignal() {
+        state = State::Draining;
+        Log("Server draining - no new matches accepted");
+
+        // 오케스트레이터에게 알림 (새 매치 안 보내도록)
+        NotifyOrchestrator(ServerStatus::Draining);
+
+        // 진행 중인 매치가 끝날 때까지 대기
+        WaitForMatchesToEnd();
+    }
+
+    void WaitForMatchesToEnd() {
+        while (!activeMatches.empty()) {
+            // 매치별 최대 시간 체크 (너무 오래 걸리면 강제 종료)
+            for (auto& [id, match] : activeMatches) {
+                if (match.duration > MAX_MATCH_DURATION) {
+                    match.ForceEnd("Server maintenance");
+                }
+            }
+
+            Sleep(1000);  // 1초마다 체크
+        }
+
+        // 모든 매치 종료됨
+        state = State::Terminating;
+        Log("All matches ended, shutting down");
+        exit(0);
+    }
+
+    bool CanAcceptNewMatch() {
+        return state == State::Running;
+    }
+};
+
+// 스케일다운 흐름:
+// 1. K8s가 SIGTERM 전송
+// 2. 서버가 Draining 상태로 전환
+// 3. 기존 매치만 처리
+// 4. 모든 매치 종료 후 서버 종료</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 서버 풀 관리</h2>
+            <div class="conversation">
+                <div class="q">매치를 어떤 서버에 배정하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">서버 오케스트레이터</div>
+                        <pre><code>class ServerOrchestrator {
+    struct ServerInfo {
+        string serverId;
+        string address;
+        int activeMatches;
+        int maxMatches;
+        float cpuUsage;
+        float memUsage;
+        Region region;
+        ServerStatus status;
+    };
+
+    std::vector<ServerInfo> serverPool;
+
+public:
+    // 매치에 적합한 서버 선택
+    ServerInfo* AllocateServer(const MatchRequest& request) {
+        std::vector<ServerInfo*> candidates;
+
+        // 1. 조건에 맞는 서버 필터링
+        for (auto& server : serverPool) {
+            if (!IsServerEligible(server, request)) continue;
+            candidates.push_back(&server);
+        }
+
+        if (candidates.empty()) {
+            // 서버 부족 → 스케일업 트리거
+            RequestScaleUp(request.region);
+            return nullptr;
+        }
+
+        // 2. 최적 서버 선택 (bin packing)
+        return SelectBestServer(candidates, request);
+    }
+
+private:
+    bool IsServerEligible(const ServerInfo& server,
+                         const MatchRequest& request) {
+        // 지역 일치
+        if (server.region != request.region) return false;
+
+        // 상태 확인
+        if (server.status != ServerStatus::Running) return false;
+
+        // 용량 확인
+        if (server.activeMatches >= server.maxMatches) return false;
+
+        // 리소스 확인
+        if (server.cpuUsage > 80 || server.memUsage > 80) return false;
+
+        return true;
+    }
+
+    ServerInfo* SelectBestServer(std::vector<ServerInfo*>& candidates,
+                                 const MatchRequest& request) {
+        // Bin Packing: 서버를 최대한 채워서 사용
+        // (비어있는 서버를 줄여서 스케일다운 가능하게)
+
+        std::sort(candidates.begin(), candidates.end(),
+            [](ServerInfo* a, ServerInfo* b) {
+                // 사용량 높은 순 (더 채워진 서버 우선)
+                return a->activeMatches > b->activeMatches;
+            });
+
+        return candidates[0];
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">플레이어를 가장 가까운 서버로 보내려면?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">지역 기반 라우팅</div>
+                        <pre><code>class RegionRouter {
+    struct DataCenter {
+        Region region;
+        string address;
+        std::vector<ServerInfo> servers;
+    };
+
+    std::vector<DataCenter> dataCenters = {
+        { Region::KR, "kr.game.com", {} },  // 한국
+        { Region::JP, "jp.game.com", {} },  // 일본
+        { Region::US_WEST, "usw.game.com", {} },
+        { Region::US_EAST, "use.game.com", {} },
+        { Region::EU, "eu.game.com", {} },
+    };
+
+public:
+    DataCenter* GetBestRegion(const std::vector<PlayerInfo>& players) {
+        // 방법 1: 지리적 위치 기반
+        // IP → GeoIP로 위치 추정 → 가장 가까운 DC
+
+        // 방법 2: 핑 측정 기반 (더 정확)
+        std::map<Region, int> avgPings;
+
+        for (const auto& dc : dataCenters) {
+            int totalPing = 0;
+            for (const auto& player : players) {
+                totalPing += player.pingToRegion[dc.region];
+            }
+            avgPings[dc.region] = totalPing / players.size();
+        }
+
+        // 평균 핑이 가장 낮은 지역 선택
+        Region bestRegion = std::min_element(
+            avgPings.begin(), avgPings.end(),
+            [](const auto& a, const auto& b) {
+                return a.second < b.second;
+            }
+        )->first;
+
+        return GetDataCenter(bestRegion);
+    }
+
+    // 클라이언트 측: 정기적으로 각 지역 핑 측정
+    void MeasurePings() {
+        for (const auto& dc : dataCenters) {
+            auto start = Clock::now();
+            Ping(dc.address);
+            auto rtt = Clock::now() - start;
+            myPingToRegion[dc.region] = rtt.count();
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 데이터 샤딩</h2>
+            <div class="conversation">
+                <div class="q">DB도 스케일링해야 하나요?</div>
+                <div class="a">
+                    <p>네, DB도 <strong>샤딩(Sharding)</strong>으로 분산합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+데이터베이스 샤딩:
+
+┌─────────────────────────────────────────────────┐
+│                 Application Layer               │
+└─────────────────────────┬───────────────────────┘
+                          │
+                          ▼
+                ┌─────────────────┐
+                │   Shard Router  │
+                │ (어디로 보낼지)   │
+                └────────┬────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        ▼                ▼                ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│   Shard 1    │ │   Shard 2    │ │   Shard 3    │
+│ User ID      │ │ User ID      │ │ User ID      │
+│ 1 ~ 1,000,000│ │1M ~ 2,000,000│ │2M ~ 3,000,000│
+└──────────────┘ └──────────────┘ └──────────────┘
+
+샤딩 키 선택:
+- User ID: 사용자별 분산 (좋음)
+- Guild ID: 길드별 분산 (길드 데이터 조인 용이)
+- Region: 지역별 분산 (지역 서버와 맞춤)
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">샤딩 구현은 어떻게 하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Consistent Hashing 샤딩</div>
+                        <pre><code>class ConsistentHashSharding {
+    // 가상 노드 (한 샤드당 100개의 가상 노드)
+    std::map<uint64_t, int> ring;  // hash → shard_id
+    int virtualNodesPerShard = 100;
+
+public:
+    void AddShard(int shardId) {
+        for (int i = 0; i < virtualNodesPerShard; i++) {
+            string key = "shard_" + std::to_string(shardId) +
+                        "_vnode_" + std::to_string(i);
+            uint64_t hash = MurmurHash(key);
+            ring[hash] = shardId;
+        }
+    }
+
+    void RemoveShard(int shardId) {
+        auto it = ring.begin();
+        while (it != ring.end()) {
+            if (it->second == shardId) {
+                it = ring.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    int GetShard(uint64_t userId) {
+        if (ring.empty()) return -1;
+
+        uint64_t hash = MurmurHash(std::to_string(userId));
+
+        // 해시값보다 크거나 같은 첫 번째 노드 찾기
+        auto it = ring.lower_bound(hash);
+        if (it == ring.end()) {
+            it = ring.begin();  // 링 순환
+        }
+
+        return it->second;
+    }
+};
+
+// Consistent Hashing 장점:
+// - 샤드 추가/제거 시 최소한의 데이터만 이동
+// - 균등 분배
+// - 확장성 좋음</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 장애 대응</h2>
+            <div class="conversation">
+                <div class="q">서버가 죽으면 어떻게 대응하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">서버 Health Check와 장애 복구</div>
+                        <pre><code>class ServerHealthMonitor {
+    struct HealthCheck {
+        bool isHealthy;
+        int consecutiveFailures;
+        float responseTime;
+        time_t lastCheck;
+    };
+
+    std::map<string, HealthCheck> serverHealth;
+    const int MAX_FAILURES = 3;
+    const float HEALTH_CHECK_INTERVAL = 5.0f;  // 5초
+
+public:
+    void RunHealthChecks() {
+        for (auto& [serverId, health] : serverHealth) {
+            auto start = Clock::now();
+            bool success = PingServer(serverId);
+            float responseTime = (Clock::now() - start).count();
+
+            if (success && responseTime < TIMEOUT) {
+                health.isHealthy = true;
+                health.consecutiveFailures = 0;
+                health.responseTime = responseTime;
+            } else {
+                health.consecutiveFailures++;
+                if (health.consecutiveFailures >= MAX_FAILURES) {
+                    health.isHealthy = false;
+                    HandleServerFailure(serverId);
+                }
+            }
+            health.lastCheck = time(nullptr);
+        }
+    }
+
+    void HandleServerFailure(const string& serverId) {
+        Log("Server %s marked as unhealthy", serverId.c_str());
+
+        // 1. 로드 밸런서에서 제거
+        loadBalancer.RemoveServer(serverId);
+
+        // 2. 진행 중인 매치 복구 시도
+        auto affectedMatches = GetMatchesOnServer(serverId);
+        for (auto& matchId : affectedMatches) {
+            TryRecoverMatch(matchId);
+        }
+
+        // 3. 새 서버 요청 (스케일업)
+        RequestReplacementServer(serverId);
+
+        // 4. 알림 전송
+        SendAlert("Server failure: " + serverId);
+    }
+
+    void TryRecoverMatch(MatchID matchId) {
+        // 주기적으로 저장된 체크포인트에서 복구
+        auto checkpoint = redis.Get("match_checkpoint:" + matchId);
+        if (checkpoint) {
+            // 새 서버에서 매치 재시작
+            auto newServer = AllocateNewServer();
+            newServer->RestoreMatch(matchId, checkpoint);
+
+            // 플레이어들에게 재연결 안내
+            NotifyPlayersToReconnect(matchId, newServer->address);
+        } else {
+            // 복구 불가 → 매치 취소
+            CancelMatch(matchId, "Server error - match canceled");
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">게임 상태를 어떻게 백업하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">매치 상태 체크포인트</div>
+                        <pre><code>class MatchCheckpoint {
+    const float CHECKPOINT_INTERVAL = 30.0f;  // 30초마다
+
+public:
+    void PeriodicCheckpoint(const GameState& state) {
+        // 직렬화
+        auto data = Serialize(state);
+
+        // 압축
+        auto compressed = Compress(data);
+
+        // Redis에 저장 (TTL 설정)
+        string key = "match_checkpoint:" + state.matchId;
+        redis.SetEx(key, compressed, CHECKPOINT_TTL);
+
+        Log("Checkpoint saved for match %s (%d bytes)",
+            state.matchId.c_str(), compressed.size());
+    }
+
+    std::optional<GameState> LoadCheckpoint(MatchID matchId) {
+        string key = "match_checkpoint:" + matchId;
+        auto compressed = redis.Get(key);
+
+        if (!compressed) return std::nullopt;
+
+        auto data = Decompress(*compressed);
+        return Deserialize<GameState>(data);
+    }
+};
+
+// 체크포인트 주의사항:
+// - 자주 저장: 복구 시 손실 적음, 하지만 부하 증가
+// - 드물게 저장: 부하 적음, 하지만 복구 시 손실 큼
+// - 중요 이벤트 시 추가 저장 (킬, 점령 등)</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>수평 확장</strong>: 서버 대수를 늘려 용량 증가 (선호됨)</li>
+                <li><strong>수직 확장</strong>: 더 좋은 서버로 교체 (한계 있음)</li>
+                <li><strong>Stateless</strong>: 상태 없는 서버, 쉬운 확장 (로그인, 로비)</li>
+                <li><strong>Stateful</strong>: 상태 있는 서버, 복잡한 확장 (게임 서버)</li>
+                <li><strong>Auto Scaling</strong>: 부하에 따라 자동 서버 추가/제거</li>
+                <li><strong>Graceful Shutdown</strong>: 진행 중인 매치 보호하며 종료</li>
+                <li><strong>데이터 샤딩</strong>: Consistent Hashing으로 DB 분산</li>
+                <li><strong>장애 복구</strong>: Health Check, 체크포인트로 빠른 복구</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

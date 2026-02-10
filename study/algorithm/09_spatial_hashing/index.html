@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Hashing | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>무한한 공간에서 물체를 어떻게 빨리 찾을까?</h1>
+            <p class="subtitle">해시 테이블로 공간 분할하기 - Spatial Hashing</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Spatial Hashing이란?</h2>
+            <div class="conversation">
+                <div class="q">Quadtree와 뭐가 다른가요?</div>
+                <div class="a">
+                    <p>Quadtree는 경계가 정해진 공간을 트리로 분할합니다.</p>
+                    <p class="highlight">Spatial Hashing은 해시 테이블을 사용해 무한한 공간도 처리 가능합니다!</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>Quadtree</th>
+                                <th>Spatial Hashing</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>공간 범위</td>
+                                <td>미리 정의된 경계</td>
+                                <td>무한 (해시 충돌로 처리)</td>
+                            </tr>
+                            <tr>
+                                <td>메모리</td>
+                                <td>트리 노드 오버헤드</td>
+                                <td>사용 셀만 할당</td>
+                            </tr>
+                            <tr>
+                                <td>동적 물체</td>
+                                <td>재구축 또는 업데이트</td>
+                                <td>O(1) 삽입/삭제</td>
+                            </tr>
+                            <tr>
+                                <td>질의</td>
+                                <td>O(log n)</td>
+                                <td>O(1) 평균</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">어떻게 동작하나요?</div>
+                <div class="a">
+                    <p class="key-point">좌표를 셀 ID로 변환하고, 해시 테이블에 저장합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Spatial Hashing 원리
+
+1. 공간을 가상의 그리드로 나눔
+   ┌───┬───┬───┬───┐
+   │0,2│1,2│2,2│3,2│
+   ├───┼───┼───┼───┤
+   │0,1│1,1│2,1│3,1│  ← 각 셀에 ID 부여
+   ├───┼───┼───┼───┤
+   │0,0│1,0│2,0│3,0│
+   └───┴───┴───┴───┘
+
+2. 물체 좌표 → 셀 ID → 해시값
+   물체 (3.5, 2.7) → 셀 (1, 1) → hash(1, 1) = 5
+
+3. 해시 테이블에 저장
+   Bucket[5] = [물체A, 물체B, ...]
+
+4. 주변 셀 조회로 인근 물체 검색
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 기본 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">C++ Spatial Hashing 구현</div>
+                    <pre><code>#include &lt;unordered_map&gt;
+#include &lt;vector&gt;
+#include &lt;functional&gt;
+
+struct Vec2 {
+    float x, y;
+};
+
+struct GameObject {
+    int id;
+    Vec2 position;
+    float radius;
+};
+
+// 셀 좌표를 위한 해시 함수
+struct CellHash {
+    std::size_t operator()(const std::pair&lt;int, int&gt;& cell) const {
+        // 간단한 해시 결합
+        return std::hash&lt;int&gt;()(cell.first) ^
+               (std::hash&lt;int&gt;()(cell.second) << 1);
+    }
+};
+
+class SpatialHash {
+private:
+    float cellSize;
+    std::unordered_map&lt;std::pair&lt;int, int&gt;,
+                       std::vector&lt;GameObject*&gt;,
+                       CellHash&gt; buckets;
+
+    // 좌표를 셀 좌표로 변환
+    std::pair&lt;int, int&gt; getCell(float x, float y) const {
+        return {
+            static_cast&lt;int&gt;(std::floor(x / cellSize)),
+            static_cast&lt;int&gt;(std::floor(y / cellSize))
+        };
+    }
+
+public:
+    SpatialHash(float size) : cellSize(size) {}
+
+    // 물체 삽입
+    void insert(GameObject* obj) {
+        auto cell = getCell(obj->position.x, obj->position.y);
+        buckets[cell].push_back(obj);
+    }
+
+    // 물체 제거
+    void remove(GameObject* obj) {
+        auto cell = getCell(obj->position.x, obj->position.y);
+        auto& bucket = buckets[cell];
+        bucket.erase(
+            std::remove(bucket.begin(), bucket.end(), obj),
+            bucket.end()
+        );
+
+        // 빈 버킷 정리 (선택적)
+        if (bucket.empty()) {
+            buckets.erase(cell);
+        }
+    }
+
+    // 물체 이동 업데이트
+    void update(GameObject* obj, const Vec2& oldPos) {
+        auto oldCell = getCell(oldPos.x, oldPos.y);
+        auto newCell = getCell(obj->position.x, obj->position.y);
+
+        if (oldCell != newCell) {
+            // 셀이 변경된 경우에만 업데이트
+            auto& oldBucket = buckets[oldCell];
+            oldBucket.erase(
+                std::remove(oldBucket.begin(), oldBucket.end(), obj),
+                oldBucket.end()
+            );
+            buckets[newCell].push_back(obj);
+        }
+    }
+
+    // 범위 내 물체 질의
+    void query(float x, float y, float radius,
+               std::vector&lt;GameObject*&gt;& result) const {
+        // 질의 범위가 걸치는 모든 셀 검사
+        int minCellX = static_cast&lt;int&gt;(std::floor((x - radius) / cellSize));
+        int maxCellX = static_cast&lt;int&gt;(std::floor((x + radius) / cellSize));
+        int minCellY = static_cast&lt;int&gt;(std::floor((y - radius) / cellSize));
+        int maxCellY = static_cast&lt;int&gt;(std::floor((y + radius) / cellSize));
+
+        float radiusSq = radius * radius;
+
+        for (int cy = minCellY; cy <= maxCellY; cy++) {
+            for (int cx = minCellX; cx <= maxCellX; cx++) {
+                auto it = buckets.find({cx, cy});
+                if (it == buckets.end()) continue;
+
+                for (GameObject* obj : it->second) {
+                    float dx = obj->position.x - x;
+                    float dy = obj->position.y - y;
+                    if (dx * dx + dy * dy <= radiusSq) {
+                        result.push_back(obj);
+                    }
+                }
+            }
+        }
+    }
+
+    // 전체 초기화
+    void clear() {
+        buckets.clear();
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 큰 물체 처리</h2>
+            <div class="conversation">
+                <div class="q">물체가 여러 셀에 걸치면 어떻게 하나요?</div>
+                <div class="a">
+                    <p class="warning">큰 물체는 하나의 셀에만 넣으면 검색에서 누락될 수 있습니다!</p>
+
+                    <p><strong>해결책 1: 모든 걸치는 셀에 삽입</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">다중 셀 삽입</div>
+                        <pre><code>void insertWithRadius(GameObject* obj) {
+    float r = obj->radius;
+    float x = obj->position.x;
+    float y = obj->position.y;
+
+    int minCellX = static_cast&lt;int&gt;(std::floor((x - r) / cellSize));
+    int maxCellX = static_cast&lt;int&gt;(std::floor((x + r) / cellSize));
+    int minCellY = static_cast&lt;int&gt;(std::floor((y - r) / cellSize));
+    int maxCellY = static_cast&lt;int&gt;(std::floor((y + r) / cellSize));
+
+    for (int cy = minCellY; cy <= maxCellY; cy++) {
+        for (int cx = minCellX; cx <= maxCellX; cx++) {
+            buckets[{cx, cy}].push_back(obj);
+        }
+    }
+
+    // 물체가 등록된 셀 목록 저장 (제거 시 필요)
+    obj->cells.clear();
+    for (int cy = minCellY; cy <= maxCellY; cy++) {
+        for (int cx = minCellX; cx <= maxCellX; cx++) {
+            obj->cells.push_back({cx, cy});
+        }
+    }
+}</code></pre>
+                    </div>
+
+                    <p><strong>해결책 2: 계층적 해싱</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">계층별 셀 크기</div>
+                        <pre><code>class HierarchicalSpatialHash {
+private:
+    std::array&lt;SpatialHash, 4&gt; levels;  // 다양한 셀 크기
+
+public:
+    HierarchicalSpatialHash() {
+        // 셀 크기: 1, 4, 16, 64
+        for (int i = 0; i < 4; i++) {
+            levels[i] = SpatialHash(std::pow(4, i));
+        }
+    }
+
+    void insert(GameObject* obj) {
+        // 물체 크기에 맞는 레벨 선택
+        int level = selectLevel(obj->radius);
+        levels[level].insert(obj);
+    }
+
+    int selectLevel(float radius) {
+        // 물체가 최대 4개 셀에 걸치도록 레벨 선택
+        for (int i = 0; i < 4; i++) {
+            float cellSize = std::pow(4, i);
+            if (radius <= cellSize) {
+                return i;
+            }
+        }
+        return 3;  // 최대 레벨
+    }
+
+    void query(float x, float y, float radius,
+               std::vector&lt;GameObject*&gt;& result) {
+        // 모든 레벨에서 검색
+        for (auto& level : levels) {
+            level.query(x, y, radius, result);
+        }
+        // 중복 제거
+        std::sort(result.begin(), result.end());
+        result.erase(std::unique(result.begin(), result.end()), result.end());
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 3D 확장</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">3D Spatial Hashing</div>
+                    <pre><code>struct Cell3D {
+    int x, y, z;
+
+    bool operator==(const Cell3D& other) const {
+        return x == other.x && y == other.y && z == other.z;
+    }
+};
+
+struct Cell3DHash {
+    std::size_t operator()(const Cell3D& cell) const {
+        // 3D 해시 결합
+        std::size_t h1 = std::hash&lt;int&gt;()(cell.x);
+        std::size_t h2 = std::hash&lt;int&gt;()(cell.y);
+        std::size_t h3 = std::hash&lt;int&gt;()(cell.z);
+        return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
+};
+
+class SpatialHash3D {
+private:
+    float cellSize;
+    std::unordered_map&lt;Cell3D, std::vector&lt;GameObject3D*&gt;, Cell3DHash&gt; buckets;
+
+    Cell3D getCell(float x, float y, float z) const {
+        return {
+            static_cast&lt;int&gt;(std::floor(x / cellSize)),
+            static_cast&lt;int&gt;(std::floor(y / cellSize)),
+            static_cast&lt;int&gt;(std::floor(z / cellSize))
+        };
+    }
+
+public:
+    void query(const Vec3& center, float radius,
+               std::vector&lt;GameObject3D*&gt;& result) const {
+        Cell3D minCell = getCell(center.x - radius, center.y - radius,
+                                 center.z - radius);
+        Cell3D maxCell = getCell(center.x + radius, center.y + radius,
+                                 center.z + radius);
+
+        float radiusSq = radius * radius;
+
+        for (int cz = minCell.z; cz <= maxCell.z; cz++) {
+            for (int cy = minCell.y; cy <= maxCell.y; cy++) {
+                for (int cx = minCell.x; cx <= maxCell.x; cx++) {
+                    auto it = buckets.find({cx, cy, cz});
+                    if (it == buckets.end()) continue;
+
+                    for (auto* obj : it->second) {
+                        float distSq = (obj->position - center).lengthSq();
+                        if (distSq <= radiusSq) {
+                            result.push_back(obj);
+                        }
+                    }
+                }
+            }
+        }
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 최적화 기법</h2>
+            <div class="conversation">
+                <div class="q">Spatial Hashing을 더 빠르게 만들 수 있나요?</div>
+                <div class="a">
+                    <p><strong>1. 정수 해시 최적화:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">빠른 해시 함수</div>
+                        <pre><code>// 빠른 정수 해시 (Z-order curve / Morton code)
+inline uint32_t hashCell(int x, int y) {
+    // Interleave bits
+    uint32_t ux = static_cast&lt;uint32_t&gt;(x);
+    uint32_t uy = static_cast&lt;uint32_t&gt;(y);
+
+    ux = (ux | (ux << 8)) & 0x00FF00FF;
+    ux = (ux | (ux << 4)) & 0x0F0F0F0F;
+    ux = (ux | (ux << 2)) & 0x33333333;
+    ux = (ux | (ux << 1)) & 0x55555555;
+
+    uy = (uy | (uy << 8)) & 0x00FF00FF;
+    uy = (uy | (uy << 4)) & 0x0F0F0F0F;
+    uy = (uy | (uy << 2)) & 0x33333333;
+    uy = (uy | (uy << 1)) & 0x55555555;
+
+    return ux | (uy << 1);  // Morton code
+}</code></pre>
+                    </div>
+
+                    <p><strong>2. Open Addressing 해시 테이블:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">캐시 친화적 해시 테이블</div>
+                        <pre><code>class FlatSpatialHash {
+private:
+    struct Bucket {
+        Cell3D cell;
+        uint16_t objectStart;  // objects 배열의 시작 인덱스
+        uint16_t objectCount;
+        bool occupied = false;
+    };
+
+    std::vector&lt;Bucket&gt; buckets;
+    std::vector&lt;GameObject*&gt; objects;  // 연속 배열
+    size_t bucketMask;  // power of 2 - 1
+
+public:
+    FlatSpatialHash(size_t bucketCount) {
+        // 2의 거듭제곱으로 반올림
+        bucketCount = nextPowerOf2(bucketCount);
+        buckets.resize(bucketCount);
+        bucketMask = bucketCount - 1;
+    }
+
+    Bucket* findBucket(const Cell3D& cell) {
+        size_t hash = Cell3DHash()(cell);
+        size_t idx = hash & bucketMask;
+
+        // Linear probing
+        for (size_t i = 0; i < buckets.size(); i++) {
+            Bucket& bucket = buckets[(idx + i) & bucketMask];
+            if (!bucket.occupied || bucket.cell == cell) {
+                return &bucket;
+            }
+        }
+        return nullptr;  // 테이블 가득 참
+    }
+};</code></pre>
+                    </div>
+
+                    <p><strong>3. SIMD 거리 계산:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">SSE 거리 체크</div>
+                        <pre><code>#include &lt;xmmintrin.h&gt;
+
+// 4개 물체 동시 거리 체크
+void checkDistances4(const Vec2& center, float radius,
+                     const Vec2* positions,  // 4개 위치
+                     bool* results) {         // 4개 결과
+    __m128 cx = _mm_set1_ps(center.x);
+    __m128 cy = _mm_set1_ps(center.y);
+    __m128 rsq = _mm_set1_ps(radius * radius);
+
+    __m128 px = _mm_set_ps(positions[3].x, positions[2].x,
+                           positions[1].x, positions[0].x);
+    __m128 py = _mm_set_ps(positions[3].y, positions[2].y,
+                           positions[1].y, positions[0].y);
+
+    __m128 dx = _mm_sub_ps(px, cx);
+    __m128 dy = _mm_sub_ps(py, cy);
+    __m128 distSq = _mm_add_ps(_mm_mul_ps(dx, dx), _mm_mul_ps(dy, dy));
+
+    __m128 mask = _mm_cmple_ps(distSq, rsq);
+    int resultBits = _mm_movemask_ps(mask);
+
+    results[0] = (resultBits & 1) != 0;
+    results[1] = (resultBits & 2) != 0;
+    results[2] = (resultBits & 4) != 0;
+    results[3] = (resultBits & 8) != 0;
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 활용 사례</h2>
+            <div class="conversation">
+                <div class="q">Spatial Hashing은 어디에 사용하나요?</div>
+                <div class="a">
+                    <ul>
+                        <li><strong>물리 엔진</strong>: 충돌 감지 Broad Phase</li>
+                        <li><strong>파티클 시스템</strong>: 입자 간 상호작용</li>
+                        <li><strong>RTS 게임</strong>: 유닛 선택, 범위 공격</li>
+                        <li><strong>시뮬레이션</strong>: SPH (유체 시뮬레이션)</li>
+                        <li><strong>멀티플레이어</strong>: 관심 영역 관리</li>
+                    </ul>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+성능 비교 (10,000개 동적 물체)
+
+                Brute Force    Quadtree    Spatial Hash
+삽입/삭제         O(1)          O(log n)      O(1)
+질의              O(n)          O(log n)      O(1)*
+재구축         불필요          O(n log n)    불필요
+메모리          O(n)          O(n log n)     O(n)
+
+* 평균 케이스, 해시 충돌에 따라 다름
+
+Spatial Hashing은 동적 물체가 많고
+공간이 균일하게 분포할 때 최적!
+                        </pre>
+                    </div>
+
+                    <p class="highlight">Spatial Hashing은 단순하면서도 매우 효율적인 공간 분할 기법입니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Spatial Hashing</strong>: 좌표 → 셀 ID → 해시값으로 물체 관리</li>
+                <li><strong>장점</strong>: 무한 공간, O(1) 삽입/삭제, 동적 물체에 적합</li>
+                <li><strong>큰 물체</strong>: 다중 셀 삽입 또는 계층적 해싱</li>
+                <li><strong>최적화</strong>: Morton code, Open Addressing, SIMD</li>
+                <li><strong>활용</strong>: 충돌 감지, 파티클, SPH 시뮬레이션</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

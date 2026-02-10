@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lag Compensation | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../server.html" class="back-link">← 목록으로</a>
+            <h1>분명히 맞췄는데 왜 빗나갔지?</h1>
+            <p class="subtitle">FPS 게임의 핵심 - Lag Compensation과 Hit Registration</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 문제의 본질</h2>
+            <div class="conversation">
+                <div class="q">왜 조준을 정확히 했는데 안 맞는 경우가 생기나요?</div>
+                <div class="a">
+                    <p>네트워크 지연 때문입니다. 당신이 보는 화면은 <strong>과거</strong>의 모습입니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+시간축으로 본 네트워크 지연 문제:
+
+서버 시간:        0ms ────────────────────────────── 100ms
+                  │                                    │
+                  │  적의 실제 위치: ●────────────────▶○
+                  │                 (0,0)            (10,0)
+                  │
+                  │
+클라이언트 시간:   0ms ────────────────────────────── 100ms
+                  │           │
+                  │           │ 50ms 지연으로 인해
+                  │           │ 클라이언트가 보는 적 위치
+                  │           ▼
+                  │          ●  ← 여기를 조준해서 쏨!
+                  │        (5,0)
+                  │
+                  │          그런데 서버에서 적은 이미 (10,0)에 있음
+                        </pre>
+                    </div>
+                    <p class="warning">플레이어는 분명히 적을 맞췄는데, 서버 기준으로는 빈 공간을 쐈습니다!</p>
+                </div>
+
+                <div class="q">이 문제를 해결하지 않으면 어떻게 되나요?</div>
+                <div class="a">
+                    <p>핑이 높은 플레이어는 절대 적을 맞출 수 없습니다. 게임이 불공평해집니다.</p>
+                    <p class="highlight">Lag Compensation은 이 문제를 해결하여, 플레이어가 화면에서 본 대로 판정하는 기술입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Lag Compensation의 원리</h2>
+            <div class="conversation">
+                <div class="q">Lag Compensation은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>서버가 <strong>시간을 되감아서</strong> 플레이어가 쏜 시점의 상황을 재현합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+Lag Compensation 동작 과정:
+
+1. 클라이언트가 사격 (t = 0ms, 로컬 시간)
+   └─ "나는 (5, 0)에 있는 적을 쐈다" + 타임스탬프
+
+2. 사격 정보가 서버에 도착 (t = 50ms, 서버 시간)
+   └─ 서버: "이 사격은 50ms 전에 발생했군"
+
+3. 서버가 시간 되감기 (Rewind)
+   ┌────────────────────────────────────────┐
+   │  t = 0ms 시점의 월드 상태 복원          │
+   │                                        │
+   │  적 위치: (5, 0)  ← 실제로 그 시점엔 여기│
+   │  사격자 위치: (0, 0)                    │
+   │  사격 방향: (1, 0)                      │
+   └────────────────────────────────────────┘
+
+4. 되감긴 상태에서 히트 판정
+   └─ 레이캐스트 실행 → 적 (5, 0)과 충돌!
+   └─ 결과: HIT! 🎯
+
+5. 현재 시간으로 복귀, 결과 적용
+   └─ 적에게 데미지 처리
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">서버는 과거 상태를 어떻게 알고 있나요?</div>
+                <div class="a">
+                    <p>서버는 일정 시간 동안의 <strong>히스토리 버퍼</strong>를 유지합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">히스토리 버퍼 구현</div>
+                        <pre><code>class PositionHistory {
+    struct HistoryEntry {
+        float timestamp;
+        Vector3 position;
+        BoundingBox hitbox;
+    };
+
+    static const int HISTORY_SIZE = 128;  // 약 1초 분량
+    static const float HISTORY_DURATION = 1.0f;
+
+    std::array<HistoryEntry, HISTORY_SIZE> history;
+    int head = 0;
+
+public:
+    // 매 틱마다 호출
+    void RecordPosition(float serverTime, Vector3 pos, BoundingBox hitbox) {
+        history[head] = { serverTime, pos, hitbox };
+        head = (head + 1) % HISTORY_SIZE;
+    }
+
+    // 특정 시점의 위치 조회
+    bool GetPositionAtTime(float targetTime, Vector3& outPos,
+                           BoundingBox& outHitbox) {
+        // 가장 가까운 두 스냅샷 찾기
+        HistoryEntry* before = nullptr;
+        HistoryEntry* after = nullptr;
+
+        for (int i = 0; i < HISTORY_SIZE; i++) {
+            int idx = (head - 1 - i + HISTORY_SIZE) % HISTORY_SIZE;
+
+            if (history[idx].timestamp <= targetTime) {
+                before = &history[idx];
+                if (i > 0) {
+                    after = &history[(idx + 1) % HISTORY_SIZE];
+                }
+                break;
+            }
+        }
+
+        if (!before) return false;  // 너무 오래된 시간
+
+        if (after && after->timestamp > targetTime) {
+            // 두 스냅샷 사이를 보간
+            float t = (targetTime - before->timestamp) /
+                      (after->timestamp - before->timestamp);
+            outPos = Vector3::Lerp(before->position, after->position, t);
+            outHitbox = BoundingBox::Lerp(before->hitbox, after->hitbox, t);
+        } else {
+            outPos = before->position;
+            outHitbox = before->hitbox;
+        }
+        return true;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 서버 측 구현</h2>
+            <div class="conversation">
+                <div class="q">전체적인 히트 판정 과정은 어떻게 되나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">서버의 샷 처리</div>
+                        <pre><code>class HitDetectionSystem {
+    std::map<PlayerID, PositionHistory> playerHistories;
+    float maxCompensationTime = 0.25f;  // 최대 250ms 보정
+
+public:
+    void ProcessShot(const ShotData& shot) {
+        // 1. 클라이언트 레이턴시 계산
+        float clientLatency = GetPlayerLatency(shot.shooterID);
+        float shotTime = currentServerTime - clientLatency;
+
+        // 2. 보정 제한 (어뷰징 방지)
+        float compensationTime = std::min(clientLatency, maxCompensationTime);
+        float rewindTime = currentServerTime - compensationTime;
+
+        // 3. 모든 플레이어를 과거 위치로 되감기
+        std::vector<RewindState> savedStates;
+        for (auto& [playerID, history] : playerHistories) {
+            if (playerID == shot.shooterID) continue;  // 쏜 사람은 제외
+
+            Vector3 pastPos;
+            BoundingBox pastHitbox;
+
+            if (history.GetPositionAtTime(rewindTime, pastPos, pastHitbox)) {
+                // 현재 상태 저장
+                savedStates.push_back({
+                    playerID,
+                    GetPlayer(playerID)->position,
+                    GetPlayer(playerID)->hitbox
+                });
+
+                // 과거 위치로 이동
+                GetPlayer(playerID)->position = pastPos;
+                GetPlayer(playerID)->hitbox = pastHitbox;
+            }
+        }
+
+        // 4. 되감긴 상태에서 레이캐스트
+        RaycastHit hit;
+        bool didHit = Physics::Raycast(
+            shot.origin,
+            shot.direction,
+            shot.maxDistance,
+            hit
+        );
+
+        // 5. 모든 플레이어 원래 위치로 복원
+        for (const auto& saved : savedStates) {
+            GetPlayer(saved.playerID)->position = saved.position;
+            GetPlayer(saved.playerID)->hitbox = saved.hitbox;
+        }
+
+        // 6. 히트 결과 처리
+        if (didHit && hit.entity->IsPlayer()) {
+            ApplyDamage(hit.entity, shot.damage, shot.hitLocation);
+
+            // 결과 브로드캐스트
+            BroadcastHitConfirm(shot.shooterID, hit.entity->GetID());
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">히트박스는 어떻게 처리하나요?</div>
+                <div class="a">
+                    <p>게임마다 다르지만, 일반적으로 <strong>단순화된 히트박스</strong>를 사용합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+캐릭터 히트박스 구조:
+
+        ┌───┐           실제 메시는 복잡하지만
+        │ H │  ← Head   히트박스는 단순한 도형 조합
+        └─┬─┘
+    ┌─────┴─────┐
+    │           │
+    │   Body    │  ← Torso (AABB)
+    │           │
+    └─────┬─────┘
+      ┌───┴───┐
+      │       │
+      │ Legs  │  ← Legs (Capsule)
+      │       │
+      └───────┘
+
+각 부위별 데미지 배율:
+- Head: 4.0x (헤드샷)
+- Torso: 1.0x (기본)
+- Arms: 0.75x
+- Legs: 0.75x
+                        </pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">부위별 히트 판정</div>
+                        <pre><code>struct CharacterHitbox {
+    Capsule head;
+    AABB torso;
+    Capsule leftArm, rightArm;
+    Capsule leftLeg, rightLeg;
+
+    HitResult CheckHit(const Ray& ray) {
+        HitResult result;
+        result.didHit = false;
+        result.distance = FLT_MAX;
+
+        // 부위별로 검사, 가장 가까운 히트 반환
+        CheckPart(ray, head, "head", 4.0f, result);
+        CheckPart(ray, torso, "torso", 1.0f, result);
+        CheckPart(ray, leftArm, "arm", 0.75f, result);
+        CheckPart(ray, rightArm, "arm", 0.75f, result);
+        CheckPart(ray, leftLeg, "leg", 0.75f, result);
+        CheckPart(ray, rightLeg, "leg", 0.75f, result);
+
+        return result;
+    }
+
+private:
+    void CheckPart(const Ray& ray, const Collider& part,
+                   const char* name, float multiplier, HitResult& result) {
+        float t;
+        if (part.Intersects(ray, t) && t < result.distance) {
+            result.didHit = true;
+            result.distance = t;
+            result.hitPart = name;
+            result.damageMultiplier = multiplier;
+            result.hitPoint = ray.origin + ray.direction * t;
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 공정성 문제와 해결책</h2>
+            <div class="conversation">
+                <div class="q">Lag Compensation이 핑 높은 사람에게 유리한 거 아닌가요?</div>
+                <div class="a">
+                    <p>맞습니다. 이것이 <strong>"Peeker's Advantage"</strong> 문제입니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+Peeker's Advantage 시나리오:
+
+Player A (핑 150ms) - 공격자
+Player B (핑 20ms) - 수비자
+
+1. A가 코너를 돌며 B를 봄 (A의 화면)
+   ┌─────────┐
+   │    A→   │ B는 아직 A를 못 봄
+   │    ▼    │
+   │  ─────  │ ← 벽
+   │    B    │
+   └─────────┘
+
+2. 150ms 후: A의 정보가 B에게 도착
+   ┌─────────┐
+   │    A    │ 이제서야 B가 A를 봄
+   │    ▼    │ 하지만 A는 이미 150ms 전에
+   │  ─────  │ B를 조준하고 쐈음!
+   │    B    │
+   └─────────┘
+
+3. 결과: A가 쏜 총알이 Lag Compensation으로 적용
+        B 입장에서는 보이자마자 죽음!
+                        </pre>
+                    </div>
+                    <p class="warning">수비자 B는 반응할 시간도 없이 죽습니다. 공격자가 구조적으로 유리합니다.</p>
+                </div>
+
+                <div class="q">이 문제를 어떻게 완화하나요?</div>
+                <div class="a">
+                    <p>여러 가지 방법이 있습니다:</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>방법</th>
+                                <th>설명</th>
+                                <th>트레이드오프</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>보정 시간 제한</td>
+                                <td>최대 100~250ms만 보정</td>
+                                <td>고핑 유저 정확도 저하</td>
+                            </tr>
+                            <tr>
+                                <td>하이브리드 판정</td>
+                                <td>서버/클라이언트 판정 가중 평균</td>
+                                <td>구현 복잡도 증가</td>
+                            </tr>
+                            <tr>
+                                <td>Favor the Defender</td>
+                                <td>수비자에게 약간의 판정 유리</td>
+                                <td>공격자 경험 저하</td>
+                            </tr>
+                            <tr>
+                                <td>핑 기반 매칭</td>
+                                <td>비슷한 핑끼리 매칭</td>
+                                <td>대기 시간 증가</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">하이브리드 판정 예시</div>
+                        <pre><code>struct HybridHitDetection {
+    float clientWeight = 0.7f;  // 클라이언트 판정 비중
+    float serverWeight = 0.3f;  // 서버 판정 비중
+
+    bool ProcessHit(const ShotData& shot, PlayerID targetID) {
+        // 1. 클라이언트 판정 (Lag Compensation 적용)
+        bool clientHit = CheckWithLagCompensation(shot, targetID);
+
+        // 2. 서버 현재 상태 판정 (보정 없음)
+        bool serverHit = CheckCurrentState(shot, targetID);
+
+        // 3. 확률적 판정
+        if (clientHit && serverHit) {
+            return true;  // 둘 다 히트면 확정
+        }
+
+        if (clientHit && !serverHit) {
+            // 클라이언트만 히트: 70% 확률로 히트
+            return RandomFloat() < clientWeight;
+        }
+
+        if (!clientHit && serverHit) {
+            // 서버만 히트: 30% 확률로 히트
+            return RandomFloat() < serverWeight;
+        }
+
+        return false;  // 둘 다 미스
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: "Getting Shot Around Corners" 문제</h2>
+            <div class="conversation">
+                <div class="q">엄폐물 뒤로 숨었는데 왜 맞나요?</div>
+                <div class="a">
+                    <p>이것도 Lag Compensation의 부작용입니다. 적 화면에서는 아직 엄폐물 밖에 있었기 때문입니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+"벽 뒤에서 맞는" 현상:
+
+적(Shooter)의 화면 (100ms 전):
+┌─────────────────┐
+│                 │
+│    ● Shooter   │
+│    ↓           │
+│  █████         │ ← 벽
+│      ○ You     │ ← 아직 밖에 있음!
+│                │
+└─────────────────┘
+
+나(You)의 화면 (현재):
+┌─────────────────┐
+│                 │
+│    ● Shooter   │
+│                │
+│  █████○        │ ← 나는 벽 뒤로 숨음
+│                │ ← 안전하다고 생각
+└─────────────────┘
+
+서버의 Lag Compensation 결과:
+→ Shooter의 사격 시점(100ms 전)으로 되감음
+→ 그 시점에 You는 밖에 있었음
+→ 판정: HIT! 💀
+→ 나: "????"
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">완전히 해결할 방법은 없나요?</div>
+                <div class="a">
+                    <p>네트워크 지연이 있는 한 완전한 해결은 <strong>불가능</strong>합니다. 그래서 두 가지 선택지가 있습니다:</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 Favor the Shooter vs Favor the Defender</strong>
+                        <p><strong>Favor the Shooter</strong>: 쏘는 사람 기준 판정. 내 화면에서 맞추면 맞음. 대신 벽 뒤에서 맞을 수 있음.</p>
+                        <p><strong>Favor the Defender</strong>: 맞는 사람 기준 판정. 벽 뒤에 있으면 안 맞음. 대신 분명히 맞췄는데 안 맞을 수 있음.</p>
+                        <p>대부분의 FPS는 <strong>Favor the Shooter</strong>를 선택합니다. "쏴서 맞추는 재미"가 게임의 핵심이기 때문입니다.</p>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">양쪽 균형을 맞추는 시도</div>
+                        <pre><code>// 이동 속도가 빠를수록 Lag Compensation 축소
+// (빠르게 움직여서 엄폐하면 보정이 줄어듦)
+
+float CalculateCompensationFactor(const Player& target, float latency) {
+    float baseCompensation = latency;
+
+    // 타겟의 이동 속도 확인
+    float targetSpeed = target.velocity.Length();
+    float maxSpeed = target.maxMoveSpeed;
+    float speedRatio = targetSpeed / maxSpeed;
+
+    // 빠르게 움직일수록 보정 감소 (최대 50% 감소)
+    float speedPenalty = speedRatio * 0.5f;
+
+    float adjustedCompensation = baseCompensation * (1.0f - speedPenalty);
+
+    // 최소 보정은 유지 (완전히 0이 되면 안 됨)
+    return std::max(adjustedCompensation, latency * 0.3f);
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실제 게임들의 구현</h2>
+            <div class="conversation">
+                <div class="q">유명한 게임들은 어떻게 구현하나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>게임</th>
+                                <th>접근 방식</th>
+                                <th>특징</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>CS:GO</td>
+                                <td>서버 기반 Lag Comp</td>
+                                <td>cl_interp, cl_interp_ratio 조절 가능. 64/128 틱 서버.</td>
+                            </tr>
+                            <tr>
+                                <td>Overwatch</td>
+                                <td>Favor the Shooter</td>
+                                <td>강한 클라이언트 예측. 최대 250ms 보정.</td>
+                            </tr>
+                            <tr>
+                                <td>Valorant</td>
+                                <td>하이브리드</td>
+                                <td>128틱 서버. 낮은 peeker's advantage 목표.</td>
+                            </tr>
+                            <tr>
+                                <td>Fortnite</td>
+                                <td>클라이언트 중심</td>
+                                <td>히트스캔은 클라이언트, 투사체는 서버.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">디버깅은 어떻게 하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Lag Compensation 시각화</div>
+                        <pre><code>class LagCompDebugger {
+    bool showRewindPositions = false;
+    bool showHitboxes = false;
+    float debugDuration = 2.0f;
+
+public:
+    void VisualizeShot(const ShotData& shot, const RewindResult& result) {
+        if (!showRewindPositions) return;
+
+        // 사격 레이 표시
+        DebugDraw::Line(shot.origin,
+                       shot.origin + shot.direction * shot.maxDistance,
+                       Color::Red, debugDuration);
+
+        // 되감기 전 위치 (반투명)
+        for (const auto& player : result.currentPositions) {
+            DebugDraw::WireSphere(player.position, 0.5f,
+                                 Color::Blue.WithAlpha(0.3f), debugDuration);
+        }
+
+        // 되감긴 위치 (원)
+        for (const auto& player : result.rewindPositions) {
+            DebugDraw::WireSphere(player.position, 0.5f,
+                                 Color::Green, debugDuration);
+
+            // 시간 되감기 표시
+            DebugDraw::Text(player.position + Vector3(0, 1, 0),
+                           Format("%.0fms ago", result.rewindTime * 1000),
+                           Color::White, debugDuration);
+        }
+
+        // 히트 포인트
+        if (result.didHit) {
+            DebugDraw::Sphere(result.hitPoint, 0.1f,
+                             Color::Yellow, debugDuration);
+            DebugDraw::Text(result.hitPoint + Vector3(0, 0.5f, 0),
+                           Format("HIT: %s (%.1fx)",
+                                  result.hitPart, result.damageMultiplier),
+                           Color::Yellow, debugDuration);
+        }
+    }
+};</code></pre>
+                    </div>
+                    <p class="key-point">개발 중에는 항상 시각화 도구를 켜두세요. 판정 문제 디버깅에 필수적입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Lag Compensation</strong>: 서버가 과거로 되감아서 플레이어가 본 시점 기준으로 판정</li>
+                <li><strong>히스토리 버퍼</strong>: 일정 시간(~1초) 동안의 위치/히트박스 기록</li>
+                <li><strong>Peeker's Advantage</strong>: 공격자가 구조적으로 유리한 현상</li>
+                <li><strong>벽 뒤 피격</strong>: 완전한 해결 불가, 트레이드오프 선택 필요</li>
+                <li><strong>보정 제한</strong>: 최대 100~250ms로 제한하여 악용 방지</li>
+                <li><strong>Favor the Shooter</strong>: 대부분의 FPS가 선택하는 방식 (쏘는 재미 우선)</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

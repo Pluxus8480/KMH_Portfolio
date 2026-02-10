@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NoSQL vs RDBMS 선택 기준 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../database.html" class="back-link">← 목록으로</a>
+            <h1>"우리 게임에는 어떤 DB가 맞을까?"</h1>
+            <p class="subtitle">NoSQL vs RDBMS 게임별 선택 전략</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 왜 선택이 어려운가?</h2>
+            <div class="conversation">
+                <div class="q">게임마다 최적의 DB가 다른 이유는 무엇인가요?</div>
+                <div class="a">
+                    <p>게임 장르에 따라 <strong>데이터 특성</strong>이 완전히 다릅니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                     게임 장르별 데이터 특성                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  MMORPG                           │  캐주얼/소셜 게임               │
+│  ├── 복잡한 관계 (길드, 거래, 퀘스트)  │  ├── 단순한 구조             │
+│  ├── 트랜잭션 중요 (아이템 거래)       │  ├── 읽기 중심               │
+│  ├── 스키마 안정적                    │  ├── 빠른 스키마 변경 필요    │
+│  └── → RDBMS 유리                    │  └── → NoSQL 유리            │
+│                                                                     │
+│  실시간 PvP                         │  분석/로그                     │
+│  ├── 초고속 읽기/쓰기                  │  ├── 대량 쓰기               │
+│  ├── 단순 키-값 접근                   │  ├── 집계 쿼리               │
+│  ├── 일시적 데이터                     │  ├── 스키마리스              │
+│  └── → Redis/메모리 DB               │  └── → Document DB           │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <p class="highlight">은탄환은 없습니다. 데이터 특성을 먼저 분석하세요.</p>
+                </div>
+
+                <div class="q">RDBMS와 NoSQL의 근본적 차이는?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>RDBMS</th>
+                                <th>NoSQL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>스키마</td>
+                                <td>고정 (Schema-on-Write)</td>
+                                <td>유연 (Schema-on-Read)</td>
+                            </tr>
+                            <tr>
+                                <td>관계</td>
+                                <td>JOIN으로 표현</td>
+                                <td>비정규화/임베딩</td>
+                            </tr>
+                            <tr>
+                                <td>일관성</td>
+                                <td>ACID 보장</td>
+                                <td>Eventually Consistent</td>
+                            </tr>
+                            <tr>
+                                <td>확장</td>
+                                <td>수직 확장 (Scale-Up)</td>
+                                <td>수평 확장 (Scale-Out)</td>
+                            </tr>
+                            <tr>
+                                <td>쿼리</td>
+                                <td>SQL (강력한 조회)</td>
+                                <td>제한적 (키 기반)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: NoSQL 유형별 특징</h2>
+            <div class="conversation">
+                <div class="q">NoSQL도 종류가 많던데, 어떤 것들이 있나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                       NoSQL 유형별 비교                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  1. Key-Value Store (Redis, DynamoDB)                               │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  "user:1001" → {"name": "Kim", "level": 50}                  │   │
+│  │                                                              │   │
+│  │  장점: 초고속, 단순함, 확장 용이                              │   │
+│  │  단점: 복잡한 쿼리 불가                                       │   │
+│  │  게임 용도: 세션, 캐시, 실시간 상태                           │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  2. Document Store (MongoDB, CouchDB)                               │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  {                                                           │   │
+│  │    "_id": "char_1001",                                       │   │
+│  │    "name": "Warrior",                                        │   │
+│  │    "inventory": [{"item": "sword", "count": 1}, ...]         │   │
+│  │  }                                                           │   │
+│  │                                                              │   │
+│  │  장점: 유연한 스키마, 중첩 데이터                             │   │
+│  │  단점: JOIN 비효율, 트랜잭션 제한                             │   │
+│  │  게임 용도: 유저 프로필, 게임 설정, 로그                      │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  3. Wide-Column Store (Cassandra, HBase)                            │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  RowKey: "user:1001:2024-01"                                 │   │
+│  │  Columns: {login: 50, playtime: 3600, ...}                   │   │
+│  │                                                              │   │
+│  │  장점: 대규모 쓰기, 시계열 데이터                             │   │
+│  │  단점: 복잡한 모델링, 읽기 패턴 제한                          │   │
+│  │  게임 용도: 로그, 분석, 리플레이 데이터                       │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  4. Graph Database (Neo4j, Amazon Neptune)                          │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  (Player)--[FRIEND_OF]--(Player)                             │   │
+│  │  (Player)--[MEMBER_OF]--(Guild)                              │   │
+│  │                                                              │   │
+│  │  장점: 관계 탐색 최적화                                       │   │
+│  │  단점: 일반 CRUD 비효율                                       │   │
+│  │  게임 용도: 소셜 그래프, 추천 시스템                          │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 게임별 DB 선택 사례</h2>
+            <div class="conversation">
+                <div class="q">MMORPG에서는 어떤 구성을 사용하나요?</div>
+                <div class="a">
+                    <p>복잡한 관계와 트랜잭션이 많으므로 <strong>RDBMS가 핵심</strong>입니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    MMORPG 데이터 아키텍처                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│                     ┌─────────────┐                                 │
+│                     │  Game Server │                                 │
+│                     └──────┬──────┘                                 │
+│                            │                                        │
+│      ┌─────────────────────┼─────────────────────┐                  │
+│      │                     │                     │                  │
+│      ▼                     ▼                     ▼                  │
+│  ┌───────────┐      ┌───────────┐      ┌───────────────┐           │
+│  │   Redis   │      │   MySQL   │      │   MongoDB     │           │
+│  │  (Cache)  │      │  (Core)   │      │   (Logs)      │           │
+│  └───────────┘      └───────────┘      └───────────────┘           │
+│                                                                     │
+│  Redis 담당:                                                        │
+│  - 실시간 유저 상태 (위치, HP, 버프)                                 │
+│  - 세션 정보                                                        │
+│  - 인스턴스 던전 상태                                                │
+│                                                                     │
+│  MySQL 담당:                                                        │
+│  - 캐릭터 정보, 인벤토리                                             │
+│  - 길드, 친구 관계                                                   │
+│  - 거래 내역 (ACID 필수)                                             │
+│  - 결제 정보                                                        │
+│                                                                     │
+│  MongoDB 담당:                                                      │
+│  - 게임 로그 (채팅, 전투, 이동)                                      │
+│  - 퀘스트 진행 상태                                                  │
+│  - A/B 테스트 설정                                                   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">MMORPG 아이템 거래 - RDBMS가 필수인 이유</div>
+                        <pre><code>-- 아이템 거래는 ACID가 보장되어야 함
+BEGIN TRANSACTION;
+
+-- 1. 판매자 인벤토리에서 아이템 제거
+UPDATE inventory
+SET quantity = quantity - 1
+WHERE character_id = @seller_id AND item_id = @item_id;
+
+-- 2. 구매자 인벤토리에 아이템 추가
+INSERT INTO inventory (character_id, item_id, quantity)
+VALUES (@buyer_id, @item_id, 1)
+ON DUPLICATE KEY UPDATE quantity = quantity + 1;
+
+-- 3. 골드 이동
+UPDATE currency SET gold = gold + @price WHERE character_id = @seller_id;
+UPDATE currency SET gold = gold - @price WHERE character_id = @buyer_id;
+
+-- 4. 거래 기록
+INSERT INTO trade_log (seller_id, buyer_id, item_id, price, trade_time)
+VALUES (@seller_id, @buyer_id, @item_id, @price, NOW());
+
+COMMIT;
+
+-- NoSQL로 이걸 구현하면?
+-- - 부분 실패 시 일관성 깨짐
+-- - 아이템 복제 버그 위험
+-- - 롤백 구현이 복잡해짐</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">모바일 캐주얼 게임은 어떤가요?</div>
+                <div class="a">
+                    <p>스키마 변경이 잦고 관계가 단순하므로 <strong>Document DB가 유리</strong>합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">MongoDB로 유저 데이터 관리</div>
+                        <pre><code>// 유저 문서 - 모든 데이터가 한 문서에
+{
+    "_id": "user_12345",
+    "profile": {
+        "name": "Player1",
+        "level": 25,
+        "exp": 15000,
+        "created_at": ISODate("2024-01-15")
+    },
+    "resources": {
+        "gold": 50000,
+        "gems": 100,
+        "energy": 30
+    },
+    "inventory": [
+        {"item_id": "sword_001", "level": 5, "equipped": true},
+        {"item_id": "shield_002", "level": 3, "equipped": true}
+    ],
+    "progress": {
+        "current_stage": 45,
+        "stars_collected": 120,
+        "achievements": ["first_win", "level_10"]
+    },
+    // 스키마 변경이 쉬움 - 새 필드 추가
+    "event_data": {
+        "summer_2024": {"points": 500, "rewards_claimed": [1, 2]}
+    }
+}
+
+// 조회: 한 번의 읽기로 모든 데이터 획득
+db.users.findOne({_id: "user_12345"})
+
+// 업데이트: 특정 필드만 수정
+db.users.updateOne(
+    {_id: "user_12345"},
+    {
+        $inc: {"resources.gold": 1000},
+        $push: {"inventory": {"item_id": "potion_001", "count": 5}}
+    }
+)</code></pre>
+                    </div>
+
+                    <p class="key-point">모바일 게임은 업데이트 주기가 짧아 스키마 유연성이 중요합니다.</p>
+                </div>
+
+                <div class="q">실시간 대전 게임(배틀로얄 등)은요?</div>
+                <div class="a">
+                    <p>매치 중 데이터는 <strong>인메모리</strong>, 결과만 <strong>영구 저장</strong>합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                   배틀로얄 게임 데이터 흐름                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   [매치 진행 중]                        [매치 종료 후]               │
+│                                                                     │
+│   ┌─────────────────┐                  ┌─────────────────┐         │
+│   │  Game Server    │                  │   Result API    │         │
+│   │  (In-Memory)    │                  └────────┬────────┘         │
+│   └────────┬────────┘                           │                  │
+│            │                                    │                  │
+│            ▼                                    ▼                  │
+│   ┌─────────────────┐                  ┌─────────────────┐         │
+│   │     Redis       │                  │     MySQL       │         │
+│   │  Match State    │                  │  - 매치 결과    │         │
+│   │  - 플레이어 위치 │ ───────────────▶│  - 통계 업데이트│         │
+│   │  - 체력/킬 수    │    매치 종료 시  │  - 랭킹 반영    │         │
+│   │  - 자기장 상태   │                  │  - 보상 지급    │         │
+│   └─────────────────┘                  └─────────────────┘         │
+│                                                                     │
+│   특징:                                                             │
+│   - 매치 중: 영속성 < 속도 (손실 허용)                              │
+│   - 매치 후: 속도 < 정확성 (ACID 필요)                              │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Redis로 매치 상태 관리</div>
+                        <pre><code>// 매치 상태 저장 (Redis)
+class MatchStateManager {
+    constructor(redisClient) {
+        this.redis = redisClient;
+    }
+
+    // 플레이어 상태 업데이트 (초당 수십회)
+    async updatePlayerState(matchId, playerId, state) {
+        const key = `match:${matchId}:player:${playerId}`;
+        await this.redis.hSet(key, {
+            x: state.x,
+            y: state.y,
+            health: state.health,
+            kills: state.kills,
+            alive: state.alive ? 1 : 0
+        });
+        await this.redis.expire(key, 3600); // 1시간 후 자동 삭제
+    }
+
+    // 생존자 수 확인
+    async getAlivePlayers(matchId) {
+        const pattern = `match:${matchId}:player:*`;
+        const keys = await this.redis.keys(pattern);
+
+        let aliveCount = 0;
+        for (const key of keys) {
+            const alive = await this.redis.hGet(key, 'alive');
+            if (alive === '1') aliveCount++;
+        }
+        return aliveCount;
+    }
+
+    // 매치 종료 시 결과 영구 저장
+    async finalizeMatch(matchId) {
+        const results = await this.getMatchResults(matchId);
+
+        // MySQL에 영구 저장
+        await this.saveToMySQL(results);
+
+        // Redis 정리
+        const keys = await this.redis.keys(`match:${matchId}:*`);
+        if (keys.length > 0) {
+            await this.redis.del(keys);
+        }
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 하이브리드 전략</h2>
+            <div class="conversation">
+                <div class="q">현실에서는 하나만 선택하지 않는다고요?</div>
+                <div class="a">
+                    <p>맞습니다. <strong>Polyglot Persistence</strong> - 목적에 맞는 여러 DB를 조합합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>공구함에 망치만 있으면 모든 걸 못질하게 됩니다.</p>
+                        <p>드라이버, 펜치, 톱 등 용도에 맞는 도구를 사용하는 게 효율적입니다.</p>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                  Polyglot Persistence 아키텍처                       │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   ┌─────────────────────────────────────────────────────────────┐  │
+│   │                      Application Layer                      │  │
+│   │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐        │  │
+│   │  │ Auth    │  │ Game    │  │ Social  │  │Analytics│        │  │
+│   │  │ Service │  │ Service │  │ Service │  │ Service │        │  │
+│   │  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘        │  │
+│   └───────┼────────────┼────────────┼────────────┼──────────────┘  │
+│           │            │            │            │                  │
+│           ▼            ▼            ▼            ▼                  │
+│   ┌─────────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────┐          │
+│   │   MySQL     │ │  Redis  │ │  Neo4j  │ │ ClickHouse  │          │
+│   │  (Account,  │ │ (Cache, │ │(Friends,│ │   (Logs,    │          │
+│   │   Payment)  │ │  State) │ │  Guild) │ │  Analytics) │          │
+│   └─────────────┘ └─────────┘ └─────────┘ └─────────────┘          │
+│                                                                     │
+│   각 서비스가 적합한 DB를 선택:                                      │
+│   - 인증/결제: 트랜잭션 필수 → MySQL                                │
+│   - 게임 상태: 속도 우선 → Redis                                    │
+│   - 소셜 기능: 관계 탐색 → Graph DB                                 │
+│   - 분석: 대량 집계 → Column-Oriented DB                            │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">여러 DB 간 데이터 동기화는 어떻게 하나요?</div>
+                <div class="a">
+                    <p><strong>이벤트 기반 동기화</strong>가 일반적입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Kafka를 이용한 DB 동기화</div>
+                        <pre><code>// 이벤트 발행 (MySQL 변경 시)
+class UserService {
+    async updateUserLevel(userId, newLevel) {
+        // 1. MySQL 업데이트 (Source of Truth)
+        await this.mysql.query(
+            'UPDATE users SET level = ? WHERE id = ?',
+            [newLevel, userId]
+        );
+
+        // 2. 이벤트 발행
+        await this.kafka.produce('user-events', {
+            type: 'USER_LEVEL_CHANGED',
+            userId: userId,
+            newLevel: newLevel,
+            timestamp: Date.now()
+        });
+    }
+}
+
+// 이벤트 소비 (다른 DB들)
+class CacheSync {
+    async handleUserEvent(event) {
+        if (event.type === 'USER_LEVEL_CHANGED') {
+            // Redis 캐시 갱신
+            await this.redis.hSet(
+                `user:${event.userId}`,
+                'level', event.newLevel
+            );
+        }
+    }
+}
+
+class AnalyticsSync {
+    async handleUserEvent(event) {
+        if (event.type === 'USER_LEVEL_CHANGED') {
+            // ClickHouse에 레벨업 이벤트 기록
+            await this.clickhouse.insert('level_up_events', {
+                user_id: event.userId,
+                new_level: event.newLevel,
+                event_time: new Date(event.timestamp)
+            });
+        }
+    }
+}
+
+class SocialSync {
+    async handleUserEvent(event) {
+        if (event.type === 'USER_LEVEL_CHANGED') {
+            // Neo4j 유저 노드 속성 업데이트
+            await this.neo4j.run(
+                'MATCH (u:User {id: $userId}) SET u.level = $level',
+                {userId: event.userId, level: event.newLevel}
+            );
+        }
+    }
+}</code></pre>
+                    </div>
+
+                    <p class="warning">이벤트 기반은 결국적 일관성(Eventual Consistency)입니다. 즉시 일관성이 필요하면 동기 호출을 사용하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 선택 체크리스트</h2>
+            <div class="conversation">
+                <div class="q">실무에서 DB를 선택할 때 체크해야 할 것들은?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>체크 항목</th>
+                                <th>RDBMS 선택</th>
+                                <th>NoSQL 선택</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>데이터 관계</td>
+                                <td>복잡한 JOIN 필요</td>
+                                <td>관계 단순/없음</td>
+                            </tr>
+                            <tr>
+                                <td>트랜잭션</td>
+                                <td>ACID 필수</td>
+                                <td>일관성 양보 가능</td>
+                            </tr>
+                            <tr>
+                                <td>스키마 변경</td>
+                                <td>안정적, 변경 적음</td>
+                                <td>자주 변경됨</td>
+                            </tr>
+                            <tr>
+                                <td>쿼리 패턴</td>
+                                <td>복잡한 검색, 집계</td>
+                                <td>키 기반 접근</td>
+                            </tr>
+                            <tr>
+                                <td>확장성</td>
+                                <td>수직 확장으로 충분</td>
+                                <td>대규모 수평 확장</td>
+                            </tr>
+                            <tr>
+                                <td>팀 경험</td>
+                                <td>SQL 숙련도 높음</td>
+                                <td>NoSQL 경험 있음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">결정 플로우차트 (의사 코드)</div>
+                        <pre><code>function chooseDatabase(requirements) {
+    // 1. 트랜잭션 요구사항 체크
+    if (requirements.needsACID) {
+        if (requirements.complexJoins) {
+            return "MySQL/PostgreSQL";
+        }
+        if (requirements.needsHorizontalScale) {
+            return "CockroachDB/TiDB"; // NewSQL
+        }
+    }
+
+    // 2. 데이터 구조 체크
+    if (requirements.dataStructure === "key-value") {
+        if (requirements.persistence === false) {
+            return "Redis";
+        }
+        return "DynamoDB/Redis with AOF";
+    }
+
+    if (requirements.dataStructure === "document") {
+        if (requirements.flexibleSchema) {
+            return "MongoDB";
+        }
+    }
+
+    if (requirements.dataStructure === "graph") {
+        return "Neo4j/Amazon Neptune";
+    }
+
+    // 3. 접근 패턴 체크
+    if (requirements.writeHeavy && requirements.timeSeriesData) {
+        return "Cassandra/TimescaleDB";
+    }
+
+    if (requirements.analyticsQueries) {
+        return "ClickHouse/BigQuery";
+    }
+
+    // 4. 기본값
+    return "PostgreSQL"; // 범용적이고 기능이 풍부함
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 마이그레이션 고려사항</h2>
+            <div class="conversation">
+                <div class="q">잘못된 선택을 했다면 어떻게 하나요?</div>
+                <div class="a">
+                    <p class="warning">DB 마이그레이션은 매우 비용이 큽니다. 초기 설계가 중요합니다!</p>
+                    <p>하지만 불가피하다면 <strong>점진적 마이그레이션</strong>을 권장합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    점진적 마이그레이션 전략                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  Phase 1: 듀얼 라이트                                               │
+│  ┌─────────┐     ┌─────────┐     ┌─────────┐                       │
+│  │   App   │────▶│ Old DB  │     │ New DB  │                       │
+│  │         │────▶│(Primary)│────▶│ (Sync)  │                       │
+│  └─────────┘     └─────────┘     └─────────┘                       │
+│  - 기존 DB가 메인, 신규 DB에 동기화                                  │
+│  - 읽기는 기존 DB에서                                               │
+│                                                                     │
+│  Phase 2: 읽기 전환                                                  │
+│  ┌─────────┐     ┌─────────┐     ┌─────────┐                       │
+│  │   App   │────▶│ Old DB  │────▶│ New DB  │                       │
+│  │         │◀────│ (Write) │◀────│ (Read)  │                       │
+│  └─────────┘     └─────────┘     └─────────┘                       │
+│  - 읽기를 신규 DB로 점진적 전환                                      │
+│  - 문제 발생 시 즉시 롤백 가능                                       │
+│                                                                     │
+│  Phase 3: 쓰기 전환                                                  │
+│  ┌─────────┐     ┌─────────┐     ┌─────────┐                       │
+│  │   App   │────▶│ New DB  │────▶│ Old DB  │                       │
+│  │         │◀────│(Primary)│     │(Backup) │                       │
+│  └─────────┘     └─────────┘     └─────────┘                       │
+│  - 신규 DB가 메인                                                   │
+│  - 기존 DB는 백업용으로 유지                                         │
+│                                                                     │
+│  Phase 4: 완료                                                       │
+│  ┌─────────┐     ┌─────────┐                                       │
+│  │   App   │◀───▶│ New DB  │     기존 DB 제거                       │
+│  └─────────┘     └─────────┘                                       │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <p class="key-point">전환 중에는 항상 롤백 플랜을 준비하고, 충분한 모니터링을 설정하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>RDBMS</strong>: 복잡한 관계, 트랜잭션 필수, 안정적 스키마 → MMORPG 핵심 데이터</li>
+                <li><strong>Document DB</strong>: 유연한 스키마, 단순 관계 → 모바일 게임, 설정 데이터</li>
+                <li><strong>Key-Value</strong>: 초고속 접근, 단순 구조 → 캐시, 세션, 실시간 상태</li>
+                <li><strong>Polyglot Persistence</strong>: 목적에 맞는 여러 DB 조합이 현실적 해답</li>
+                <li><strong>선택 기준</strong>: 데이터 관계, 트랜잭션 요구, 쿼리 패턴, 확장성 고려</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

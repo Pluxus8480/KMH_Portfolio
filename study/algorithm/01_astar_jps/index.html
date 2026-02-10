@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A* / JPS 길찾기 알고리즘 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>NPC는 어떻게 최단 경로를 찾을까?</h1>
+            <p class="subtitle">A* 알고리즘과 JPS(Jump Point Search) 길찾기 기법</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 길찾기 문제의 본질</h2>
+            <div class="conversation">
+                <div class="q">게임에서 NPC가 플레이어를 추적하려면 어떻게 해야 하나요?</div>
+                <div class="a">
+                    <p>단순히 플레이어 방향으로 직진하면 벽에 막히거나 장애물에 갇히게 됩니다.</p>
+                    <p class="highlight">길찾기(Pathfinding)는 시작점에서 목표점까지 장애물을 피해 이동하는 경로를 계산하는 알고리즘입니다.</p>
+                </div>
+
+                <div class="q">어떤 방식으로 경로를 찾나요?</div>
+                <div class="a">
+                    <p>그래프 탐색 알고리즘을 사용합니다. 맵을 노드(점)와 엣지(연결선)로 표현하고, 최단 경로를 탐색합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>도시 지하철 노선도를 생각해보세요. 각 역이 노드이고, 노선이 엣지입니다.</p>
+                        <p>A역에서 B역까지 최소 환승으로 가는 방법을 찾는 것이 길찾기입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: A* 알고리즘의 핵심 원리</h2>
+            <div class="conversation">
+                <div class="q">A* 알고리즘은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>A*는 Dijkstra 알고리즘에 휴리스틱(추정값)을 추가한 것입니다.</p>
+                    <p class="key-point">f(n) = g(n) + h(n) 공식이 핵심입니다.</p>
+                    <ul>
+                        <li><strong>g(n)</strong>: 시작점에서 현재 노드까지의 실제 비용</li>
+                        <li><strong>h(n)</strong>: 현재 노드에서 목표까지의 추정 비용 (휴리스틱)</li>
+                        <li><strong>f(n)</strong>: 총 예상 비용 (이 값이 가장 작은 노드를 우선 탐색)</li>
+                    </ul>
+                </div>
+
+                <div class="visual-section">
+                    <pre class="diagram">
+A* 탐색 순서 (S: 시작, G: 목표, █: 벽)
+
+    1   2   3   4   5
+  ┌───┬───┬───┬───┬───┐
+1 │ S │ 2 │ 3 │ 4 │ 5 │   f = g + h
+  ├───┼───┼───┼───┼───┤
+2 │ 1 │███│███│███│ 6 │   S의 f = 0 + 4 = 4
+  ├───┼───┼───┼───┼───┤   노드2의 f = 1 + 3 = 4
+3 │ 2 │███│ G │ 7 │ 8 │   노드1의 f = 1 + 4 = 5
+  ├───┼───┼───┼───┼───┤
+4 │ 3 │ 4 │ 5 │ 6 │ 9 │   → 더 유망한 노드부터 탐색
+  └───┴───┴───┴───┴───┘
+                    </pre>
+                    <p class="diagram-caption">f값이 작은 노드를 우선 탐색하여 불필요한 탐색을 줄임</p>
+                </div>
+
+                <div class="q">휴리스틱 h(n)은 어떻게 계산하나요?</div>
+                <div class="a">
+                    <p>목표까지의 예상 거리를 계산합니다. 게임에서 주로 사용하는 방식:</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>휴리스틱</th>
+                                <th>공식</th>
+                                <th>사용 상황</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>맨해튼 거리</td>
+                                <td>|dx| + |dy|</td>
+                                <td>4방향 이동 (상하좌우)</td>
+                            </tr>
+                            <tr>
+                                <td>유클리드 거리</td>
+                                <td>√(dx² + dy²)</td>
+                                <td>자유로운 이동</td>
+                            </tr>
+                            <tr>
+                                <td>체비셰프 거리</td>
+                                <td>max(|dx|, |dy|)</td>
+                                <td>8방향 이동 (대각선 포함)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="warning">휴리스틱이 실제 거리보다 크면 최단 경로를 보장하지 않습니다 (Admissibility 조건).</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: A* 알고리즘 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">C++ A* 알고리즘 구현</div>
+                    <pre><code>#include &lt;queue&gt;
+#include &lt;vector&gt;
+#include &lt;cmath&gt;
+
+struct Node {
+    int x, y;
+    float g, h, f;
+    Node* parent;
+
+    Node(int _x, int _y) : x(_x), y(_y), g(0), h(0), f(0), parent(nullptr) {}
+
+    bool operator>(const Node& other) const {
+        return f > other.f;  // 최소 힙을 위한 비교
+    }
+};
+
+class AStar {
+private:
+    int width, height;
+    std::vector&lt;std::vector&lt;bool&gt;&gt; obstacles;
+
+    // 8방향 이동 (상하좌우 + 대각선)
+    const int dx[8] = {-1, 0, 1, 0, -1, -1, 1, 1};
+    const int dy[8] = {0, -1, 0, 1, -1, 1, -1, 1};
+    const float cost[8] = {1, 1, 1, 1, 1.414f, 1.414f, 1.414f, 1.414f};
+
+    float heuristic(int x1, int y1, int x2, int y2) {
+        // 체비셰프 거리 (8방향 이동에 적합)
+        float dx = std::abs(x2 - x1);
+        float dy = std::abs(y2 - y1);
+        return std::max(dx, dy) + (1.414f - 1) * std::min(dx, dy);
+    }
+
+    bool isValid(int x, int y) {
+        return x >= 0 && x < width && y >= 0 && y < height && !obstacles[y][x];
+    }
+
+public:
+    std::vector&lt;Node*&gt; findPath(int startX, int startY, int goalX, int goalY) {
+        std::priority_queue&lt;Node*, std::vector&lt;Node*&gt;,
+            std::function&lt;bool(Node*, Node*)&gt;&gt; openList(
+                [](Node* a, Node* b) { return a->f > b->f; });
+
+        std::vector&lt;std::vector&lt;bool&gt;&gt; closedList(height,
+            std::vector&lt;bool&gt;(width, false));
+        std::vector&lt;std::vector&lt;Node*&gt;&gt; allNodes(height,
+            std::vector&lt;Node*&gt;(width, nullptr));
+
+        Node* start = new Node(startX, startY);
+        start->h = heuristic(startX, startY, goalX, goalY);
+        start->f = start->h;
+        openList.push(start);
+        allNodes[startY][startX] = start;
+
+        while (!openList.empty()) {
+            Node* current = openList.top();
+            openList.pop();
+
+            // 목표 도달
+            if (current->x == goalX && current->y == goalY) {
+                return reconstructPath(current);
+            }
+
+            closedList[current->y][current->x] = true;
+
+            // 8방향 이웃 탐색
+            for (int i = 0; i < 8; i++) {
+                int nx = current->x + dx[i];
+                int ny = current->y + dy[i];
+
+                if (!isValid(nx, ny) || closedList[ny][nx]) continue;
+
+                float newG = current->g + cost[i];
+
+                Node* neighbor = allNodes[ny][nx];
+                if (neighbor == nullptr) {
+                    neighbor = new Node(nx, ny);
+                    allNodes[ny][nx] = neighbor;
+                }
+
+                if (neighbor->parent == nullptr || newG < neighbor->g) {
+                    neighbor->g = newG;
+                    neighbor->h = heuristic(nx, ny, goalX, goalY);
+                    neighbor->f = neighbor->g + neighbor->h;
+                    neighbor->parent = current;
+                    openList.push(neighbor);
+                }
+            }
+        }
+
+        return {};  // 경로 없음
+    }
+
+    std::vector&lt;Node*&gt; reconstructPath(Node* goal) {
+        std::vector&lt;Node*&gt; path;
+        Node* current = goal;
+        while (current != nullptr) {
+            path.push_back(current);
+            current = current->parent;
+        }
+        std::reverse(path.begin(), path.end());
+        return path;
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: A*의 한계와 JPS의 등장</h2>
+            <div class="conversation">
+                <div class="q">A*의 문제점은 무엇인가요?</div>
+                <div class="a">
+                    <p class="warning">넓은 공간에서 너무 많은 노드를 탐색합니다.</p>
+                    <p>격자 맵에서 A*는 대칭 경로(symmetrical paths)를 모두 탐색합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+A*의 대칭 경로 문제
+
+S─┬─┬─┐    S에서 G까지 가는 경로가 여러 개 있지만
+  │ │ │    실제로는 모두 같은 비용입니다.
+  ├─┼─┼─┤
+  │ │ │ │   A*는 이 대칭 경로들을 모두 탐색하여
+  └─┴─┴─G   불필요한 연산이 발생합니다.
+
+  탐색한 노드: 16개 (전체 노드)
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">JPS(Jump Point Search)는 어떻게 이 문제를 해결하나요?</div>
+                <div class="a">
+                    <p class="highlight">JPS는 "점프 포인트"만 탐색하여 대칭 경로를 제거합니다.</p>
+                    <p>점프 포인트: 방향 전환이 필요한 중요한 지점만 선택</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+JPS의 점프 포인트
+
+S───────────┐    점프 포인트: 방향이 꺾이는 곳
+            │
+            │    S에서 오른쪽으로 점프
+            │    벽을 만나면 점프 포인트!
+            └────G
+
+  탐색한 노드: 3개 (S, 코너, G)
+  → 80% 이상 노드 탐색 감소!
+                        </pre>
+                    </div>
+
+                    <p>JPS의 핵심 규칙:</p>
+                    <ul>
+                        <li><strong>직선 이동</strong>: 장애물을 만날 때까지 점프</li>
+                        <li><strong>대각선 이동</strong>: 수평/수직 방향으로 점프 포인트 검색</li>
+                        <li><strong>강제 이웃(Forced Neighbor)</strong>: 장애물로 인해 고려해야 할 새로운 방향</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: JPS 알고리즘 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">C++ JPS 핵심 로직</div>
+                    <pre><code>class JPS {
+private:
+    // 수평/수직 방향 점프
+    Node* jumpStraight(int x, int y, int dx, int dy, int goalX, int goalY) {
+        int nx = x + dx;
+        int ny = y + dy;
+
+        // 범위 밖이거나 장애물
+        if (!isValid(nx, ny)) return nullptr;
+
+        // 목표 도달
+        if (nx == goalX && ny == goalY) {
+            return new Node(nx, ny);
+        }
+
+        // 강제 이웃 체크 (수평 이동 시)
+        if (dx != 0) {
+            // 위쪽 장애물 → 대각선 위가 강제 이웃
+            if (!isValid(nx, ny - 1) && isValid(nx + dx, ny - 1)) {
+                return new Node(nx, ny);  // 점프 포인트!
+            }
+            // 아래쪽 장애물 → 대각선 아래가 강제 이웃
+            if (!isValid(nx, ny + 1) && isValid(nx + dx, ny + 1)) {
+                return new Node(nx, ny);  // 점프 포인트!
+            }
+        }
+
+        // 강제 이웃 체크 (수직 이동 시)
+        if (dy != 0) {
+            if (!isValid(nx - 1, ny) && isValid(nx - 1, ny + dy)) {
+                return new Node(nx, ny);
+            }
+            if (!isValid(nx + 1, ny) && isValid(nx + 1, ny + dy)) {
+                return new Node(nx, ny);
+            }
+        }
+
+        // 계속 점프
+        return jumpStraight(nx, ny, dx, dy, goalX, goalY);
+    }
+
+    // 대각선 방향 점프
+    Node* jumpDiagonal(int x, int y, int dx, int dy, int goalX, int goalY) {
+        int nx = x + dx;
+        int ny = y + dy;
+
+        if (!isValid(nx, ny)) return nullptr;
+
+        if (nx == goalX && ny == goalY) {
+            return new Node(nx, ny);
+        }
+
+        // 대각선 이동 시: 수평, 수직 방향으로 점프 포인트 탐색
+        if (jumpStraight(nx, ny, dx, 0, goalX, goalY) != nullptr ||
+            jumpStraight(nx, ny, 0, dy, goalX, goalY) != nullptr) {
+            return new Node(nx, ny);  // 점프 포인트 발견!
+        }
+
+        // 강제 이웃 체크
+        if (!isValid(nx - dx, ny) && isValid(nx - dx, ny + dy)) {
+            return new Node(nx, ny);
+        }
+        if (!isValid(nx, ny - dy) && isValid(nx + dx, ny - dy)) {
+            return new Node(nx, ny);
+        }
+
+        // 계속 대각선 점프
+        return jumpDiagonal(nx, ny, dx, dy, goalX, goalY);
+    }
+
+public:
+    std::vector&lt;Node*&gt; findPath(int startX, int startY, int goalX, int goalY) {
+        // A*와 동일한 구조, 하지만 이웃 대신 점프 포인트만 추가
+        std::priority_queue&lt;Node*, std::vector&lt;Node*&gt;,
+            std::function&lt;bool(Node*, Node*)&gt;&gt; openList(
+                [](Node* a, Node* b) { return a->f > b->f; });
+
+        Node* start = new Node(startX, startY);
+        start->f = heuristic(startX, startY, goalX, goalY);
+        openList.push(start);
+
+        while (!openList.empty()) {
+            Node* current = openList.top();
+            openList.pop();
+
+            if (current->x == goalX && current->y == goalY) {
+                return reconstructPath(current);
+            }
+
+            // 8방향으로 점프 포인트 탐색
+            for (int dir = 0; dir < 8; dir++) {
+                Node* jumpPoint = jump(current->x, current->y,
+                                       dx[dir], dy[dir], goalX, goalY);
+                if (jumpPoint != nullptr) {
+                    // 점프 포인트까지의 거리 계산
+                    float dist = distance(current->x, current->y,
+                                         jumpPoint->x, jumpPoint->y);
+                    jumpPoint->g = current->g + dist;
+                    jumpPoint->h = heuristic(jumpPoint->x, jumpPoint->y,
+                                            goalX, goalY);
+                    jumpPoint->f = jumpPoint->g + jumpPoint->h;
+                    jumpPoint->parent = current;
+                    openList.push(jumpPoint);
+                }
+            }
+        }
+
+        return {};
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 성능 비교와 실무 적용</h2>
+            <div class="conversation">
+                <div class="q">A*와 JPS의 성능 차이는 얼마나 되나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>알고리즘</th>
+                                <th>탐색 노드 수</th>
+                                <th>100x100 맵 속도</th>
+                                <th>메모리 사용량</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>A*</td>
+                                <td>많음 (대칭 경로)</td>
+                                <td>10-50ms</td>
+                                <td>높음</td>
+                            </tr>
+                            <tr>
+                                <td>JPS</td>
+                                <td>적음 (점프 포인트만)</td>
+                                <td>1-5ms</td>
+                                <td>낮음</td>
+                            </tr>
+                            <tr>
+                                <td>JPS+ (전처리)</td>
+                                <td>최소 (사전 계산)</td>
+                                <td>0.1-0.5ms</td>
+                                <td>전처리 테이블</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="highlight">JPS는 A*보다 평균 10배 이상 빠릅니다!</p>
+                </div>
+
+                <div class="q">실제 게임에서 어떻게 사용하나요?</div>
+                <div class="a">
+                    <p><strong>상황별 알고리즘 선택:</strong></p>
+                    <ul>
+                        <li><strong>그리드 기반 맵</strong>: JPS 추천 (StarCraft, RTS 게임)</li>
+                        <li><strong>복잡한 3D 공간</strong>: NavMesh + A* (오픈월드 게임)</li>
+                        <li><strong>동적 장애물</strong>: D* Lite, LPA* (로봇 공학)</li>
+                        <li><strong>실시간 다수 유닛</strong>: Flow Field (RTS 대규모 유닛)</li>
+                    </ul>
+
+                    <p class="key-point">최적화 팁: 길찾기는 프레임당 1-2개씩 분산 처리하고, 결과를 캐싱하세요.</p>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">비동기 길찾기 시스템</div>
+                    <pre><code>class PathfindingSystem {
+private:
+    std::queue&lt;PathRequest&gt; requestQueue;
+    std::unordered_map&lt;uint64_t, std::vector&lt;Node*&gt;&gt; pathCache;
+
+    uint64_t getPathKey(int sx, int sy, int gx, int gy) {
+        return ((uint64_t)sx << 48) | ((uint64_t)sy << 32) |
+               ((uint64_t)gx << 16) | gy;
+    }
+
+public:
+    void requestPath(int unitId, int startX, int startY, int goalX, int goalY) {
+        uint64_t key = getPathKey(startX, startY, goalX, goalY);
+
+        // 캐시 확인
+        auto it = pathCache.find(key);
+        if (it != pathCache.end()) {
+            onPathFound(unitId, it->second);
+            return;
+        }
+
+        // 요청 큐에 추가
+        requestQueue.push({unitId, startX, startY, goalX, goalY});
+    }
+
+    void update() {
+        // 프레임당 최대 2개 경로 계산
+        for (int i = 0; i < 2 && !requestQueue.empty(); i++) {
+            PathRequest req = requestQueue.front();
+            requestQueue.pop();
+
+            auto path = jps.findPath(req.startX, req.startY,
+                                     req.goalX, req.goalY);
+
+            // 캐시 저장
+            uint64_t key = getPathKey(req.startX, req.startY,
+                                      req.goalX, req.goalY);
+            pathCache[key] = path;
+
+            onPathFound(req.unitId, path);
+        }
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>A* 알고리즘</strong>: f(n) = g(n) + h(n), 휴리스틱으로 탐색 방향 유도</li>
+                <li><strong>휴리스틱</strong>: 맨해튼(4방향), 유클리드(자유이동), 체비셰프(8방향)</li>
+                <li><strong>JPS</strong>: 점프 포인트만 탐색하여 A*보다 10배 이상 빠름</li>
+                <li><strong>강제 이웃</strong>: 장애물로 인해 새로운 방향을 고려해야 하는 지점</li>
+                <li><strong>실무 최적화</strong>: 경로 캐싱, 비동기 처리, 프레임 분산 계산</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

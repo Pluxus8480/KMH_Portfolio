@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Occlusion Culling 알고리즘 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>벽 뒤에 숨은 적을 왜 그릴까?</h1>
+            <p class="subtitle">Occlusion Culling으로 보이지 않는 물체 제거하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Occlusion Culling이란?</h2>
+            <div class="conversation">
+                <div class="q">Frustum Culling과 뭐가 다른가요?</div>
+                <div class="a">
+                    <p><strong>Frustum Culling:</strong> 카메라 시야 밖의 물체 제거</p>
+                    <p><strong>Occlusion Culling:</strong> 시야 안이지만 다른 물체에 가려진 물체 제거</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Frustum vs Occlusion Culling
+
+        카메라 시야
+          ╱    ╲
+         ╱      ╲
+        ╱  벽    ╲
+       ╱ ┌────┐   ╲
+      ╱  │    │ ●  ╲   ● = 가려진 물체
+     ╱   └────┘     ╲
+    ╱                ╲
+   ●                  ●
+
+Frustum Culling: 양쪽 ● 제거 (시야 밖)
+Occlusion Culling: 벽 뒤 ● 제거 (가려짐)
+                        </pre>
+                    </div>
+
+                    <p class="highlight">실내 씬에서는 Occlusion Culling이 더 효과적입니다!</p>
+                </div>
+
+                <div class="q">왜 중요한가요?</div>
+                <div class="a">
+                    <p>복잡한 실내 씬에서는 보이는 것보다 가려진 것이 훨씬 많습니다.</p>
+                    <p class="key-point">예: 건물 내부에서 방 하나만 보여도, 전체 건물이 렌더링 대상</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>아파트에서 내 방 창문으로 바깥을 보면, 옆 건물 사무실 내부는 보이지 않습니다.</p>
+                        <p>하지만 컴퓨터는 "그 사무실도 화면 안에 있다"고 판단해 그리려 합니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Occlusion Culling 기법들</h2>
+            <div class="conversation">
+                <div class="q">어떤 방법들이 있나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>기법</th>
+                                <th>원리</th>
+                                <th>장단점</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>PVS (Potentially Visible Set)</td>
+                                <td>오프라인 가시성 계산</td>
+                                <td>빠름, 정적 씬만 가능</td>
+                            </tr>
+                            <tr>
+                                <td>Portal Culling</td>
+                                <td>문/창문으로 연결된 공간</td>
+                                <td>실내 씬에 효과적</td>
+                            </tr>
+                            <tr>
+                                <td>Hardware Occlusion Query</td>
+                                <td>GPU Z-buffer 조회</td>
+                                <td>동적, 지연 문제</td>
+                            </tr>
+                            <tr>
+                                <td>Software Rasterization</td>
+                                <td>CPU로 간단한 Z-buffer</td>
+                                <td>즉각적, CPU 부하</td>
+                            </tr>
+                            <tr>
+                                <td>Hierarchical Z-Buffer</td>
+                                <td>밉맵된 깊이 버퍼</td>
+                                <td>GPU 최적화됨</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Portal Culling</h2>
+            <div class="conversation">
+                <div class="q">Portal Culling은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p class="highlight">공간을 셀(Cell)로 나누고, 포털(문/창문)로 연결합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Portal Culling 구조
+
+┌─────────┬─────────┬─────────┐
+│  Room A │  Room B │  Room C │
+│         ┿         ┿         │
+│   👁    │         │    ●    │
+│ (카메라)│         │ (물체)  │
+└─────────┴─────────┴─────────┘
+           Portal1    Portal2
+
+카메라가 Room A에 있을 때:
+1. Room A의 물체: 보임
+2. Portal1을 통해 Room B 검사
+3. Portal2를 통해 Room C 검사 (Portal1 ∩ Portal2)
+4. 포털 밖 영역: 컬링!
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Portal Culling 구현</div>
+                        <pre><code>struct Portal {
+    int fromCell;
+    int toCell;
+    std::vector&lt;Vec3&gt; vertices;  // 포털 다각형
+
+    // 포털을 절두체로 변환
+    Frustum createFrustum(const Vec3& cameraPos) const;
+};
+
+struct Cell {
+    AABB bounds;
+    std::vector&lt;GameObject*&gt; objects;
+    std::vector&lt;Portal*&gt; portals;
+};
+
+class PortalCuller {
+private:
+    std::vector&lt;Cell&gt; cells;
+    std::vector&lt;bool&gt; visitedCells;
+
+public:
+    void cullFromCamera(const Camera& camera,
+                        std::vector&lt;GameObject*&gt;& visible) {
+        // 1. 카메라가 있는 셀 찾기
+        int startCell = findCellContaining(camera.position);
+        if (startCell < 0) return;
+
+        visitedCells.assign(cells.size(), false);
+
+        // 2. 재귀적으로 포털 순회
+        traversePortals(startCell, camera.frustum, camera.position, visible);
+    }
+
+private:
+    void traversePortals(int cellIndex, const Frustum& frustum,
+                         const Vec3& cameraPos,
+                         std::vector&lt;GameObject*&gt;& visible) {
+        if (visitedCells[cellIndex]) return;
+        visitedCells[cellIndex] = true;
+
+        Cell& cell = cells[cellIndex];
+
+        // 이 셀의 물체들을 frustum으로 컬링
+        for (auto* obj : cell.objects) {
+            if (frustum.intersects(obj->bounds)) {
+                visible.push_back(obj);
+            }
+        }
+
+        // 포털을 통해 다음 셀로
+        for (auto* portal : cell.portals) {
+            // 포털이 현재 frustum과 교차하는지 확인
+            if (!frustum.intersects(portal->getBounds())) {
+                continue;  // 포털이 안 보임
+            }
+
+            // 포털을 통해 보이는 영역으로 frustum 축소
+            Frustum reducedFrustum = frustum.clipToPortal(*portal, cameraPos);
+
+            if (!reducedFrustum.isValid()) {
+                continue;  // 포털이 완전히 가려짐
+            }
+
+            // 다음 셀 순회
+            traversePortals(portal->toCell, reducedFrustum, cameraPos, visible);
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Hardware Occlusion Query</h2>
+            <div class="conversation">
+                <div class="q">GPU를 활용하는 방법은?</div>
+                <div class="a">
+                    <p class="highlight">GPU의 Z-buffer를 쿼리하여 물체가 가려졌는지 확인합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">OpenGL Occlusion Query</div>
+                        <pre><code>class OcclusionQueryCuller {
+private:
+    struct QueryObject {
+        GLuint queryId;
+        GameObject* object;
+        bool resultReady;
+        int visiblePixels;
+    };
+
+    std::vector&lt;QueryObject&gt; queries;
+
+public:
+    void initialize(const std::vector&lt;GameObject*&gt;& objects) {
+        queries.resize(objects.size());
+
+        for (size_t i = 0; i < objects.size(); i++) {
+            glGenQueries(1, &queries[i].queryId);
+            queries[i].object = objects[i];
+        }
+    }
+
+    // 1단계: 쿼리 제출 (이전 프레임 또는 깊이 프리패스 후)
+    void submitQueries() {
+        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);  // 색상 쓰기 끔
+        glDepthMask(GL_FALSE);  // 깊이 쓰기 끔
+
+        for (auto& query : queries) {
+            glBeginQuery(GL_SAMPLES_PASSED, query.queryId);
+
+            // 바운딩 박스만 그리기 (간단한 지오메트리)
+            renderBoundingBox(query.object->bounds);
+
+            glEndQuery(GL_SAMPLES_PASSED);
+        }
+
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glDepthMask(GL_TRUE);
+    }
+
+    // 2단계: 결과 확인 (다음 프레임에서)
+    void fetchResults(std::vector&lt;GameObject*&gt;& visible) {
+        for (auto& query : queries) {
+            GLint available;
+            glGetQueryObjectiv(query.queryId, GL_QUERY_RESULT_AVAILABLE,
+                              &available);
+
+            if (available) {
+                GLuint pixelCount;
+                glGetQueryObjectuiv(query.queryId, GL_QUERY_RESULT, &pixelCount);
+
+                if (pixelCount > 0) {
+                    visible.push_back(query.object);
+                }
+            } else {
+                // 결과가 아직 없으면 보수적으로 포함
+                visible.push_back(query.object);
+            }
+        }
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="warning">문제: 쿼리 결과는 1~2 프레임 뒤에 옵니다 (지연)</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Software Occlusion Culling</h2>
+            <div class="conversation">
+                <div class="q">GPU 지연 없이 할 수 있나요?</div>
+                <div class="a">
+                    <p class="highlight">CPU에서 간소화된 Z-buffer를 래스터화합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Software Occlusion Buffer</div>
+                        <pre><code>class SoftwareOcclusionCuller {
+private:
+    std::vector&lt;float&gt; depthBuffer;
+    int bufferWidth = 256;   // 저해상도
+    int bufferHeight = 128;
+    Mat4 viewProj;
+
+public:
+    void beginFrame(const Camera& camera) {
+        // 깊이 버퍼 초기화
+        std::fill(depthBuffer.begin(), depthBuffer.end(), 1.0f);
+        viewProj = camera.projection * camera.view;
+    }
+
+    // Occluder(가리는 물체) 래스터화
+    void rasterizeOccluder(const Mesh& mesh, const Mat4& model) {
+        Mat4 mvp = viewProj * model;
+
+        for (const Triangle& tri : mesh.triangles) {
+            // 정점 변환
+            Vec4 v0 = mvp * Vec4(tri.v0, 1);
+            Vec4 v1 = mvp * Vec4(tri.v1, 1);
+            Vec4 v2 = mvp * Vec4(tri.v2, 1);
+
+            // 클리핑 (간략화)
+            if (v0.w <= 0 || v1.w <= 0 || v2.w <= 0) continue;
+
+            // NDC 변환
+            v0 /= v0.w; v1 /= v1.w; v2 /= v2.w;
+
+            // 뒷면 컬링
+            if (isBackFacing(v0, v1, v2)) continue;
+
+            // 스크린 좌표 변환
+            Vec2 s0 = ndcToScreen(v0);
+            Vec2 s1 = ndcToScreen(v1);
+            Vec2 s2 = ndcToScreen(v2);
+
+            // 삼각형 래스터화 (최대 깊이 저장)
+            rasterizeTriangle(s0, v0.z, s1, v1.z, s2, v2.z);
+        }
+    }
+
+    // Occludee(가려질 물체) 테스트
+    bool isVisible(const AABB& bounds, const Mat4& model) {
+        // AABB의 8개 정점을 스크린 공간으로 투영
+        std::array&lt;Vec3, 8&gt; corners = bounds.getCorners();
+        float minDepth = 1.0f;
+        int minX = bufferWidth, maxX = 0;
+        int minY = bufferHeight, maxY = 0;
+
+        for (const Vec3& corner : corners) {
+            Vec4 clip = viewProj * model * Vec4(corner, 1);
+            if (clip.w <= 0) continue;
+
+            Vec3 ndc = Vec3(clip) / clip.w;
+            minDepth = std::min(minDepth, ndc.z);
+
+            Vec2 screen = ndcToScreen(ndc);
+            minX = std::min(minX, (int)screen.x);
+            maxX = std::max(maxX, (int)screen.x);
+            minY = std::min(minY, (int)screen.y);
+            maxY = std::max(maxY, (int)screen.y);
+        }
+
+        // 바운딩 박스 영역에서 깊이 테스트
+        for (int y = minY; y <= maxY; y++) {
+            for (int x = minX; x <= maxX; x++) {
+                if (x < 0 || x >= bufferWidth ||
+                    y < 0 || y >= bufferHeight) continue;
+
+                if (depthBuffer[y * bufferWidth + x] > minDepth) {
+                    return true;  // 적어도 일부 픽셀이 보임
+                }
+            }
+        }
+
+        return false;  // 완전히 가려짐
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="key-point">Masked Software Occlusion Culling (Intel): SIMD로 8x4 픽셀 동시 처리!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: Hierarchical Z-Buffer (Hi-Z)</h2>
+            <div class="conversation">
+                <div class="q">GPU에서 더 효율적인 방법은?</div>
+                <div class="a">
+                    <p class="highlight">Hi-Z는 깊이 버퍼의 밉맵을 사용하여 빠르게 테스트합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Hierarchical Z-Buffer
+
+Level 0 (원본):     Level 1 (2x2):    Level 2 (4x4):
+┌─┬─┬─┬─┐           ┌───┬───┐          ┌───────┐
+│1│2│3│4│           │max│max│          │  max  │
+├─┼─┼─┼─┤           │(1-4)(5-8)│       │ (전체)│
+│5│6│7│8│    →     ├───┼───┤     →   └───────┘
+├─┼─┼─┼─┤           │max│max│
+│...    │           │...│...│
+└───────┘           └───┴───┘
+
+각 레벨은 자식 4개의 최대값 저장
+→ 큰 물체는 상위 레벨에서 빠르게 컬링!
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Hi-Z Occlusion Test (Compute Shader)</div>
+                        <pre><code>// Compute Shader: Hi-Z Occlusion Test
+[numthreads(64, 1, 1)]
+void HiZOcclusionTest(uint3 id : SV_DispatchThreadID)
+{
+    uint objectIndex = id.x;
+    if (objectIndex >= objectCount) return;
+
+    // AABB를 스크린 공간으로 투영
+    float4 aabbMin = mul(viewProj, float4(objects[objectIndex].min, 1));
+    float4 aabbMax = mul(viewProj, float4(objects[objectIndex].max, 1));
+
+    // 스크린 공간 바운딩 박스
+    float2 screenMin = (aabbMin.xy / aabbMin.w) * 0.5 + 0.5;
+    float2 screenMax = (aabbMax.xy / aabbMax.w) * 0.5 + 0.5;
+
+    // AABB의 최소 깊이 (가장 가까운 점)
+    float minDepth = min(aabbMin.z / aabbMin.w, aabbMax.z / aabbMax.w);
+
+    // 적절한 밉맵 레벨 선택 (바운딩 박스 크기 기반)
+    float2 screenSize = (screenMax - screenMin) * float2(screenWidth, screenHeight);
+    int mipLevel = ceil(log2(max(screenSize.x, screenSize.y)));
+
+    // Hi-Z에서 최대 깊이 샘플링
+    float occluderDepth = hiZTexture.SampleLevel(
+        sampler, (screenMin + screenMax) * 0.5, mipLevel).r;
+
+    // 깊이 테스트
+    if (minDepth > occluderDepth)
+    {
+        // 완전히 가려짐 - 컬링
+        visibilityBuffer[objectIndex] = 0;
+    }
+    else
+    {
+        // 잠재적으로 보임
+        visibilityBuffer[objectIndex] = 1;
+    }
+}</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>기법</th>
+                                <th>지연</th>
+                                <th>정확도</th>
+                                <th>성능</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Occlusion Query</td>
+                                <td>1-2 프레임</td>
+                                <td>높음</td>
+                                <td>중간</td>
+                            </tr>
+                            <tr>
+                                <td>Software Rasterization</td>
+                                <td>없음</td>
+                                <td>중간</td>
+                                <td>CPU 의존</td>
+                            </tr>
+                            <tr>
+                                <td>Hi-Z (GPU)</td>
+                                <td>없음</td>
+                                <td>보수적</td>
+                                <td>높음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Occlusion Culling</strong>: 가려진 물체 제거로 드로우 콜 감소</li>
+                <li><strong>Portal Culling</strong>: 실내 씬에서 포털을 통한 가시성 전파</li>
+                <li><strong>Hardware Query</strong>: GPU Z-buffer 조회, 1-2 프레임 지연</li>
+                <li><strong>Software Rasterization</strong>: CPU에서 저해상도 깊이 버퍼</li>
+                <li><strong>Hi-Z</strong>: 밉맵된 깊이 버퍼로 빠른 보수적 테스트</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

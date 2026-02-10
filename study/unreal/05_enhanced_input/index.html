@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>입력 시스템의 진화 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+
+        <header class="content-header">
+            <h1>입력 시스템의 진화</h1>
+            <p class="subtitle">Enhanced Input System 완벽 활용</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 왜 새로운 입력 시스템이 필요했나?</h2>
+            <div class="conversation">
+                <div class="q">기존 입력 시스템의 문제점은 무엇인가요?</div>
+                <div class="a">
+                    <p>UE4의 기존 입력 시스템은 <span class="highlight">Action/Axis Mapping</span>이 프로젝트 설정에 하드코딩되어 있었습니다.</p>
+                    <p>런타임에 키 바인딩을 바꾸거나, 상황에 따라 다른 입력 처리를 하기가 매우 어려웠죠. 예를 들어:</p>
+                    <p class="warning">• 수영 중에는 WASD가 수영 동작으로
+                    <br>• 차량 탑승 중에는 같은 키가 운전 조작으로
+                    <br>• UI가 열려있으면 입력 무시</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>기존 시스템은 <span class="highlight">하나의 리모컨에 모든 버튼이 고정</span>된 것입니다.</p>
+                <p>Enhanced Input은 <span class="highlight">상황에 따라 버튼 기능이 바뀌는 스마트 리모컨</span>입니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Enhanced Input의 핵심 구성요소</h2>
+            <div class="conversation">
+                <div class="q">Enhanced Input은 어떤 구조로 되어 있나요?</div>
+                <div class="a">
+                    <p>세 가지 핵심 요소가 있습니다:</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+┌─────────────────────────────────────────────────────────────┐
+│                   Enhanced Input 구조                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌─────────────────┐                                        │
+│  │  Input Action   │  ← "점프한다" "이동한다" (추상적 행동) │
+│  │   (IA_Jump)     │                                        │
+│  └────────┬────────┘                                        │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌─────────────────┐                                        │
+│  │ Input Mapping   │  ← 키보드: Space = 점프                │
+│  │    Context      │    게임패드: A버튼 = 점프              │
+│  │   (IMC_Game)    │                                        │
+│  └────────┬────────┘                                        │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌─────────────────┐                                        │
+│  │   Modifiers &   │  ← 데드존, 감도, 반전 등               │
+│  │    Triggers     │    입력값 가공                         │
+│  └─────────────────┘                                        │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">Enhanced Input의 3단 구조</p>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>구성요소</th>
+                        <th>역할</th>
+                        <th>예시</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Input Action</td>
+                        <td>추상적인 "행동" 정의</td>
+                        <td>IA_Move, IA_Jump, IA_Fire</td>
+                    </tr>
+                    <tr>
+                        <td>Input Mapping Context</td>
+                        <td>물리 키와 Action 연결</td>
+                        <td>IMC_OnFoot, IMC_Vehicle</td>
+                    </tr>
+                    <tr>
+                        <td>Modifier</td>
+                        <td>입력값 변환</td>
+                        <td>데드존, 스케일, 반전</td>
+                    </tr>
+                    <tr>
+                        <td>Trigger</td>
+                        <td>발동 조건 정의</td>
+                        <td>눌렀을 때, 뗐을 때, 홀드</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Input Action 만들기</h2>
+            <div class="conversation">
+                <div class="q">Input Action은 어떻게 정의하나요?</div>
+                <div class="a">
+                    <p>Input Action은 <span class="highlight">값의 타입</span>을 정의합니다. bool(눌림/안눌림), 1D(아날로그 축), 2D(스틱/마우스), 3D(VR 컨트롤러) 등이 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Input Action 설정</div>
+                <pre><code>// IA_Move (2D 이동)
+Value Type: Axis2D (Vector2D)
+Description: "Character Movement"
+
+// IA_Jump (버튼)
+Value Type: Digital (bool)
+Description: "Character Jump"
+
+// IA_Look (마우스/스틱 회전)
+Value Type: Axis2D (Vector2D)
+Description: "Camera Rotation"</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++에서 Input Action 바인딩</div>
+                <pre><code>void AMyCharacter::SetupPlayerInputComponent(UInputComponent* Input)
+{
+    Super::SetupPlayerInputComponent(Input);
+
+    // Enhanced Input Component로 캐스팅
+    if (UEnhancedInputComponent* EnhancedInput =
+        Cast<UEnhancedInputComponent>(Input))
+    {
+        // 이동 - 2D Axis
+        EnhancedInput->BindAction(MoveAction, ETriggerEvent::Triggered,
+            this, &AMyCharacter::Move);
+
+        // 점프 - Started/Completed
+        EnhancedInput->BindAction(JumpAction, ETriggerEvent::Started,
+            this, &AMyCharacter::StartJump);
+        EnhancedInput->BindAction(JumpAction, ETriggerEvent::Completed,
+            this, &AMyCharacter::StopJump);
+    }
+}
+
+void AMyCharacter::Move(const FInputActionValue& Value)
+{
+    FVector2D MovementVector = Value.Get<FVector2D>();
+    // MovementVector.X = 좌우, MovementVector.Y = 전후
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Input Mapping Context 활용</h2>
+            <div class="conversation">
+                <div class="q">상황에 따라 입력을 바꾸려면 어떻게 하나요?</div>
+                <div class="a">
+                    <p>Input Mapping Context(IMC)를 <span class="highlight">런타임에 추가/제거</span>하면 됩니다. 우선순위도 설정할 수 있어서, 높은 우선순위의 IMC가 입력을 "소비"하면 낮은 IMC는 무시됩니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Mapping Context 전환</div>
+                <pre><code>void AMyCharacter::EnterVehicle(AVehicle* Vehicle)
+{
+    if (APlayerController* PC = Cast<APlayerController>(Controller))
+    {
+        if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+            ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
+                PC->GetLocalPlayer()))
+        {
+            // 도보 컨텍스트 제거
+            Subsystem->RemoveMappingContext(IMC_OnFoot);
+
+            // 차량 컨텍스트 추가 (우선순위 1)
+            Subsystem->AddMappingContext(IMC_Vehicle, 1);
+        }
+    }
+}
+
+void AMyCharacter::ExitVehicle()
+{
+    // 반대로 수행
+    Subsystem->RemoveMappingContext(IMC_Vehicle);
+    Subsystem->AddMappingContext(IMC_OnFoot, 0);
+}</code></pre>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+        IMC 우선순위 스택
+
+        ┌─────────────────┐
+        │  IMC_UIMenu     │ ← Priority 2 (최우선)
+        │  (UI 입력만)    │   Escape, 마우스 클릭
+        ├─────────────────┤
+        │  IMC_Vehicle    │ ← Priority 1
+        │  (차량 조작)    │   WASD = 운전
+        ├─────────────────┤
+        │  IMC_OnFoot     │ ← Priority 0 (기본)
+        │  (도보 이동)    │   WASD = 걷기
+        └─────────────────┘
+
+    높은 우선순위가 입력을 소비하면
+    낮은 우선순위는 해당 입력을 받지 못함
+                </pre>
+                <p class="diagram-caption">IMC 우선순위 스택</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Modifiers와 Triggers</h2>
+            <div class="conversation">
+                <div class="q">Modifier는 어떤 것들이 있나요?</div>
+                <div class="a">
+                    <p>Modifier는 입력값을 <span class="highlight">변환</span>합니다. 순서대로 적용됩니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>Modifier</th>
+                        <th>기능</th>
+                        <th>사용 예</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Dead Zone</td>
+                        <td>일정 값 이하 무시</td>
+                        <td>스틱 드리프트 방지</td>
+                    </tr>
+                    <tr>
+                        <td>Negate</td>
+                        <td>값 반전</td>
+                        <td>Y축 반전 옵션</td>
+                    </tr>
+                    <tr>
+                        <td>Scalar</td>
+                        <td>값 스케일</td>
+                        <td>마우스 감도</td>
+                    </tr>
+                    <tr>
+                        <td>Swizzle</td>
+                        <td>축 교환</td>
+                        <td>XY → YX</td>
+                    </tr>
+                    <tr>
+                        <td>Smooth</td>
+                        <td>값 보간</td>
+                        <td>부드러운 입력</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="conversation">
+                <div class="q">Trigger는 언제 사용하나요?</div>
+                <div class="a">
+                    <p>Trigger는 <span class="highlight">Action이 발동되는 조건</span>을 정의합니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>Trigger</th>
+                        <th>발동 시점</th>
+                        <th>사용 예</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Down</td>
+                        <td>누르고 있는 동안</td>
+                        <td>이동, 연사</td>
+                    </tr>
+                    <tr>
+                        <td>Pressed</td>
+                        <td>누른 순간</td>
+                        <td>점프 시작</td>
+                    </tr>
+                    <tr>
+                        <td>Released</td>
+                        <td>뗀 순간</td>
+                        <td>활 발사</td>
+                    </tr>
+                    <tr>
+                        <td>Hold</td>
+                        <td>일정 시간 누름</td>
+                        <td>차지 공격</td>
+                    </tr>
+                    <tr>
+                        <td>Tap</td>
+                        <td>빠르게 눌렀다 뗌</td>
+                        <td>회피</td>
+                    </tr>
+                    <tr>
+                        <td>Chorded</td>
+                        <td>다른 키와 조합</td>
+                        <td>Shift+W = 달리기</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 예제 - 복합 입력</h2>
+            <div class="conversation">
+                <div class="q">Shift를 누르면 달리는 것은 어떻게 구현하나요?</div>
+                <div class="a">
+                    <p><span class="highlight">Chorded Action Trigger</span>를 사용합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">달리기 구현 (IMC 설정)</div>
+                <pre><code>// Input Mapping Context: IMC_OnFoot
+
+// 걷기 매핑
+IA_Move:
+  - Key: W
+    Modifiers: [Swizzle YXZ]  // 전후 이동
+  - Key: S
+    Modifiers: [Swizzle YXZ, Negate]
+  - Key: A
+    Modifiers: [Negate]  // 좌우 이동
+  - Key: D
+    Modifiers: []
+
+// 달리기 매핑 (Shift + 이동)
+IA_Sprint:
+  - Key: Left Shift
+    Triggers: [Down]  // 누르고 있는 동안
+
+// 코드에서
+void AMyCharacter::Move(const FInputActionValue& Value)
+{
+    FVector2D Input = Value.Get<FVector2D>();
+
+    float Speed = bIsSprinting ? SprintSpeed : WalkSpeed;
+    AddMovementInput(GetActorForwardVector(), Input.Y * Speed);
+    AddMovementInput(GetActorRightVector(), Input.X * Speed);
+}
+
+void AMyCharacter::Sprint(const FInputActionValue& Value)
+{
+    bIsSprinting = Value.Get<bool>();
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Input Action</strong>은 추상적인 행동, <strong>IMC</strong>는 물리 키와의 연결입니다</li>
+                <li><strong>IMC를 런타임에 추가/제거</strong>해서 상황별 입력을 구현합니다</li>
+                <li><strong>Modifier</strong>로 입력값을 변환하고, <strong>Trigger</strong>로 발동 조건을 정의합니다</li>
+                <li><strong>우선순위</strong>가 높은 IMC가 입력을 먼저 처리합니다</li>
+                <li><strong>Chorded Trigger</strong>로 Shift+Key 같은 조합 입력을 구현합니다</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

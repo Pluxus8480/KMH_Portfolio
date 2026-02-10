@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SFINAE와 Type Traits | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>컴파일러와 대화하는 법</h1>
+            <p class="subtitle">SFINAE로 타입에 따라 다른 코드 선택하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: SFINAE란?</h2>
+            <div class="conversation">
+                <div class="q">SFINAE가 뭔가요?</div>
+                <div class="a">
+                    <p class="highlight">Substitution Failure Is Not An Error - 치환 실패는 에러가 아니다!</p>
+                    <p>템플릿 인자 치환이 실패해도 컴파일 에러가 아니라, 그 템플릿만 후보에서 제외됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">SFINAE 기본 원리</div>
+                        <pre><code>// 두 개의 오버로드
+template&lt;typename T&gt;
+typename T::value_type getValue(T container) {  // #1
+    return container[0];
+}
+
+template&lt;typename T&gt;
+T getValue(T value) {  // #2
+    return value;
+}
+
+std::vector&lt;int&gt; vec = {1, 2, 3};
+int x = 10;
+
+getValue(vec);  // #1 선택: vector에 value_type 있음
+getValue(x);    // #2 선택: int에 value_type 없음 → #1 치환 실패 → 제외 → #2 선택
+                // 에러가 아님!</code></pre>
+                    </div>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>자격증 심사와 같습니다. 지원자 A가 필수 자격증이 없으면 탈락하지만, "자격증 없음"이라고 화내지 않고 다음 지원자를 봅니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Type Traits 기초</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">표준 Type Traits</div>
+                    <pre><code>#include &lt;type_traits&gt;
+
+// 타입 검사
+std::is_integral_v&lt;int&gt;         // true
+std::is_floating_point_v&lt;float&gt; // true
+std::is_pointer_v&lt;int*&gt;         // true
+std::is_reference_v&lt;int&&gt;        // true
+std::is_class_v&lt;std::string&gt;    // true
+
+// 타입 관계
+std::is_same_v&lt;int, int32_t&gt;    // true (플랫폼에 따라)
+std::is_base_of_v&lt;Base, Derived&gt; // true
+std::is_convertible_v&lt;int, double&gt; // true
+
+// 타입 변환
+std::remove_const_t&lt;const int&gt;     // int
+std::remove_reference_t&lt;int&&gt;       // int
+std::add_pointer_t&lt;int&gt;            // int*
+std::decay_t&lt;const int&&gt;            // int
+
+// 조건부 타입
+std::conditional_t&lt;true, int, float&gt;  // int
+std::conditional_t&lt;false, int, float&gt; // float
+
+// 사용 예시
+template&lt;typename T&gt;
+void print(T value) {
+    if constexpr (std::is_integral_v&lt;T&gt;) {
+        std::cout << "정수: " << value << "\n";
+    } else if constexpr (std::is_floating_point_v&lt;T&gt;) {
+        std::cout << "실수: " << value << "\n";
+    } else {
+        std::cout << "기타: " << value << "\n";
+    }
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: enable_if 활용</h2>
+            <div class="conversation">
+                <div class="q">enable_if는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">std::enable_if 구현과 사용</div>
+                        <pre><code>// std::enable_if 구현
+template&lt;bool Cond, typename T = void&gt;
+struct enable_if {};  // 기본: 타입 없음
+
+template&lt;typename T&gt;
+struct enable_if&lt;true, T&gt; {
+    using type = T;  // 조건이 true면 type 정의
+};
+
+// 조건이 false면 enable_if::type이 없음 → 치환 실패 → SFINAE
+
+// 사용법 1: 반환 타입에서
+template&lt;typename T&gt;
+std::enable_if_t&lt;std::is_integral_v&lt;T&gt;, T&gt;
+double_value(T x) {
+    return x * 2;
+}
+
+template&lt;typename T&gt;
+std::enable_if_t&lt;std::is_floating_point_v&lt;T&gt;, T&gt;
+double_value(T x) {
+    return x * 2.0;
+}
+
+// 사용법 2: 템플릿 파라미터에서
+template&lt;typename T,
+         std::enable_if_t&lt;std::is_integral_v&lt;T&gt;, int&gt; = 0&gt;
+void process(T x) {
+    std::cout << "정수 처리: " << x << "\n";
+}
+
+template&lt;typename T,
+         std::enable_if_t&lt;std::is_floating_point_v&lt;T&gt;, int&gt; = 0&gt;
+void process(T x) {
+    std::cout << "실수 처리: " << x << "\n";
+}
+
+// 사용법 3: 클래스 템플릿 특수화
+template&lt;typename T, typename Enable = void&gt;
+class Serializer;
+
+template&lt;typename T&gt;
+class Serializer&lt;T, std::enable_if_t&lt;std::is_arithmetic_v&lt;T&gt;&gt;&gt; {
+public:
+    static std::string serialize(T value) {
+        return std::to_string(value);
+    }
+};
+
+template&lt;typename T&gt;
+class Serializer&lt;T, std::enable_if_t&lt;std::is_same_v&lt;T, std::string&gt;&gt;&gt; {
+public:
+    static std::string serialize(const T& value) {
+        return "\"" + value + "\"";
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 커스텀 Type Traits 만들기</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">타입 특성 검사기 구현</div>
+                    <pre><code>// 멤버 함수 존재 여부 검사
+template&lt;typename T, typename = void&gt;
+struct has_size : std::false_type {};
+
+template&lt;typename T&gt;
+struct has_size&lt;T, std::void_t&lt;decltype(std::declval&lt;T&gt;().size())&gt;&gt;
+    : std::true_type {};
+
+template&lt;typename T&gt;
+inline constexpr bool has_size_v = has_size&lt;T&gt;::value;
+
+// 사용
+static_assert(has_size_v&lt;std::vector&lt;int&gt;&gt;);  // true
+static_assert(!has_size_v&lt;int&gt;);               // true
+
+// 더 정밀한 검사: 반환 타입도 확인
+template&lt;typename T, typename = void&gt;
+struct has_begin_end : std::false_type {};
+
+template&lt;typename T&gt;
+struct has_begin_end&lt;T, std::void_t&lt;
+    decltype(std::declval&lt;T&gt;().begin()),
+    decltype(std::declval&lt;T&gt;().end())
+&gt;&gt; : std::true_type {};
+
+// is_iterable 구현
+template&lt;typename T, typename = void&gt;
+struct is_iterable : std::false_type {};
+
+template&lt;typename T&gt;
+struct is_iterable&lt;T, std::void_t&lt;
+    decltype(std::begin(std::declval&lt;T&gt;())),
+    decltype(std::end(std::declval&lt;T&gt;()))
+&gt;&gt; : std::true_type {};
+
+// is_printable 구현 (operator<< 존재 여부)
+template&lt;typename T, typename = void&gt;
+struct is_printable : std::false_type {};
+
+template&lt;typename T&gt;
+struct is_printable&lt;T, std::void_t&lt;
+    decltype(std::declval&lt;std::ostream&&gt;() << std::declval&lt;T&gt;())
+&gt;&gt; : std::true_type {};
+
+// 활용
+template&lt;typename T&gt;
+void smart_print(const T& value) {
+    if constexpr (is_iterable&lt;T&gt;::value && !std::is_same_v&lt;T, std::string&gt;) {
+        std::cout << "[";
+        bool first = true;
+        for (const auto& item : value) {
+            if (!first) std::cout << ", ";
+            smart_print(item);
+            first = false;
+        }
+        std::cout << "]";
+    } else if constexpr (is_printable&lt;T&gt;::value) {
+        std::cout << value;
+    } else {
+        std::cout << "(unprintable)";
+    }
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 태그 디스패치</h2>
+            <div class="conversation">
+                <div class="q">SFINAE 외에 다른 방법은?</div>
+                <div class="a">
+                    <p class="highlight">태그 디스패치: 타입 특성을 태그로 변환하여 오버로딩에 활용!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">태그 디스패치 패턴</div>
+                        <pre><code>// 반복자 카테고리별 advance 구현
+namespace detail {
+    template&lt;typename Iter, typename Distance&gt;
+    void advance_impl(Iter& it, Distance n, std::input_iterator_tag) {
+        // 입력 반복자: 하나씩 이동
+        while (n--) ++it;
+    }
+
+    template&lt;typename Iter, typename Distance&gt;
+    void advance_impl(Iter& it, Distance n, std::bidirectional_iterator_tag) {
+        // 양방향 반복자: 앞뒤로 이동 가능
+        if (n >= 0) {
+            while (n--) ++it;
+        } else {
+            while (n++) --it;
+        }
+    }
+
+    template&lt;typename Iter, typename Distance&gt;
+    void advance_impl(Iter& it, Distance n, std::random_access_iterator_tag) {
+        // 랜덤 액세스 반복자: 직접 점프
+        it += n;
+    }
+}
+
+template&lt;typename Iter, typename Distance&gt;
+void advance(Iter& it, Distance n) {
+    // 태그로 디스패치
+    detail::advance_impl(it, n,
+        typename std::iterator_traits&lt;Iter&gt;::iterator_category{});
+}
+
+// 커스텀 태그 사용
+struct small_object_tag {};
+struct large_object_tag {};
+
+template&lt;typename T&gt;
+using object_size_tag = std::conditional_t&lt;
+    sizeof(T) <= 16,
+    small_object_tag,
+    large_object_tag
+&gt;;
+
+template&lt;typename T&gt;
+void store_impl(T value, small_object_tag) {
+    // 작은 객체: 값으로 저장
+    buffer_.push_back(value);
+}
+
+template&lt;typename T&gt;
+void store_impl(T value, large_object_tag) {
+    // 큰 객체: 포인터로 저장
+    heap_storage_.push_back(std::make_unique&lt;T&gt;(std::move(value)));
+}
+
+template&lt;typename T&gt;
+void store(T value) {
+    store_impl(std::move(value), object_size_tag&lt;T&gt;{});
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 SFINAE 패턴</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">실전 예제들</div>
+                    <pre><code>// 1. 컨테이너 타입 감지
+template&lt;typename T, typename = void&gt;
+struct is_container : std::false_type {};
+
+template&lt;typename T&gt;
+struct is_container&lt;T, std::void_t&lt;
+    typename T::value_type,
+    typename T::iterator,
+    decltype(std::declval&lt;T&gt;().begin()),
+    decltype(std::declval&lt;T&gt;().end()),
+    decltype(std::declval&lt;T&gt;().size())
+&gt;&gt; : std::true_type {};
+
+// 2. 호출 가능 여부 검사
+template&lt;typename F, typename... Args&gt;
+struct is_invocable {
+private:
+    template&lt;typename Func, typename... As&gt;
+    static auto test(int) -> decltype(
+        std::declval&lt;Func&gt;()(std::declval&lt;As&gt;()...),
+        std::true_type{}
+    );
+
+    template&lt;typename, typename...&gt;
+    static std::false_type test(...);
+
+public:
+    static constexpr bool value = decltype(test&lt;F, Args...&gt;(0))::value;
+};
+
+// 3. 직렬화 가능 타입 처리
+template&lt;typename T, typename = void&gt;
+struct has_serialize : std::false_type {};
+
+template&lt;typename T&gt;
+struct has_serialize&lt;T, std::void_t&lt;
+    decltype(std::declval&lt;T&gt;().serialize())
+&gt;&gt; : std::true_type {};
+
+template&lt;typename T&gt;
+std::string to_json(const T& obj) {
+    if constexpr (has_serialize&lt;T&gt;::value) {
+        return obj.serialize();
+    } else if constexpr (std::is_arithmetic_v&lt;T&gt;) {
+        return std::to_string(obj);
+    } else if constexpr (std::is_same_v&lt;T, std::string&gt;) {
+        return "\"" + obj + "\"";
+    } else if constexpr (is_container&lt;T&gt;::value) {
+        std::string result = "[";
+        bool first = true;
+        for (const auto& item : obj) {
+            if (!first) result += ",";
+            result += to_json(item);
+            first = false;
+        }
+        return result + "]";
+    } else {
+        static_assert(sizeof(T) == 0, "Type not serializable");
+    }
+}
+
+// 4. 생성자 존재 여부 검사
+template&lt;typename T, typename... Args&gt;
+struct is_constructible_from {
+    template&lt;typename U, typename... As&gt;
+    static auto test(int) -> decltype(U(std::declval&lt;As&gt;()...), std::true_type{});
+
+    template&lt;typename, typename...&gt;
+    static std::false_type test(...);
+
+    static constexpr bool value = decltype(test&lt;T, Args...&gt;(0))::value;
+};</code></pre>
+                </div>
+
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>기법</th>
+                            <th>장점</th>
+                            <th>단점</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>SFINAE + enable_if</td>
+                            <td>강력하고 유연함</td>
+                            <td>코드가 복잡함</td>
+                        </tr>
+                        <tr>
+                            <td>태그 디스패치</td>
+                            <td>코드가 명확함</td>
+                            <td>태그 정의 필요</td>
+                        </tr>
+                        <tr>
+                            <td>if constexpr</td>
+                            <td>간결하고 직관적</td>
+                            <td>C++17 이상 필요</td>
+                        </tr>
+                        <tr>
+                            <td>Concepts</td>
+                            <td>가장 명확함</td>
+                            <td>C++20 이상 필요</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>SFINAE</strong>: 치환 실패는 에러가 아니라 후보 제외</li>
+                <li><strong>enable_if</strong>: 조건에 따라 템플릿 활성화/비활성화</li>
+                <li><strong>Type Traits</strong>: 컴파일 타임 타입 정보 조회</li>
+                <li><strong>void_t</strong>: 멤버 존재 여부 검사에 활용</li>
+                <li><strong>태그 디스패치</strong>: 타입 특성을 오버로딩으로 분기</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

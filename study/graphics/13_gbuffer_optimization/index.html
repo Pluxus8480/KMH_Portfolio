@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>화면 정보를 효율적으로 담다 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>화면 정보를 효율적으로 담다</h1>
+            <p class="subtitle">G-Buffer 구조와 최적화</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: G-Buffer 복습</h2>
+            <div class="conversation">
+                <div class="q">G-Buffer란 무엇인가요?</div>
+                <div class="a">
+                    <p><span class="highlight">G-Buffer (Geometry Buffer)</span>는 Deferred Rendering에서 라이팅에 필요한 기하 정보를 저장하는 버퍼 집합입니다.</p>
+                    <p>첫 번째 패스에서 정보를 저장하고, 두 번째 패스에서 라이팅을 계산합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Deferred Rendering 흐름:
+
+         Geometry Pass                    Lighting Pass
+┌─────────────────────────┐        ┌─────────────────────────┐
+│                         │        │                         │
+│  모든 오브젝트 렌더링   │   →    │  G-Buffer 읽기          │
+│  G-Buffer에 저장        │        │  + 라이트별 라이팅      │
+│                         │        │                         │
+└─────────────────────────┘        └─────────────────────────┘
+            │                                  │
+            ▼                                  ▼
+┌─────────────────────────┐        ┌─────────────────────────┐
+│      G-Buffer           │        │    Final Image          │
+│  ┌──────┬──────┬──────┐ │        │                         │
+│  │Albedo│Normal│Depth │ │        │    💡 라이팅 적용      │
+│  └──────┴──────┴──────┘ │        │                         │
+└─────────────────────────┘        └─────────────────────────┘
+                </pre>
+                <p class="diagram-caption">Deferred Rendering 기본 흐름</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 일반적인 G-Buffer 레이아웃</h2>
+            <div class="conversation">
+                <div class="q">G-Buffer에는 어떤 정보가 필요한가요?</div>
+                <div class="a">
+                    <p>PBR 라이팅에 필요한 정보: 위치(깊이), 법선, 알베도, 러프니스, 메탈릭, 이미시브 등</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+전형적인 G-Buffer 구성 (총 ~256 bits/pixel):
+
+RT0: R8G8B8A8_UNORM (32 bits)
+┌────────┬────────┬────────┬────────┐
+│   R    │   G    │   B    │   A    │
+│ Albedo │ Albedo │ Albedo │Metallic│
+│   8    │   8    │   8    │   8    │
+└────────┴────────┴────────┴────────┘
+
+RT1: R16G16B16A16_FLOAT (64 bits)
+┌─────────────┬─────────────┬─────────────┬─────────────┐
+│     R       │     G       │     B       │     A       │
+│  Normal.x   │  Normal.y   │  Normal.z   │  Roughness  │
+│     16      │     16      │     16      │     16      │
+└─────────────┴─────────────┴─────────────┴─────────────┘
+
+RT2: R16G16B16A16_FLOAT (64 bits)
+┌─────────────┬─────────────┬─────────────┬─────────────┐
+│     R       │     G       │     B       │     A       │
+│ Emissive.r  │ Emissive.g  │ Emissive.b  │    AO       │
+│     16      │     16      │     16      │     16      │
+└─────────────┴─────────────┴─────────────┴─────────────┘
+
+Depth: D24S8 or D32F (32 bits)
+┌───────────────────────────────────────────────────────┐
+│                     Depth                              │
+│                      24-32                             │
+└───────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">일반적인 G-Buffer 레이아웃</p>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>데이터</th>
+                        <th>용도</th>
+                        <th>일반적 포맷</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Albedo</td>
+                        <td>기본 색상</td>
+                        <td>RGB8</td>
+                    </tr>
+                    <tr>
+                        <td>Normal</td>
+                        <td>표면 방향</td>
+                        <td>RGB16F / RG16F + 재구성</td>
+                    </tr>
+                    <tr>
+                        <td>Roughness</td>
+                        <td>거칠기</td>
+                        <td>R8</td>
+                    </tr>
+                    <tr>
+                        <td>Metallic</td>
+                        <td>금속성</td>
+                        <td>R8</td>
+                    </tr>
+                    <tr>
+                        <td>Depth</td>
+                        <td>위치 재구성</td>
+                        <td>D24/D32F</td>
+                    </tr>
+                    <tr>
+                        <td>Emissive</td>
+                        <td>자체 발광</td>
+                        <td>RGB16F</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 대역폭 최적화</h2>
+            <div class="conversation">
+                <div class="q">G-Buffer가 너무 크면 어떤 문제가 있나요?</div>
+                <div class="a">
+                    <p>G-Buffer 크기 = <span class="warning">메모리 대역폭</span>입니다. 1080p에서 4개 RT는 프레임당 ~30MB를 읽고 씁니다.</p>
+                    <p>대역폭 최적화가 성능에 직접적인 영향을 줍니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+G-Buffer 대역폭 계산 (1920×1080):
+
+픽셀 수: 2,073,600
+
+전형적 G-Buffer (192 bits/pixel):
+- RT0 (32 bits) = 8.3 MB
+- RT1 (64 bits) = 16.6 MB
+- RT2 (64 bits) = 16.6 MB
+- Depth (32 bits) = 8.3 MB
+─────────────────────────
+총: 49.8 MB / frame
+
+60 FPS 기준:
+- Write (Geometry Pass): 49.8 × 60 = 3.0 GB/s
+- Read (Lighting Pass): 49.8 × 60 = 3.0 GB/s
+─────────────────────────
+총 대역폭: ~6 GB/s (G-Buffer만!)
+                </pre>
+                <p class="diagram-caption">G-Buffer 대역폭 분석</p>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 대역폭 최적화 전략</strong>
+                <p><span class="highlight">데이터 패킹</span>: 여러 값을 하나의 채널에</p>
+                <p><span class="highlight">법선 압축</span>: 3채널 → 2채널</p>
+                <p><span class="highlight">깊이에서 위치 재구성</span>: World Position 저장 불필요</p>
+                <p><span class="highlight">Thin G-Buffer</span>: 최소한의 정보만 저장</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 법선 인코딩</h2>
+            <div class="conversation">
+                <div class="q">법선을 어떻게 압축하나요?</div>
+                <div class="a">
+                    <p>법선은 단위 벡터이므로 x, y만 저장하고 z를 재구성할 수 있습니다. 여러 인코딩 방식이 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">법선 인코딩 방식들</div>
+                <pre><code>// 1. 단순 XY 저장 (Z 재구성)
+// 문제: 반구만 표현 가능
+float2 EncodeNormalXY(float3 n)
+{
+    return n.xy;
+}
+
+float3 DecodeNormalXY(float2 enc)
+{
+    float3 n;
+    n.xy = enc;
+    n.z = sqrt(1.0 - saturate(dot(n.xy, n.xy)));
+    return n;
+}
+
+// 2. Spheremap Transform (더 정확)
+float2 EncodeNormalSpheremap(float3 n)
+{
+    float f = sqrt(8.0 * n.z + 8.0);
+    return n.xy / f + 0.5;
+}
+
+float3 DecodeNormalSpheremap(float2 enc)
+{
+    float2 fenc = enc * 4.0 - 2.0;
+    float f = dot(fenc, fenc);
+    float g = sqrt(1.0 - f / 4.0);
+    float3 n;
+    n.xy = fenc * g;
+    n.z = 1.0 - f / 2.0;
+    return n;
+}
+
+// 3. Octahedron Encoding (현재 가장 인기)
+float2 OctWrap(float2 v)
+{
+    return (1.0 - abs(v.yx)) * (v.xy >= 0.0 ? 1.0 : -1.0);
+}
+
+float2 EncodeNormalOctahedron(float3 n)
+{
+    n /= (abs(n.x) + abs(n.y) + abs(n.z));
+    n.xy = n.z >= 0.0 ? n.xy : OctWrap(n.xy);
+    n.xy = n.xy * 0.5 + 0.5;
+    return n.xy;
+}
+
+float3 DecodeNormalOctahedron(float2 enc)
+{
+    enc = enc * 2.0 - 1.0;
+    float3 n = float3(enc.xy, 1.0 - abs(enc.x) - abs(enc.y));
+    float t = saturate(-n.z);
+    n.xy += n.xy >= 0.0 ? -t : t;
+    return normalize(n);
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>인코딩</th>
+                        <th>저장 크기</th>
+                        <th>정확도</th>
+                        <th>연산 비용</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>RGB 저장</td>
+                        <td>48 bits</td>
+                        <td>완벽</td>
+                        <td>없음</td>
+                    </tr>
+                    <tr>
+                        <td>XY + Z재구성</td>
+                        <td>32 bits</td>
+                        <td>낮음 (반구만)</td>
+                        <td>낮음</td>
+                    </tr>
+                    <tr>
+                        <td>Spheremap</td>
+                        <td>32 bits</td>
+                        <td>중간</td>
+                        <td>중간</td>
+                    </tr>
+                    <tr>
+                        <td>Octahedron</td>
+                        <td>32 bits</td>
+                        <td>높음</td>
+                        <td>낮음</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 최적화된 G-Buffer 레이아웃</h2>
+            <div class="conversation">
+                <div class="q">실전에서 사용하는 최적화된 레이아웃은?</div>
+                <div class="a">
+                    <p>2~3개의 렌더 타겟으로 압축하는 것이 일반적입니다:</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+최적화된 G-Buffer (80 bits/pixel):
+
+RT0: R8G8B8A8_UNORM (32 bits)
+┌────────┬────────┬────────┬────────┐
+│   R    │   G    │   B    │   A    │
+│ Albedo │ Albedo │ Albedo │Specular│
+│ (sRGB) │ (sRGB) │ (sRGB) │ (선택) │
+└────────┴────────┴────────┴────────┘
+
+RT1: R16G16_FLOAT (32 bits)
+┌─────────────────┬─────────────────┐
+│       R         │       G         │
+│   Normal.x      │   Normal.y      │
+│  (Octahedron)   │  (Octahedron)   │
+└─────────────────┴─────────────────┘
+
+RT2: R8G8_UNORM (16 bits) - 또는 RT0/RT1에 패킹
+┌────────┬────────┐
+│   R    │   G    │
+│Metallic│Roughness│
+└────────┴────────┘
+
+Depth: D24S8 (32 bits)
+┌───────────────────────────────────┐
+│            Depth                  │
+└───────────────────────────────────┘
+
+대역폭 절감: 192 bits → 112 bits (42% 감소!)
+                </pre>
+                <p class="diagram-caption">최적화된 G-Buffer</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">최적화된 G-Buffer 셰이더</div>
+                <pre><code>// Geometry Pass - G-Buffer 출력
+struct GBufferOutput
+{
+    float4 RT0 : SV_Target0;  // Albedo + Specular
+    float2 RT1 : SV_Target1;  // Normal (Octahedron)
+    float2 RT2 : SV_Target2;  // Metallic + Roughness
+};
+
+GBufferOutput PS_GBuffer(VSOutput input)
+{
+    GBufferOutput output;
+
+    // 알베도
+    float3 albedo = albedoTexture.Sample(samp, input.uv).rgb;
+
+    // 법선 (노말맵 적용 후)
+    float3 normal = normalTexture.Sample(samp, input.uv).rgb * 2.0 - 1.0;
+    normal = mul(normal, input.TBN);
+    normal = normalize(normal);
+
+    // 머티리얼
+    float metallic = metallicTexture.Sample(samp, input.uv).r;
+    float roughness = roughnessTexture.Sample(samp, input.uv).r;
+
+    // 패킹
+    output.RT0 = float4(albedo, 0);  // A 채널 활용 가능
+    output.RT1 = EncodeNormalOctahedron(normal);
+    output.RT2 = float2(metallic, roughness);
+
+    return output;
+}
+
+// Lighting Pass - G-Buffer 언패킹
+struct GBufferData
+{
+    float3 albedo;
+    float3 normal;
+    float metallic;
+    float roughness;
+    float3 worldPos;
+};
+
+GBufferData UnpackGBuffer(float2 uv, float2 screenPos)
+{
+    GBufferData data;
+
+    // 읽기
+    float4 rt0 = gBuffer0.Sample(pointSamp, uv);
+    float2 rt1 = gBuffer1.Sample(pointSamp, uv);
+    float2 rt2 = gBuffer2.Sample(pointSamp, uv);
+    float depth = depthBuffer.Sample(pointSamp, uv).r;
+
+    // 언패킹
+    data.albedo = rt0.rgb;
+    data.normal = DecodeNormalOctahedron(rt1);
+    data.metallic = rt2.r;
+    data.roughness = rt2.g;
+
+    // 깊이에서 월드 위치 재구성
+    data.worldPos = ReconstructWorldPosition(screenPos, depth);
+
+    return data;
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 위치 재구성</h2>
+            <div class="conversation">
+                <div class="q">World Position을 저장하지 않으려면?</div>
+                <div class="a">
+                    <p>깊이 버퍼와 역 뷰-프로젝션 행렬로 월드 위치를 재구성합니다. 3채널 대신 1채널로 충분합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">깊이에서 위치 재구성</div>
+                <pre><code>// 방법 1: 역행렬 사용
+float3 ReconstructWorldPosition(float2 screenUV, float depth)
+{
+    // 스크린 UV → NDC (-1 ~ 1)
+    float2 ndc = screenUV * 2.0 - 1.0;
+    ndc.y = -ndc.y;  // DirectX Y 반전
+
+    // 클립 공간 위치
+    float4 clipPos = float4(ndc, depth, 1.0);
+
+    // 역 뷰-프로젝션 변환
+    float4 worldPos = mul(clipPos, invViewProjMatrix);
+    worldPos /= worldPos.w;  // 원근 나눗셈
+
+    return worldPos.xyz;
+}
+
+// 방법 2: 레이 + 선형 깊이 (더 빠름)
+float3 ReconstructWorldPositionFast(float2 screenUV, float depth)
+{
+    // 카메라에서 픽셀로의 방향 벡터 (미리 계산)
+    float3 viewRay = GetViewRay(screenUV);
+
+    // 선형 깊이로 변환
+    float linearDepth = LinearizeDepth(depth, nearPlane, farPlane);
+
+    // 카메라 위치 + 방향 × 거리
+    return cameraPosition + viewRay * linearDepth;
+}
+
+// 뷰 레이 계산 (Vertex Shader에서)
+float3 GetViewRay(float2 screenUV)
+{
+    // 카메라 코너에서 보간
+    // 전체 화면 쿼드의 각 정점에 뷰 레이 저장
+    float3 topLeft = frustumCorners[0];
+    float3 topRight = frustumCorners[1];
+    float3 bottomLeft = frustumCorners[2];
+    float3 bottomRight = frustumCorners[3];
+
+    float3 top = lerp(topLeft, topRight, screenUV.x);
+    float3 bottom = lerp(bottomLeft, bottomRight, screenUV.x);
+    return lerp(top, bottom, screenUV.y);
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 추가 최적화 팁</strong>
+                <p><span class="highlight">Stencil 활용</span>: 라이트 볼륨 내 픽셀만 처리</p>
+                <p><span class="highlight">Early-Z</span>: Geometry Pass에서 깊이 먼저 그리기</p>
+                <p><span class="highlight">Tile-Based</span>: GPU의 타일 메모리 활용 (모바일)</p>
+                <p><span class="highlight">MRT 최소화</span>: 필요한 데이터만 저장</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>G-Buffer</strong>는 Deferred Rendering의 핵심, 대역폭이 성능 병목</li>
+                <li><strong>Octahedron 인코딩</strong>으로 법선을 2채널로 압축</li>
+                <li><strong>깊이 재구성</strong>으로 World Position 저장 불필요</li>
+                <li><strong>데이터 패킹</strong>으로 렌더 타겟 수와 크기 최소화</li>
+                <li>최적화로 <strong>192 bits → 80~112 bits</strong>까지 압축 가능</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

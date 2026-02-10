@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>완벽한 전달 (Perfect Forwarding) | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>인자를 그대로 전달하고 싶다면?</h1>
+            <p class="subtitle">Perfect Forwarding과 Universal Reference 마스터하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 전달 문제 (Forwarding Problem)</h2>
+            <div class="conversation">
+                <div class="q">왜 인자 전달이 어려운가요?</div>
+                <div class="a">
+                    <p class="warning">래퍼 함수에서 원본 인자의 값 카테고리(lvalue/rvalue)가 손실됩니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">전달 문제 예시</div>
+                        <pre><code>void process(int& x) { std::cout << "lvalue: " << x << "\n"; }
+void process(int&& x) { std::cout << "rvalue: " << x << "\n"; }
+
+// 래퍼 함수 시도 1: 값으로 받기
+template&lt;typename T&gt;
+void wrapper1(T arg) {
+    process(arg);  // 항상 lvalue! (arg는 이름 있음)
+}
+
+// 래퍼 함수 시도 2: lvalue 참조로 받기
+template&lt;typename T&gt;
+void wrapper2(T& arg) {
+    process(arg);  // rvalue를 받을 수 없음!
+}
+
+// 래퍼 함수 시도 3: const lvalue 참조로 받기
+template&lt;typename T&gt;
+void wrapper3(const T& arg) {
+    process(arg);  // const를 non-const로 변환 불가!
+}
+
+int main() {
+    int x = 10;
+    wrapper1(x);        // lvalue → 복사 발생
+    wrapper1(20);       // rvalue → lvalue로 변환됨
+
+    wrapper2(x);        // OK
+    // wrapper2(20);    // 컴파일 에러! rvalue 못 받음
+
+    wrapper3(x);        // OK, 하지만 const
+    wrapper3(20);       // OK, 하지만 const
+}</code></pre>
+                    </div>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>택배 중계소에서 '급행' 스티커가 붙은 박스를 받았는데, 다음 배송지에 보낼 때 스티커가 떨어져 '일반'으로 처리되는 것과 같습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Universal Reference (Forwarding Reference)</h2>
+            <div class="conversation">
+                <div class="q">Universal Reference란 무엇인가요?</div>
+                <div class="a">
+                    <p class="highlight">T&&가 템플릿 타입 추론 컨텍스트에서 사용되면 Universal Reference가 됩니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Universal Reference vs Rvalue Reference</div>
+                        <pre><code>// Rvalue Reference (항상 rvalue만 받음)
+void func1(int&& x);              // rvalue reference
+void func2(Widget&& w);           // rvalue reference
+
+// Universal Reference (lvalue와 rvalue 모두 받음)
+template&lt;typename T&gt;
+void func3(T&& x);                // universal reference!
+
+auto&& var = expr;                // universal reference!
+
+// 주의: 타입이 고정되면 rvalue reference!
+template&lt;typename T&gt;
+class Widget {
+    void method(T&& x);           // rvalue reference! (T는 이미 결정됨)
+};
+
+// 참조 붕괴 (Reference Collapsing) 규칙
+// T&  + &  → T&
+// T&  + && → T&
+// T&& + &  → T&
+// T&& + && → T&&
+
+template&lt;typename T&gt;
+void example(T&& x) {
+    // T가 int& 로 추론되면: int& && → int& (lvalue reference)
+    // T가 int  로 추론되면: int &&  → int&& (rvalue reference)
+}
+
+int main() {
+    int a = 10;
+
+    example(a);     // T = int&,  T&& = int&  (lvalue)
+    example(20);    // T = int,   T&& = int&& (rvalue)
+}</code></pre>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Universal Reference 타입 추론
+
+example(a);  // a는 lvalue
+├── T = int& (lvalue이므로 참조로 추론)
+└── T&& = int& && = int& (참조 붕괴)
+
+example(20); // 20은 rvalue
+├── T = int (rvalue이므로 값으로 추론)
+└── T&& = int && = int&& (rvalue reference)
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: std::forward 구현</h2>
+            <div class="conversation">
+                <div class="q">std::forward는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">std::forward 구현</div>
+                        <pre><code>// 간소화된 std::forward 구현
+template&lt;typename T&gt;
+T&& forward(std::remove_reference_t&lt;T&gt;& arg) noexcept {
+    return static_cast&lt;T&&>(arg);
+}
+
+template&lt;typename T&gt;
+T&& forward(std::remove_reference_t&lt;T&gt;&& arg) noexcept {
+    static_assert(!std::is_lvalue_reference_v&lt;T&gt;,
+                  "Cannot forward rvalue as lvalue");
+    return static_cast&lt;T&&>(arg);
+}
+
+// 동작 원리
+template&lt;typename T&gt;
+void wrapper(T&& arg) {
+    process(std::forward&lt;T&gt;(arg));
+}
+
+// T = int& 일 때 (lvalue가 들어옴)
+// forward&lt;int&&gt;(arg)
+// → static_cast&lt;int& &&>(arg)
+// → static_cast&lt;int&>(arg)  // 참조 붕괴
+// → lvalue reference 반환!
+
+// T = int 일 때 (rvalue가 들어옴)
+// forward&lt;int&gt;(arg)
+// → static_cast&lt;int&&>(arg)
+// → rvalue reference 반환!</code></pre>
+                    </div>
+
+                    <p class="key-point">std::forward는 조건부 캐스트입니다. lvalue면 그대로, rvalue면 std::move처럼 동작합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Perfect Forwarding 적용</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">완벽한 전달 패턴</div>
+                    <pre><code>// 팩토리 함수
+template&lt;typename T, typename... Args&gt;
+std::unique_ptr&lt;T&gt; make_unique(Args&&... args) {
+    return std::unique_ptr&lt;T&gt;(
+        new T(std::forward&lt;Args&gt;(args)...)
+    );
+}
+
+// emplace 함수
+template&lt;typename T&gt;
+class Vector {
+public:
+    template&lt;typename... Args&gt;
+    void emplace_back(Args&&... args) {
+        // 메모리에 직접 생성
+        new (end()) T(std::forward&lt;Args&gt;(args)...);
+        size_++;
+    }
+};
+
+// 래퍼 함수
+template&lt;typename Func, typename... Args&gt;
+decltype(auto) invoke(Func&& func, Args&&... args) {
+    return std::forward&lt;Func&gt;(func)(std::forward&lt;Args&gt;(args)...);
+}
+
+// 사용 예시
+class Widget {
+public:
+    Widget(std::string name, int value)
+        : name_(std::move(name)), value_(value) {}
+private:
+    std::string name_;
+    int value_;
+};
+
+auto w1 = make_unique&lt;Widget&gt;("test", 42);  // 인자 완벽 전달
+
+std::vector&lt;Widget&gt; widgets;
+widgets.emplace_back("widget1", 10);  // 복사 없이 직접 생성!</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 주의사항과 함정</h2>
+            <div class="conversation">
+                <div class="q">Perfect Forwarding을 쓸 때 주의할 점은?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">흔한 실수들</div>
+                        <pre><code>// 실수 1: forward 없이 전달
+template&lt;typename T&gt;
+void bad1(T&& arg) {
+    process(arg);  // 항상 lvalue! forward 필요
+}
+
+// 실수 2: move 대신 forward
+template&lt;typename T&gt;
+void bad2(T&& arg) {
+    process(std::move(arg));  // 항상 rvalue! lvalue도 이동됨
+}
+
+// 실수 3: 타입 명시 오류
+template&lt;typename T&gt;
+void bad3(T&& arg) {
+    process(std::forward(arg));  // 에러! 템플릿 인자 필요
+}
+
+// 실수 4: 여러 번 forward
+template&lt;typename T&gt;
+void bad4(T&& arg) {
+    func1(std::forward&lt;T&gt;(arg));
+    func2(std::forward&lt;T&gt;(arg));  // 위험! 이미 이동됐을 수 있음
+}
+
+// 올바른 패턴
+template&lt;typename T&gt;
+void good(T&& arg) {
+    func1(arg);                      // 마지막이 아니면 그대로
+    func2(std::forward&lt;T&gt;(arg));     // 마지막에만 forward
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Universal Reference와 오버로딩</div>
+                        <pre><code>// 위험: Universal Reference + 오버로딩
+class Widget {
+public:
+    // Universal Reference 생성자
+    template&lt;typename T&gt;
+    Widget(T&& name) : name_(std::forward&lt;T&gt;(name)) {}
+
+    // 복사 생성자
+    Widget(const Widget& other) : name_(other.name_) {}
+};
+
+Widget w1("test");      // OK: T&& 버전 호출
+const Widget w2(w1);    // OK: const Widget& 버전 호출
+Widget w3(w1);          // 에러! T&&가 더 잘 맞음 (Widget& vs const Widget&)
+
+// 해결책 1: enable_if 사용
+template&lt;typename T,
+         typename = std::enable_if_t&lt;!std::is_same_v&lt;std::decay_t&lt;T&gt;, Widget&gt;&gt;&gt;
+Widget(T&& name) : name_(std::forward&lt;T&gt;(name)) {}
+
+// 해결책 2: 태그 디스패치
+// 해결책 3: Concepts (C++20)
+template&lt;typename T&gt;
+    requires (!std::same_as&lt;std::decay_t&lt;T&gt;, Widget&gt;)
+Widget(T&& name) : name_(std::forward&lt;T&gt;(name)) {}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 활용 패턴</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">실전 예제들</div>
+                    <pre><code>// 1. 이벤트 시스템
+template&lt;typename Event&gt;
+class EventDispatcher {
+    std::vector&lt;std::function&lt;void(Event)&gt;&gt; handlers;
+
+public:
+    template&lt;typename E&gt;
+    void dispatch(E&& event) {
+        for (auto& handler : handlers) {
+            handler(std::forward&lt;E&gt;(event));
+        }
+    }
+};
+
+// 2. 비동기 작업 래퍼
+template&lt;typename Func, typename... Args&gt;
+auto async_call(Func&& func, Args&&... args) {
+    return std::async(std::launch::async,
+        std::forward&lt;Func&gt;(func),
+        std::forward&lt;Args&gt;(args)...
+    );
+}
+
+// 3. 로깅 래퍼
+template&lt;typename Func, typename... Args&gt;
+decltype(auto) logged_call(const char* name, Func&& func, Args&&... args) {
+    std::cout << "Calling: " << name << "\n";
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    decltype(auto) result = std::forward&lt;Func&gt;(func)(
+        std::forward&lt;Args&gt;(args)...
+    );
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout << "Duration: "
+              << std::chrono::duration_cast&lt;std::chrono::microseconds&gt;(end - start).count()
+              << "us\n";
+
+    return result;
+}
+
+// 4. Tuple과 함께
+template&lt;typename Func, typename Tuple, size_t... Is&gt;
+decltype(auto) apply_impl(Func&& func, Tuple&& tuple,
+                          std::index_sequence&lt;Is...&gt;) {
+    return std::forward&lt;Func&gt;(func)(
+        std::get&lt;Is&gt;(std::forward&lt;Tuple&gt;(tuple))...
+    );
+}
+
+template&lt;typename Func, typename Tuple&gt;
+decltype(auto) apply(Func&& func, Tuple&& tuple) {
+    return apply_impl(
+        std::forward&lt;Func&gt;(func),
+        std::forward&lt;Tuple&gt;(tuple),
+        std::make_index_sequence&lt;std::tuple_size_v&lt;std::decay_t&lt;Tuple&gt;&gt;&gt;{}
+    );
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Universal Reference</strong>: T&& + 타입 추론 = lvalue/rvalue 모두 받음</li>
+                <li><strong>Reference Collapsing</strong>: && + & = &, && + && = &&</li>
+                <li><strong>std::forward</strong>: 원래 값 카테고리 유지하며 전달</li>
+                <li><strong>규칙</strong>: 마지막 사용 시에만 forward, 그 전엔 그대로</li>
+                <li><strong>주의</strong>: 오버로딩과 함께 쓸 때 enable_if나 Concepts 필요</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

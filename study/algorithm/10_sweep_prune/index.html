@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sweep and Prune 알고리즘 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>빗자루로 쓸 듯이 충돌 후보를 찾는다?</h1>
+            <p class="subtitle">Sweep and Prune (SAP) 알고리즘으로 Broad Phase 최적화</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Sweep and Prune이란?</h2>
+            <div class="conversation">
+                <div class="q">SAP 알고리즘은 어떤 원리인가요?</div>
+                <div class="a">
+                    <p class="highlight">1차원 축에서 겹치는 구간을 찾아 충돌 후보를 빠르게 필터링합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>책꽂이에 꽂힌 책들을 생각해보세요. 책의 시작점과 끝점만 보면 어떤 책들이 겹치는지 알 수 있습니다.</p>
+                        <p>왼쪽에서 오른쪽으로 쓸어가며(Sweep) 겹치지 않는 것들을 걸러냅니다(Prune).</p>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Sweep and Prune 원리
+
+X축에 투영된 AABB들:
+
+      A        [========]
+      B    [======]
+      C              [====]
+      D                      [======]
+      E        [==]
+
+X축: ─────────────────────────────────────────►
+        ↑      ↑  ↑   ↑   ↑ ↑    ↑      ↑
+        B시작 A시작 E끝 B끝 A끝 C끝 D시작 D끝
+
+정렬 후 Sweep:
+B시작 → A시작 (B와 겹침 시작) → E끝 → B끝 → A끝 → C끝 → D시작 ...
+
+충돌 후보: (A,B), (A,E), (B,E)
+D는 다른 것들과 X축에서 겹치지 않음 → 충돌 체크 불필요!
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">왜 효율적인가요?</div>
+                <div class="a">
+                    <p><strong>핵심 인사이트:</strong></p>
+                    <ul>
+                        <li>축에서 겹치지 않으면 절대 충돌하지 않음</li>
+                        <li>정렬된 리스트에서 겹침 찾기는 O(n + k) (k = 겹침 쌍 수)</li>
+                        <li>프레임 간 물체 이동이 작으면 정렬이 거의 유지됨</li>
+                    </ul>
+                    <p class="key-point">시간적 일관성(Temporal Coherence)을 활용합니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 기본 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">C++ SAP 기본 구현</div>
+                    <pre><code>#include &lt;vector&gt;
+#include &lt;algorithm&gt;
+#include &lt;set&gt;
+
+struct AABB {
+    int id;
+    float minX, maxX;
+    float minY, maxY;
+    float minZ, maxZ;
+};
+
+struct Endpoint {
+    float value;
+    int aabbId;
+    bool isMin;  // true = 시작점, false = 끝점
+
+    bool operator&lt;(const Endpoint& other) const {
+        if (value != other.value) return value < other.value;
+        // 같은 값이면 시작점이 먼저
+        return isMin > other.isMin;
+    }
+};
+
+class SweepAndPrune1D {
+private:
+    std::vector&lt;Endpoint&gt; endpoints;
+    std::vector&lt;AABB*&gt; aabbs;
+
+public:
+    // 초기 구축
+    void build(std::vector&lt;AABB*&gt;& objects) {
+        aabbs = objects;
+        endpoints.clear();
+
+        for (auto* aabb : aabbs) {
+            endpoints.push_back({aabb->minX, aabb->id, true});
+            endpoints.push_back({aabb->maxX, aabb->id, false});
+        }
+
+        // 정렬
+        std::sort(endpoints.begin(), endpoints.end());
+    }
+
+    // 겹치는 쌍 찾기
+    std::vector&lt;std::pair&lt;int, int&gt;&gt; findOverlaps() {
+        std::vector&lt;std::pair&lt;int, int&gt;&gt; overlaps;
+        std::set&lt;int&gt; activeSet;  // 현재 열린(겹칠 수 있는) AABB들
+
+        for (const auto& ep : endpoints) {
+            if (ep.isMin) {
+                // 시작점: 현재 활성화된 모든 AABB와 잠재적 충돌
+                for (int otherId : activeSet) {
+                    overlaps.push_back({ep.aabbId, otherId});
+                }
+                activeSet.insert(ep.aabbId);
+            } else {
+                // 끝점: 활성 집합에서 제거
+                activeSet.erase(ep.aabbId);
+            }
+        }
+
+        return overlaps;
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 다축 SAP (3D)</h2>
+            <div class="conversation">
+                <div class="q">3D에서는 어떻게 적용하나요?</div>
+                <div class="a">
+                    <p class="highlight">모든 축(X, Y, Z)에서 겹쳐야 실제 충돌 후보입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">다축 SAP 구현</div>
+                        <pre><code>class SweepAndPrune3D {
+private:
+    std::vector&lt;Endpoint&gt; endpointsX, endpointsY, endpointsZ;
+    std::set&lt;std::pair&lt;int, int&gt;&gt; pairCache;  // 현재 겹치는 쌍들
+
+    // 두 AABB가 특정 축에서 겹치는지 확인
+    bool overlapsOnAxis(const AABB& a, const AABB& b, int axis) {
+        if (axis == 0) return a.minX <= b.maxX && a.maxX >= b.minX;
+        if (axis == 1) return a.minY <= b.maxY && a.maxY >= b.minY;
+        return a.minZ <= b.maxZ && a.maxZ >= b.minZ;
+    }
+
+    // 모든 축에서 겹치는지 확인
+    bool overlapsAllAxes(const AABB& a, const AABB& b) {
+        return overlapsOnAxis(a, b, 0) &&
+               overlapsOnAxis(a, b, 1) &&
+               overlapsOnAxis(a, b, 2);
+    }
+
+public:
+    void build(std::vector&lt;AABB*&gt;& objects) {
+        // 각 축에 대해 엔드포인트 생성
+        for (auto* aabb : objects) {
+            endpointsX.push_back({aabb->minX, aabb->id, true});
+            endpointsX.push_back({aabb->maxX, aabb->id, false});
+            endpointsY.push_back({aabb->minY, aabb->id, true});
+            endpointsY.push_back({aabb->maxY, aabb->id, false});
+            endpointsZ.push_back({aabb->minZ, aabb->id, true});
+            endpointsZ.push_back({aabb->maxZ, aabb->id, false});
+        }
+
+        std::sort(endpointsX.begin(), endpointsX.end());
+        std::sort(endpointsY.begin(), endpointsY.end());
+        std::sort(endpointsZ.begin(), endpointsZ.end());
+    }
+
+    // 한 축에서의 겹침 변화를 감지
+    void handleAxisOverlap(int id1, int id2, bool startOverlap,
+                           const std::vector&lt;AABB*&gt;& aabbs) {
+        auto pairKey = std::minmax(id1, id2);
+
+        if (startOverlap) {
+            // 새로운 겹침: 다른 축들도 겹치는지 확인
+            if (overlapsAllAxes(*aabbs[id1], *aabbs[id2])) {
+                pairCache.insert(pairKey);
+            }
+        } else {
+            // 겹침 종료
+            pairCache.erase(pairKey);
+        }
+    }
+
+    const std::set&lt;std::pair&lt;int, int&gt;&gt;& getOverlappingPairs() const {
+        return pairCache;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 증분 업데이트</h2>
+            <div class="conversation">
+                <div class="q">매 프레임 전체 정렬은 비효율적이지 않나요?</div>
+                <div class="a">
+                    <p class="highlight">물체가 조금 이동하면 정렬이 거의 유지됩니다. 삽입 정렬로 효율적 업데이트!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">증분 SAP 업데이트</div>
+                        <pre><code>class IncrementalSAP {
+private:
+    std::vector&lt;Endpoint&gt; sortedEndpoints;
+    std::map&lt;int, int&gt; minIndices;  // AABB ID → 시작점 인덱스
+    std::map&lt;int, int&gt; maxIndices;  // AABB ID → 끝점 인덱스
+    std::set&lt;std::pair&lt;int, int&gt;&gt; overlappingPairs;
+
+public:
+    // AABB 위치 업데이트
+    void updateAABB(int id, float newMin, float newMax,
+                    const std::vector&lt;AABB*&gt;& aabbs) {
+        int minIdx = minIndices[id];
+        int maxIdx = maxIndices[id];
+
+        // 시작점 업데이트
+        sortedEndpoints[minIdx].value = newMin;
+        bubbleSort(minIdx, aabbs);
+
+        // 끝점 업데이트
+        sortedEndpoints[maxIdx].value = newMax;
+        bubbleSort(maxIdx, aabbs);
+    }
+
+private:
+    // 버블 정렬로 위치 조정 (대부분 1-2칸만 이동)
+    void bubbleSort(int idx, const std::vector&lt;AABB*&gt;& aabbs) {
+        // 왼쪽으로 이동
+        while (idx > 0 && sortedEndpoints[idx] < sortedEndpoints[idx - 1]) {
+            swapAndUpdatePairs(idx, idx - 1, aabbs);
+            idx--;
+        }
+
+        // 오른쪽으로 이동
+        while (idx < sortedEndpoints.size() - 1 &&
+               sortedEndpoints[idx + 1] < sortedEndpoints[idx]) {
+            swapAndUpdatePairs(idx, idx + 1, aabbs);
+            idx++;
+        }
+    }
+
+    void swapAndUpdatePairs(int i, int j, const std::vector&lt;AABB*&gt;& aabbs) {
+        Endpoint& a = sortedEndpoints[i];
+        Endpoint& b = sortedEndpoints[j];
+
+        // 스왑 시 겹침 상태 변화 감지
+        if (a.isMin != b.isMin) {
+            int idA = a.aabbId;
+            int idB = b.aabbId;
+            auto pairKey = std::minmax(idA, idB);
+
+            if (a.isMin && !b.isMin) {
+                // Min이 Max를 넘어감 → 겹침 시작
+                if (overlapsAllAxes(*aabbs[idA], *aabbs[idB])) {
+                    overlappingPairs.insert(pairKey);
+                    onOverlapStart(idA, idB);
+                }
+            } else {
+                // Max가 Min을 넘어감 → 겹침 종료
+                if (overlappingPairs.count(pairKey)) {
+                    overlappingPairs.erase(pairKey);
+                    onOverlapEnd(idA, idB);
+                }
+            }
+        }
+
+        std::swap(sortedEndpoints[i], sortedEndpoints[j]);
+
+        // 인덱스 맵 업데이트
+        updateIndexMap(sortedEndpoints[i], i);
+        updateIndexMap(sortedEndpoints[j], j);
+    }
+
+    void onOverlapStart(int id1, int id2) {
+        // 충돌 후보 추가 콜백
+    }
+
+    void onOverlapEnd(int id1, int id2) {
+        // 충돌 후보 제거 콜백
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="key-point">시간적 일관성 덕분에 평균 O(n + k) 성능!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 성능 비교</h2>
+            <div class="conversation">
+                <div class="q">SAP와 다른 Broad Phase 기법의 차이점은?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>기법</th>
+                                <th>초기 구축</th>
+                                <th>업데이트</th>
+                                <th>장점</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Brute Force</td>
+                                <td>-</td>
+                                <td>O(n²)</td>
+                                <td>구현 간단</td>
+                            </tr>
+                            <tr>
+                                <td>Spatial Hash</td>
+                                <td>O(n)</td>
+                                <td>O(n)</td>
+                                <td>동적 물체에 좋음</td>
+                            </tr>
+                            <tr>
+                                <td>BVH</td>
+                                <td>O(n log n)</td>
+                                <td>O(n log n)</td>
+                                <td>정적 물체에 좋음</td>
+                            </tr>
+                            <tr>
+                                <td>SAP</td>
+                                <td>O(n log n)</td>
+                                <td>O(n + k)</td>
+                                <td>시간 일관성 활용</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+SAP가 유리한 상황:
+
+1. 물체가 천천히 움직임 (시간 일관성 ↑)
+   ○ → ○    거의 재정렬 없음
+
+2. 한 축에서 분리된 물체가 많음
+   [A]        [B]        [C]
+   → 겹치는 쌍이 적어 빠름
+
+SAP가 불리한 상황:
+
+1. 물체가 순간이동 (시간 일관성 ↓)
+   ○ ──────────────────────→ ○
+
+2. 물체가 한 축에 밀집
+   [A][B][C][D][E][F]  모두 겹침!
+   → 거의 n² 쌍 발생
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 최적화</h2>
+            <div class="conversation">
+                <div class="q">실제 물리 엔진에서 어떻게 사용하나요?</div>
+                <div class="a">
+                    <p><strong>Box2D 스타일 구현:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">실전 SAP 구현</div>
+                        <pre><code>// 쌍 관리자: 충돌 쌍의 생성/소멸 추적
+class BroadPhase {
+private:
+    struct Pair {
+        int32_t proxyIdA;
+        int32_t proxyIdB;
+    };
+
+    std::vector&lt;Pair&gt; pairBuffer;
+    std::set&lt;std::pair&lt;int32_t, int32_t&gt;&gt; currentPairs;
+    DynamicTree tree;  // 또는 SAP
+
+public:
+    // 매 프레임 호출
+    template&lt;typename Callback&gt;
+    void updatePairs(Callback callback) {
+        // 1. 이동한 프록시들에 대해 질의
+        pairBuffer.clear();
+
+        for (int32_t proxyId : movedProxies) {
+            AABB fatAABB = tree.getFatAABB(proxyId);
+
+            // 이 AABB와 겹치는 모든 프록시 찾기
+            tree.query(fatAABB, [&](int32_t otherId) {
+                if (otherId == proxyId) return true;
+                pairBuffer.push_back({
+                    std::min(proxyId, otherId),
+                    std::max(proxyId, otherId)
+                });
+                return true;
+            });
+        }
+
+        movedProxies.clear();
+
+        // 2. 정렬하여 중복 제거
+        std::sort(pairBuffer.begin(), pairBuffer.end());
+        pairBuffer.erase(
+            std::unique(pairBuffer.begin(), pairBuffer.end()),
+            pairBuffer.end()
+        );
+
+        // 3. 새로운 쌍과 사라진 쌍 콜백
+        for (const Pair& pair : pairBuffer) {
+            auto key = std::make_pair(pair.proxyIdA, pair.proxyIdB);
+            if (currentPairs.find(key) == currentPairs.end()) {
+                callback.onPairAdded(pair.proxyIdA, pair.proxyIdB);
+                currentPairs.insert(key);
+            }
+        }
+
+        // 사라진 쌍 처리 (생략)
+    }
+};
+
+// Fat AABB: 약간 확장된 AABB로 잦은 업데이트 방지
+AABB computeFatAABB(const AABB& aabb) {
+    const float extension = 0.1f;  // 10cm 확장
+    return {
+        aabb.minX - extension, aabb.maxX + extension,
+        aabb.minY - extension, aabb.maxY + extension,
+        aabb.minZ - extension, aabb.maxZ + extension
+    };
+}</code></pre>
+                    </div>
+
+                    <p class="highlight">실제 물리 엔진은 SAP + Dynamic AABB Tree를 조합하여 사용합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Sweep and Prune</strong>: 축 투영 + 정렬로 겹침 탐지</li>
+                <li><strong>시간 일관성</strong>: 이전 프레임 정렬 활용으로 O(n + k) 성능</li>
+                <li><strong>다축 SAP</strong>: 모든 축에서 겹쳐야 충돌 후보</li>
+                <li><strong>증분 업데이트</strong>: 버블 정렬로 위치 변화 반영</li>
+                <li><strong>활용</strong>: Box2D, Bullet, PhysX 등 물리 엔진의 Broad Phase</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

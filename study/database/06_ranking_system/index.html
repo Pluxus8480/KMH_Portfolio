@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>랭킹 시스템 구현 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../database.html" class="back-link">← 목록으로</a>
+            <h1>100만 명 중 내 등수는 몇 등?</h1>
+            <p class="subtitle">Redis Sorted Set으로 실시간 랭킹 시스템 구현</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 랭킹 시스템의 요구사항</h2>
+            <div class="conversation">
+                <div class="q">랭킹 시스템은 어떤 기능이 필요한가요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+랭킹 시스템 핵심 기능:
+
+1. 점수 업데이트      - O(log N)
+2. 상위 N명 조회      - O(log N + M)
+3. 내 등수 조회       - O(log N)
+4. 특정 등수 조회     - O(log N)
+5. 내 주변 랭킹 조회  - O(log N + M)
+
+요구사항:
+- 실시간 반영 (점수 변경 즉시)
+- 빠른 조회 (100ms 이내)
+- 100만+ 유저 지원
+- 동점자 처리
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">MySQL로 랭킹을 구현하면 안 되나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">MySQL 랭킹의 한계</div>
+                        <pre><code>-- 내 등수 조회 (O(N) - 느림!)
+SELECT COUNT(*) + 1 as my_rank
+FROM characters
+WHERE level > (SELECT level FROM characters WHERE char_id = @my_id);
+
+-- 100만 행 테이블에서 매번 COUNT... 💀
+-- 인덱스가 있어도 COUNT는 모든 행 스캔
+
+-- 상위 100명 (이건 빠름)
+SELECT * FROM characters ORDER BY level DESC LIMIT 100;
+
+문제:
+- "내 등수" 조회가 매우 느림
+- 점수 업데이트마다 인덱스 재정렬
+- 동시 요청 시 DB 부하</code></pre>
+                    </div>
+                    <p class="highlight">Redis Sorted Set은 모든 연산이 O(log N)으로 빠릅니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Redis Sorted Set 기초</h2>
+            <div class="conversation">
+                <div class="q">Sorted Set은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+Redis Sorted Set 구조:
+
+Key: "ranking:level"
+
+┌────────────────────────────────────┐
+│  Member (char_id)  │   Score      │
+├────────────────────────────────────┤
+│      user_1        │    99        │  ← Rank 1
+│      user_7        │    95        │  ← Rank 2
+│      user_3        │    90        │  ← Rank 3
+│      user_5        │    85        │  ← Rank 4
+│      ...           │    ...       │
+│      user_999      │    10        │  ← Rank N
+└────────────────────────────────────┘
+
+내부 구조: Skip List + Hash Table
+- Score로 정렬된 Skip List (범위 검색 빠름)
+- Member → Score 매핑 Hash Table (개별 조회 빠름)
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">기본 명령어는 어떤 게 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Sorted Set 기본 명령어</div>
+                        <pre><code>// 점수 설정/업데이트
+ZADD ranking:level 99 "user_1"
+ZADD ranking:level 95 "user_7"
+ZADD ranking:level 90 "user_3"
+
+// 점수 증가
+ZINCRBY ranking:level 5 "user_3"  // 90 → 95
+
+// 상위 N명 조회 (높은 점수 순)
+ZREVRANGE ranking:level 0 9 WITHSCORES
+// 결과: [user_1, 99, user_7, 95, user_3, 95, ...]
+
+// 특정 유저의 등수 조회 (0부터 시작)
+ZREVRANK ranking:level "user_7"
+// 결과: 1 (2등)
+
+// 특정 유저의 점수 조회
+ZSCORE ranking:level "user_7"
+// 결과: 95
+
+// 특정 등수 범위 조회
+ZREVRANGE ranking:level 10 19 WITHSCORES  // 11등~20등
+
+// 전체 유저 수
+ZCARD ranking:level
+// 결과: 1000000</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 랭킹 시스템 구현</h2>
+            <div class="conversation">
+                <div class="q">실제 랭킹 시스템은 어떻게 구현하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">랭킹 시스템 클래스</div>
+                        <pre><code>class RankingSystem {
+    Redis redis;
+    const string RANKING_KEY = "ranking:level";
+
+public:
+    // 점수 업데이트 (레벨업 시 호출)
+    void UpdateScore(int64_t charId, double score) {
+        redis.ZAdd(RANKING_KEY, score, std::to_string(charId));
+    }
+
+    // 내 랭킹 정보
+    RankInfo GetMyRank(int64_t charId) {
+        string member = std::to_string(charId);
+
+        // 파이프라인으로 한 번에 조회
+        auto pipe = redis.Pipeline();
+        pipe.ZRevRank(RANKING_KEY, member);   // 등수
+        pipe.ZScore(RANKING_KEY, member);     // 점수
+        pipe.ZCard(RANKING_KEY);              // 전체 수
+        auto results = pipe.Execute();
+
+        RankInfo info;
+        info.rank = std::get<int64_t>(results[0]) + 1;  // 0-based → 1-based
+        info.score = std::get<double>(results[1]);
+        info.totalPlayers = std::get<int64_t>(results[2]);
+        return info;
+    }
+
+    // 상위 N명
+    std::vector<RankEntry> GetTopN(int n) {
+        auto results = redis.ZRevRange(RANKING_KEY, 0, n - 1, true);
+
+        std::vector<RankEntry> entries;
+        int rank = 1;
+        for (size_t i = 0; i < results.size(); i += 2) {
+            entries.push_back({
+                rank++,
+                std::stoll(results[i]),      // char_id
+                std::stod(results[i + 1])    // score
+            });
+        }
+        return entries;
+    }
+
+    // 내 주변 랭킹 (앞뒤 5명씩)
+    std::vector<RankEntry> GetAroundMe(int64_t charId, int range = 5) {
+        string member = std::to_string(charId);
+        auto myRankOpt = redis.ZRevRank(RANKING_KEY, member);
+
+        if (!myRankOpt) return {};
+
+        int64_t myRank = *myRankOpt;
+        int64_t start = std::max(0LL, myRank - range);
+        int64_t end = myRank + range;
+
+        auto results = redis.ZRevRange(RANKING_KEY, start, end, true);
+
+        std::vector<RankEntry> entries;
+        int64_t rank = start + 1;
+        for (size_t i = 0; i < results.size(); i += 2) {
+            entries.push_back({
+                rank++,
+                std::stoll(results[i]),
+                std::stod(results[i + 1])
+            });
+        }
+        return entries;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 동점자 처리</h2>
+            <div class="conversation">
+                <div class="q">같은 점수면 누가 더 높은 등수인가요?</div>
+                <div class="a">
+                    <p>Redis Sorted Set은 동점 시 <strong>사전순</strong>으로 정렬합니다. 특별한 처리가 필요합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">동점자 처리: 복합 점수</div>
+                        <pre><code>// 방법 1: 점수에 타임스탬프 포함
+// 먼저 달성한 사람이 높은 등수
+
+double CreateCompositeScore(int level, int64_t timestamp) {
+    // 레벨은 정수부, 타임스탬프는 소수부 (역순)
+    // 큰 레벨이 높은 점수, 같은 레벨이면 먼저 달성한 사람이 높음
+    double inverseTime = 1.0 - (timestamp / 1e15);  // 작은 타임스탬프 = 큰 값
+    return level + inverseTime;
+}
+
+// 사용
+double score = CreateCompositeScore(99, getCurrentTimestamp());
+redis.ZAdd("ranking:level", score, charId);
+
+// 방법 2: 부 정렬 키 사용
+// Score = level * 1000000000 + (MAX_TIME - timestamp)
+
+int64_t CreateCompositeScore(int level, int64_t timestamp) {
+    const int64_t MAX_TIME = 9999999999;
+    return (int64_t)level * 1000000000 + (MAX_TIME - timestamp);
+}
+
+// 예시:
+// User A: Level 50, 2024-01-01 → 50 * 1e9 + (MAX - t1)
+// User B: Level 50, 2024-01-02 → 50 * 1e9 + (MAX - t2)
+// t1 < t2 이므로 (MAX - t1) > (MAX - t2)
+// → User A가 더 높은 점수 = 더 높은 등수</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">경험치까지 고려하면 어떻게 하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">레벨 + 경험치 복합 점수</div>
+                        <pre><code>// 레벨이 주 정렬 키, 경험치가 부 정렬 키
+// 같은 레벨이면 경험치 높은 사람이 위
+
+double CreateLevelExpScore(int level, int64_t exp) {
+    // 레벨당 최대 경험치가 10억이라고 가정
+    const double MAX_EXP = 1e9;
+    return level + (exp / MAX_EXP);
+}
+
+// Level 50, Exp 500,000,000 → 50.5
+// Level 50, Exp 300,000,000 → 50.3
+// Level 49, Exp 999,999,999 → 49.999... (50보다 작음)
+
+// 업데이트
+void OnExpGain(int64_t charId, int level, int64_t exp) {
+    double score = CreateLevelExpScore(level, exp);
+    redis.ZAdd("ranking:level", score, std::to_string(charId));
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 시즌/주간 랭킹</h2>
+            <div class="conversation">
+                <div class="q">시즌 랭킹은 어떻게 구현하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">시즌 기반 랭킹</div>
+                        <pre><code>class SeasonRanking {
+    Redis redis;
+
+    string GetCurrentSeasonKey() {
+        // 시즌 ID 기반 키 생성
+        int season = GetCurrentSeasonId();  // 예: 2024S1
+        return "ranking:pvp:season:" + std::to_string(season);
+    }
+
+public:
+    void UpdatePvPScore(int64_t charId, int scoreChange) {
+        string key = GetCurrentSeasonKey();
+        redis.ZIncrBy(key, scoreChange, std::to_string(charId));
+    }
+
+    // 시즌 종료 시
+    void EndSeason() {
+        string currentKey = GetCurrentSeasonKey();
+        string archiveKey = currentKey + ":final";
+
+        // 1. 최종 랭킹 아카이브
+        redis.Copy(currentKey, archiveKey);
+
+        // 2. 보상 지급 (상위 100명)
+        auto topPlayers = redis.ZRevRange(currentKey, 0, 99, true);
+        for (auto& player : topPlayers) {
+            GiveSeasonReward(player.charId, player.rank);
+        }
+
+        // 3. 현재 시즌 랭킹 삭제
+        redis.Del(currentKey);
+
+        // 4. 이전 시즌 랭킹 삭제 (2시즌 전)
+        int oldSeason = GetCurrentSeasonId() - 2;
+        redis.Del("ranking:pvp:season:" + std::to_string(oldSeason) + ":final");
+    }
+};
+
+// 주간 랭킹도 동일한 패턴
+// 키: ranking:weekly:2024W05 (2024년 5주차)
+// 월요일 자정에 리셋</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 대규모 랭킹 최적화</h2>
+            <div class="conversation">
+                <div class="q">1000만 명 규모에서도 괜찮나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">대규모 랭킹 최적화</div>
+                        <pre><code>// 전략 1: 캐싱 레이어 추가
+class CachedRanking {
+    Redis redis;
+    LocalCache topCache;  // 상위 100명 로컬 캐시
+    const int CACHE_TTL = 60;  // 1분
+
+public:
+    std::vector<RankEntry> GetTop100() {
+        // 로컬 캐시 먼저 확인
+        if (auto cached = topCache.Get("top100")) {
+            return *cached;
+        }
+
+        // Redis 조회
+        auto result = redis.ZRevRange(RANKING_KEY, 0, 99, true);
+        topCache.Set("top100", result, CACHE_TTL);
+        return result;
+    }
+};
+
+// 전략 2: 근사 랭킹 (매우 낮은 등수)
+// 정확한 등수 대신 백분위 표시
+string GetApproximateRank(int64_t charId) {
+    auto myRank = redis.ZRevRank(RANKING_KEY, charId);
+    auto total = redis.ZCard(RANKING_KEY);
+
+    if (!myRank) return "Unranked";
+
+    double percentile = (*myRank * 100.0) / total;
+
+    if (*myRank < 100) {
+        return "Top " + std::to_string(*myRank + 1);
+    } else if (percentile < 1) {
+        return "Top 1%";
+    } else if (percentile < 10) {
+        return "Top 10%";
+    } else {
+        return "Top " + std::to_string((int)percentile) + "%";
+    }
+}
+
+// 전략 3: 샤딩 (서버별 랭킹 + 글로벌 집계)
+// 각 게임 서버가 로컬 Redis에 점수 기록
+// 주기적으로 글로벌 Redis에 집계</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Redis Sorted Set</strong>: 모든 랭킹 연산 O(log N)</li>
+                <li><strong>핵심 명령어</strong>: ZADD, ZREVRANK, ZREVRANGE, ZINCRBY</li>
+                <li><strong>동점자 처리</strong>: 복합 점수 (level + timestamp/exp)</li>
+                <li><strong>시즌 랭킹</strong>: 시즌별 키 분리, 종료 시 아카이브</li>
+                <li><strong>최적화</strong>: 상위 랭킹 로컬 캐시, 근사 등수 표시</li>
+                <li>MySQL 랭킹보다 <strong>100배 이상 빠름</strong></li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

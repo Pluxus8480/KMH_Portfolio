@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>페이지 폴트와 TLB | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+            <h1>"주소 변환만 해도 100 사이클?"</h1>
+            <p class="subtitle">TLB와 페이지 폴트 최적화</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 주소 변환의 비용</h2>
+            <div class="conversation">
+                <div class="q">가상 주소를 물리 주소로 바꾸는 데 얼마나 걸리나요?</div>
+                <div class="a">
+                    <p>페이지 테이블이 메모리에 있으므로 <strong>4단계 × 메모리 접근</strong>이 필요합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    페이지 테이블 워킹 비용                           │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   가상 주소                                                         │
+│       │                                                             │
+│       ▼                                                             │
+│   ┌─────────┐  100ns   ┌─────────┐  100ns   ┌─────────┐            │
+│   │  PML4   │─────────▶│  PDPT   │─────────▶│   PD    │            │
+│   └─────────┘          └─────────┘          └─────────┘            │
+│                                                   │                 │
+│                                                   │ 100ns           │
+│                                                   ▼                 │
+│                        ┌─────────┐  100ns   ┌─────────┐            │
+│                        │  Data   │◀─────────│   PT    │            │
+│                        └─────────┘          └─────────┘            │
+│                                                                     │
+│   총 비용: 4 × 100ns = 400ns (vs 데이터 접근 100ns)                │
+│   → 주소 변환이 실제 접근보다 4배 오래 걸림!                        │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <p class="highlight">이 문제를 해결하는 것이 TLB (Translation Lookaside Buffer)!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: TLB 동작 원리</h2>
+            <div class="conversation">
+                <div class="q">TLB는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>최근 변환 결과를 캐싱하는 <strong>하드웨어 캐시</strong>입니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                        TLB 구조                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   가상 주소: 0x00007FFF12345ABC                                     │
+│              ─────────────┬─────                                    │
+│              VPN(가상페이지) │ Offset                                │
+│                            │                                        │
+│                            ▼                                        │
+│   ┌────────────────────────────────────────────┐                   │
+│   │                   TLB                       │                   │
+│   │  ┌──────────────┬──────────────┬────────┐  │                   │
+│   │  │     VPN      │     PFN     │ Flags  │  │                   │
+│   │  ├──────────────┼──────────────┼────────┤  │                   │
+│   │  │ 0x7FFF12345  │  0x87654    │  R/W   │  │ ← HIT!            │
+│   │  │ 0x7FFF12346  │  0x11111    │   R    │  │                   │
+│   │  │ 0x7FFF00001  │  0x22222    │  R/W   │  │                   │
+│   │  │    ...       │    ...      │  ...   │  │                   │
+│   │  └──────────────┴──────────────┴────────┘  │                   │
+│   │            (보통 64~1024 엔트리)            │                   │
+│   └────────────────────────────────────────────┘                   │
+│                            │                                        │
+│   TLB Hit: 1 사이클!       │ TLB Miss: 페이지 테이블 워킹          │
+│                            ▼                                        │
+│   물리 주소: 0x87654ABC                                             │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>상황</th>
+                                <th>소요 시간</th>
+                                <th>발생 빈도</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>TLB Hit</td>
+                                <td>~1 사이클</td>
+                                <td>~99%</td>
+                            </tr>
+                            <tr>
+                                <td>TLB Miss (메모리)</td>
+                                <td>~100 사이클</td>
+                                <td>~0.9%</td>
+                            </tr>
+                            <tr>
+                                <td>Page Fault (디스크)</td>
+                                <td>~10,000,000 사이클</td>
+                                <td>~0.1%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: TLB 최적화</h2>
+            <div class="conversation">
+                <div class="q">TLB 미스를 줄이는 방법은?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Huge Pages 사용</div>
+                        <pre><code>// 일반 페이지: 4KB → 1GB 데이터 = 256K 페이지 = 256K TLB 엔트리 필요
+// Huge Page: 2MB → 1GB 데이터 = 512 페이지 = 512 TLB 엔트리만 필요
+
+// Linux에서 Huge Pages 할당
+#include <sys/mman.h>
+
+void* allocHugePages(size_t size) {
+    void* ptr = mmap(nullptr, size,
+                     PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB,
+                     -1, 0);
+
+    if (ptr == MAP_FAILED) {
+        // 대안: Transparent Huge Pages 사용
+        ptr = mmap(nullptr, size,
+                   PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS,
+                   -1, 0);
+        madvise(ptr, size, MADV_HUGEPAGE);
+    }
+
+    return ptr;
+}
+
+// Windows에서 Large Pages
+#include <windows.h>
+
+void* allocLargePages(size_t size) {
+    // 권한 필요: SeLockMemoryPrivilege
+    SIZE_T largePageSize = GetLargePageMinimum();  // 보통 2MB
+    size = (size + largePageSize - 1) & ~(largePageSize - 1);
+
+    return VirtualAlloc(nullptr, size,
+                       MEM_COMMIT | MEM_RESERVE | MEM_LARGE_PAGES,
+                       PAGE_READWRITE);
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">메모리 접근 패턴 최적화</div>
+                        <pre><code>// ❌ TLB 스래싱: 많은 페이지에 무작위 접근
+void badPattern(int* data, int* indices, int count) {
+    for (int i = 0; i < count; ++i) {
+        data[indices[i]]++;  // 무작위 페이지 접근
+    }
+}
+
+// ✅ TLB 친화적: 연속 접근
+void goodPattern(int* data, int count) {
+    for (int i = 0; i < count; ++i) {
+        data[i]++;  // 순차 접근 → 적은 TLB 엔트리 사용
+    }
+}
+
+// ✅ 블록 단위 처리
+void blockPattern(int* data, int rows, int cols) {
+    const int BLOCK_SIZE = 64;  // 캐시 + TLB 친화적 크기
+
+    for (int bi = 0; bi < rows; bi += BLOCK_SIZE) {
+        for (int bj = 0; bj < cols; bj += BLOCK_SIZE) {
+            // 블록 내에서 집중적으로 접근
+            for (int i = bi; i < bi + BLOCK_SIZE && i < rows; ++i) {
+                for (int j = bj; j < bj + BLOCK_SIZE && j < cols; ++j) {
+                    data[i * cols + j]++;
+                }
+            }
+        }
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 페이지 폴트 종류</h2>
+            <div class="conversation">
+                <div class="q">페이지 폴트에도 종류가 있나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>종류</th>
+                                <th>원인</th>
+                                <th>처리</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Minor (Soft)</td>
+                                <td>페이지가 메모리에 있지만 매핑 안 됨</td>
+                                <td>페이지 테이블 업데이트만</td>
+                            </tr>
+                            <tr>
+                                <td>Major (Hard)</td>
+                                <td>디스크에서 페이지 로드 필요</td>
+                                <td>I/O 대기 (매우 느림)</td>
+                            </tr>
+                            <tr>
+                                <td>Invalid</td>
+                                <td>접근 권한 없음 또는 잘못된 주소</td>
+                                <td>Segmentation Fault</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">페이지 폴트 측정</div>
+                        <pre><code># Linux에서 페이지 폴트 확인
+/usr/bin/time -v ./game 2>&1 | grep "page faults"
+
+# 출력 예시:
+# Minor (reclaiming a frame) page faults: 1234
+# Major (requiring I/O) page faults: 5
+
+# perf로 상세 측정
+perf stat -e page-faults,minor-faults,major-faults ./game</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 게임에서의 최적화</h2>
+            <div class="conversation">
+                <div class="q">게임 로딩 시 페이지 폴트를 줄이려면?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">프리페치와 프리로딩</div>
+                        <pre><code>// 텍스처 스트리밍: 미리 페이지를 메모리에 로드
+class TextureStreamer {
+public:
+    void prefetchTexture(const char* path) {
+        // 비동기로 파일 읽기 시작
+        auto future = std::async(std::launch::async, [path] {
+            std::ifstream file(path, std::ios::binary);
+            std::vector<char> data(
+                std::istreambuf_iterator<char>(file),
+                std::istreambuf_iterator<char>()
+            );
+            return data;
+        });
+
+        prefetchQueue_.push({path, std::move(future)});
+    }
+
+    // 필요할 때 이미 로드되어 있음
+    Texture* getTexture(const char* path) {
+        auto* cached = findInCache(path);
+        if (cached) return cached;
+
+        // 프리페치된 데이터 확인
+        auto prefetched = getPrefetchedData(path);
+        if (prefetched) {
+            return createTextureFromData(*prefetched);
+        }
+
+        // 동기 로드 (피해야 함!)
+        return loadTextureSync(path);
+    }
+};
+
+// madvise로 OS에게 힌트
+void prefetchMemory(void* addr, size_t len) {
+    #ifdef __linux__
+    madvise(addr, len, MADV_WILLNEED);  // 곧 사용할 예정
+    // madvise(addr, len, MADV_DONTNEED);  // 당분간 안 씀
+    #endif
+
+    #ifdef _WIN32
+    // PrefetchVirtualMemory (Windows 8+)
+    WIN32_MEMORY_RANGE_ENTRY entry = {addr, len};
+    PrefetchVirtualMemory(GetCurrentProcess(), 1, &entry, 0);
+    #endif
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">메모리 매핑 최적화</div>
+                        <pre><code>// 대용량 에셋 파일을 메모리 매핑
+class AssetLoader {
+    void* mappedBase_;
+    size_t mappedSize_;
+
+public:
+    bool mapAssetFile(const char* path) {
+        #ifdef __linux__
+        int fd = open(path, O_RDONLY);
+        struct stat sb;
+        fstat(fd, &sb);
+        mappedSize_ = sb.st_size;
+
+        mappedBase_ = mmap(nullptr, mappedSize_,
+                          PROT_READ, MAP_PRIVATE,
+                          fd, 0);
+
+        // 순차 접근 힌트
+        madvise(mappedBase_, mappedSize_, MADV_SEQUENTIAL);
+
+        // Huge Pages 시도
+        madvise(mappedBase_, mappedSize_, MADV_HUGEPAGE);
+
+        close(fd);
+        #endif
+
+        #ifdef _WIN32
+        HANDLE hFile = CreateFile(path, GENERIC_READ, FILE_SHARE_READ,
+                                  nullptr, OPEN_EXISTING, 0, nullptr);
+        HANDLE hMap = CreateFileMapping(hFile, nullptr, PAGE_READONLY,
+                                        0, 0, nullptr);
+        mappedBase_ = MapViewOfFile(hMap, FILE_MAP_READ, 0, 0, 0);
+        #endif
+
+        return mappedBase_ != nullptr;
+    }
+
+    // 특정 오프셋의 데이터 접근
+    const void* getData(size_t offset) {
+        return static_cast<char*>(mappedBase_) + offset;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>TLB</strong>: 주소 변환 캐시, Hit 시 1사이클, Miss 시 100+ 사이클</li>
+                <li><strong>Huge Pages</strong>: 2MB 페이지로 TLB 커버리지 증가</li>
+                <li><strong>연속 접근</strong>: 순차/블록 패턴으로 TLB 미스 최소화</li>
+                <li><strong>Major Fault</strong>: 디스크 I/O 발생, 게임 스터터링의 주요 원인</li>
+                <li><strong>프리페치</strong>: madvise/PrefetchVirtualMemory로 미리 로드</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

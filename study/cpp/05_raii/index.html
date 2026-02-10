@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAII 패턴과 자원 관리 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>객체가 죽으면 자원도 함께?</h1>
+            <p class="subtitle">RAII로 안전하게 자원 관리하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: RAII란?</h2>
+            <div class="conversation">
+                <div class="q">RAII가 뭔가요?</div>
+                <div class="a">
+                    <p class="highlight">Resource Acquisition Is Initialization - 자원 획득은 초기화와 함께!</p>
+                    <p>객체의 생명주기에 자원을 연결합니다. 생성자에서 획득, 소멸자에서 해제.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>호텔에 체크인하면 방 키를 받고, 체크아웃하면 자동으로 반납합니다.</p>
+                        <p>RAII 객체가 스코프를 벗어나면 자동으로 자원이 해제됩니다.</p>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">RAII vs 수동 관리</div>
+                        <pre><code>// 수동 관리 (위험!)
+void manualResource() {
+    FILE* file = fopen("data.txt", "r");
+    if (!file) return;
+
+    char buffer[256];
+    if (!fgets(buffer, sizeof(buffer), file)) {
+        fclose(file);  // 잊기 쉬움!
+        return;
+    }
+
+    process(buffer);
+
+    if (error) {
+        fclose(file);  // 모든 경로에서 해제해야 함
+        return;
+    }
+
+    fclose(file);  // 정상 경로
+}
+
+// RAII (안전!)
+void raiiResource() {
+    std::ifstream file("data.txt");
+    if (!file) return;
+
+    std::string line;
+    if (!std::getline(file, line)) {
+        return;  // 자동 해제!
+    }
+
+    process(line);
+
+    if (error) {
+        return;  // 자동 해제!
+    }
+
+    // 스코프 끝 → 자동 해제!
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: RAII 래퍼 작성</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">파일 핸들 RAII 래퍼</div>
+                    <pre><code>class FileHandle {
+private:
+    FILE* handle;
+
+public:
+    // 생성자: 자원 획득
+    explicit FileHandle(const char* path, const char* mode)
+        : handle(fopen(path, mode)) {
+        if (!handle) {
+            throw std::runtime_error("Failed to open file");
+        }
+    }
+
+    // 소멸자: 자원 해제
+    ~FileHandle() {
+        if (handle) {
+            fclose(handle);
+        }
+    }
+
+    // 복사 금지
+    FileHandle(const FileHandle&) = delete;
+    FileHandle& operator=(const FileHandle&) = delete;
+
+    // 이동 허용
+    FileHandle(FileHandle&& other) noexcept : handle(other.handle) {
+        other.handle = nullptr;
+    }
+
+    FileHandle& operator=(FileHandle&& other) noexcept {
+        if (this != &other) {
+            if (handle) fclose(handle);
+            handle = other.handle;
+            other.handle = nullptr;
+        }
+        return *this;
+    }
+
+    // 접근자
+    FILE* get() const { return handle; }
+    explicit operator bool() const { return handle != nullptr; }
+};
+
+// 사용
+void processFile() {
+    FileHandle file("data.txt", "r");  // 자원 획득
+    // 파일 처리...
+}  // 자동으로 fclose() 호출!</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 범용 RAII 유틸리티</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">ScopeGuard 패턴</div>
+                    <pre><code>// 스코프 종료 시 특정 동작 실행
+template&lt;typename Func&gt;
+class ScopeGuard {
+private:
+    Func cleanup;
+    bool active = true;
+
+public:
+    explicit ScopeGuard(Func f) : cleanup(std::move(f)) {}
+
+    ~ScopeGuard() {
+        if (active) {
+            cleanup();
+        }
+    }
+
+    // 해제 취소
+    void dismiss() { active = false; }
+
+    ScopeGuard(const ScopeGuard&) = delete;
+    ScopeGuard& operator=(const ScopeGuard&) = delete;
+
+    ScopeGuard(ScopeGuard&& other) noexcept
+        : cleanup(std::move(other.cleanup)), active(other.active) {
+        other.active = false;
+    }
+};
+
+// 헬퍼 함수
+template&lt;typename Func&gt;
+ScopeGuard&lt;Func&gt; makeScopeGuard(Func f) {
+    return ScopeGuard&lt;Func&gt;(std::move(f));
+}
+
+// 매크로로 더 편하게
+#define SCOPE_EXIT auto CONCAT(scopeGuard_, __LINE__) = makeScopeGuard
+
+// 사용
+void transaction() {
+    beginTransaction();
+    SCOPE_EXIT([&] { rollbackTransaction(); });  // 예외 시 롤백
+
+    doSomething();
+    doAnotherThing();
+
+    if (success) {
+        commitTransaction();
+        // scopeGuard.dismiss();  // 롤백 취소
+    }
+}  // 실패 시 자동 롤백</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Lock RAII</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">락 관리 RAII</div>
+                    <pre><code>// 수동 락 (위험!)
+void unsafeLocking() {
+    mutex.lock();
+
+    if (condition) {
+        mutex.unlock();  // 잊기 쉬움
+        return;
+    }
+
+    doWork();
+
+    mutex.unlock();  // 예외 발생 시 해제 안 됨!
+}
+
+// RAII 락 (안전!)
+void safeLocking() {
+    std::lock_guard&lt;std::mutex&gt; lock(mutex);
+
+    if (condition) {
+        return;  // 자동 해제
+    }
+
+    doWork();
+
+}  // 자동 해제
+
+// 더 유연한 unique_lock
+void flexibleLocking() {
+    std::unique_lock&lt;std::mutex&gt; lock(mutex);
+
+    // 수동 해제/재획득 가능
+    lock.unlock();
+    doWorkWithoutLock();
+    lock.lock();
+
+    // 조건부 획득
+    std::unique_lock&lt;std::mutex&gt; lock2(mutex, std::try_to_lock);
+    if (lock2.owns_lock()) {
+        // 락 획득 성공
+    }
+}
+
+// scoped_lock (C++17) - 여러 뮤텍스 동시 락
+void multiLocking() {
+    std::scoped_lock lock(mutex1, mutex2, mutex3);  // 데드락 방지
+    // 모든 뮤텍스 락
+}  // 모두 자동 해제</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 다양한 RAII 예시</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">다양한 자원 관리</div>
+                    <pre><code>// 타이머 RAII
+class ScopedTimer {
+    std::string name;
+    std::chrono::high_resolution_clock::time_point start;
+
+public:
+    ScopedTimer(std::string n) : name(std::move(n)),
+        start(std::chrono::high_resolution_clock::now()) {}
+
+    ~ScopedTimer() {
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast&lt;std::chrono::milliseconds&gt;(end - start);
+        std::cout << name << ": " << duration.count() << "ms\n";
+    }
+};
+
+// OpenGL 상태 RAII
+class GLStateGuard {
+    GLenum cap;
+    GLboolean wasEnabled;
+
+public:
+    GLStateGuard(GLenum capability) : cap(capability) {
+        wasEnabled = glIsEnabled(cap);
+        glEnable(cap);
+    }
+
+    ~GLStateGuard() {
+        if (!wasEnabled) {
+            glDisable(cap);
+        }
+    }
+};
+
+// 디렉토리 변경 RAII
+class DirectoryChanger {
+    std::filesystem::path originalPath;
+
+public:
+    DirectoryChanger(const std::filesystem::path& newPath)
+        : originalPath(std::filesystem::current_path()) {
+        std::filesystem::current_path(newPath);
+    }
+
+    ~DirectoryChanger() {
+        std::filesystem::current_path(originalPath);
+    }
+};
+
+// 사용
+void processWithTiming() {
+    ScopedTimer timer("processWithTiming");  // 시간 측정 시작
+
+    {
+        GLStateGuard blendGuard(GL_BLEND);
+        // 블렌딩 활성화 상태에서 렌더링
+    }  // 원래 상태로 복원
+
+    {
+        DirectoryChanger cd("/tmp");
+        // /tmp에서 작업
+    }  // 원래 디렉토리로 복원
+
+}  // 타이머 출력</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: Rule of Zero</h2>
+            <div class="conversation">
+                <div class="q">가장 좋은 RAII는 뭔가요?</div>
+                <div class="a">
+                    <p class="highlight">Rule of Zero: 직접 자원 관리하지 말고, RAII 래퍼를 사용하세요!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Rule of Zero 적용</div>
+                        <pre><code>// Rule of Five (직접 관리)
+class ManualResource {
+    int* data;
+public:
+    ManualResource() : data(new int[100]) {}
+    ~ManualResource() { delete[] data; }
+    ManualResource(const ManualResource& other) : data(new int[100]) {
+        std::copy(other.data, other.data + 100, data);
+    }
+    ManualResource& operator=(const ManualResource& other) { /* ... */ }
+    ManualResource(ManualResource&& other) noexcept : data(other.data) {
+        other.data = nullptr;
+    }
+    ManualResource& operator=(ManualResource&& other) noexcept { /* ... */ }
+};
+
+// Rule of Zero (RAII 래퍼 사용)
+class AutoResource {
+    std::unique_ptr&lt;int[]&gt; data;  // RAII 래퍼가 관리
+
+public:
+    AutoResource() : data(std::make_unique&lt;int[]&gt;(100)) {}
+
+    // 복사/이동 생성자, 대입 연산자, 소멸자
+    // 모두 컴파일러가 자동 생성! (default)
+};
+
+// 권장 패턴
+class GameEntity {
+    std::string name;                        // 자동 관리
+    std::vector&lt;Component&gt; components;       // 자동 관리
+    std::unique_ptr&lt;Renderer&gt; renderer;      // 자동 관리
+    std::shared_ptr&lt;Texture&gt; texture;        // 자동 관리
+
+    // 소멸자, 복사/이동 연산자 정의 불필요!
+    // Rule of Zero: 모두 자동!
+};</code></pre>
+                    </div>
+
+                    <p class="key-point">가능하면 스마트 포인터와 STL 컨테이너를 사용하여 자원을 관리하세요!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>RAII</strong>: 생성자에서 획득, 소멸자에서 해제</li>
+                <li><strong>장점</strong>: 예외 안전, 자동 해제, 코드 간결화</li>
+                <li><strong>ScopeGuard</strong>: 스코프 종료 시 임의 동작 실행</li>
+                <li><strong>Lock Guard</strong>: lock_guard, unique_lock, scoped_lock</li>
+                <li><strong>Rule of Zero</strong>: RAII 래퍼 사용으로 직접 관리 최소화</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

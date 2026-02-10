@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>색으로 분위기를 만들다 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>색으로 분위기를 만들다</h1>
+            <p class="subtitle">Color Grading과 LUT</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Color Grading이란?</h2>
+            <div class="conversation">
+                <div class="q">게임이나 영화의 독특한 색감은 어떻게 만드나요?</div>
+                <div class="a">
+                    <p><span class="highlight">Color Grading</span>은 이미지의 색상을 조정해 특정 분위기나 스타일을 만드는 과정입니다.</p>
+                    <p>영화 같은 룩, 빈티지 느낌, 공포 분위기 등을 색상만으로 표현할 수 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Color Grading 예시:
+
+원본:                    시네마틱:              공포:
+┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐
+│                   │   │                   │   │                   │
+│   자연스러운      │   │   청록+오렌지     │   │   녹색+어둡게     │
+│   색상            │   │   (Teal/Orange)   │   │   채도 낮음       │
+│                   │   │                   │   │                   │
+└───────────────────┘   └───────────────────┘   └───────────────────┘
+
+밝기, 대비, 채도, 색온도, 톤 커브 등을 조절
+                </pre>
+                <p class="diagram-caption">Color Grading 스타일</p>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>Color Grading은 <span class="highlight">사진 필터</span>의 고급 버전입니다.</p>
+                <p>인스타그램 필터처럼 전체 분위기를 바꾸지만, 훨씬 정밀하게 제어할 수 있습니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 기본 색상 조정</h2>
+            <div class="conversation">
+                <div class="q">어떤 파라미터들을 조정하나요?</div>
+                <div class="a">
+                    <p>밝기(Brightness), 대비(Contrast), 채도(Saturation), 색온도(Temperature), 틴트(Tint) 등이 기본입니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">기본 색상 조정</div>
+                <pre><code>// 밝기 조정
+float3 AdjustBrightness(float3 color, float brightness)
+{
+    return color + brightness;
+}
+
+// 대비 조정 (0.5를 중심으로)
+float3 AdjustContrast(float3 color, float contrast)
+{
+    return (color - 0.5) * contrast + 0.5;
+}
+
+// 채도 조정
+float3 AdjustSaturation(float3 color, float saturation)
+{
+    float luminance = dot(color, float3(0.2126, 0.7152, 0.0722));
+    return lerp(float3(luminance, luminance, luminance), color, saturation);
+}
+
+// 색온도 (화이트 밸런스)
+float3 AdjustTemperature(float3 color, float temperature)
+{
+    // 양수 = 따뜻하게 (노랑/오렌지), 음수 = 차갑게 (파랑)
+    float3 warm = float3(1.0, 0.9, 0.8);
+    float3 cool = float3(0.8, 0.9, 1.0);
+
+    float3 tint = (temperature > 0) ?
+        lerp(float3(1,1,1), warm, temperature) :
+        lerp(float3(1,1,1), cool, -temperature);
+
+    return color * tint;
+}
+
+// 전체 적용
+float4 PS_BasicColorGrading(float2 uv : TEXCOORD) : SV_Target
+{
+    float3 color = sceneTexture.Sample(linearSamp, uv).rgb;
+
+    color = AdjustBrightness(color, brightness);
+    color = AdjustContrast(color, contrast);
+    color = AdjustSaturation(color, saturation);
+    color = AdjustTemperature(color, temperature);
+
+    return float4(saturate(color), 1);
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>파라미터</th>
+                        <th>효과</th>
+                        <th>분위기</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>밝기 ↑</td>
+                        <td>전체적으로 밝게</td>
+                        <td>희망적, 꿈</td>
+                    </tr>
+                    <tr>
+                        <td>대비 ↑</td>
+                        <td>밝은/어두운 차이 강조</td>
+                        <td>드라마틱</td>
+                    </tr>
+                    <tr>
+                        <td>채도 ↓</td>
+                        <td>색이 빠짐</td>
+                        <td>우울, 과거</td>
+                    </tr>
+                    <tr>
+                        <td>따뜻한 톤</td>
+                        <td>노랑/오렌지</td>
+                        <td>따뜻함, 황혼</td>
+                    </tr>
+                    <tr>
+                        <td>차가운 톤</td>
+                        <td>파랑/시안</td>
+                        <td>차가움, 슬픔</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Lift/Gamma/Gain (3-Way Color)</h2>
+            <div class="conversation">
+                <div class="q">그림자/중간톤/하이라이트를 따로 조정하려면?</div>
+                <div class="a">
+                    <p><span class="highlight">Lift/Gamma/Gain</span>은 밝기 범위별로 색상을 다르게 조정합니다. 영화 색보정의 핵심 기법입니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Lift/Gamma/Gain:
+
+밝기
+  ↑
+  │         ╱ Gain (밝은 영역)
+  │       ╱
+  │     ╱
+  │   ╱  ← Gamma (중간톤)
+  │ ╱
+  │╱ ← Lift (어두운 영역)
+  └──────────────────→ 입력
+
+Lift: 그림자 영역의 색상/밝기
+Gamma: 중간톤 영역의 색상/밝기
+Gain: 하이라이트 영역의 색상/밝기
+
+예: 그림자는 파랗게, 하이라이트는 노랗게
+  → 시네마틱 Teal/Orange 룩
+                </pre>
+                <p class="diagram-caption">3-Way Color Correction</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Lift/Gamma/Gain 구현</div>
+                <pre><code>// Lift/Gamma/Gain 파라미터
+cbuffer ColorGradingParams : register(b0)
+{
+    float4 lift;     // RGB + 강도
+    float4 gamma;    // RGB + 강도
+    float4 gain;     // RGB + 강도
+};
+
+float3 ApplyLiftGammaGain(float3 color)
+{
+    // Lift: 어두운 영역 조정 (color + lift * (1 - color))
+    color = color + lift.rgb * lift.a * (1.0 - color);
+
+    // Gamma: 중간톤 조정 (power)
+    float3 gammaValue = 1.0 / (1.0 + gamma.rgb * gamma.a);
+    color = pow(max(color, 0.0001), gammaValue);
+
+    // Gain: 밝은 영역 조정 (color * gain)
+    color = color * (1.0 + gain.rgb * gain.a);
+
+    return color;
+}
+
+// ASC CDL (Color Decision List) 표준
+// 영화 산업 표준 색보정 공식
+float3 ApplyASC_CDL(float3 color, float3 slope, float3 offset, float3 power)
+{
+    // Slope (Gain과 유사)
+    color = color * slope;
+
+    // Offset (Lift와 유사)
+    color = color + offset;
+
+    // Power (Gamma와 유사)
+    color = pow(max(color, 0), power);
+
+    return color;
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: LUT (Look-Up Table)</h2>
+            <div class="conversation">
+                <div class="q">복잡한 색 변환을 빠르게 하려면?</div>
+                <div class="a">
+                    <p><span class="highlight">LUT</span>는 모든 색상 변환을 3D 텍스처로 미리 계산해 둡니다. 아티스트가 만든 색감을 게임에 그대로 적용할 수 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+3D LUT 구조:
+
+입력 RGB → LUT 좌표로 사용 → 출력 RGB
+
+LUT 텍스처 (보통 32³ 또는 64³):
+
+      B (파랑)
+        ↑
+        │   ┌───────────────┐
+        │  ╱               ╱│
+        │ ╱   3D 색 공간  ╱ │
+        │╱               ╱  │
+        ├───────────────┤   │
+        │               │   │
+G (초록)│               │  ╱
+        │               │ ╱ R (빨강)
+        │               │╱
+        └───────────────┘────────→
+
+입력: RGB(128, 64, 192)
+→ LUT 좌표: (128/255, 64/255, 192/255)
+→ 3D 텍스처 샘플링
+→ 변환된 RGB 출력
+                </pre>
+                <p class="diagram-caption">3D LUT 개념</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">LUT 적용</div>
+                <pre><code>// 3D LUT 텍스처 (Texture3D)
+Texture3D<float4> lutTexture : register(t0);
+SamplerState lutSampler : register(s0);
+
+float3 ApplyLUT(float3 color, float lutSize)
+{
+    // 입력 색상을 LUT 좌표로 변환
+    // 텍셀 중심 보정
+    float scale = (lutSize - 1.0) / lutSize;
+    float offset = 0.5 / lutSize;
+
+    float3 lutCoord = color * scale + offset;
+
+    // 3D 텍스처 샘플링 (트리리니어 보간)
+    return lutTexture.Sample(lutSampler, lutCoord).rgb;
+}
+
+// 2D LUT (3D LUT를 2D로 펼침)
+// 메모리 절약 및 호환성
+Texture2D<float4> lut2DTexture : register(t0);
+
+float3 ApplyLUT2D(float3 color, float lutSize)
+{
+    // Blue 채널에 따라 슬라이스 선택
+    float blueSlice = color.b * (lutSize - 1);
+    float slice0 = floor(blueSlice);
+    float slice1 = ceil(blueSlice);
+    float blendFactor = blueSlice - slice0;
+
+    // 2D 좌표 계산
+    float2 uv0 = float2((slice0 + color.r) / lutSize, color.g);
+    float2 uv1 = float2((slice1 + color.r) / lutSize, color.g);
+
+    // 두 슬라이스 보간
+    float3 color0 = lut2DTexture.Sample(lutSampler, uv0).rgb;
+    float3 color1 = lut2DTexture.Sample(lutSampler, uv1).rgb;
+
+    return lerp(color0, color1, blendFactor);
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 LUT 워크플로우</strong>
+                <p>1. 아티스트가 <span class="highlight">Photoshop/DaVinci</span>에서 색보정</p>
+                <p>2. 기본 LUT에 같은 조정 적용</p>
+                <p>3. 조정된 LUT를 <span class="highlight">.cube, .png</span>로 내보내기</p>
+                <p>4. 게임에서 LUT 텍스처로 로드</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Tone Mapping과 Color Grading 순서</h2>
+            <div class="conversation">
+                <div class="q">Tone Mapping과 Color Grading 중 뭐가 먼저인가요?</div>
+                <div class="a">
+                    <p>일반적으로 <span class="highlight">HDR → Tone Mapping → Color Grading → 감마</span> 순서입니다. 하지만 HDR 색보정을 위해 순서가 바뀌기도 합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Post-Processing 순서:
+
+HDR Render (16-bit float)
+        │
+        ▼
+┌───────────────────┐
+│    Bloom, DoF     │  ← HDR 공간에서
+└───────────────────┘
+        │
+        ▼
+┌───────────────────┐
+│  HDR Color Grade  │  ← (선택) HDR에서 색보정
+└───────────────────┘
+        │
+        ▼
+┌───────────────────┐
+│   Tone Mapping    │  ← HDR → LDR 압축
+│   (ACES 등)       │
+└───────────────────┘
+        │
+        ▼
+┌───────────────────┐
+│  LDR Color Grade  │  ← LUT 적용
+└───────────────────┘
+        │
+        ▼
+┌───────────────────┐
+│  Gamma Correction │  ← 모니터 감마 보정
+│  (1/2.2)          │
+└───────────────────┘
+        │
+        ▼
+    Final Output
+                </pre>
+                <p class="diagram-caption">색 처리 파이프라인</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">완전한 Post-Processing 셰이더</div>
+                <pre><code>float4 PS_FinalPostProcess(float2 uv : TEXCOORD) : SV_Target
+{
+    // HDR 색상 읽기
+    float3 hdrColor = hdrSceneTexture.Sample(linearSamp, uv).rgb;
+
+    // 1. Bloom 합성
+    float3 bloom = bloomTexture.Sample(linearSamp, uv).rgb;
+    hdrColor += bloom * bloomIntensity;
+
+    // 2. 노출 조절
+    hdrColor *= exposure;
+
+    // 3. Tone Mapping (ACES)
+    float3 ldrColor = ACESToneMapping(hdrColor);
+
+    // 4. Color Grading (LUT)
+    ldrColor = ApplyLUT(ldrColor, 32);
+
+    // 또는 파라미터 기반 조정
+    // ldrColor = ApplyLiftGammaGain(ldrColor);
+    // ldrColor = AdjustSaturation(ldrColor, saturation);
+
+    // 5. 비네팅 (선택)
+    float vignette = 1.0 - dot(uv - 0.5, uv - 0.5) * vignetteStrength;
+    ldrColor *= vignette;
+
+    // 6. 감마 보정
+    ldrColor = pow(ldrColor, 1.0 / 2.2);
+
+    return float4(ldrColor, 1);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 스타일별 Color Grading 레시피</h2>
+            <div class="conversation">
+                <div class="q">인기 있는 색보정 스타일은?</div>
+                <div class="a">
+                    <p>장르와 분위기에 따른 일반적인 색보정 설정:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>스타일</th>
+                        <th>특징</th>
+                        <th>설정</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>시네마틱 (Teal/Orange)</td>
+                        <td>그림자=청록, 하이라이트=오렌지</td>
+                        <td>Lift=Teal, Gain=Orange</td>
+                    </tr>
+                    <tr>
+                        <td>빈티지/세피아</td>
+                        <td>따뜻한 톤, 낮은 채도</td>
+                        <td>Temp↑, Sat↓, Contrast↓</td>
+                    </tr>
+                    <tr>
+                        <td>공포</td>
+                        <td>녹색 틴트, 낮은 채도, 어두움</td>
+                        <td>Tint=Green, Sat↓, Brightness↓</td>
+                    </tr>
+                    <tr>
+                        <td>네온/사이버펑크</td>
+                        <td>높은 대비, 채도, 핑크/청록</td>
+                        <td>Contrast↑, Sat↑, Split Toning</td>
+                    </tr>
+                    <tr>
+                        <td>자연/다큐멘터리</td>
+                        <td>자연스러운 색, 약간의 따뜻함</td>
+                        <td>미세 조정만</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">스타일 프리셋 예시</div>
+                <pre><code>// Teal/Orange 시네마틱 룩
+void SetCinematicLook()
+{
+    lift = float4(0.0, 0.1, 0.2, 0.3);   // 그림자에 청록
+    gamma = float4(0.0, 0.0, 0.0, 0.0);  // 중간톤 유지
+    gain = float4(0.15, 0.05, -0.05, 0.2); // 하이라이트에 오렌지
+    saturation = 1.1;
+    contrast = 1.15;
+}
+
+// 공포 분위기
+void SetHorrorLook()
+{
+    lift = float4(-0.05, 0.05, 0.0, 0.2);  // 녹색 틴트
+    gamma = float4(0.0, 0.02, 0.0, 0.1);
+    gain = float4(-0.1, -0.05, -0.1, -0.1); // 전체적으로 어둡게
+    saturation = 0.6;
+    contrast = 1.3;  // 높은 대비로 긴장감
+}
+
+// 비네팅 (화면 가장자리 어둡게)
+float ApplyVignette(float2 uv, float strength, float softness)
+{
+    float2 center = uv - 0.5;
+    float dist = length(center);
+    return smoothstep(0.5, 0.5 - softness, dist + (1 - strength));
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 Color Grading 팁</strong>
+                <p><span class="highlight">미세 조정</span>: 과도한 조정은 부자연스러움 → 미묘하게</p>
+                <p><span class="highlight">일관성</span>: 게임 전체에 일관된 룩 유지</p>
+                <p><span class="highlight">테스트</span>: 다양한 씬에서 테스트 (실내/외, 낮/밤)</p>
+                <p><span class="highlight">모니터 보정</span>: 개발 환경 모니터 캘리브레이션 중요</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Color Grading</strong>: 색상 조정으로 분위기와 스타일 창출</li>
+                <li><strong>기본 조정</strong>: 밝기, 대비, 채도, 색온도</li>
+                <li><strong>Lift/Gamma/Gain</strong>: 밝기 범위별 색상 조정 (영화 표준)</li>
+                <li><strong>LUT</strong>: 3D 텍스처로 복잡한 색 변환을 빠르게 적용</li>
+                <li>순서: <strong>HDR → Tone Mapping → Color Grade → Gamma</strong></li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

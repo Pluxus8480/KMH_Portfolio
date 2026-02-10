@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECS 패턴과 Data-Oriented Design | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>10만 개의 적을 어떻게 관리할까?</h1>
+            <p class="subtitle">ECS와 Data-Oriented Design으로 성능 극대화</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: OOP의 한계</h2>
+            <div class="conversation">
+                <div class="q">왜 전통적인 OOP가 게임에서 문제가 되나요?</div>
+                <div class="a">
+                    <p class="warning">상속 계층이 복잡해지고, 캐시 미스로 성능이 저하됩니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">OOP 문제점</div>
+                        <pre><code>// 전통적 상속 구조
+class GameObject {
+    virtual void update() = 0;
+};
+
+class Character : public GameObject {
+    virtual void update() override;
+    Health health;
+    Transform transform;
+};
+
+class Enemy : public Character {
+    AI* ai;
+};
+
+class FlyingEnemy : public Enemy {
+    void update() override {
+        // 비행 로직 + 적 로직 + 캐릭터 로직
+    }
+};
+
+// 문제 1: 다이아몬드 상속
+class FlyingShootingEnemy : public FlyingEnemy, public ShootingEnemy {};
+
+// 문제 2: 불필요한 데이터
+class StaticObject : public GameObject {
+    // Transform만 필요한데 다른 것도 상속...
+};
+
+// 문제 3: 캐시 비효율
+std::vector&lt;GameObject*&gt; objects;  // 포인터 배열
+for (auto* obj : objects) {
+    obj->update();  // 매번 다른 메모리 위치 접근 → 캐시 미스!
+}</code></pre>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+OOP 메모리 레이아웃 (캐시 비효율)
+
+objects 배열:
+[ptr1] [ptr2] [ptr3] [ptr4] ...
+  │      │      │      │
+  ↓      ↓      ↓      ↓
+[힙 어딘가] [다른 위치] [또 다른 곳] [멀리]
+  Enemy     Player     Bullet    Item
+
+→ 캐시 라인에 관련 데이터가 없음!
+→ 매번 메모리 접근 필요 = 느림
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Data-Oriented Design (DOD)</h2>
+            <div class="conversation">
+                <div class="q">Data-Oriented Design은 어떻게 다른가요?</div>
+                <div class="a">
+                    <p class="highlight">데이터를 연속적으로 배치하여 캐시 효율을 극대화합니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">AoS vs SoA</div>
+                        <pre><code>// Array of Structures (AoS) - 전통적 방식
+struct Entity {
+    Vector3 position;
+    Vector3 velocity;
+    float health;
+    float damage;
+};
+std::vector&lt;Entity&gt; entities;
+
+// position만 업데이트할 때:
+for (auto& e : entities) {
+    e.position += e.velocity * dt;
+    // 캐시 라인에 health, damage도 로드됨 (낭비!)
+}
+
+// Structure of Arrays (SoA) - DOD 방식
+struct Entities {
+    std::vector&lt;Vector3&gt; positions;   // 연속 배치
+    std::vector&lt;Vector3&gt; velocities;  // 연속 배치
+    std::vector&lt;float&gt; healths;       // 연속 배치
+    std::vector&lt;float&gt; damages;       // 연속 배치
+};
+
+// position만 업데이트할 때:
+for (size_t i = 0; i < count; i++) {
+    positions[i] += velocities[i] * dt;
+    // 캐시 라인에 position과 velocity만!
+}</code></pre>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+SoA 메모리 레이아웃 (캐시 효율적)
+
+positions 배열:
+[pos0][pos1][pos2][pos3][pos4][pos5]...
+  ↑ 캐시 라인 하나에 여러 position!
+
+velocities 배열:
+[vel0][vel1][vel2][vel3][vel4][vel5]...
+
+→ position 순회 시 관련 데이터만 캐시에!
+→ SIMD 벡터화도 가능 = 매우 빠름
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: ECS 아키텍처</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">ECS 핵심 개념</div>
+                    <pre><code>// Entity: 단순한 ID
+using Entity = uint32_t;
+
+// Component: 순수 데이터 (로직 없음)
+struct Position { float x, y, z; };
+struct Velocity { float x, y, z; };
+struct Health { float current, max; };
+struct Sprite { TextureID texture; int frame; };
+
+// System: 특정 컴포넌트 조합을 처리하는 로직
+class MovementSystem {
+public:
+    void update(float dt) {
+        // Position과 Velocity를 가진 모든 엔티티 처리
+        for (auto entity : world.view&lt;Position, Velocity&gt;()) {
+            auto& pos = world.get&lt;Position&gt;(entity);
+            auto& vel = world.get&lt;Velocity&gt;(entity);
+            pos.x += vel.x * dt;
+            pos.y += vel.y * dt;
+            pos.z += vel.z * dt;
+        }
+    }
+};
+
+class RenderSystem {
+public:
+    void update() {
+        // Position과 Sprite를 가진 엔티티만 렌더링
+        for (auto entity : world.view&lt;Position, Sprite&gt;()) {
+            auto& pos = world.get&lt;Position&gt;(entity);
+            auto& sprite = world.get&lt;Sprite&gt;(entity);
+            renderer.draw(sprite.texture, pos);
+        }
+    }
+};
+
+// 엔티티 생성
+Entity player = world.create();
+world.add&lt;Position&gt;(player, {0, 0, 0});
+world.add&lt;Velocity&gt;(player, {1, 0, 0});
+world.add&lt;Health&gt;(player, {100, 100});
+world.add&lt;Sprite&gt;(player, {playerTexture, 0});
+
+Entity bullet = world.create();
+world.add&lt;Position&gt;(bullet, {0, 0, 0});
+world.add&lt;Velocity&gt;(bullet, {10, 0, 0});
+// Health 없음 - 총알은 체력이 필요없음!</code></pre>
+                </div>
+
+                <div class="visual-section">
+                    <pre class="diagram">
+ECS 구조
+
+┌─────────────────────────────────────────────┐
+│                    World                     │
+├─────────────────────────────────────────────┤
+│  Entities:  [0, 1, 2, 3, 4, 5, ...]         │
+├─────────────────────────────────────────────┤
+│  Component Storage:                          │
+│  ┌─────────┬───────────────────────────┐    │
+│  │Position │ [pos0][pos1][pos2][pos3]  │    │
+│  ├─────────┼───────────────────────────┤    │
+│  │Velocity │ [vel0][vel1]    [vel3]    │    │
+│  ├─────────┼───────────────────────────┤    │
+│  │Health   │ [hp0]       [hp2]         │    │
+│  ├─────────┼───────────────────────────┤    │
+│  │Sprite   │ [spr0][spr1][spr2]        │    │
+│  └─────────┴───────────────────────────┘    │
+├─────────────────────────────────────────────┤
+│  Systems: [Movement] [Render] [Combat] ...  │
+└─────────────────────────────────────────────┘
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 간단한 ECS 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">미니 ECS 프레임워크</div>
+                    <pre><code>// 컴포넌트 타입 ID
+inline size_t getComponentTypeId() {
+    static size_t id = 0;
+    return id++;
+}
+
+template&lt;typename T&gt;
+size_t getComponentId() {
+    static size_t id = getComponentTypeId();
+    return id;
+}
+
+// 컴포넌트 풀
+class ComponentPoolBase {
+public:
+    virtual ~ComponentPoolBase() = default;
+    virtual void remove(Entity e) = 0;
+};
+
+template&lt;typename T&gt;
+class ComponentPool : public ComponentPoolBase {
+    std::unordered_map&lt;Entity, T&gt; data;
+
+public:
+    void add(Entity e, T component) {
+        data[e] = std::move(component);
+    }
+
+    T& get(Entity e) { return data.at(e); }
+    bool has(Entity e) const { return data.count(e) > 0; }
+    void remove(Entity e) override { data.erase(e); }
+
+    auto begin() { return data.begin(); }
+    auto end() { return data.end(); }
+};
+
+// World
+class World {
+    Entity nextEntity = 0;
+    std::vector&lt;std::unique_ptr&lt;ComponentPoolBase&gt;&gt; pools;
+
+    template&lt;typename T&gt;
+    ComponentPool&lt;T&gt;* getPool() {
+        size_t id = getComponentId&lt;T&gt;();
+        if (id >= pools.size()) {
+            pools.resize(id + 1);
+        }
+        if (!pools[id]) {
+            pools[id] = std::make_unique&lt;ComponentPool&lt;T&gt;&gt;();
+        }
+        return static_cast&lt;ComponentPool&lt;T&gt;*&gt;(pools[id].get());
+    }
+
+public:
+    Entity create() { return nextEntity++; }
+
+    template&lt;typename T&gt;
+    void add(Entity e, T component) {
+        getPool&lt;T&gt;()->add(e, std::move(component));
+    }
+
+    template&lt;typename T&gt;
+    T& get(Entity e) { return getPool&lt;T&gt;()->get(e); }
+
+    template&lt;typename T&gt;
+    bool has(Entity e) { return getPool&lt;T&gt;()->has(e); }
+
+    // 특정 컴포넌트 조합을 가진 엔티티 순회
+    template&lt;typename... Components&gt;
+    auto view() {
+        // 간단 구현: 첫 컴포넌트 풀을 순회하며 필터링
+        // 실제로는 더 최적화된 구현 필요
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 성능 최적화 기법</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">Archetype 기반 ECS</div>
+                    <pre><code>// Archetype: 같은 컴포넌트 조합을 가진 엔티티 그룹
+// 장점: 컴포넌트가 연속 배치되어 캐시 효율 극대화
+
+struct Archetype {
+    std::vector&lt;ComponentId&gt; componentTypes;
+
+    // 각 컴포넌트 타입의 배열
+    std::vector&lt;std::vector&lt;std::byte&gt;&gt; componentArrays;
+    std::vector&lt;Entity&gt; entities;
+};
+
+// [Position, Velocity] 아키타입
+// positions: [pos0, pos1, pos2, pos3, ...]  ← 연속!
+// velocities: [vel0, vel1, vel2, vel3, ...]  ← 연속!
+// entities: [e0, e1, e2, e3, ...]
+
+// [Position, Velocity, Health] 아키타입
+// 다른 테이블에 저장
+
+// SIMD 최적화
+void updatePositions(Archetype& arch, float dt) {
+    auto* positions = arch.getArray&lt;Position&gt;();
+    auto* velocities = arch.getArray&lt;Velocity&gt;();
+    size_t count = arch.entities.size();
+
+    // SIMD로 4개씩 처리
+    for (size_t i = 0; i + 4 <= count; i += 4) {
+        __m128 px = _mm_load_ps(&positions[i].x);
+        __m128 vx = _mm_load_ps(&velocities[i].x);
+        __m128 dtv = _mm_set1_ps(dt);
+        px = _mm_add_ps(px, _mm_mul_ps(vx, dtv));
+        _mm_store_ps(&positions[i].x, px);
+    }
+}</code></pre>
+                </div>
+
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>구현 방식</th>
+                            <th>메모리 효율</th>
+                            <th>순회 성능</th>
+                            <th>구현 복잡도</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Sparse Set</td>
+                            <td>낮음</td>
+                            <td>중간</td>
+                            <td>낮음</td>
+                        </tr>
+                        <tr>
+                            <td>Archetype</td>
+                            <td>높음</td>
+                            <td>높음</td>
+                            <td>높음</td>
+                        </tr>
+                        <tr>
+                            <td>Bitset + Pool</td>
+                            <td>중간</td>
+                            <td>중간</td>
+                            <td>중간</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 ECS 라이브러리</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">EnTT 예제</div>
+                    <pre><code>#include &lt;entt/entt.hpp&gt;
+
+struct Position { float x, y; };
+struct Velocity { float x, y; };
+struct Health { int hp; };
+
+int main() {
+    entt::registry registry;
+
+    // 엔티티 생성
+    auto entity = registry.create();
+    registry.emplace&lt;Position&gt;(entity, 0.0f, 0.0f);
+    registry.emplace&lt;Velocity&gt;(entity, 1.0f, 0.0f);
+    registry.emplace&lt;Health&gt;(entity, 100);
+
+    // 대량 생성
+    for (int i = 0; i < 10000; i++) {
+        auto e = registry.create();
+        registry.emplace&lt;Position&gt;(e, 0.0f, 0.0f);
+        registry.emplace&lt;Velocity&gt;(e, rand() % 10, rand() % 10);
+    }
+
+    // 시스템: 뷰로 순회
+    auto view = registry.view&lt;Position, Velocity&gt;();
+    float dt = 1.0f / 60.0f;
+
+    view.each([dt](Position& pos, Velocity& vel) {
+        pos.x += vel.x * dt;
+        pos.y += vel.y * dt;
+    });
+
+    // 그룹: 더 빠른 순회 (정렬된 접근)
+    auto group = registry.group&lt;Position&gt;(entt::get&lt;Velocity&gt;);
+    for (auto [entity, pos, vel] : group.each()) {
+        // 캐시 최적화된 순회
+    }
+
+    // 컴포넌트 확인 및 제거
+    if (registry.all_of&lt;Health&gt;(entity)) {
+        registry.remove&lt;Health&gt;(entity);
+    }
+
+    // 엔티티 파괴
+    registry.destroy(entity);
+}</code></pre>
+                </div>
+
+                <p class="key-point">EnTT, Flecs, EntityX 같은 라이브러리를 사용하면 최적화된 ECS를 바로 활용할 수 있습니다!</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>DOD</strong>: 데이터 배치를 캐시에 최적화</li>
+                <li><strong>SoA</strong>: 같은 타입 데이터를 연속 배치</li>
+                <li><strong>Entity</strong>: 단순한 ID (데이터나 로직 없음)</li>
+                <li><strong>Component</strong>: 순수 데이터 (로직 없음)</li>
+                <li><strong>System</strong>: 컴포넌트 조합을 처리하는 로직</li>
+                <li><strong>장점</strong>: 높은 성능, 유연한 조합, 병렬화 용이</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

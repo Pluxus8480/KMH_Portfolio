@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Notes | KMH Portfolio</title>
+    <meta name="description" content="KMH의 게임 개발 학습 기록">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Pretendard -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+</head>
+<body>
+    <!-- Navigation -->
+    <header class="header" id="header">
+        <nav class="nav container">
+            <a href="index.html" class="nav__logo">
+                <span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span>
+            </a>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item"><a href="index.html#about" class="nav__link">About</a></li>
+                <li class="nav__item"><a href="index.html#projects" class="nav__link">Projects</a></li>
+                <li class="nav__item"><a href="index.html#skills" class="nav__link">Skills</a></li>
+                <li class="nav__item"><a href="study.html" class="nav__link active">Study</a></li>
+                <li class="nav__item"><a href="index.html#contact" class="nav__link">Contact</a></li>
+            </ul>
+            <button class="nav__toggle" id="nav-toggle">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <!-- Study Hero -->
+        <section class="study-hero section">
+            <div class="container">
+                <h1 class="study-hero__title">
+                    <span class="section__title-accent">//</span> Study Notes
+                </h1>
+                <p class="study-hero__desc">
+                    게임 개발을 위해 공부하고 연구한 내용들을 정리한 학습 기록입니다.
+                </p>
+
+                <!-- Filter Tags -->
+                <div class="study__tags" id="study-tags">
+                    <button class="tag-btn active" data-filter="all">All</button>
+                    <button class="tag-btn" data-filter="game-engine">Game Engine</button>
+                    <button class="tag-btn" data-filter="graphics">Graphics</button>
+                    <button class="tag-btn" data-filter="server">Server</button>
+                    <button class="tag-btn" data-filter="database">Database</button>
+                    <button class="tag-btn" data-filter="cs-fundamentals">CS 기초</button>
+                    <button class="tag-btn" data-filter="algorithm">Algorithm</button>
+                    <button class="tag-btn" data-filter="language">Language</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Study Grid -->
+        <section class="study section" id="study">
+            <div class="container">
+                <div class="study__grid">
+                    <!-- Unreal Engine -->
+                    <a href="study/unreal.html" class="study-card" data-tags="game-engine">
+                        <div class="study-card__header">
+                            <span class="study-card__icon">🔷</span>
+                            <h3 class="study-card__title">Unreal Engine</h3>
+                        </div>
+                        <p class="study-card__desc">Unreal Engine 심화 학습</p>
+                        <ul class="study-card__topics">
+                            <li>Gameplay Ability System (GAS) 구조 분석</li>
+                            <li>Nanite 가상화 지오메트리 원리</li>
+                            <li>Lumen 글로벌 일루미네이션</li>
+                            <li>Blueprint vs C++ 성능 비교</li>
+                        </ul>
+                        <span class="study-card__count">15개 주제</span>
+                    </a>
+
+                    <!-- Graphics -->
+                    <a href="study/graphics.html" class="study-card" data-tags="graphics">
+                        <div class="study-card__header">
+                            <span class="study-card__icon">🖼️</span>
+                            <h3 class="study-card__title">Graphics / Rendering</h3>
+                        </div>
+                        <p class="study-card__desc">DirectX 11 그래픽스 프로그래밍</p>
+                        <ul class="study-card__topics">
+                            <li>Deferred vs Forward 렌더링</li>
+                            <li>PBR 재질 시스템 구현</li>
+                            <li>Shadow Mapping 기법 비교</li>
+                            <li>Post-Processing 파이프라인</li>
+                        </ul>
+                        <span class="study-card__count">20개 주제</span>
+                    </a>
+
+                    <!-- Game Server -->
+                    <a href="study/server.html" class="study-card" data-tags="server">
+                        <div class="study-card__header">
+                            <span class="study-card__icon">🖥️</span>
+                            <h3 class="study-card__title">Game Server</h3>
+                        </div>
+                        <p class="study-card__desc">게임 서버 아키텍처와 네트워크</p>
+                        <ul class="study-card__topics">
+                            <li>게임 서버 아키텍처 패턴</li>
+                            <li>네트워크 동기화 전략</li>
+                            <li>Lag Compensation 구현</li>
+                            <li>매치메이킹 시스템</li>
+                        </ul>
+                        <span class="study-card__count">12개 주제</span>
+                    </a>
+
+                    <!-- Database -->
+                    <a href="study/database.html" class="study-card" data-tags="database">
+                        <div class="study-card__header">
+                            <span class="study-card__icon">💾</span>
+                            <h3 class="study-card__title">Database</h3>
+                        </div>
+                        <p class="study-card__desc">데이터베이스 설계와 최적화</p>
+                        <ul class="study-card__topics">
+                            <li>게임 DB 스키마 설계</li>
+                            <li>Redis 캐싱 전략</li>
+                            <li>인덱스 최적화</li>
+                            <li>트랜잭션과 동시성</li>
+                        </ul>
+                        <span class="study-card__count">10개 주제</span>
+                    </a>
+
+                    <!-- CS Fundamentals -->
+                    <a href="study/cs-fundamentals.html" class="study-card" data-tags="cs-fundamentals">
+                        <div class="study-card__header">
+                            <span class="study-card__icon">🧠</span>
+                            <h3 class="study-card__title">CS 기초</h3>
+                        </div>
+                        <p class="study-card__desc">컴퓨터 과학 기본 개념</p>
+                        <ul class="study-card__topics">
+                            <li>메모리 관리와 가상 메모리</li>
+                            <li>캐시 친화적 프로그래밍</li>
+                            <li>멀티스레딩 동기화</li>
+                            <li>CPU 파이프라인과 분기 예측</li>
+                        </ul>
+                        <span class="study-card__count">15개 주제</span>
+                    </a>
+
+                    <!-- Algorithm -->
+                    <a href="study/algorithm.html" class="study-card" data-tags="algorithm">
+                        <div class="study-card__header">
+                            <span class="study-card__icon">🧩</span>
+                            <h3 class="study-card__title">Algorithm</h3>
+                        </div>
+                        <p class="study-card__desc">게임 개발용 자료구조와 알고리즘</p>
+                        <ul class="study-card__topics">
+                            <li>A* / JPS 길찾기 알고리즘</li>
+                            <li>공간 분할 (Octree, BVH)</li>
+                            <li>충돌 감지 최적화</li>
+                            <li>절두체 컬링</li>
+                        </ul>
+                        <span class="study-card__count">15개 주제</span>
+                    </a>
+
+                    <!-- C++ -->
+                    <a href="study/cpp.html" class="study-card" data-tags="language">
+                        <div class="study-card__header">
+                            <span class="study-card__icon">⚡</span>
+                            <h3 class="study-card__title">C++</h3>
+                        </div>
+                        <p class="study-card__desc">Modern C++ 심화 학습</p>
+                        <ul class="study-card__topics">
+                            <li>Move Semantics 완벽 이해</li>
+                            <li>스마트 포인터 내부 구현</li>
+                            <li>템플릿 메타프로그래밍</li>
+                            <li>메모리 풀 / Custom Allocator</li>
+                        </ul>
+                        <span class="study-card__count">18개 주제</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__content">
+                <p class="footer__name">
+                    <span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span>
+                </p>
+                <p class="footer__copy">
+                    &copy; 2024 KMH. All rights reserved.
+                </p>
+                <p class="footer__credit">
+                    Built with <span class="highlight">♥</span> and lots of ☕
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="js/study.js"></script>
+</body>
+</html>

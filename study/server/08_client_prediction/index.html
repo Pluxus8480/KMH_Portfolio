@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>클라이언트 예측과 서버 권한 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../server.html" class="back-link">← 목록으로</a>
+            <h1>버튼을 눌렀는데 왜 바로 안 움직이지?</h1>
+            <p class="subtitle">Client-Side Prediction과 Server Authority의 균형</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 반응성 vs 보안의 딜레마</h2>
+            <div class="conversation">
+                <div class="q">서버가 모든 것을 결정하면 어떤 문제가 있나요?</div>
+                <div class="a">
+                    <p>키를 누르고 캐릭터가 움직이기까지 <strong>왕복 지연(RTT)</strong>이 발생합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+서버 권한만 사용 시 (Server Authority Only):
+
+t=0ms:   키보드 "W" 입력
+         │
+         └──▶ 서버로 전송 ─────────────────────▶ 서버
+                                                │
+t=50ms:                                        서버에서 이동 처리
+                                                │
+t=100ms: 서버 응답 수신 ◀─────────────────────────┘
+         │
+         └──▶ 화면에 캐릭터 이동
+
+입력 후 100ms(RTT) 동안 캐릭터가 멈춰 있음!
+핑 200ms면 → 200ms 지연
+게임이 뻑뻑하고 답답함
+                        </pre>
+                    </div>
+                    <p class="warning">RTT가 100ms만 되어도 게임이 매우 부자연스럽게 느껴집니다.</p>
+                </div>
+
+                <div class="q">클라이언트가 직접 움직이면 안 되나요?</div>
+                <div class="a">
+                    <p>그러면 <strong>치팅</strong>이 가능해집니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+클라이언트 권한 시 보안 문제:
+
+정상 플레이어:                    해커:
+"W키 누름" → 앞으로 1 이동       "내 위치는 (999, 999)야"
+                                 ↓
+서버: "OK, 이동함"               서버: "OK... 순간이동?"
+
+결과: 스피드핵, 텔레포트 등 치팅 가능
+                        </pre>
+                    </div>
+                    <p class="highlight">해결책: <strong>Client-Side Prediction</strong> - 클라이언트는 예측하고, 서버가 검증합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Client-Side Prediction 기본</h2>
+            <div class="conversation">
+                <div class="q">Client-Side Prediction은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>클라이언트가 <strong>서버 응답을 기다리지 않고 먼저 움직입니다</strong>.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+Client-Side Prediction:
+
+t=0ms:   키보드 "W" 입력
+         │
+         ├──▶ 서버로 입력 전송 ────────────────▶ 서버
+         │
+         └──▶ 클라이언트에서 즉시 이동 (예측)
+              Position: (0, 0) → (1, 0)
+              ↓
+              화면에 바로 표시! ✓
+                                                │
+t=50ms:                                        서버에서 처리
+                                               Position: (1, 0)
+                                                │
+t=100ms: 서버 응답 수신 ◀─────────────────────────┘
+         │
+         └──▶ 예측 검증: 클라이언트 (1, 0) == 서버 (1, 0)
+              정확히 맞음! 아무 것도 안 해도 됨
+
+결과: 입력 즉시 반응, 지연 느껴지지 않음
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">기본 구현은 어떻게 하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Client-Side Prediction 기본 구현</div>
+                        <pre><code>class ClientPrediction {
+    struct InputRecord {
+        uint32_t sequence;      // 입력 시퀀스 번호
+        PlayerInput input;      // 입력 데이터
+        Vector3 resultPosition; // 예측된 결과 위치
+        float timestamp;
+    };
+
+    std::deque<InputRecord> pendingInputs;
+    uint32_t inputSequence = 0;
+    Vector3 currentPosition;
+
+public:
+    void ProcessLocalInput(const PlayerInput& input) {
+        uint32_t seq = inputSequence++;
+
+        // 1. 클라이언트에서 즉시 시뮬레이션 (예측)
+        Vector3 predictedPos = SimulateMovement(currentPosition, input);
+
+        // 2. 입력 기록 저장 (나중에 검증용)
+        pendingInputs.push_back({
+            seq,
+            input,
+            predictedPos,
+            GetTime()
+        });
+
+        // 3. 즉시 위치 적용
+        currentPosition = predictedPos;
+
+        // 4. 서버에 입력 전송
+        SendInputToServer(seq, input);
+    }
+
+    Vector3 SimulateMovement(Vector3 pos, const PlayerInput& input) {
+        // 서버와 동일한 이동 로직!
+        Vector3 movement = Vector3::Zero;
+
+        if (input.forward)  movement.z += 1;
+        if (input.backward) movement.z -= 1;
+        if (input.left)     movement.x -= 1;
+        if (input.right)    movement.x += 1;
+
+        movement = Normalize(movement) * MOVE_SPEED * TICK_RATE;
+
+        // 충돌 처리도 동일하게
+        Vector3 newPos = pos + movement;
+        newPos = ResolveCollisions(newPos);
+
+        return newPos;
+    }
+};</code></pre>
+                    </div>
+                    <p class="key-point">핵심: 클라이언트의 시뮬레이션 로직이 서버와 <strong>완전히 동일</strong>해야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Server Reconciliation (서버 조정)</h2>
+            <div class="conversation">
+                <div class="q">예측이 틀렸을 때는 어떻게 하나요?</div>
+                <div class="a">
+                    <p>서버 결과를 받으면 <strong>재시뮬레이션(Reconciliation)</strong>합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+예측 오류 시 Reconciliation:
+
+t=0ms:   Input #1 (앞으로)
+         클라이언트 예측: (0,0) → (1,0)
+
+t=16ms:  Input #2 (앞으로)
+         클라이언트 예측: (1,0) → (2,0)
+
+t=32ms:  Input #3 (앞으로)
+         클라이언트 예측: (2,0) → (3,0)
+
+t=100ms: 서버 응답 수신 (Input #1 처리 결과)
+         서버: "Input #1 결과는 (0.9, 0)야" (벽에 살짝 막힘)
+
+         클라이언트 예측 (3,0) vs 서버 기대값 ???
+
+         Reconciliation 과정:
+         1. Input #1 서버 결과로 시작: (0.9, 0)
+         2. Input #2 재시뮬레이션: (0.9, 0) → (1.9, 0)
+         3. Input #3 재시뮬레이션: (1.9, 0) → (2.9, 0)
+
+         보정된 위치: (2.9, 0)
+         오차: 0.1 unit → 부드럽게 보간
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">Reconciliation 코드는 어떻게 작성하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Server Reconciliation 구현</div>
+                        <pre><code>class ClientPrediction {
+    // ... 이전 코드에 추가
+
+public:
+    void OnServerStateReceived(uint32_t ackedSequence,
+                               Vector3 serverPosition) {
+        // 1. 확인된 입력들 제거
+        while (!pendingInputs.empty() &&
+               pendingInputs.front().sequence <= ackedSequence) {
+            pendingInputs.pop_front();
+        }
+
+        // 2. 서버 위치에서 시작하여 미확인 입력들 재시뮬레이션
+        Vector3 reconciledPos = serverPosition;
+
+        for (const auto& record : pendingInputs) {
+            reconciledPos = SimulateMovement(reconciledPos, record.input);
+        }
+
+        // 3. 오차 확인 및 보정
+        float error = Vector3::Distance(currentPosition, reconciledPos);
+
+        if (error > SNAP_THRESHOLD) {
+            // 오차가 크면 즉시 스냅 (텔레포트)
+            currentPosition = reconciledPos;
+            Log("Position snapped due to large error: %.2f", error);
+        }
+        else if (error > SMOOTH_THRESHOLD) {
+            // 오차가 작으면 부드럽게 보간
+            currentPosition = Vector3::Lerp(
+                currentPosition,
+                reconciledPos,
+                RECONCILIATION_SMOOTHING
+            );
+        }
+        // 오차가 매우 작으면 무시
+
+        // 4. 보정 오차 기록 (디버깅용)
+        predictionErrors.Add(error);
+    }
+
+private:
+    static const float SNAP_THRESHOLD = 5.0f;       // 5 units 이상
+    static const float SMOOTH_THRESHOLD = 0.1f;     // 0.1 units 이상
+    static const float RECONCILIATION_SMOOTHING = 0.3f;
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Entity Interpolation (원격 엔티티 보간)</h2>
+            <div class="conversation">
+                <div class="q">다른 플레이어는 어떻게 부드럽게 보이나요?</div>
+                <div class="a">
+                    <p>내 캐릭터는 예측, 다른 플레이어는 <strong>보간(Interpolation)</strong>을 사용합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+Entity Interpolation:
+
+서버에서 받은 위치 (20Hz):
+●─────────●─────────●─────────●
+t=0      t=50ms   t=100ms  t=150ms
+(0,0)    (2,0)    (4,0)    (6,0)
+
+클라이언트 렌더링 (60Hz):
+우리는 100ms 지연된 과거를 보여줌
+
+현재 시간 = 150ms일 때:
+렌더링 시간 = 150ms - 100ms = 50ms
+
+50ms 시점의 위치 = (2,0)과 (4,0) 사이 보간
+                 = 정확히 (2,0)
+
+장점:
+- 데이터가 없는 시점도 부드럽게 표시
+- 패킷 손실/지터에 강함
+
+단점:
+- 항상 100ms 과거를 봄 (Lag Compensation 필요)
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">보간 버퍼는 어떻게 구현하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Entity Interpolation 구현</div>
+                        <pre><code>class RemoteEntityInterpolation {
+    struct Snapshot {
+        float serverTime;
+        Vector3 position;
+        Quaternion rotation;
+    };
+
+    std::deque<Snapshot> snapshotBuffer;
+    static const float INTERPOLATION_DELAY = 0.1f;  // 100ms
+
+public:
+    void AddSnapshot(float serverTime, Vector3 pos, Quaternion rot) {
+        snapshotBuffer.push_back({ serverTime, pos, rot });
+
+        // 오래된 스냅샷 제거 (1초 이상)
+        while (snapshotBuffer.size() > 2 &&
+               serverTime - snapshotBuffer.front().serverTime > 1.0f) {
+            snapshotBuffer.pop_front();
+        }
+    }
+
+    void GetInterpolatedState(float currentServerTime,
+                              Vector3& outPos, Quaternion& outRot) {
+        // 렌더링 시간 = 현재 - 지연
+        float renderTime = currentServerTime - INTERPOLATION_DELAY;
+
+        // 렌더링 시간을 감싸는 두 스냅샷 찾기
+        Snapshot* from = nullptr;
+        Snapshot* to = nullptr;
+
+        for (int i = 0; i < snapshotBuffer.size() - 1; i++) {
+            if (snapshotBuffer[i].serverTime <= renderTime &&
+                snapshotBuffer[i + 1].serverTime >= renderTime) {
+                from = &snapshotBuffer[i];
+                to = &snapshotBuffer[i + 1];
+                break;
+            }
+        }
+
+        if (from && to) {
+            // 두 스냅샷 사이 보간
+            float t = (renderTime - from->serverTime) /
+                      (to->serverTime - from->serverTime);
+
+            outPos = Vector3::Lerp(from->position, to->position, t);
+            outRot = Quaternion::Slerp(from->rotation, to->rotation, t);
+        }
+        else if (!snapshotBuffer.empty()) {
+            // 스냅샷 부족 시 마지막 값 사용 (또는 외삽)
+            auto& last = snapshotBuffer.back();
+            outPos = last.position;
+            outRot = last.rotation;
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 예측 가능한 것과 불가능한 것</h2>
+            <div class="conversation">
+                <div class="q">모든 것을 예측할 수 있나요?</div>
+                <div class="a">
+                    <p>아니요. <strong>로컬에서 결정 가능한 것만</strong> 예측합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>예측 가능</th>
+                                <th>예측 불가</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>내 캐릭터 이동</td>
+                                <td>다른 플레이어 행동</td>
+                            </tr>
+                            <tr>
+                                <td>점프, 앉기</td>
+                                <td>피격 판정 결과</td>
+                            </tr>
+                            <tr>
+                                <td>무기 발사 애니메이션</td>
+                                <td>데미지 계산</td>
+                            </tr>
+                            <tr>
+                                <td>재장전 시작</td>
+                                <td>아이템 드랍</td>
+                            </tr>
+                            <tr>
+                                <td>로컬 물리 (점프 궤적)</td>
+                                <td>서버 이벤트 (폭발, 스폰)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">예측 불가능한 것은 어떻게 처리하나요?</div>
+                <div class="a">
+                    <p>서버 응답을 기다리되, <strong>시각적 피드백</strong>으로 체감 지연을 줄입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Optimistic Visual Feedback</div>
+                        <pre><code>class WeaponSystem {
+public:
+    void OnShootInput() {
+        // 서버에 전송
+        SendShootToServer(aimDirection);
+
+        // 즉시 시각적 피드백 (예측이 아님!)
+        PlayMuzzleFlash();           // 총구 화염
+        PlayShootSound();            // 발사 소리
+        ApplyRecoilAnimation();      // 반동 애니메이션
+        SpawnTracerEffect(aimDir);   // 탄흔 이펙트
+
+        // 히트 판정은 예측하지 않음
+        // 서버 응답 후 처리
+    }
+
+    void OnServerHitConfirm(EntityID target, int damage, HitPart part) {
+        // 서버에서 히트 확인 후
+        PlayHitmarker();             // 히트 마커
+        PlayHitSound(part);          // 히트 사운드
+
+        if (target.IsKilled()) {
+            ShowKillFeed();          // 킬 피드
+        }
+    }
+
+    void OnServerHitDenied() {
+        // 서버가 히트를 거부한 경우
+        // 이미 재생한 이펙트는 그대로 둠 (되감지 않음)
+        // 히트마커만 안 나옴
+    }
+};</code></pre>
+                    </div>
+                    <p class="highlight">발사는 즉시 보여주고, 히트 판정은 서버를 기다립니다. 플레이어는 "쏘는 느낌"을 즉시 받습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 치트 방지와 서버 검증</h2>
+            <div class="conversation">
+                <div class="q">클라이언트가 거짓 입력을 보내면?</div>
+                <div class="a">
+                    <p>서버가 모든 입력을 <strong>검증</strong>합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">서버 측 입력 검증</div>
+                        <pre><code>class ServerInputValidator {
+public:
+    bool ValidateMovementInput(PlayerID playerId,
+                               const PlayerInput& input,
+                               float deltaTime) {
+        auto& player = GetPlayer(playerId);
+
+        // 1. 이동 속도 검증
+        Vector3 intendedMove = CalculateMovement(input, deltaTime);
+        float speed = intendedMove.Length() / deltaTime;
+
+        float maxSpeed = player.isSprinting ? MAX_SPRINT_SPEED : MAX_WALK_SPEED;
+        if (speed > maxSpeed * SPEED_TOLERANCE) {
+            LogCheatAttempt(playerId, "Speed hack detected");
+            return false;
+        }
+
+        // 2. 위치 일관성 검증
+        Vector3 newPos = player.position + intendedMove;
+        if (!IsValidPosition(newPos)) {
+            LogCheatAttempt(playerId, "Invalid position");
+            return false;
+        }
+
+        // 3. 입력 빈도 검증 (입력 스팸 방지)
+        float timeSinceLastInput = GetTime() - player.lastInputTime;
+        if (timeSinceLastInput < MIN_INPUT_INTERVAL) {
+            LogCheatAttempt(playerId, "Input spam detected");
+            return false;
+        }
+
+        // 4. 물리적 가능성 검증
+        if (input.jump && !player.isGrounded) {
+            // 공중 점프 시도
+            LogCheatAttempt(playerId, "Air jump attempted");
+            return false;
+        }
+
+        return true;
+    }
+
+    Vector3 ApplyValidatedMovement(PlayerID playerId,
+                                    const PlayerInput& input,
+                                    float deltaTime) {
+        auto& player = GetPlayer(playerId);
+
+        // 서버에서 시뮬레이션
+        Vector3 newPos = SimulateMovement(player.position, input, deltaTime);
+
+        // 충돌 처리
+        newPos = ResolveCollisions(newPos);
+
+        // 위치 업데이트
+        player.position = newPos;
+
+        return newPos;
+    }
+
+private:
+    static const float SPEED_TOLERANCE = 1.1f;  // 10% 여유
+    static const float MIN_INPUT_INTERVAL = 0.01f;  // 100Hz 제한
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">클라이언트와 서버 물리가 다르면?</div>
+                <div class="a">
+                    <p><strong>결정론적 물리</strong>를 사용하거나, 약간의 오차를 허용합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">허용 오차 설정</div>
+                        <pre><code>class PredictionTolerance {
+    // 오차 허용 범위
+    static const float POSITION_TOLERANCE = 0.5f;   // 0.5 units
+    static const float VELOCITY_TOLERANCE = 1.0f;   // 1 unit/s
+    static const float ROTATION_TOLERANCE = 5.0f;   // 5 degrees
+
+    // 연속 오차 카운터 (반복 오차 시 치트 의심)
+    std::unordered_map<PlayerID, int> errorCounts;
+
+public:
+    void OnPredictionMismatch(PlayerID playerId,
+                              Vector3 clientPos, Vector3 serverPos) {
+        float error = Vector3::Distance(clientPos, serverPos);
+
+        if (error <= POSITION_TOLERANCE) {
+            // 허용 범위 내, 정상
+            errorCounts[playerId] = 0;
+            return;
+        }
+
+        errorCounts[playerId]++;
+
+        if (errorCounts[playerId] > MAX_CONSECUTIVE_ERRORS) {
+            // 연속 오차 → 치트 의심
+            LogCheatWarning(playerId,
+                "Repeated prediction mismatch: %.2f units", error);
+
+            // 강제 위치 보정
+            ForcePositionCorrection(playerId, serverPos);
+
+            errorCounts[playerId] = 0;
+        }
+    }
+
+private:
+    static const int MAX_CONSECUTIVE_ERRORS = 10;
+};</code></pre>
+                    </div>
+                    <p class="key-point">약간의 오차는 네트워크 지터로 인한 것일 수 있으므로, 반복적인 큰 오차만 치트로 간주합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Client-Side Prediction</strong>: 서버 응답 없이 즉시 로컬에서 시뮬레이션</li>
+                <li><strong>Server Authority</strong>: 서버가 최종 결정권, 클라이언트는 검증받음</li>
+                <li><strong>Server Reconciliation</strong>: 예측 오류 시 서버 상태로 재시뮬레이션</li>
+                <li><strong>Entity Interpolation</strong>: 다른 플레이어는 과거 스냅샷 보간</li>
+                <li><strong>예측 대상</strong>: 로컬 결정 가능한 것만 (이동, 점프 등)</li>
+                <li><strong>시각적 피드백</strong>: 예측 불가능한 것도 즉시 이펙트 재생</li>
+                <li><strong>입력 검증</strong>: 서버가 속도, 위치, 빈도 등 모두 검증</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

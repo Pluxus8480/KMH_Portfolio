@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C++ Study | KMH Portfolio</title>
+    <meta name="description" content="C++ 학습 기록">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+    <header class="header" id="header">
+        <nav class="nav container">
+            <a href="../index.html" class="nav__logo"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></a>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item"><a href="../index.html#about" class="nav__link">About</a></li>
+                <li class="nav__item"><a href="../index.html#projects" class="nav__link">Projects</a></li>
+                <li class="nav__item"><a href="../index.html#skills" class="nav__link">Skills</a></li>
+                <li class="nav__item"><a href="../study.html" class="nav__link active">Study</a></li>
+                <li class="nav__item"><a href="../index.html#contact" class="nav__link">Contact</a></li>
+            </ul>
+            <button class="nav__toggle" id="nav-toggle"><span></span><span></span><span></span></button>
+        </nav>
+    </header>
+    <main class="main">
+        <section class="study-detail section">
+            <div class="container">
+                <nav class="breadcrumb"><a href="../study.html">Study</a><span>/</span><span>C++</span></nav>
+                <div class="study-detail__header">
+                    <span class="study-detail__icon">⚡</span>
+                    <h1 class="study-detail__title">C++</h1>
+                </div>
+                <p class="study-detail__desc">Modern C++ 심화 학습 기록</p>
+                <div class="study-detail__content">
+                    <div class="study-topics">
+                        <h2 class="study-topics__title">학습 주제 목록</h2>
+                        <ul class="study-topics__list">
+                            <li class="study-topic">
+                                <a href="cpp/01_move_semantics/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">01</span>
+                                    <span class="study-topic__name">Move Semantics 완벽 이해</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/02_smart_pointers/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">02</span>
+                                    <span class="study-topic__name">스마트 포인터 내부 구현</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/03_template_metaprogramming/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">03</span>
+                                    <span class="study-topic__name">템플릿 메타프로그래밍 (TMP)</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/04_memory_pool/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">04</span>
+                                    <span class="study-topic__name">메모리 풀 / Custom Allocator</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/05_raii/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">05</span>
+                                    <span class="study-topic__name">RAII 패턴과 자원 관리</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/06_vtable/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">06</span>
+                                    <span class="study-topic__name">가상 함수 테이블 (vtable) 분석</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/07_perfect_forwarding/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">07</span>
+                                    <span class="study-topic__name">완벽한 전달 (Perfect Forwarding)</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/08_sfinae/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">08</span>
+                                    <span class="study-topic__name">SFINAE와 Type Traits</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/09_variant_optional/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">09</span>
+                                    <span class="study-topic__name">std::variant / std::optional 활용</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/10_lambda/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">10</span>
+                                    <span class="study-topic__name">람다 표현식 심화</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/11_constexpr/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">11</span>
+                                    <span class="study-topic__name">constexpr과 컴파일 타임 연산</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/12_atomic/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">12</span>
+                                    <span class="study-topic__name">std::atomic과 메모리 순서</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/13_coroutine/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">13</span>
+                                    <span class="study-topic__name">Coroutine (C++20)</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/14_concepts/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">14</span>
+                                    <span class="study-topic__name">Concepts (C++20) 활용</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/15_ecs_dod/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">15</span>
+                                    <span class="study-topic__name">ECS 패턴과 Data-Oriented Design</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/16_sbo/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">16</span>
+                                    <span class="study-topic__name">Small Buffer Optimization (SBO)</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/17_exception_safety/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">17</span>
+                                    <span class="study-topic__name">예외 안전성 (Exception Safety)</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="cpp/18_crtp/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">18</span>
+                                    <span class="study-topic__name">CRTP (Curiously Recurring Template Pattern)</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <footer class="footer"><div class="container"><div class="footer__content"><p class="footer__name"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></p><p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p></div></div></footer>
+    <script src="../js/study.js"></script>
+</body>
+</html>

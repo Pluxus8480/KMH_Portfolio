@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>힙과 스택 메모리 관리 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+            <h1>"new는 느리고 지역변수는 빠르다?"</h1>
+            <p class="subtitle">힙과 스택 메모리의 차이와 활용</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 스택 메모리</h2>
+            <div class="conversation">
+                <div class="q">스택 메모리는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                      스택 메모리 구조                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   높은 주소                                                         │
+│   ┌─────────────────────────────────────────┐                      │
+│   │          커널 영역                       │                      │
+│   ├─────────────────────────────────────────┤                      │
+│   │                                         │                      │
+│   │          스택 (Stack)                   │ ← 아래로 성장        │
+│   │     ┌───────────────────────────┐      │                      │
+│   │     │ main() 지역변수           │      │                      │
+│   │     ├───────────────────────────┤      │                      │
+│   │     │ func1() 지역변수          │      │                      │
+│   │     ├───────────────────────────┤      │                      │
+│   │     │ func2() 지역변수          │ ← SP │                      │
+│   │     └───────────────────────────┘      │                      │
+│   │                 ↓                       │                      │
+│   │            (여유 공간)                   │                      │
+│   │                 ↑                       │                      │
+│   │          힙 (Heap)                      │ ← 위로 성장         │
+│   ├─────────────────────────────────────────┤                      │
+│   │          데이터 영역 (.data, .bss)      │                      │
+│   ├─────────────────────────────────────────┤                      │
+│   │          코드 영역 (.text)              │                      │
+│   └─────────────────────────────────────────┘                      │
+│   낮은 주소                                                         │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <p class="highlight">스택 할당 = 스택 포인터(SP)만 이동! O(1) 상수 시간</p>
+                </div>
+
+                <div class="q">스택은 왜 빠른가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">스택 할당 원리</div>
+                        <pre><code>void function() {
+    int a = 10;      // SP -= 4
+    float b = 3.14f; // SP -= 4
+    char c[100];     // SP -= 100
+
+    // 함수 시작 시:
+    // push rbp           ; 이전 베이스 포인터 저장
+    // mov rbp, rsp       ; 새 베이스 포인터 설정
+    // sub rsp, 108       ; 지역변수 공간 확보 (한 번에!)
+
+    // 함수 종료 시:
+    // mov rsp, rbp       ; 스택 복원
+    // pop rbp
+    // ret
+
+    // 단 3개의 명령어로 모든 지역변수 해제!
+}
+
+// 반면 힙 할당은...
+void heapAllocation() {
+    int* a = new int(10);
+    // 1. 힙 관리자 호출
+    // 2. 빈 공간 탐색
+    // 3. 메모리 블록 분할
+    // 4. 메타데이터 업데이트
+    // 5. 포인터 반환
+    // → 수십~수백 사이클!
+
+    delete a;
+    // 1. 메타데이터 확인
+    // 2. 병합 가능 블록 확인
+    // 3. 프리 리스트 업데이트
+}</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>스택</th>
+                                <th>힙</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>할당 속도</td>
+                                <td>~1 사이클</td>
+                                <td>~100+ 사이클</td>
+                            </tr>
+                            <tr>
+                                <td>해제 속도</td>
+                                <td>자동 (0 비용)</td>
+                                <td>delete 호출 필요</td>
+                            </tr>
+                            <tr>
+                                <td>크기 제한</td>
+                                <td>보통 1~8MB</td>
+                                <td>가상 메모리 한도</td>
+                            </tr>
+                            <tr>
+                                <td>수명</td>
+                                <td>스코프에 묶임</td>
+                                <td>수동 관리</td>
+                            </tr>
+                            <tr>
+                                <td>캐시 효율</td>
+                                <td>최고 (연속/지역성)</td>
+                                <td>낮음 (단편화)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 힙 메모리</h2>
+            <div class="conversation">
+                <div class="q">힙은 언제 사용해야 하나요?</div>
+                <div class="a">
+                    <ul>
+                        <li>크기가 런타임에 결정될 때</li>
+                        <li>수명이 함수 스코프를 넘어야 할 때</li>
+                        <li>대용량 데이터 (스택 오버플로우 방지)</li>
+                        <li>다형성(Polymorphism) 필요 시</li>
+                    </ul>
+
+                    <div class="code-block">
+                        <div class="code-header">힙 사용 예시</div>
+                        <pre><code>// 1. 런타임 크기
+int count = getUserInput();
+std::vector<int> data(count);  // 힙에 할당
+
+// 2. 수명 연장
+Entity* createEntity() {
+    return new Entity();  // 호출자가 관리
+}
+
+// 3. 대용량 데이터
+void processLargeData() {
+    // ❌ 스택 오버플로우 위험!
+    // int hugeArray[10000000];
+
+    // ✅ 힙에 할당
+    std::vector<int> hugeData(10000000);
+}
+
+// 4. 다형성
+class Shape { virtual void draw() = 0; };
+class Circle : public Shape { ... };
+
+Shape* shape = new Circle();  // 포인터로 다형성</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">힙 할당기는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    힙 할당기 내부 구조                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Free List (빈 블록 연결 리스트):                                   │
+│                                                                     │
+│   ┌───────┐    ┌───────┐    ┌───────┐    ┌───────┐                │
+│   │Header │───▶│Header │───▶│Header │───▶│Header │──▶ NULL        │
+│   │size:64│    │size:128│   │size:32│    │size:256│               │
+│   │next:──┼────┤next:──┼────┤next:──┼────┤next:──┼───             │
+│   ├───────┤    ├───────┤    ├───────┤    ├───────┤                │
+│   │ Free  │    │ Free  │    │ Free  │    │ Free  │                │
+│   │ Space │    │ Space │    │ Space │    │ Space │                │
+│   └───────┘    └───────┘    └───────┘    └───────┘                │
+│                                                                     │
+│   malloc(50) 호출 시:                                               │
+│   1. Free List에서 >= 50 + Header 크기인 블록 탐색                 │
+│   2. 64바이트 블록 발견! (First Fit)                               │
+│   3. 블록을 리스트에서 제거                                         │
+│   4. 사용자에게 데이터 영역 포인터 반환                             │
+│                                                                     │
+│   free(ptr) 호출 시:                                                │
+│   1. ptr에서 Header 위치 계산                                       │
+│   2. Free List에 블록 추가                                          │
+│   3. 인접 빈 블록과 병합 (Coalescing)                              │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 게임 최적화 기법</h2>
+            <div class="conversation">
+                <div class="q">게임에서 힙 사용을 줄이는 방법은?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">스택 배열 활용</div>
+                        <pre><code>// ❌ 매번 힙 할당
+void processBad(const std::vector<Entity*>& entities) {
+    std::vector<Entity*> visible;  // 힙 할당!
+    for (auto* e : entities) {
+        if (isVisible(e)) visible.push_back(e);
+    }
+    // 처리...
+}
+
+// ✅ 스택 배열 또는 Small Buffer Optimization
+void processGood(const std::vector<Entity*>& entities) {
+    // 작은 배열은 스택에
+    Entity* visible[256];
+    int count = 0;
+
+    for (auto* e : entities) {
+        if (count < 256 && isVisible(e)) {
+            visible[count++] = e;
+        }
+    }
+    // 처리...
+}
+
+// ✅ std::array 또는 고정 크기 컨테이너
+template<typename T, size_t N>
+class StackVector {
+    std::array<T, N> data_;
+    size_t size_ = 0;
+
+public:
+    void push_back(const T& v) {
+        if (size_ < N) data_[size_++] = v;
+    }
+    // 힙 할당 없이 스택에서만 동작
+};</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">오브젝트 풀링</div>
+                        <pre><code>// 게임에서 가장 많이 쓰는 패턴!
+template<typename T, size_t PoolSize>
+class ObjectPool {
+    union Slot {
+        T object;
+        Slot* next;
+        Slot() {}
+        ~Slot() {}
+    };
+
+    Slot pool_[PoolSize];
+    Slot* freeList_ = nullptr;
+
+public:
+    ObjectPool() {
+        // 모든 슬롯을 free list로 연결
+        for (size_t i = 0; i < PoolSize; ++i) {
+            pool_[i].next = freeList_;
+            freeList_ = &pool_[i];
+        }
+    }
+
+    T* allocate() {
+        if (!freeList_) return nullptr;
+
+        Slot* slot = freeList_;
+        freeList_ = slot->next;
+        return new (&slot->object) T();  // placement new
+    }
+
+    void deallocate(T* obj) {
+        obj->~T();
+        Slot* slot = reinterpret_cast<Slot*>(obj);
+        slot->next = freeList_;
+        freeList_ = slot;
+    }
+};
+
+// 사용 예시
+ObjectPool<Bullet, 10000> bulletPool;
+
+void fire() {
+    Bullet* b = bulletPool.allocate();  // O(1), 힙 접근 없음!
+    // ...
+}
+
+void destroy(Bullet* b) {
+    bulletPool.deallocate(b);  // O(1)
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 스마트 포인터와 RAII</h2>
+            <div class="conversation">
+                <div class="q">힙 메모리 누수를 방지하려면?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">스마트 포인터 활용</div>
+                        <pre><code>#include <memory>
+
+// unique_ptr: 단독 소유권
+std::unique_ptr<Entity> entity = std::make_unique<Entity>();
+// 스코프 끝나면 자동 delete
+
+// shared_ptr: 공유 소유권
+std::shared_ptr<Texture> texture = std::make_shared<Texture>();
+// 참조 카운트 0이 되면 자동 delete
+
+// weak_ptr: 순환 참조 방지
+class Node {
+    std::shared_ptr<Node> next;
+    std::weak_ptr<Node> parent;  // weak로 순환 끊기
+};
+
+// 게임에서의 적용
+class Entity {
+    std::unique_ptr<MeshComponent> mesh_;      // 단독 소유
+    std::shared_ptr<Material> material_;       // 여러 엔티티가 공유
+    std::weak_ptr<Entity> target_;             // 참조만 (소유 X)
+
+public:
+    Entity() : mesh_(std::make_unique<MeshComponent>()) {}
+
+    void setTarget(std::shared_ptr<Entity> target) {
+        target_ = target;  // weak로 저장
+    }
+
+    void update() {
+        if (auto t = target_.lock()) {  // 아직 살아있는지 확인
+            moveToward(t->position);
+        }
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="warning">shared_ptr의 참조 카운팅은 원자적 연산이라 비용이 있습니다. 성능 중요한 곳에서는 unique_ptr이나 원시 포인터를 고려하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 스택 오버플로우 방지</h2>
+            <div class="conversation">
+                <div class="q">스택 오버플로우는 어떻게 발생하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">스택 오버플로우 사례</div>
+                        <pre><code>// 1. 재귀 호출 과다
+void badRecursion(int n) {
+    if (n <= 0) return;
+    char buffer[1024];  // 매 호출마다 1KB
+    badRecursion(n - 1);
+}
+badRecursion(10000);  // 10MB+ 스택 사용 → 오버플로우!
+
+// ✅ 꼬리 재귀 최적화 또는 반복문으로 변환
+void goodIteration(int n) {
+    for (int i = 0; i < n; ++i) {
+        char buffer[1024];
+        // 처리... (매 반복 후 스택 해제됨)
+    }
+}
+
+// 2. 대용량 지역 변수
+void badLocalArray() {
+    int hugeArray[1000000];  // 4MB - 스택 초과!
+}
+
+// ✅ 힙 사용
+void goodHeapArray() {
+    std::vector<int> data(1000000);  // 힙에 안전하게 할당
+}
+
+// 3. 스택 크기 확인/조정
+#ifdef _WIN32
+    // Windows: 링커 옵션으로 설정
+    // /STACK:4194304  (4MB)
+#else
+    // Linux: ulimit 또는 pthread_attr_setstacksize
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 4 * 1024 * 1024);  // 4MB
+#endif</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>스택</strong>: ~1 사이클 할당, 자동 해제, 크기 제한 있음</li>
+                <li><strong>힙</strong>: ~100+ 사이클, 수동 관리, 큰 데이터/긴 수명용</li>
+                <li><strong>오브젝트 풀</strong>: 빈번한 할당/해제를 O(1)로 최적화</li>
+                <li><strong>스마트 포인터</strong>: 메모리 누수 방지, unique_ptr > shared_ptr</li>
+                <li><strong>스택 오버플로우</strong>: 재귀 제한, 대용량은 힙에 할당</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

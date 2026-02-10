@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>뼈대로 캐릭터를 움직이다 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>뼈대로 캐릭터를 움직이다</h1>
+            <p class="subtitle">Skeletal Animation과 GPU Skinning</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 스켈레탈 애니메이션이란?</h2>
+            <div class="conversation">
+                <div class="q">캐릭터 애니메이션은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p><span class="highlight">스켈레탈 애니메이션</span>은 뼈대(Skeleton)를 움직여 메시를 변형합니다. 각 정점은 여러 뼈에 가중치로 연결됩니다.</p>
+                    <p>모든 정점을 직접 움직이는 것보다 훨씬 효율적이고, 애니메이션 블렌딩이 가능합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+스켈레탈 애니메이션 구조:
+
+1. 뼈대 (Skeleton)        2. 스킨 가중치        3. 결과
+
+       ●  머리                  메시             변형된 메시
+       │                     ┌─────┐
+       ●  가슴               │∧∧∧∧∧│           ┌─────┐
+      ╱│╲                    │     │           │∧∧∧∧∧│
+     ●─●─●  팔              │ 가중│           │  ╲  │
+       │                     │ 치  │           │   ╲ │
+       ●  허리               │     │           │    ╲│
+      ╱ ╲                    │     │           │     │
+     ●   ●  다리            └─────┘           └─────┘
+
+각 정점이 근처 뼈의 영향을 받음
+정점 P = Σ(Weight[i] × BoneMatrix[i] × BindPose × P)
+                </pre>
+                <p class="diagram-caption">스켈레탈 애니메이션의 구성 요소</p>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>스켈레탈 애니메이션은 <span class="highlight">인형극</span>과 같습니다.</p>
+                <p>뼈대가 인형의 막대기, 메시가 인형의 천입니다. 막대기를 움직이면 천이 따라 움직입니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 뼈대 계층 구조</h2>
+            <div class="conversation">
+                <div class="q">뼈들은 어떻게 연결되어 있나요?</div>
+                <div class="a">
+                    <p>뼈는 <span class="highlight">트리 구조</span>로 부모-자식 관계를 가집니다. 부모 뼈가 움직이면 모든 자식 뼈도 따라 움직입니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+뼈대 계층 구조 (Bone Hierarchy):
+
+                    Root (골반)
+                       │
+         ┌─────────────┼─────────────┐
+         │             │             │
+      Spine1        L_Thigh       R_Thigh
+         │             │             │
+      Spine2        L_Calf        R_Calf
+         │             │             │
+    ┌────┼────┐     L_Foot       R_Foot
+    │    │    │
+ L_Arm Neck R_Arm
+    │    │    │
+L_Fore Head R_Fore
+    │         │
+L_Hand     R_Hand
+
+부모 변환이 자식에게 전파됨:
+WorldMatrix = Parent.WorldMatrix × Local.Transform
+                </pre>
+                <p class="diagram-caption">휴머노이드 뼈대 트리</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">뼈대 데이터 구조</div>
+                <pre><code>// 단일 뼈 정보
+struct Bone
+{
+    std::string name;
+    int parentIndex;           // -1이면 루트
+    XMMATRIX bindPose;         // 바인드 포즈 (T-Pose)
+    XMMATRIX inverseBindPose;  // 바인드 포즈의 역행렬
+};
+
+// 스켈레톤
+struct Skeleton
+{
+    std::vector<Bone> bones;
+
+    // 계층 구조 순회하며 월드 행렬 계산
+    void CalculateBoneMatrices(
+        const std::vector<XMMATRIX>& localTransforms,
+        std::vector<XMMATRIX>& finalMatrices)
+    {
+        for (size_t i = 0; i < bones.size(); i++)
+        {
+            XMMATRIX parentWorld = (bones[i].parentIndex >= 0)
+                ? finalMatrices[bones[i].parentIndex]
+                : XMMatrixIdentity();
+
+            // 로컬 → 월드
+            XMMATRIX worldMatrix = localTransforms[i] * parentWorld;
+
+            // 최종 스키닝 행렬
+            // = 바인드 포즈에서의 정점 → 현재 뼈 공간
+            finalMatrices[i] = bones[i].inverseBindPose * worldMatrix;
+        }
+    }
+};</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 버텍스 스키닝</h2>
+            <div class="conversation">
+                <div class="q">정점은 뼈를 어떻게 따라가나요?</div>
+                <div class="a">
+                    <p>각 정점은 최대 <span class="highlight">4개의 뼈</span>에 가중치로 연결됩니다. 가중치의 합은 1.0입니다.</p>
+                    <p>정점 위치 = Σ(가중치 × 뼈 행렬 × 원래 위치)</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">스키닝 정점 데이터</div>
+                <pre><code>// 스키닝용 정점 구조체
+struct SkinnedVertex
+{
+    XMFLOAT3 position;
+    XMFLOAT3 normal;
+    XMFLOAT2 texCoord;
+    XMFLOAT3 tangent;
+
+    // 스키닝 데이터
+    uint32_t boneIndices;  // 4개 뼈 인덱스 (패킹)
+    XMFLOAT4 boneWeights;  // 4개 가중치
+};
+
+// Input Layout
+D3D11_INPUT_ELEMENT_DESC layout[] = {
+    {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, ...},
+    {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, ...},
+    {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, ...},
+    {"TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, ...},
+    {"BLENDINDICES", 0, DXGI_FORMAT_R8G8B8A8_UINT, 0, 44, ...},
+    {"BLENDWEIGHT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 48, ...},
+};</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">GPU Skinning Shader (HLSL)</div>
+                <pre><code>// 상수 버퍼 - 뼈 행렬들
+cbuffer BoneMatrices : register(b1)
+{
+    float4x4 bones[128];  // 최대 128개 뼈
+};
+
+struct VSInput
+{
+    float3 position : POSITION;
+    float3 normal   : NORMAL;
+    float2 texCoord : TEXCOORD0;
+    float3 tangent  : TANGENT;
+    uint4  boneIds  : BLENDINDICES;
+    float4 weights  : BLENDWEIGHT;
+};
+
+struct VSOutput
+{
+    float4 position : SV_Position;
+    float3 worldPos : TEXCOORD0;
+    float3 normal   : TEXCOORD1;
+    float2 texCoord : TEXCOORD2;
+};
+
+VSOutput VS_Skinned(VSInput input)
+{
+    VSOutput output;
+
+    // 스키닝 행렬 계산 (4개 뼈의 가중 평균)
+    float4x4 skinMatrix =
+        bones[input.boneIds.x] * input.weights.x +
+        bones[input.boneIds.y] * input.weights.y +
+        bones[input.boneIds.z] * input.weights.z +
+        bones[input.boneIds.w] * input.weights.w;
+
+    // 위치 변환
+    float4 skinnedPos = mul(float4(input.position, 1), skinMatrix);
+    output.worldPos = skinnedPos.xyz;
+    output.position = mul(skinnedPos, viewProj);
+
+    // 법선 변환 (역전치 행렬 필요하지만, 균등 스케일 가정)
+    output.normal = mul(input.normal, (float3x3)skinMatrix);
+    output.texCoord = input.texCoord;
+
+    return output;
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 애니메이션 데이터</h2>
+            <div class="conversation">
+                <div class="q">애니메이션은 어떻게 저장되나요?</div>
+                <div class="a">
+                    <p>각 뼈의 <span class="highlight">키프레임</span>을 저장합니다. 위치, 회전(쿼터니언), 스케일을 시간별로 기록합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+애니메이션 키프레임:
+
+시간 →  0.0s    0.5s    1.0s    1.5s    2.0s
+         │       │       │       │       │
+Bone 0:  ●───────●───────●───────●───────●
+         │       │       │       │       │
+Bone 1:  ●───────●───────●───────●───────●
+         │               │               │
+Bone 2:  ●───────────────●───────────────●  (키 적음)
+
+● = 키프레임 (Position, Rotation, Scale)
+
+키프레임 사이 → 보간 (Linear/Slerp)
+                </pre>
+                <p class="diagram-caption">키프레임 기반 애니메이션</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">애니메이션 데이터 구조</div>
+                <pre><code>// 키프레임
+struct VectorKey {
+    float time;
+    XMFLOAT3 value;
+};
+
+struct QuaternionKey {
+    float time;
+    XMFLOAT4 value;  // 쿼터니언
+};
+
+// 뼈별 애니메이션 채널
+struct AnimationChannel
+{
+    std::string boneName;
+    std::vector<VectorKey> positionKeys;
+    std::vector<QuaternionKey> rotationKeys;
+    std::vector<VectorKey> scaleKeys;
+};
+
+// 애니메이션 클립
+struct AnimationClip
+{
+    std::string name;
+    float duration;
+    float ticksPerSecond;
+    std::vector<AnimationChannel> channels;
+
+    // 특정 시간의 뼈 변환 계산
+    XMMATRIX GetBoneTransform(int boneIndex, float time)
+    {
+        AnimationChannel& channel = channels[boneIndex];
+
+        // 위치 보간
+        XMFLOAT3 position = InterpolatePosition(channel.positionKeys, time);
+
+        // 회전 보간 (Slerp)
+        XMFLOAT4 rotation = InterpolateRotation(channel.rotationKeys, time);
+
+        // 스케일 보간
+        XMFLOAT3 scale = InterpolateScale(channel.scaleKeys, time);
+
+        // 행렬 조합: Scale × Rotation × Translation
+        return XMMatrixScaling(scale.x, scale.y, scale.z) *
+               XMMatrixRotationQuaternion(XMLoadFloat4(&rotation)) *
+               XMMatrixTranslation(position.x, position.y, position.z);
+    }
+};</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 애니메이션 블렌딩</h2>
+            <div class="conversation">
+                <div class="q">걸으면서 공격하는 애니메이션은 어떻게 만드나요?</div>
+                <div class="a">
+                    <p><span class="highlight">애니메이션 블렌딩</span>으로 여러 애니메이션을 혼합합니다. 전체 블렌딩, 레이어 블렌딩, 마스크 블렌딩 등이 있습니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>블렌딩 유형</th>
+                        <th>설명</th>
+                        <th>예시</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Crossfade</td>
+                        <td>두 애니메이션 전환</td>
+                        <td>걷기 → 뛰기</td>
+                    </tr>
+                    <tr>
+                        <td>Additive</td>
+                        <td>기본 + 추가 동작</td>
+                        <td>달리기 + 숨쉬기</td>
+                    </tr>
+                    <tr>
+                        <td>Layer/Mask</td>
+                        <td>신체 부위별 다른 애니</td>
+                        <td>하체: 걷기, 상체: 사격</td>
+                    </tr>
+                    <tr>
+                        <td>Blend Space</td>
+                        <td>다차원 블렌딩</td>
+                        <td>속도/방향에 따른 이동</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">애니메이션 블렌딩 구현</div>
+                <pre><code>// Crossfade 블렌딩
+std::vector<XMMATRIX> BlendAnimations(
+    AnimationClip& animA, float timeA,
+    AnimationClip& animB, float timeB,
+    float blendFactor)  // 0 = A만, 1 = B만
+{
+    std::vector<XMMATRIX> result(boneCount);
+
+    for (int i = 0; i < boneCount; i++)
+    {
+        XMMATRIX matA = animA.GetBoneTransform(i, timeA);
+        XMMATRIX matB = animB.GetBoneTransform(i, timeB);
+
+        // 행렬 분해 → 보간 → 재조합
+        XMVECTOR scaleA, rotA, transA;
+        XMVECTOR scaleB, rotB, transB;
+
+        XMMatrixDecompose(&scaleA, &rotA, &transA, matA);
+        XMMatrixDecompose(&scaleB, &rotB, &transB, matB);
+
+        XMVECTOR scale = XMVectorLerp(scaleA, scaleB, blendFactor);
+        XMVECTOR rot = XMQuaternionSlerp(rotA, rotB, blendFactor);
+        XMVECTOR trans = XMVectorLerp(transA, transB, blendFactor);
+
+        result[i] = XMMatrixScalingFromVector(scale) *
+                    XMMatrixRotationQuaternion(rot) *
+                    XMMatrixTranslationFromVector(trans);
+    }
+
+    return result;
+}
+
+// 레이어 마스크 블렌딩
+std::vector<XMMATRIX> LayerBlend(
+    const std::vector<XMMATRIX>& baseAnim,
+    const std::vector<XMMATRIX>& overrideAnim,
+    const std::vector<float>& boneMasks)  // 0 = base, 1 = override
+{
+    std::vector<XMMATRIX> result(boneCount);
+
+    for (int i = 0; i < boneCount; i++)
+    {
+        // 마스크에 따라 블렌딩
+        // 상체 뼈 마스크 = 1.0, 하체 = 0.0
+        result[i] = BlendMatrix(baseAnim[i], overrideAnim[i], boneMasks[i]);
+    }
+
+    return result;
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 최적화 기법</h2>
+            <div class="conversation">
+                <div class="q">수백 캐릭터의 애니메이션 성능은?</div>
+                <div class="a">
+                    <p>여러 최적화 기법이 있습니다:</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 최적화 기법</strong>
+                <p><span class="highlight">LOD</span>: 멀리 있는 캐릭터는 뼈 수 감소</p>
+                <p><span class="highlight">Instancing</span>: 같은 애니메이션 캐릭터 인스턴싱</p>
+                <p><span class="highlight">Compute Shader</span>: 뼈 행렬 계산을 GPU에서</p>
+                <p><span class="highlight">Animation Compression</span>: 키프레임 압축</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Compute Shader 스키닝</div>
+                <pre><code>// Compute Shader로 스키닝 (대량 캐릭터용)
+[numthreads(64, 1, 1)]
+void CS_Skinning(uint3 id : SV_DispatchThreadID)
+{
+    uint vertexIndex = id.x;
+    if (vertexIndex >= vertexCount) return;
+
+    // 입력 정점 읽기
+    SkinnedVertex input = inputVertices[vertexIndex];
+
+    // 스키닝 행렬 계산
+    float4x4 skinMatrix =
+        boneMatrices[input.boneIds.x] * input.weights.x +
+        boneMatrices[input.boneIds.y] * input.weights.y +
+        boneMatrices[input.boneIds.z] * input.weights.z +
+        boneMatrices[input.boneIds.w] * input.weights.w;
+
+    // 변환 적용
+    outputVertices[vertexIndex].position =
+        mul(float4(input.position, 1), skinMatrix).xyz;
+    outputVertices[vertexIndex].normal =
+        mul(input.normal, (float3x3)skinMatrix);
+}
+
+// 애니메이션 텍스처 (Vertex Animation Texture)
+// 모든 프레임의 정점 위치를 텍스처에 베이크
+// 샘플링으로 애니메이션 → GPU 친화적</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>기법</th>
+                        <th>장점</th>
+                        <th>단점</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>CPU Skinning</td>
+                        <td>유연함</td>
+                        <td>CPU 병목</td>
+                    </tr>
+                    <tr>
+                        <td>GPU Skinning (VS)</td>
+                        <td>표준, 빠름</td>
+                        <td>상수 버퍼 크기 제한</td>
+                    </tr>
+                    <tr>
+                        <td>GPU Skinning (CS)</td>
+                        <td>대량 처리</td>
+                        <td>구현 복잡</td>
+                    </tr>
+                    <tr>
+                        <td>VAT (Vertex Animation Texture)</td>
+                        <td>인스턴싱 가능</td>
+                        <td>블렌딩 제한</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>스켈레탈 애니메이션</strong>: 뼈대를 움직여 메시 변형, 트리 구조 계층</li>
+                <li>각 정점은 최대 <strong>4개 뼈에 가중치</strong>로 연결 (스키닝)</li>
+                <li><strong>GPU Skinning</strong>: Vertex Shader에서 뼈 행렬 × 정점 계산</li>
+                <li><strong>키프레임</strong> 보간으로 애니메이션, 쿼터니언 Slerp 사용</li>
+                <li><strong>블렌딩</strong>: Crossfade, Additive, Layer Mask로 자연스러운 전환</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>렌더링 후의 마법 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>렌더링 후의 마법</h1>
+            <p class="subtitle">Post-Processing 파이프라인</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Post-Processing이란?</h2>
+            <div class="conversation">
+                <div class="q">Post-Processing은 언제 실행되나요?</div>
+                <div class="a">
+                    <p>Post-Processing은 <span class="highlight">3D 렌더링이 끝난 후</span>, 2D 이미지에 적용되는 효과입니다. 전체 화면을 대상으로 픽셀 단위 처리를 합니다.</p>
+                    <p>마치 사진을 찍은 후 포토샵에서 보정하는 것과 같습니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+렌더링 파이프라인에서의 위치:
+
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+│  Geometry   │ → │  Lighting   │ → │   Opaque    │
+│    Pass     │   │    Pass     │   │  Objects    │
+└─────────────┘   └─────────────┘   └─────────────┘
+                                           │
+                                           ▼
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+│   Bloom     │ ← │   HDR       │ ← │ Translucent │
+│             │   │  Buffer     │   │  Objects    │
+└─────────────┘   └─────────────┘   └─────────────┘
+      │
+      ▼
+┌─────────────────────────────────────────────────┐
+│              Post-Processing Chain              │
+├─────────────────────────────────────────────────┤
+│  SSAO → SSR → DoF → Motion Blur → Bloom →      │
+│  Color Grading → Tone Mapping → AA → UI        │
+└─────────────────────────────────────────────────┘
+                      │
+                      ▼
+               Final Frame Buffer
+                </pre>
+                <p class="diagram-caption">Post-Processing의 위치</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 주요 Post-Processing 효과</h2>
+            <div class="conversation">
+                <div class="q">어떤 효과들이 있나요?</div>
+                <div class="a">
+                    <p>일반적인 Post-Processing 스택:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>효과</th>
+                        <th>설명</th>
+                        <th>성능 비용</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>SSAO</td>
+                        <td>Screen Space Ambient Occlusion</td>
+                        <td>중~높음</td>
+                    </tr>
+                    <tr>
+                        <td>SSR</td>
+                        <td>Screen Space Reflections</td>
+                        <td>높음</td>
+                    </tr>
+                    <tr>
+                        <td>Bloom</td>
+                        <td>밝은 영역 번짐</td>
+                        <td>낮음</td>
+                    </tr>
+                    <tr>
+                        <td>DoF</td>
+                        <td>Depth of Field (피사계 심도)</td>
+                        <td>중간</td>
+                    </tr>
+                    <tr>
+                        <td>Motion Blur</td>
+                        <td>움직임 흐림</td>
+                        <td>중간</td>
+                    </tr>
+                    <tr>
+                        <td>Tone Mapping</td>
+                        <td>HDR → LDR 변환</td>
+                        <td>낮음</td>
+                    </tr>
+                    <tr>
+                        <td>Color Grading</td>
+                        <td>색감 보정</td>
+                        <td>낮음</td>
+                    </tr>
+                    <tr>
+                        <td>AA (Anti-Aliasing)</td>
+                        <td>계단 현상 제거</td>
+                        <td>낮음~중간</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Bloom 구현</h2>
+            <div class="conversation">
+                <div class="q">Bloom은 어떻게 만드나요?</div>
+                <div class="a">
+                    <p>Bloom은 밝은 영역이 번지는 효과입니다. 3단계로 구현됩니다:</p>
+                    <p>1. <span class="highlight">Threshold</span>: 밝은 픽셀만 추출</p>
+                    <p>2. <span class="highlight">Blur</span>: 가우시안 블러 적용</p>
+                    <p>3. <span class="highlight">Composite</span>: 원본과 합성</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">HLSL - Bloom (간략화)</div>
+                <pre><code>// 1. Brightness Threshold Pass
+float4 BrightnessPS(float2 uv : TEXCOORD) : SV_Target
+{
+    float4 color = sceneTexture.Sample(sampler, uv);
+    float brightness = dot(color.rgb, float3(0.2126, 0.7152, 0.0722));
+
+    if (brightness > threshold)
+        return color;
+    else
+        return float4(0, 0, 0, 0);
+}
+
+// 2. Gaussian Blur (Separable - 가로/세로 분리)
+float4 BlurHorizontalPS(float2 uv : TEXCOORD) : SV_Target
+{
+    float weights[5] = {0.227, 0.194, 0.121, 0.054, 0.016};
+    float3 result = brightTexture.Sample(sampler, uv).rgb * weights[0];
+
+    for (int i = 1; i < 5; i++)
+    {
+        float2 offset = float2(texelSize.x * i, 0);
+        result += brightTexture.Sample(sampler, uv + offset).rgb * weights[i];
+        result += brightTexture.Sample(sampler, uv - offset).rgb * weights[i];
+    }
+    return float4(result, 1);
+}
+
+// 3. Composite
+float4 CompositePS(float2 uv : TEXCOORD) : SV_Target
+{
+    float3 scene = sceneTexture.Sample(sampler, uv).rgb;
+    float3 bloom = bloomTexture.Sample(sampler, uv).rgb;
+    return float4(scene + bloom * bloomIntensity, 1);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Tone Mapping</h2>
+            <div class="conversation">
+                <div class="q">HDR을 모니터에 표시하려면?</div>
+                <div class="a">
+                    <p>HDR(High Dynamic Range)은 0~∞ 범위지만, 모니터는 0~1만 표시할 수 있습니다. <span class="highlight">Tone Mapping</span>이 이 변환을 담당합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">다양한 Tone Mapping 연산자</div>
+                <pre><code>// Reinhard (간단)
+float3 ReinhardToneMap(float3 hdr)
+{
+    return hdr / (hdr + 1.0);
+}
+
+// ACES (영화 산업 표준)
+float3 ACESFilmToneMap(float3 x)
+{
+    float a = 2.51f;
+    float b = 0.03f;
+    float c = 2.43f;
+    float d = 0.59f;
+    float e = 0.14f;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
+// Uncharted 2 (게임용)
+float3 Uncharted2ToneMap(float3 x)
+{
+    float A = 0.15, B = 0.50, C = 0.10;
+    float D = 0.20, E = 0.02, F = 0.30;
+    return ((x * (A * x + C * B) + D * E) /
+            (x * (A * x + B) + D * F)) - E / F;
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>연산자</th>
+                        <th>특징</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Reinhard</td>
+                        <td>간단, 약간 탁함</td>
+                    </tr>
+                    <tr>
+                        <td>ACES</td>
+                        <td>영화 같은 룩, 콘트라스트 좋음</td>
+                    </tr>
+                    <tr>
+                        <td>Uncharted 2</td>
+                        <td>게임에 적합, 디테일 보존</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 효율적인 구현</h2>
+            <div class="conversation">
+                <div class="q">Post-Processing을 효율적으로 하려면?</div>
+                <div class="a">
+                    <p>몇 가지 최적화 기법:</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 최적화 팁</strong>
+                <p><span class="highlight">다운샘플링</span>: Bloom 등은 1/4 해상도에서 계산 후 업샘플</p>
+                <p><span class="highlight">효과 병합</span>: 여러 효과를 한 패스에 (Color Grading + Tone Mapping)</p>
+                <p><span class="highlight">Compute Shader</span>: 복잡한 효과는 Compute로 (SSAO 등)</p>
+                <p><span class="highlight">LUT</span>: Color Grading은 3D LUT로 빠르게</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">다운샘플 + 업샘플 체인</div>
+                <pre><code>// Bloom 다운샘플 체인
+// 1920x1080 → 960x540 → 480x270 → 240x135 → 120x67
+
+void BloomDownsample()
+{
+    for (int i = 0; i < MIP_COUNT; i++)
+    {
+        // 이전 MIP를 블러하며 다운샘플
+        SetRenderTarget(bloomMip[i]);
+        DrawFullscreenQuad(bloomMip[i-1], downsampleShader);
+    }
+}
+
+void BloomUpsample()
+{
+    for (int i = MIP_COUNT - 1; i > 0; i--)
+    {
+        // 업샘플하며 합성
+        SetRenderTarget(bloomMip[i-1]);
+        DrawFullscreenQuad(bloomMip[i], upsampleShader);
+    }
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: Color Grading</h2>
+            <div class="conversation">
+                <div class="q">영화 같은 색감은 어떻게 만드나요?</div>
+                <div class="a">
+                    <p><span class="highlight">LUT (Look-Up Table)</span>을 사용합니다. 모든 색상 변환을 3D 텍스처로 미리 계산해 둡니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Color LUT 사용:
+
+입력 색상 (R, G, B)
+        │
+        ▼
+┌─────────────────────────────────────┐
+│         3D LUT (32³ 또는 64³)       │
+│                                     │
+│   RGB 값을 좌표로 사용하여          │
+│   변환된 색상을 조회                │
+│                                     │
+│   [0.2, 0.5, 0.8] → LUT[5][16][26]  │
+│                                     │
+└─────────────────────────────────────┘
+        │
+        ▼
+출력 색상 (R', G', B')
+
+아티스트가 Photoshop/DaVinci에서
+LUT 제작 → 게임에 적용
+                </pre>
+                <p class="diagram-caption">LUT 기반 Color Grading</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">LUT 적용</div>
+                <pre><code>// 3D LUT 샘플링
+float3 ApplyColorGrading(float3 color)
+{
+    // LUT 크기 (예: 32)
+    float lutSize = 32.0;
+
+    // 색상을 LUT 좌표로 변환
+    float3 uvw = color * (lutSize - 1.0) / lutSize + 0.5 / lutSize;
+
+    // 3D 텍스처 샘플링
+    return lutTexture.Sample(trilinearSampler, uvw).rgb;
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Post-Processing</strong>은 3D 렌더링 후 2D 이미지에 적용되는 효과</li>
+                <li><strong>Bloom</strong> = Threshold → Blur → Composite</li>
+                <li><strong>Tone Mapping</strong>으로 HDR → LDR 변환 (ACES, Reinhard 등)</li>
+                <li><strong>다운샘플링</strong>으로 비용 절감, <strong>효과 병합</strong>으로 패스 감소</li>
+                <li><strong>Color LUT</strong>로 아티스트가 제작한 색감 빠르게 적용</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

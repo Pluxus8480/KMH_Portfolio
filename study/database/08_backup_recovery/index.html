@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>유저 데이터 백업과 복구 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../database.html" class="back-link">← 목록으로</a>
+            <h1>"3년 키운 캐릭터가 사라졌어요"</h1>
+            <p class="subtitle">게임 데이터 백업과 복구 전략</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 백업의 기본 개념</h2>
+            <div class="conversation">
+                <div class="q">게임 데이터 백업은 왜 복잡한가요?</div>
+                <div class="a">
+                    <p>단순 파일 백업과 달리 <strong>실시간 트랜잭션 중인 데이터</strong>를 다뤄야 합니다.</p>
+                    <p class="highlight">게임은 24시간 운영되므로 "서버 멈추고 백업"이 불가능합니다.</p>
+                    <p>또한 관계형 데이터의 <strong>일관성</strong>이 중요합니다. 인벤토리만 복구하고 골드는 복구 안 되면 문제가 됩니다.</p>
+                </div>
+
+                <div class="q">어떤 백업 방식들이 있나요?</div>
+                <div class="a">
+                    <p>크게 세 가지 방식이 있습니다:</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                         백업 방식 비교                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  1. Full Backup (전체 백업)                                          │
+│  ┌─────────────────────────────────────────────────────┐            │
+│  │ [전체 데이터 복사] ─── 크기: 100GB, 시간: 2시간      │            │
+│  └─────────────────────────────────────────────────────┘            │
+│                                                                     │
+│  2. Incremental Backup (증분 백업)                                   │
+│  ┌─────┐   ┌───┐   ┌───┐   ┌───┐                                   │
+│  │Full │──▶│+5G│──▶│+3G│──▶│+4G│  마지막 백업 이후 변경분만          │
+│  └─────┘   └───┘   └───┘   └───┘                                   │
+│                                                                     │
+│  3. Differential Backup (차등 백업)                                  │
+│  ┌─────┐   ┌───┐   ┌────┐   ┌─────┐                                │
+│  │Full │──▶│+5G│──▶│+8G │──▶│+12G │  Full 이후 모든 변경분          │
+│  └─────┘   └───┘   └────┘   └─────┘                                │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>방식</th>
+                                <th>백업 속도</th>
+                                <th>복구 속도</th>
+                                <th>저장 용량</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Full</td>
+                                <td>느림</td>
+                                <td>빠름</td>
+                                <td>큼</td>
+                            </tr>
+                            <tr>
+                                <td>Incremental</td>
+                                <td>빠름</td>
+                                <td>느림 (체인)</td>
+                                <td>작음</td>
+                            </tr>
+                            <tr>
+                                <td>Differential</td>
+                                <td>중간</td>
+                                <td>중간</td>
+                                <td>중간</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: PITR (Point-In-Time Recovery)</h2>
+            <div class="conversation">
+                <div class="q">PITR이 뭔가요?</div>
+                <div class="a">
+                    <p><strong>Point-In-Time Recovery</strong>는 특정 시점으로 데이터를 복구하는 기술입니다.</p>
+                    <p class="highlight">예: "오늘 오후 3시 22분 33초 상태로 복구해주세요"</p>
+                    <p>WAL(Write-Ahead Log) 또는 Binlog를 활용합니다.</p>
+                </div>
+
+                <div class="q">WAL 기반 PITR은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                        PITR 복구 과정                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   [Base Backup]        [WAL Logs]                [Target Time]      │
+│   일요일 00:00         월~토 변경 기록           토요일 15:22:33     │
+│        │                    │                          │            │
+│        ▼                    ▼                          ▼            │
+│   ┌─────────┐    ┌─────────────────────┐    ┌─────────────────┐    │
+│   │ 전체    │───▶│  WAL 순차 적용      │───▶│  Target 시점    │    │
+│   │ 복원    │    │  (Replay)           │    │  도달!          │    │
+│   └─────────┘    └─────────────────────┘    └─────────────────┘    │
+│                                                                     │
+│   Timeline:                                                         │
+│   ──●──────────────────────────────────────────●────────────────▶  │
+│     │                                          │                    │
+│   Base                                       Target                 │
+│   Backup                                     Time                   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">PostgreSQL PITR 설정</div>
+                        <pre><code>-- postgresql.conf
+wal_level = replica
+archive_mode = on
+archive_command = 'cp %p /backup/wal/%f'
+
+-- 기본 백업 생성
+pg_basebackup -D /backup/base -Ft -z -P
+
+-- 특정 시점으로 복구 (recovery.conf)
+restore_command = 'cp /backup/wal/%f %p'
+recovery_target_time = '2024-01-15 15:22:33'
+recovery_target_action = 'promote'</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">MySQL Binlog PITR</div>
+                        <pre><code>-- my.cnf
+[mysqld]
+log_bin = /var/log/mysql/mysql-bin
+binlog_format = ROW
+expire_logs_days = 14
+
+-- 특정 시점까지 Binlog 적용
+mysqlbinlog --stop-datetime="2024-01-15 15:22:33" \
+    /backup/binlog/mysql-bin.000001 \
+    /backup/binlog/mysql-bin.000002 | mysql -u root -p
+
+-- 또는 특정 Position까지
+mysqlbinlog --stop-position=12345 mysql-bin.000001 | mysql</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">PITR의 한계는 무엇인가요?</div>
+                <div class="a">
+                    <p class="warning">WAL/Binlog 체인이 끊기면 복구 불가능합니다!</p>
+                    <ul>
+                        <li>디스크 가득 참 → WAL 아카이브 실패</li>
+                        <li>관리자 실수로 로그 삭제</li>
+                        <li>스토리지 장애로 로그 손실</li>
+                    </ul>
+                    <p class="key-point">WAL 아카이브는 별도 스토리지(S3 등)에 보관하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 게임 특화 백업 전략</h2>
+            <div class="conversation">
+                <div class="q">게임 서비스에서 백업 주기는 어떻게 설정하나요?</div>
+                <div class="a">
+                    <p>데이터 중요도에 따라 <strong>계층화된 백업 정책</strong>을 적용합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    게임 데이터 백업 계층                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  Tier 1: 결제/재화 (Critical)                                       │
+│  ├── 실시간 동기 복제 (Sync Replication)                            │
+│  ├── 트랜잭션 로그 별도 보관                                         │
+│  └── RPO: 0초 (데이터 손실 불가)                                    │
+│                                                                     │
+│  Tier 2: 캐릭터/인벤토리 (Important)                                │
+│  ├── 비동기 복제 + 5분 스냅샷                                       │
+│  ├── WAL 연속 아카이브                                              │
+│  └── RPO: 5분 이내                                                  │
+│                                                                     │
+│  Tier 3: 퀘스트 진행/설정 (Normal)                                  │
+│  ├── 시간별 증분 백업                                               │
+│  └── RPO: 1시간 이내                                                │
+│                                                                     │
+│  Tier 4: 로그/통계 (Low)                                            │
+│  ├── 일간 백업                                                      │
+│  └── RPO: 24시간 이내                                               │
+│                                                                     │
+│  ※ RPO (Recovery Point Objective): 허용 가능한 데이터 손실 시간     │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">실시간 복제는 어떻게 구현하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">MySQL 동기 복제 (Semi-Sync)</div>
+                        <pre><code>-- Master 설정
+INSTALL PLUGIN rpl_semi_sync_master SONAME 'semisync_master.so';
+SET GLOBAL rpl_semi_sync_master_enabled = 1;
+SET GLOBAL rpl_semi_sync_master_wait_for_slave_count = 1;
+SET GLOBAL rpl_semi_sync_master_timeout = 1000;  -- 1초 대기
+
+-- Slave 설정
+INSTALL PLUGIN rpl_semi_sync_slave SONAME 'semisync_slave.so';
+SET GLOBAL rpl_semi_sync_slave_enabled = 1;
+
+-- 복제 상태 확인
+SHOW STATUS LIKE 'Rpl_semi_sync%';
++--------------------------------------------+-------+
+| Variable_name                              | Value |
++--------------------------------------------+-------+
+| Rpl_semi_sync_master_status                | ON    |
+| Rpl_semi_sync_master_clients               | 1     |
+| Rpl_semi_sync_master_yes_tx                | 12345 |
++--------------------------------------------+-------+</code></pre>
+                    </div>
+
+                    <p class="warning">동기 복제는 지연(Latency)을 유발합니다. 결제 데이터처럼 정말 중요한 것만 적용하세요.</p>
+                </div>
+
+                <div class="q">점검 시 백업은 어떻게 하나요?</div>
+                <div class="a">
+                    <p>정기 점검은 <strong>일관된 백업</strong>을 확보할 좋은 기회입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">점검 백업 스크립트</div>
+                        <pre><code>#!/bin/bash
+# maintenance_backup.sh
+
+BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="/backup/maintenance/$BACKUP_DATE"
+
+echo "=== 점검 백업 시작: $BACKUP_DATE ==="
+
+# 1. 게임 서버 접속 차단
+./block_login.sh
+
+# 2. 현재 접속자 대기 (graceful shutdown)
+echo "접속자 퇴장 대기 중..."
+while [ $(./get_online_count.sh) -gt 0 ]; do
+    sleep 10
+done
+
+# 3. DB 쓰기 잠금
+mysql -e "FLUSH TABLES WITH READ LOCK;"
+
+# 4. 일관된 스냅샷 생성
+mkdir -p $BACKUP_DIR
+mysqldump --single-transaction --routines --triggers \
+    --all-databases > $BACKUP_DIR/full_dump.sql
+
+# 5. 잠금 해제
+mysql -e "UNLOCK TABLES;"
+
+# 6. 백업 검증
+mysql -e "SOURCE $BACKUP_DIR/full_dump.sql" --database=backup_verify
+VERIFY_RESULT=$?
+
+if [ $VERIFY_RESULT -eq 0 ]; then
+    echo "백업 검증 성공"
+    # S3 업로드
+    aws s3 cp $BACKUP_DIR s3://game-backup/maintenance/ --recursive
+else
+    echo "백업 검증 실패! 알람 발송"
+    ./send_alert.sh "점검 백업 검증 실패"
+fi
+
+echo "=== 점검 백업 완료 ==="</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 유저 데이터 복구 시나리오</h2>
+            <div class="conversation">
+                <div class="q">해킹으로 아이템이 탈취된 경우 어떻게 복구하나요?</div>
+                <div class="a">
+                    <p><strong>선택적 롤백</strong>이 필요합니다. 전체 롤백은 다른 유저에게 피해를 줍니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    해킹 피해 복구 프로세스                           │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   1. 피해 확인                                                       │
+│   ┌──────────────────────────────────────────────────────────────┐ │
+│   │ 로그 분석: 언제, 어떤 아이템이, 누구에게 이동했는지           │ │
+│   │ IP 확인: 평소와 다른 접속 위치/패턴인지                      │ │
+│   │ 피해 범위: 인벤토리, 골드, 거래 내역                         │ │
+│   └──────────────────────────────────────────────────────────────┘ │
+│                              │                                      │
+│                              ▼                                      │
+│   2. 피해 시점 확정                                                  │
+│   ┌──────────────────────────────────────────────────────────────┐ │
+│   │ 정상 마지막 활동: 2024-01-15 14:00:00                        │ │
+│   │ 해킹 시작 추정: 2024-01-15 15:30:00                          │ │
+│   │ 복구 대상 시점: 2024-01-15 14:00:00                          │ │
+│   └──────────────────────────────────────────────────────────────┘ │
+│                              │                                      │
+│                              ▼                                      │
+│   3. 선택적 복구 실행                                                │
+│   ┌──────────────────────────────────────────────────────────────┐ │
+│   │ - 해당 유저 데이터만 추출                                      │ │
+│   │ - 복구 시점 데이터로 교체                                      │ │
+│   │ - 관련 거래 처리 (아이템 회수 or 보상)                        │ │
+│   └──────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">선택적 유저 복구 프로시저</div>
+                        <pre><code>-- 특정 유저의 특정 시점 데이터 복구
+CREATE PROCEDURE RestoreUserData(
+    IN p_user_id BIGINT,
+    IN p_restore_time DATETIME
+)
+BEGIN
+    DECLARE v_backup_exists INT;
+
+    -- 1. 해당 시점 백업 확인
+    SELECT COUNT(*) INTO v_backup_exists
+    FROM backup_snapshots
+    WHERE snapshot_time <= p_restore_time
+    ORDER BY snapshot_time DESC LIMIT 1;
+
+    IF v_backup_exists = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = '해당 시점 백업이 존재하지 않습니다';
+    END IF;
+
+    START TRANSACTION;
+
+    -- 2. 현재 데이터 아카이브 (롤백 대비)
+    INSERT INTO user_data_archive (
+        user_id, archive_time, character_data,
+        inventory_data, currency_data, reason
+    )
+    SELECT
+        user_id, NOW(),
+        (SELECT JSON_ARRAYAGG(...) FROM characters WHERE user_id = p_user_id),
+        (SELECT JSON_ARRAYAGG(...) FROM inventory WHERE user_id = p_user_id),
+        (SELECT JSON_ARRAYAGG(...) FROM currency WHERE user_id = p_user_id),
+        'HACK_RECOVERY'
+    FROM users WHERE id = p_user_id;
+
+    -- 3. 백업에서 데이터 복원
+    -- (백업 테이블에서 해당 시점 데이터 복사)
+    DELETE FROM inventory WHERE user_id = p_user_id;
+    INSERT INTO inventory
+    SELECT * FROM backup_inventory_snapshot
+    WHERE user_id = p_user_id
+    AND snapshot_time = (
+        SELECT MAX(snapshot_time) FROM backup_inventory_snapshot
+        WHERE snapshot_time <= p_restore_time AND user_id = p_user_id
+    );
+
+    -- 4. 복구 로그 기록
+    INSERT INTO recovery_log (
+        user_id, recovery_time, restore_point,
+        admin_id, reason
+    ) VALUES (
+        p_user_id, NOW(), p_restore_time,
+        @current_admin, 'Account hack recovery'
+    );
+
+    COMMIT;
+
+    SELECT '복구 완료' AS result;
+END;</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">탈취된 아이템이 다른 유저에게 넘어갔다면?</div>
+                <div class="a">
+                    <p>이것이 가장 어려운 케이스입니다. 선의의 제3자 피해를 최소화해야 합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>도둑이 훔친 물건을 중고 거래로 팔았다면?</p>
+                        <p>구매자가 선의의 거래였다면 무조건 회수하기 어렵습니다. 게임도 마찬가지로 정책적 판단이 필요합니다.</p>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">아이템 흐름 추적</div>
+                        <pre><code>-- 탈취 아이템 추적 쿼리
+WITH RECURSIVE item_trace AS (
+    -- 시작: 탈취된 아이템
+    SELECT
+        item_instance_id,
+        from_user_id,
+        to_user_id,
+        transfer_type,
+        transfer_time,
+        1 as depth
+    FROM item_transfer_log
+    WHERE from_user_id = @victim_user_id
+    AND transfer_time BETWEEN @hack_start AND @hack_end
+
+    UNION ALL
+
+    -- 재귀: 아이템이 이동한 경로 추적
+    SELECT
+        t.item_instance_id,
+        t.from_user_id,
+        t.to_user_id,
+        t.transfer_type,
+        t.transfer_time,
+        it.depth + 1
+    FROM item_transfer_log t
+    INNER JOIN item_trace it ON t.from_user_id = it.to_user_id
+        AND t.item_instance_id = it.item_instance_id
+        AND t.transfer_time > it.transfer_time
+    WHERE it.depth < 10  -- 최대 10단계까지 추적
+)
+SELECT
+    item_instance_id,
+    from_user_id,
+    to_user_id,
+    transfer_type,
+    transfer_time,
+    depth,
+    -- 선의의 구매자 판단
+    CASE
+        WHEN transfer_type = 'AUCTION' AND depth > 1 THEN '선의의 구매자 가능성'
+        WHEN transfer_type = 'DIRECT_TRADE' AND depth = 1 THEN '해커 공범 가능성'
+        ELSE '추가 확인 필요'
+    END as assessment
+FROM item_trace
+ORDER BY item_instance_id, depth;</code></pre>
+                    </div>
+
+                    <p class="key-point">일반적 정책: 1차 수령자는 회수, 2차 이후 선의 구매자는 복제 아이템 지급 또는 보상</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 재해 복구 (Disaster Recovery)</h2>
+            <div class="conversation">
+                <div class="q">데이터센터가 통째로 날아가면 어떻게 하나요?</div>
+                <div class="a">
+                    <p><strong>DR(Disaster Recovery) 사이트</strong>를 구축해야 합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                      DR 구성 예시                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Primary Site (서울)                DR Site (부산)                 │
+│   ┌──────────────────┐              ┌──────────────────┐           │
+│   │   Game Server    │              │   Standby Server │           │
+│   │   ┌──────────┐   │              │   ┌──────────┐   │           │
+│   │   │   App    │   │              │   │   App    │   │           │
+│   │   └──────────┘   │              │   │ (대기)    │   │           │
+│   │   ┌──────────┐   │  Async       │   └──────────┘   │           │
+│   │   │    DB    │───┼──Repl.──────▶│   ┌──────────┐   │           │
+│   │   │ (Master) │   │              │   │    DB    │   │           │
+│   │   └──────────┘   │              │   │ (Slave)  │   │           │
+│   └──────────────────┘              │   └──────────┘   │           │
+│                                     └──────────────────┘           │
+│                                                                     │
+│   장애 발생 시:                                                      │
+│   1. Primary 장애 감지 (Health Check)                               │
+│   2. DNS Failover 또는 Load Balancer 전환                           │
+│   3. DR Site DB를 Master로 승격                                     │
+│   4. 서비스 재개                                                    │
+│                                                                     │
+│   RTO (Recovery Time Objective): 30분 ~ 2시간                       │
+│   RPO (Recovery Point Objective): 비동기 복제 지연만큼 (수초~수분)   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">클라우드에서의 DR은 어떻게 다른가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">AWS Multi-Region DR 구성</div>
+                        <pre><code># Terraform으로 Multi-Region RDS 구성
+resource "aws_rds_cluster" "primary" {
+  provider           = aws.seoul
+  cluster_identifier = "game-db-primary"
+  engine             = "aurora-mysql"
+  engine_version     = "8.0"
+
+  # Global Database 설정
+  global_cluster_identifier = aws_rds_global_cluster.main.id
+}
+
+resource "aws_rds_cluster" "secondary" {
+  provider           = aws.tokyo
+  cluster_identifier = "game-db-secondary"
+  engine             = "aurora-mysql"
+  engine_version     = "8.0"
+
+  global_cluster_identifier = aws_rds_global_cluster.main.id
+
+  # Secondary는 읽기 전용 (Failover 시 승격)
+  depends_on = [aws_rds_cluster.primary]
+}
+
+resource "aws_rds_global_cluster" "main" {
+  global_cluster_identifier = "game-db-global"
+  engine                   = "aurora-mysql"
+  engine_version          = "8.0"
+}
+
+# Route53 Health Check 기반 Failover
+resource "aws_route53_health_check" "primary" {
+  fqdn              = aws_rds_cluster.primary.endpoint
+  port              = 3306
+  type              = "TCP"
+  failure_threshold = 3
+  request_interval  = 10
+}
+
+resource "aws_route53_record" "db" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "db.game.com"
+  type    = "CNAME"
+
+  failover_routing_policy {
+    type = "PRIMARY"
+  }
+
+  health_check_id = aws_route53_health_check.primary.id
+  set_identifier  = "primary"
+  records         = [aws_rds_cluster.primary.endpoint]
+  ttl             = 60
+}</code></pre>
+                    </div>
+
+                    <p class="key-point">Aurora Global Database는 보통 1초 미만의 복제 지연(RPO)을 제공합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 백업 검증과 테스트</h2>
+            <div class="conversation">
+                <div class="q">백업이 정말 복구 가능한지 어떻게 확인하나요?</div>
+                <div class="a">
+                    <p class="warning">테스트 안 한 백업은 백업이 아닙니다!</p>
+                    <p>정기적인 <strong>복구 훈련(DR Drill)</strong>이 필수입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">자동화된 백업 검증 시스템</div>
+                        <pre><code>#!/bin/bash
+# backup_verification.sh - 매일 실행
+
+BACKUP_FILE=$(ls -t /backup/daily/*.sql.gz | head -1)
+VERIFY_DB="backup_verify_$(date +%Y%m%d)"
+SLACK_WEBHOOK="https://hooks.slack.com/..."
+
+echo "=== 백업 검증 시작: $BACKUP_FILE ==="
+
+# 1. 테스트 DB 생성
+mysql -e "CREATE DATABASE IF NOT EXISTS $VERIFY_DB"
+
+# 2. 백업 복원
+zcat $BACKUP_FILE | mysql $VERIFY_DB
+RESTORE_RESULT=$?
+
+# 3. 데이터 무결성 검사
+INTEGRITY_CHECK=$(mysql -N -e "
+    SELECT
+        (SELECT COUNT(*) FROM $VERIFY_DB.users) as users,
+        (SELECT COUNT(*) FROM $VERIFY_DB.characters) as characters,
+        (SELECT COUNT(*) FROM $VERIFY_DB.inventory) as inventory,
+        (SELECT SUM(gold) FROM $VERIFY_DB.currency) as total_gold
+")
+
+# 4. 기존 통계와 비교 (10% 이상 차이나면 경고)
+EXPECTED_USERS=$(mysql -N -e "SELECT expected_users FROM backup_stats ORDER BY check_date DESC LIMIT 1")
+ACTUAL_USERS=$(echo $INTEGRITY_CHECK | awk '{print $1}')
+
+DIFF_PERCENT=$(echo "scale=2; (($ACTUAL_USERS - $EXPECTED_USERS) / $EXPECTED_USERS) * 100" | bc)
+
+if (( $(echo "$DIFF_PERCENT > 10 || $DIFF_PERCENT < -10" | bc -l) )); then
+    ALERT_MSG="⚠️ 백업 검증 경고: 유저 수 ${DIFF_PERCENT}% 차이"
+else
+    ALERT_MSG="✅ 백업 검증 완료: 정상"
+fi
+
+# 5. 결과 기록
+mysql -e "
+    INSERT INTO backup_verification_log
+    (backup_file, verify_time, restore_success, integrity_check, alert_message)
+    VALUES ('$BACKUP_FILE', NOW(), $RESTORE_RESULT, '$INTEGRITY_CHECK', '$ALERT_MSG')
+"
+
+# 6. Slack 알림
+curl -X POST $SLACK_WEBHOOK -d "{
+    \"text\": \"$ALERT_MSG\n파일: $BACKUP_FILE\n데이터: $INTEGRITY_CHECK\"
+}"
+
+# 7. 테스트 DB 정리
+mysql -e "DROP DATABASE $VERIFY_DB"
+
+echo "=== 백업 검증 완료 ==="</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">DR 훈련은 얼마나 자주 해야 하나요?</div>
+                <div class="a">
+                    <p>규모에 따라 다르지만, 최소 <strong>분기 1회</strong>는 실시해야 합니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>훈련 종류</th>
+                                <th>주기</th>
+                                <th>내용</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>백업 복원 테스트</td>
+                                <td>주 1회</td>
+                                <td>자동화 스크립트로 검증</td>
+                            </tr>
+                            <tr>
+                                <td>Failover 테스트</td>
+                                <td>월 1회</td>
+                                <td>Replica 승격 테스트</td>
+                            </tr>
+                            <tr>
+                                <td>DR Site 전환 훈련</td>
+                                <td>분기 1회</td>
+                                <td>실제 DR 사이트로 서비스 전환</td>
+                            </tr>
+                            <tr>
+                                <td>전체 재해 시뮬레이션</td>
+                                <td>연 1회</td>
+                                <td>Primary 완전 차단 후 복구</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="key-point">훈련 결과를 문서화하고, 발견된 문제점을 개선하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>백업 방식</strong>: Full + Incremental 조합이 일반적. 중요 데이터는 동기 복제</li>
+                <li><strong>PITR</strong>: WAL/Binlog를 이용해 특정 시점으로 복구. 로그 보관 필수</li>
+                <li><strong>선택적 복구</strong>: 해킹 등의 경우 전체 롤백 대신 유저 단위 복구</li>
+                <li><strong>재해 복구</strong>: Multi-Region DR 구성으로 데이터센터 장애 대비</li>
+                <li><strong>검증 필수</strong>: 테스트 안 한 백업은 백업이 아니다. 정기 DR 훈련 필수</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

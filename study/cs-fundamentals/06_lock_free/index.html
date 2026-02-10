@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lock-free 자료구조 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+            <h1>"락 없이도 동시성 처리가 된다고요?"</h1>
+            <p class="subtitle">Lock-free 알고리즘과 CAS 연산</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Lock-free의 개념</h2>
+            <div class="conversation">
+                <div class="q">Lock-free가 왜 필요한가요?</div>
+                <div class="a">
+                    <p>Mutex의 문제점을 해결합니다:</p>
+                    <ul>
+                        <li><strong>데드락</strong>: 잘못된 lock 순서로 영원히 대기</li>
+                        <li><strong>Priority Inversion</strong>: 저우선 스레드가 lock 보유 시 고우선 대기</li>
+                        <li><strong>컨텍스트 스위칭</strong>: 대기 시 커널 진입 오버헤드</li>
+                    </ul>
+                    <p class="highlight">Lock-free는 최소 하나의 스레드가 항상 진행됨을 보장합니다.</p>
+                </div>
+
+                <div class="q">Lock-free와 Wait-free의 차이는?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>Lock-free</th>
+                                <th>Wait-free</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>진행 보장</td>
+                                <td>전체 중 하나 이상</td>
+                                <td>모든 스레드</td>
+                            </tr>
+                            <tr>
+                                <td>기아(Starvation)</td>
+                                <td>가능</td>
+                                <td>불가능</td>
+                            </tr>
+                            <tr>
+                                <td>구현 난이도</td>
+                                <td>어려움</td>
+                                <td>매우 어려움</td>
+                            </tr>
+                            <tr>
+                                <td>성능</td>
+                                <td>보통 더 좋음</td>
+                                <td>오버헤드 있음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: CAS (Compare-And-Swap)</h2>
+            <div class="conversation">
+                <div class="q">CAS 연산이란 무엇인가요?</div>
+                <div class="a">
+                    <p>Lock-free의 핵심 원자적 연산입니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    CAS (Compare-And-Swap) 동작                       │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   CAS(메모리위치, 기대값, 새값)                                      │
+│                                                                     │
+│   if (메모리[위치] == 기대값) {                                      │
+│       메모리[위치] = 새값;                                           │
+│       return true;   // 성공                                        │
+│   } else {                                                          │
+│       return false;  // 실패 (다른 스레드가 먼저 수정)              │
+│   }                                                                 │
+│                                                                     │
+│   ※ 이 전체 과정이 하드웨어 수준에서 원자적으로 실행됨!             │
+│                                                                     │
+│   예시:                                                              │
+│   ┌─────────────┐                                                   │
+│   │  value: 10  │  ← 현재 상태                                     │
+│   └─────────────┘                                                   │
+│                                                                     │
+│   Thread A: CAS(&value, 10, 20)  →  성공! value = 20               │
+│   Thread B: CAS(&value, 10, 30)  →  실패! (기대값 10 ≠ 현재 20)   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C++ atomic CAS 사용</div>
+                        <pre><code>#include <atomic>
+
+std::atomic<int> counter{0};
+
+// CAS 기반 안전한 증가
+void safeIncrement() {
+    int expected = counter.load();
+
+    while (!counter.compare_exchange_weak(expected, expected + 1)) {
+        // 실패하면 expected에 현재 값이 저장됨
+        // 다시 시도
+    }
+}
+
+// compare_exchange_weak vs compare_exchange_strong
+// weak: 가짜 실패(spurious failure) 가능, 루프에서 사용
+// strong: 값이 같으면 항상 성공, 단일 시도에 적합</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Lock-free 스택</h2>
+            <div class="conversation">
+                <div class="q">Lock-free 스택은 어떻게 구현하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Lock-free Stack 구현</div>
+                        <pre><code>template<typename T>
+class LockFreeStack {
+private:
+    struct Node {
+        T data;
+        Node* next;
+        Node(const T& d) : data(d), next(nullptr) {}
+    };
+
+    std::atomic<Node*> head{nullptr};
+
+public:
+    void push(const T& data) {
+        Node* newNode = new Node(data);
+
+        // CAS 루프
+        newNode->next = head.load();
+        while (!head.compare_exchange_weak(newNode->next, newNode)) {
+            // 실패: newNode->next가 현재 head로 업데이트됨
+            // 다시 시도
+        }
+    }
+
+    bool pop(T& result) {
+        Node* oldHead = head.load();
+
+        while (oldHead != nullptr) {
+            // 다른 스레드가 oldHead를 이미 pop 했을 수 있음
+            if (head.compare_exchange_weak(oldHead, oldHead->next)) {
+                result = oldHead->data;
+                // 주의: 메모리 해제는 별도 처리 필요! (ABA 문제)
+                // delete oldHead;  // 위험!
+                return true;
+            }
+            // 실패: oldHead가 현재 head로 업데이트됨
+        }
+        return false;  // 스택 비어있음
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="warning">위 코드에는 ABA 문제와 메모리 해제 문제가 있습니다!</p>
+                </div>
+
+                <div class="q">ABA 문제란 무엇인가요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                         ABA 문제                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   초기: head → [A] → [B] → [C]                                     │
+│                                                                     │
+│   Thread 1:                          Thread 2:                      │
+│   oldHead = A                                                       │
+│   (여기서 스케줄 아웃)              pop() → A 제거                   │
+│                                     pop() → B 제거                   │
+│                                     push(A) → A 재사용              │
+│                                                                     │
+│   현재: head → [A] → [C]   (B는 해제됨)                            │
+│                                                                     │
+│   Thread 1 재개:                                                    │
+│   CAS(head, A, A->next)                                            │
+│   = CAS(head, A, B)  ← 성공! (head가 A니까)                        │
+│                                                                     │
+│   결과: head → [B] → ???  ← B는 이미 해제된 메모리!                │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">ABA 문제 해결: Tagged Pointer</div>
+                        <pre><code>template<typename T>
+class LockFreeStackSafe {
+private:
+    struct Node {
+        T data;
+        Node* next;
+    };
+
+    // 포인터 + 버전 태그
+    struct TaggedPointer {
+        Node* ptr;
+        uintptr_t tag;  // 버전 카운터
+    };
+
+    std::atomic<TaggedPointer> head{{nullptr, 0}};
+
+public:
+    void push(const T& data) {
+        Node* newNode = new Node{data, nullptr};
+        TaggedPointer oldHead = head.load();
+        TaggedPointer newHead;
+
+        do {
+            newNode->next = oldHead.ptr;
+            newHead = {newNode, oldHead.tag + 1};  // 태그 증가!
+        } while (!head.compare_exchange_weak(oldHead, newHead));
+    }
+
+    bool pop(T& result) {
+        TaggedPointer oldHead = head.load();
+        TaggedPointer newHead;
+
+        while (oldHead.ptr != nullptr) {
+            newHead = {oldHead.ptr->next, oldHead.tag + 1};
+
+            if (head.compare_exchange_weak(oldHead, newHead)) {
+                result = oldHead.ptr->data;
+                // 안전한 메모리 해제 (Hazard Pointer 또는 RCU 사용)
+                safeDelete(oldHead.ptr);
+                return true;
+            }
+        }
+        return false;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Lock-free 큐</h2>
+            <div class="conversation">
+                <div class="q">게임에서 자주 쓰는 Lock-free 큐는?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">SPSC (Single Producer Single Consumer) 큐</div>
+                        <pre><code>// Producer 1개, Consumer 1개일 때 매우 효율적
+template<typename T, size_t Capacity>
+class SPSCQueue {
+private:
+    alignas(64) std::array<T, Capacity> buffer_;
+    alignas(64) std::atomic<size_t> head_{0};  // Consumer가 읽는 위치
+    alignas(64) std::atomic<size_t> tail_{0};  // Producer가 쓰는 위치
+
+public:
+    bool push(const T& item) {
+        size_t currentTail = tail_.load(std::memory_order_relaxed);
+        size_t nextTail = (currentTail + 1) % Capacity;
+
+        // 큐가 가득 찼는지 확인
+        if (nextTail == head_.load(std::memory_order_acquire)) {
+            return false;  // Full
+        }
+
+        buffer_[currentTail] = item;
+        tail_.store(nextTail, std::memory_order_release);
+        return true;
+    }
+
+    bool pop(T& item) {
+        size_t currentHead = head_.load(std::memory_order_relaxed);
+
+        // 큐가 비었는지 확인
+        if (currentHead == tail_.load(std::memory_order_acquire)) {
+            return false;  // Empty
+        }
+
+        item = buffer_[currentHead];
+        head_.store((currentHead + 1) % Capacity, std::memory_order_release);
+        return true;
+    }
+};
+
+// 사용 예: 오디오 스레드 ↔ 게임 스레드 통신
+SPSCQueue<AudioCommand, 1024> audioQueue;</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">MPSC (Multiple Producer Single Consumer) 큐</div>
+                        <pre><code>// 여러 워커 스레드 → 메인 스레드 결과 전달용
+template<typename T>
+class MPSCQueue {
+private:
+    struct Node {
+        std::atomic<Node*> next{nullptr};
+        T data;
+    };
+
+    std::atomic<Node*> head_;
+    alignas(64) Node* tail_;  // Consumer만 접근
+    Node stub_;
+
+public:
+    MPSCQueue() : head_(&stub_), tail_(&stub_) {}
+
+    void push(const T& data) {
+        Node* node = new Node();
+        node->data = data;
+
+        // Producer들이 경쟁하며 추가
+        Node* prev = head_.exchange(node, std::memory_order_acq_rel);
+        prev->next.store(node, std::memory_order_release);
+    }
+
+    bool pop(T& result) {
+        Node* tail = tail_;
+        Node* next = tail->next.load(std::memory_order_acquire);
+
+        if (next == nullptr) {
+            return false;  // Empty
+        }
+
+        result = next->data;
+        tail_ = next;
+
+        if (tail != &stub_) {
+            delete tail;
+        }
+        return true;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 메모리 순서 (Memory Ordering)</h2>
+            <div class="conversation">
+                <div class="q">memory_order는 왜 필요한가요?</div>
+                <div class="a">
+                    <p>CPU와 컴파일러는 성능을 위해 <strong>명령어 순서를 바꿀 수 있습니다</strong>.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>Memory Order</th>
+                                <th>설명</th>
+                                <th>사용 상황</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>relaxed</td>
+                                <td>순서 보장 없음, 원자성만</td>
+                                <td>단순 카운터</td>
+                            </tr>
+                            <tr>
+                                <td>acquire</td>
+                                <td>이후 읽기가 앞으로 오지 않음</td>
+                                <td>lock 획득</td>
+                            </tr>
+                            <tr>
+                                <td>release</td>
+                                <td>이전 쓰기가 뒤로 가지 않음</td>
+                                <td>lock 해제</td>
+                            </tr>
+                            <tr>
+                                <td>acq_rel</td>
+                                <td>acquire + release</td>
+                                <td>CAS 연산</td>
+                            </tr>
+                            <tr>
+                                <td>seq_cst</td>
+                                <td>전체 순서 보장 (기본값)</td>
+                                <td>안전하지만 느림</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">Memory Order 사용 예시</div>
+                        <pre><code>std::atomic<bool> ready{false};
+int data = 0;
+
+void producer() {
+    data = 42;  // 일반 쓰기
+    ready.store(true, std::memory_order_release);
+    // release: data = 42가 ready = true 이전에 완료됨을 보장
+}
+
+void consumer() {
+    while (!ready.load(std::memory_order_acquire)) {
+        // 대기
+    }
+    // acquire: ready가 true면 data = 42가 보임
+    assert(data == 42);  // 항상 성공!
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 게임에서의 활용</h2>
+            <div class="conversation">
+                <div class="q">게임 엔진에서 Lock-free는 어디에 쓰이나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Lock-free 작업 스틸링 큐</div>
+                        <pre><code>// 멀티스레드 Job System에서 사용
+class WorkStealingQueue {
+private:
+    std::array<Job*, 4096> buffer_;
+    std::atomic<int64_t> top_{0};     // 소유자 스레드가 push/pop
+    std::atomic<int64_t> bottom_{0};  // 다른 스레드가 steal
+
+public:
+    // 소유자: 맨 위에 추가
+    void push(Job* job) {
+        int64_t b = bottom_.load(std::memory_order_relaxed);
+        buffer_[b % buffer_.size()] = job;
+        bottom_.store(b + 1, std::memory_order_release);
+    }
+
+    // 소유자: 맨 위에서 가져옴 (LIFO)
+    Job* pop() {
+        int64_t b = bottom_.load(std::memory_order_relaxed) - 1;
+        bottom_.store(b, std::memory_order_relaxed);
+
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+
+        int64_t t = top_.load(std::memory_order_relaxed);
+
+        if (t <= b) {
+            Job* job = buffer_[b % buffer_.size()];
+            if (t == b) {
+                // 마지막 요소, steal과 경쟁
+                if (!top_.compare_exchange_strong(t, t + 1)) {
+                    job = nullptr;  // steal에 패배
+                }
+                bottom_.store(b + 1, std::memory_order_relaxed);
+            }
+            return job;
+        }
+        bottom_.store(b + 1, std::memory_order_relaxed);
+        return nullptr;
+    }
+
+    // 다른 스레드: 맨 아래에서 훔쳐감 (FIFO)
+    Job* steal() {
+        int64_t t = top_.load(std::memory_order_acquire);
+        int64_t b = bottom_.load(std::memory_order_acquire);
+
+        if (t < b) {
+            Job* job = buffer_[t % buffer_.size()];
+            if (top_.compare_exchange_strong(t, t + 1)) {
+                return job;
+            }
+        }
+        return nullptr;
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="key-point">Work Stealing은 코어 간 부하 균형을 자동으로 맞춰줍니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Lock-free</strong>: 최소 하나의 스레드가 항상 진행, 데드락 없음</li>
+                <li><strong>CAS</strong>: Lock-free의 핵심, compare_exchange_weak/strong 사용</li>
+                <li><strong>ABA 문제</strong>: Tagged Pointer나 Hazard Pointer로 해결</li>
+                <li><strong>SPSC Queue</strong>: 단일 Producer-Consumer에 최적, 매우 빠름</li>
+                <li><strong>Memory Order</strong>: 성능을 위해 적절한 순서 지정 필요</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

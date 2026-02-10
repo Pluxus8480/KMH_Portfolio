@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>속도감을 시각화하다 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>속도감을 시각화하다</h1>
+            <p class="subtitle">Motion Blur 구현</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Motion Blur란?</h2>
+            <div class="conversation">
+                <div class="q">왜 Motion Blur가 필요한가요?</div>
+                <div class="a">
+                    <p>실제 카메라는 셔터가 열려있는 동안 물체가 움직이면 흐릿하게 찍힙니다. 게임은 순간 스냅샷이라 이 효과가 없으면 <span class="warning">끊겨 보일 수 있습니다</span>.</p>
+                    <p><span class="highlight">Motion Blur</span>는 속도감을 더하고, 낮은 프레임레이트를 부드럽게 보이게 합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Motion Blur 원리 (실제 카메라):
+
+셔터 열림 ─────────────────── 셔터 닫힘
+    │                              │
+    ▼                              ▼
+┌─────────────────────────────────────────┐
+│                                         │
+│   🚗 ──────────────────→               │
+│                                         │
+│   물체가 이동하는 동안 빛이 누적됨       │
+│   → 이동 경로를 따라 흐릿한 잔상         │
+│                                         │
+└─────────────────────────────────────────┘
+
+게임에서:
+순간 렌더링 → Motion Vector → 블러 방향 결정
+                </pre>
+                <p class="diagram-caption">카메라 Motion Blur</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Motion Vector 생성</h2>
+            <div class="conversation">
+                <div class="q">픽셀이 어디서 왔는지 어떻게 알 수 있나요?</div>
+                <div class="a">
+                    <p><span class="highlight">Motion Vector (Velocity Buffer)</span>는 각 픽셀의 화면 공간 이동량을 저장합니다. 현재 위치와 이전 프레임 위치의 차이입니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Motion Vector 생성 (Vertex/Pixel Shader)</div>
+                <pre><code>// 상수 버퍼
+cbuffer MotionBlurCB : register(b0)
+{
+    float4x4 viewProj;       // 현재 프레임
+    float4x4 prevViewProj;   // 이전 프레임
+    float4x4 world;
+    float4x4 prevWorld;      // 이전 프레임 월드 (스키닝 포함)
+};
+
+struct VSOutput
+{
+    float4 position : SV_Position;
+    float4 currentPos : TEXCOORD0;   // 클립 공간 현재 위치
+    float4 prevPos : TEXCOORD1;      // 클립 공간 이전 위치
+};
+
+VSOutput VS_MotionVector(float3 position : POSITION)
+{
+    VSOutput output;
+
+    // 현재 프레임 위치
+    float4 worldPos = mul(float4(position, 1), world);
+    output.currentPos = mul(worldPos, viewProj);
+    output.position = output.currentPos;
+
+    // 이전 프레임 위치
+    float4 prevWorldPos = mul(float4(position, 1), prevWorld);
+    output.prevPos = mul(prevWorldPos, prevViewProj);
+
+    return output;
+}
+
+// 출력: Motion Vector 텍스처 (RG16F 또는 RG32F)
+float2 PS_MotionVector(VSOutput input) : SV_Target
+{
+    // NDC로 변환
+    float2 currentNDC = input.currentPos.xy / input.currentPos.w;
+    float2 prevNDC = input.prevPos.xy / input.prevPos.w;
+
+    // 스크린 공간 이동량 (픽셀 단위로 변환 가능)
+    float2 velocity = (currentNDC - prevNDC) * 0.5;  // -1~1 → -0.5~0.5
+
+    return velocity;
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 Motion Vector 종류</strong>
+                <p><span class="highlight">Camera Motion</span>: 카메라 이동으로 인한 전체 화면 움직임</p>
+                <p><span class="highlight">Object Motion</span>: 개별 오브젝트의 움직임</p>
+                <p><span class="highlight">Skeletal Motion</span>: 애니메이션 뼈대 움직임</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 단순 Motion Blur</h2>
+            <div class="conversation">
+                <div class="q">가장 간단한 Motion Blur 구현은?</div>
+                <div class="a">
+                    <p>Motion Vector 방향으로 여러 번 샘플링해서 평균을 냅니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">간단한 Motion Blur</div>
+                <pre><code>float4 MotionBlur_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    // Motion Vector 읽기
+    float2 velocity = velocityBuffer.Sample(pointSamp, uv).xy;
+
+    // 속도가 너무 작으면 블러 안함
+    float speed = length(velocity);
+    if (speed < 0.0001)
+        return sceneTexture.Sample(linearSamp, uv);
+
+    // 블러 강도 (최대 길이 제한)
+    float maxBlur = 0.05;  // 화면의 5%
+    velocity = normalize(velocity) * min(speed, maxBlur);
+
+    // 샘플 수
+    const int numSamples = 8;
+    float3 result = 0;
+
+    // Motion Vector 방향으로 샘플링
+    for (int i = 0; i < numSamples; i++)
+    {
+        float t = (float)i / (numSamples - 1) - 0.5;  // -0.5 ~ 0.5
+        float2 sampleUV = uv + velocity * t;
+
+        result += sceneTexture.Sample(linearSamp, sampleUV).rgb;
+    }
+
+    result /= numSamples;
+    return float4(result, 1);
+}</code></pre>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Motion Blur 샘플링:
+
+       velocity 방향
+          ←────────────→
+
+    ●  ●  ●  ●  ●  ●  ●  ●
+    │  │  │  │  │  │  │  │
+    └──┴──┴──┴──┴──┴──┴──┘
+              ↓
+          평균 색상
+
+● = 샘플 위치
+현재 픽셀을 중심으로 velocity 방향으로 분포
+                </pre>
+                <p class="diagram-caption">선형 샘플링 패턴</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Tile-Based Motion Blur</h2>
+            <div class="conversation">
+                <div class="q">모든 픽셀을 개별 처리하면 너무 느린데요?</div>
+                <div class="a">
+                    <p><span class="highlight">Tile 기반 접근</span>은 화면을 타일로 나누고, 타일 내 최대 velocity를 사용합니다. 이웃 타일의 영향도 고려합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Tile-Based Motion Blur:
+
+1. Tile Max Velocity 계산
+┌───────┬───────┬───────┬───────┐
+│ →0.02 │ →0.03 │ →0.05 │ →0.01 │
+├───────┼───────┼───────┼───────┤
+│ →0.01 │ →0.08 │ →0.06 │ →0.02 │  (타일별 최대 속도)
+├───────┼───────┼───────┼───────┤
+│ →0.02 │ →0.04 │ →0.03 │ →0.01 │
+└───────┴───────┴───────┴───────┘
+
+2. Neighbor Max 확장
+각 타일에 이웃 타일의 velocity도 포함
+→ 빠른 물체의 블러가 이웃 타일로 번짐
+
+3. Blur Pass
+타일의 최대 velocity로 샘플 범위 결정
+                </pre>
+                <p class="diagram-caption">Tile 기반 최적화</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Tile Max Velocity (Compute Shader)</div>
+                <pre><code>#define TILE_SIZE 20
+
+// 타일별 최대 velocity
+RWTexture2D<float2> tileMaxVelocity : register(u0);
+groupshared float2 sharedVelocity[TILE_SIZE * TILE_SIZE];
+
+[numthreads(TILE_SIZE, TILE_SIZE, 1)]
+void CS_TileMaxVelocity(uint3 groupID : SV_GroupID,
+                         uint3 groupThreadID : SV_GroupThreadID,
+                         uint groupIndex : SV_GroupIndex)
+{
+    // 픽셀 velocity 읽기
+    uint2 pixelCoord = groupID.xy * TILE_SIZE + groupThreadID.xy;
+    float2 velocity = velocityBuffer[pixelCoord];
+    sharedVelocity[groupIndex] = velocity;
+
+    GroupMemoryBarrierWithGroupSync();
+
+    // 리덕션: 최대 속력 velocity 찾기
+    for (uint stride = TILE_SIZE * TILE_SIZE / 2; stride > 0; stride >>= 1)
+    {
+        if (groupIndex < stride)
+        {
+            float2 v1 = sharedVelocity[groupIndex];
+            float2 v2 = sharedVelocity[groupIndex + stride];
+
+            if (dot(v2, v2) > dot(v1, v1))
+                sharedVelocity[groupIndex] = v2;
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    // 첫 스레드가 결과 저장
+    if (groupIndex == 0)
+    {
+        tileMaxVelocity[groupID.xy] = sharedVelocity[0];
+    }
+}
+
+// Neighbor Max 확장
+[numthreads(8, 8, 1)]
+void CS_NeighborMax(uint3 id : SV_DispatchThreadID)
+{
+    float2 maxVel = tileMaxVelocity[id.xy];
+
+    // 3×3 이웃 체크
+    for (int y = -1; y <= 1; y++)
+    {
+        for (int x = -1; x <= 1; x++)
+        {
+            float2 neighborVel = tileMaxVelocity[id.xy + int2(x, y)];
+            if (dot(neighborVel, neighborVel) > dot(maxVel, maxVel))
+                maxVel = neighborVel;
+        }
+    }
+
+    neighborMaxVelocity[id.xy] = maxVel;
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 고품질 Motion Blur</h2>
+            <div class="conversation">
+                <div class="q">더 사실적인 Motion Blur를 위한 기법은?</div>
+                <div class="a">
+                    <p>깊이 인식 블러, 가변 샘플 수, 지터 등을 적용합니다. 빠른 물체와 느린 물체가 겹칠 때 품질이 중요합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">깊이 인식 Motion Blur</div>
+                <pre><code>float4 DepthAwareMotionBlur_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    float centerDepth = depthBuffer.Sample(pointSamp, uv).r;
+    float2 centerVelocity = velocityBuffer.Sample(pointSamp, uv).xy;
+
+    // 타일 최대 velocity
+    uint2 tileCoord = uint2(uv * screenSize) / TILE_SIZE;
+    float2 tileVelocity = neighborMaxVelocity[tileCoord];
+
+    float maxSpeed = max(length(centerVelocity), length(tileVelocity));
+
+    if (maxSpeed < 0.001)
+        return sceneTexture.Sample(linearSamp, uv);
+
+    // 샘플 수 (속도에 비례)
+    int numSamples = clamp(int(maxSpeed * 100), 4, 16);
+
+    float3 result = 0;
+    float totalWeight = 0;
+
+    // 지터 적용 (노이즈)
+    float jitter = InterleavedGradientNoise(uv * screenSize);
+
+    for (int i = 0; i < numSamples; i++)
+    {
+        float t = ((float)i + jitter) / numSamples - 0.5;
+        float2 sampleUV = uv + tileVelocity * t;
+
+        float sampleDepth = depthBuffer.Sample(pointSamp, sampleUV).r;
+        float2 sampleVelocity = velocityBuffer.Sample(pointSamp, sampleUV).xy;
+
+        // 깊이 기반 가중치 (앞에 있는 물체의 블러가 뒤를 덮음)
+        float depthWeight = (sampleDepth <= centerDepth) ? 1.0 : 0.0;
+
+        // 속도 방향 일치 여부
+        float velocityWeight = dot(normalize(sampleVelocity + 0.0001),
+                                    normalize(tileVelocity + 0.0001));
+        velocityWeight = saturate(velocityWeight);
+
+        float weight = depthWeight * velocityWeight;
+
+        result += sceneTexture.Sample(linearSamp, sampleUV).rgb * weight;
+        totalWeight += weight;
+    }
+
+    // 가중치 합이 0이면 원본 반환
+    if (totalWeight < 0.001)
+        return sceneTexture.Sample(linearSamp, uv);
+
+    return float4(result / totalWeight, 1);
+}
+
+// Interleaved Gradient Noise
+float InterleavedGradientNoise(float2 pos)
+{
+    float3 magic = float3(0.06711056, 0.00583715, 52.9829189);
+    return frac(magic.z * frac(dot(pos, magic.xy)));
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>기법</th>
+                        <th>장점</th>
+                        <th>단점</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>간단한 블러</td>
+                        <td>빠름, 구현 쉬움</td>
+                        <td>깊이 무시, 아티팩트</td>
+                    </tr>
+                    <tr>
+                        <td>Tile 기반</td>
+                        <td>효율적</td>
+                        <td>타일 경계 아티팩트</td>
+                    </tr>
+                    <tr>
+                        <td>깊이 인식</td>
+                        <td>정확한 오클루전</td>
+                        <td>복잡, 비용 높음</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 카메라 vs 오브젝트 Motion Blur</h2>
+            <div class="conversation">
+                <div class="q">카메라만 움직일 때와 오브젝트만 움직일 때 다르게 처리해야 하나요?</div>
+                <div class="a">
+                    <p>보통 같이 처리하지만, <span class="highlight">카메라 블러</span>는 전체 화면에 균일하게, <span class="highlight">오브젝트 블러</span>는 움직이는 물체에만 적용됩니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Camera-Only Motion Blur (간단 버전)</div>
+                <pre><code>// 카메라 움직임만 있을 때 (더 효율적)
+float4 CameraMotionBlur_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    // 깊이에서 월드 위치 재구성
+    float depth = depthBuffer.Sample(pointSamp, uv).r;
+    float4 currentClip = float4(uv * 2 - 1, depth, 1);
+    currentClip.y = -currentClip.y;
+
+    float4 worldPos = mul(currentClip, invViewProj);
+    worldPos /= worldPos.w;
+
+    // 이전 프레임 위치
+    float4 prevClip = mul(worldPos, prevViewProj);
+    prevClip /= prevClip.w;
+
+    float2 prevUV = prevClip.xy * 0.5 + 0.5;
+    prevUV.y = 1 - prevUV.y;
+
+    // 카메라 모션 벡터
+    float2 velocity = uv - prevUV;
+
+    // 블러 적용
+    const int numSamples = 8;
+    float3 result = 0;
+
+    for (int i = 0; i < numSamples; i++)
+    {
+        float t = (float)i / (numSamples - 1);
+        float2 sampleUV = lerp(uv, prevUV, t);
+        result += sceneTexture.Sample(linearSamp, sampleUV).rgb;
+    }
+
+    return float4(result / numSamples, 1);
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 Motion Blur 팁</strong>
+                <p><span class="highlight">UI 제외</span>: UI는 블러하지 않음 (별도 패스)</p>
+                <p><span class="highlight">강도 조절</span>: 사용자 설정으로 끄기 옵션 제공</p>
+                <p><span class="highlight">TAA 연계</span>: TAA의 모션 벡터 재사용 가능</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Motion Blur</strong>: 카메라 셔터 효과 모방, 속도감과 부드러움 증가</li>
+                <li><strong>Motion Vector</strong>: 각 픽셀의 화면 공간 이동량 저장</li>
+                <li><strong>Tile 기반</strong>: 타일별 최대 velocity로 효율적 처리</li>
+                <li><strong>깊이 인식</strong>: 앞/뒤 물체 오클루전 처리</li>
+                <li>카메라 블러는 깊이 재투영, 오브젝트 블러는 개별 Motion Vector 필요</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>멀티스레딩 동기화 기법 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+            <h1>"두 스레드가 같은 변수를 건드리면?"</h1>
+            <p class="subtitle">멀티스레딩 동기화의 모든 것</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Race Condition의 이해</h2>
+            <div class="conversation">
+                <div class="q">Race Condition이 왜 위험한가요?</div>
+                <div class="a">
+                    <p><strong>비결정적 버그</strong>를 만듭니다. 실행할 때마다 결과가 달라질 수 있습니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Race Condition 예시                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   공유 변수: int count = 0;                                         │
+│   연산: count++ (실제로는 3단계!)                                   │
+│                                                                     │
+│   Thread A                    Thread B                              │
+│   ─────────────               ─────────────                         │
+│   1. READ count (0)                                                 │
+│   2. ADD 1 (→ 1)             1. READ count (0)  ← 아직 0!           │
+│   3. WRITE count (1)         2. ADD 1 (→ 1)                         │
+│                              3. WRITE count (1)  ← 덮어씀!          │
+│                                                                     │
+│   기대 결과: 2                                                       │
+│   실제 결과: 1  ← 1이 손실됨!                                       │
+│                                                                     │
+│   ※ count++는 원자적(atomic)이 아님!                                │
+│     READ-MODIFY-WRITE 3단계 연산                                    │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Race Condition 발생 코드</div>
+                        <pre><code>// ❌ Race Condition 발생!
+int sharedCounter = 0;
+
+void incrementThread() {
+    for (int i = 0; i < 100000; ++i) {
+        sharedCounter++;  // 원자적이지 않음!
+    }
+}
+
+int main() {
+    std::thread t1(incrementThread);
+    std::thread t2(incrementThread);
+    t1.join();
+    t2.join();
+
+    // 기대값: 200000
+    // 실제값: 100000 ~ 200000 사이의 랜덤한 값!
+    std::cout << sharedCounter << std::endl;
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Mutex (상호 배제)</h2>
+            <div class="conversation">
+                <div class="q">Mutex는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p><strong>한 번에 하나의 스레드만</strong> 임계 영역에 진입할 수 있게 합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                      Mutex 동작 원리                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Thread A                    Mutex                Thread B         │
+│   ─────────                   ─────                ─────────        │
+│                                                                     │
+│   lock() ─────────────────▶  [획득]                                 │
+│   ┌─────────────────────┐      │                                   │
+│   │ Critical Section    │      │                  lock() ───────┐  │
+│   │ (데이터 수정 중)     │      │  locked           (대기...)    │  │
+│   └─────────────────────┘      │                       │         │  │
+│   unlock() ───────────────▶  [해제] ◀──────────────────┘         │  │
+│                                │                                    │
+│                              [획득] ─────▶ ┌─────────────────────┐ │
+│                                │           │ Critical Section    │ │
+│                                │           │ (Thread B 진입)     │ │
+│                                │           └─────────────────────┘ │
+│                              [해제] ◀───── unlock()                │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Mutex 사용 예시</div>
+                        <pre><code>#include <mutex>
+
+std::mutex mtx;
+int sharedCounter = 0;
+
+// ✅ Mutex로 보호
+void safeIncrement() {
+    for (int i = 0; i < 100000; ++i) {
+        mtx.lock();
+        sharedCounter++;  // 한 스레드만 접근
+        mtx.unlock();
+    }
+}
+
+// ✅ RAII 패턴 (더 안전)
+void safeIncrementRAII() {
+    for (int i = 0; i < 100000; ++i) {
+        std::lock_guard<std::mutex> lock(mtx);  // 자동 lock
+        sharedCounter++;
+        // 스코프 끝나면 자동 unlock
+    }
+}
+
+// ✅ unique_lock (더 유연한 제어)
+void flexibleLocking() {
+    std::unique_lock<std::mutex> lock(mtx);
+
+    // 중간에 unlock 가능
+    lock.unlock();
+
+    // 다시 lock 가능
+    lock.lock();
+
+    // 조건부 lock
+    if (lock.try_lock()) {
+        // 성공
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">Mutex의 단점은 무엇인가요?</div>
+                <div class="a">
+                    <p class="warning">Mutex는 비용이 큽니다! 커널 진입이 필요할 수 있습니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>문제</th>
+                                <th>설명</th>
+                                <th>결과</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>컨텍스트 스위칭</td>
+                                <td>대기 시 커널 진입</td>
+                                <td>수 마이크로초 지연</td>
+                            </tr>
+                            <tr>
+                                <td>직렬화</td>
+                                <td>한 번에 하나만 실행</td>
+                                <td>병렬성 감소</td>
+                            </tr>
+                            <tr>
+                                <td>데드락 위험</td>
+                                <td>잘못된 lock 순서</td>
+                                <td>프로그램 멈춤</td>
+                            </tr>
+                            <tr>
+                                <td>Priority Inversion</td>
+                                <td>저우선 스레드가 lock 보유</td>
+                                <td>고우선 스레드 대기</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Spinlock과 Atomic</h2>
+            <div class="conversation">
+                <div class="q">Spinlock은 Mutex와 뭐가 다른가요?</div>
+                <div class="a">
+                    <p>Spinlock은 <strong>대기하지 않고 계속 시도</strong>합니다 (Busy-waiting).</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Spinlock 구현</div>
+                        <pre><code>#include <atomic>
+
+class Spinlock {
+    std::atomic_flag flag = ATOMIC_FLAG_INIT;
+
+public:
+    void lock() {
+        // test_and_set이 false 반환할 때까지 반복
+        while (flag.test_and_set(std::memory_order_acquire)) {
+            // CPU 점유하며 대기 (Busy-waiting)
+            // 힌트: 다른 스레드에게 양보 가능성 제공
+            #if defined(__x86_64__)
+                __builtin_ia32_pause();  // x86 PAUSE 명령어
+            #endif
+        }
+    }
+
+    void unlock() {
+        flag.clear(std::memory_order_release);
+    }
+};
+
+// 사용
+Spinlock spin;
+
+void worker() {
+    spin.lock();
+    // 임계 영역 (짧은 작업만!)
+    spin.unlock();
+}</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>Mutex</th>
+                                <th>Spinlock</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>대기 방식</td>
+                                <td>Sleep (커널)</td>
+                                <td>Busy-wait (CPU)</td>
+                            </tr>
+                            <tr>
+                                <td>짧은 임계구간</td>
+                                <td>오버헤드 큼</td>
+                                <td>✅ 효율적</td>
+                            </tr>
+                            <tr>
+                                <td>긴 임계구간</td>
+                                <td>✅ 효율적</td>
+                                <td>CPU 낭비</td>
+                            </tr>
+                            <tr>
+                                <td>단일 코어</td>
+                                <td>✅ 가능</td>
+                                <td>❌ 무한 대기</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">Atomic 변수는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>하드웨어 수준에서 <strong>원자적 연산</strong>을 보장합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Atomic 사용 예시</div>
+                        <pre><code>#include <atomic>
+
+// ✅ 락 없이 스레드 안전한 카운터
+std::atomic<int> atomicCounter{0};
+
+void atomicIncrement() {
+    for (int i = 0; i < 100000; ++i) {
+        atomicCounter++;  // 원자적 증가
+        // 내부적으로 lock xadd 명령어 사용 (x86)
+    }
+}
+
+// 더 복잡한 원자적 연산
+std::atomic<int> value{0};
+
+void complexAtomic() {
+    // Compare-And-Swap (CAS)
+    int expected = 0;
+    int desired = 1;
+    bool success = value.compare_exchange_strong(expected, desired);
+    // value가 0이면 1로 변경, 아니면 expected에 현재값 저장
+
+    // Fetch-and-Add
+    int old = value.fetch_add(5);  // 이전 값 반환하고 5 증가
+
+    // Exchange
+    int prev = value.exchange(10);  // 이전 값 반환하고 10으로 설정
+
+    // Load/Store
+    int current = value.load();  // 원자적 읽기
+    value.store(20);             // 원자적 쓰기
+}</code></pre>
+                    </div>
+
+                    <p class="key-point">단순 카운터나 플래그는 Atomic으로, 복잡한 연산은 Mutex로!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 조건 변수 (Condition Variable)</h2>
+            <div class="conversation">
+                <div class="q">특정 조건이 될 때까지 대기하려면?</div>
+                <div class="a">
+                    <p><strong>조건 변수</strong>를 사용합니다. Producer-Consumer 패턴에 필수입니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                   Producer-Consumer 패턴                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Producer                 Queue              Consumer              │
+│   ─────────               ─────               ─────────             │
+│                                                                     │
+│   produce()               [empty]             wait() ───────┐       │
+│      │                                                      │       │
+│   lock()                                                    │ 대기  │
+│   queue.push(item)       [item1]                            │       │
+│   notify_one() ─────────────────────────────────────────────┘       │
+│   unlock()                                     │                    │
+│                                               lock()                │
+│                          [empty]  ◀─────── queue.pop()              │
+│                                               unlock()              │
+│                                               process(item)         │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Producer-Consumer 구현</div>
+                        <pre><code>#include <mutex>
+#include <condition_variable>
+#include <queue>
+
+template<typename T>
+class ThreadSafeQueue {
+private:
+    std::queue<T> queue_;
+    mutable std::mutex mutex_;
+    std::condition_variable condVar_;
+    bool stopped_ = false;
+
+public:
+    void push(T item) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            queue_.push(std::move(item));
+        }
+        condVar_.notify_one();  // 대기 중인 스레드 하나 깨움
+    }
+
+    bool pop(T& item) {
+        std::unique_lock<std::mutex> lock(mutex_);
+
+        // 조건이 만족될 때까지 대기
+        condVar_.wait(lock, [this] {
+            return !queue_.empty() || stopped_;
+        });
+        // wait()은 자동으로 lock 해제하고 대기
+        // 깨어나면 다시 lock 획득
+
+        if (stopped_ && queue_.empty()) {
+            return false;  // 종료
+        }
+
+        item = std::move(queue_.front());
+        queue_.pop();
+        return true;
+    }
+
+    void stop() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stopped_ = true;
+        }
+        condVar_.notify_all();  // 모든 대기 스레드 깨움
+    }
+};
+
+// 사용 예시
+ThreadSafeQueue<int> taskQueue;
+
+void producer() {
+    for (int i = 0; i < 100; ++i) {
+        taskQueue.push(i);
+    }
+    taskQueue.stop();
+}
+
+void consumer() {
+    int task;
+    while (taskQueue.pop(task)) {
+        processTask(task);
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">조건 변수 사용 시 주의점은?</div>
+                <div class="a">
+                    <p class="warning">Spurious Wakeup에 주의! 조건 없이 깨어날 수 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Spurious Wakeup 대응</div>
+                        <pre><code>// ❌ 잘못된 사용 - spurious wakeup에 취약
+condVar_.wait(lock);  // 조건 없이 대기
+// 아무 이유 없이 깨어날 수 있음!
+
+// ✅ 올바른 사용 - 조건 확인 루프
+while (queue_.empty()) {
+    condVar_.wait(lock);
+}
+
+// ✅ 또는 람다 조건 사용 (권장)
+condVar_.wait(lock, [this] { return !queue_.empty(); });
+// wait 내부에서 조건 확인 루프를 자동으로 수행</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Read-Write Lock</h2>
+            <div class="conversation">
+                <div class="q">읽기는 여러 스레드가 동시에 해도 되지 않나요?</div>
+                <div class="a">
+                    <p>맞습니다! <strong>shared_mutex</strong>는 읽기 동시 허용, 쓰기는 배타적으로 처리합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Read-Write Lock 사용</div>
+                        <pre><code>#include <shared_mutex>
+
+class GameState {
+private:
+    std::shared_mutex rwMutex_;
+    std::unordered_map<int, Player> players_;
+
+public:
+    // 읽기 - 여러 스레드 동시 접근 가능
+    Player getPlayer(int id) const {
+        std::shared_lock<std::shared_mutex> lock(rwMutex_);
+        auto it = players_.find(id);
+        return it != players_.end() ? it->second : Player{};
+    }
+
+    int getPlayerCount() const {
+        std::shared_lock<std::shared_mutex> lock(rwMutex_);
+        return players_.size();
+    }
+
+    // 쓰기 - 배타적 접근
+    void addPlayer(int id, const Player& player) {
+        std::unique_lock<std::shared_mutex> lock(rwMutex_);
+        players_[id] = player;
+    }
+
+    void removePlayer(int id) {
+        std::unique_lock<std::shared_mutex> lock(rwMutex_);
+        players_.erase(id);
+    }
+};
+
+// 읽기가 많고 쓰기가 적은 경우 효과적
+// 예: 게임 상태 조회 vs 업데이트</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>Lock 유형</th>
+                                <th>동시 읽기</th>
+                                <th>동시 쓰기</th>
+                                <th>읽기 중 쓰기</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>mutex</td>
+                                <td>❌</td>
+                                <td>❌</td>
+                                <td>❌</td>
+                            </tr>
+                            <tr>
+                                <td>shared_mutex (읽기)</td>
+                                <td>✅</td>
+                                <td>-</td>
+                                <td>❌</td>
+                            </tr>
+                            <tr>
+                                <td>shared_mutex (쓰기)</td>
+                                <td>-</td>
+                                <td>❌</td>
+                                <td>❌</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 게임에서의 동기화 패턴</h2>
+            <div class="conversation">
+                <div class="q">게임 엔진에서는 어떤 동기화 전략을 사용하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Double Buffering 패턴</div>
+                        <pre><code>// 락 없이 스레드 간 데이터 전달
+template<typename T>
+class DoubleBuffer {
+private:
+    T buffers_[2];
+    std::atomic<int> readIndex_{0};
+    std::atomic<bool> swapPending_{false};
+
+public:
+    // 쓰기 스레드 전용
+    T& getWriteBuffer() {
+        return buffers_[1 - readIndex_.load()];
+    }
+
+    // 쓰기 완료 후 호출
+    void swap() {
+        swapPending_.store(true);
+    }
+
+    // 읽기 스레드 전용
+    const T& getReadBuffer() {
+        // 스왑 대기 중이면 인덱스 전환
+        if (swapPending_.exchange(false)) {
+            readIndex_.store(1 - readIndex_.load());
+        }
+        return buffers_[readIndex_.load()];
+    }
+};
+
+// 사용: 물리 스레드 → 렌더 스레드
+DoubleBuffer<WorldState> worldBuffer;
+
+void physicsThread() {
+    while (running) {
+        WorldState& state = worldBuffer.getWriteBuffer();
+        simulatePhysics(state);
+        worldBuffer.swap();
+    }
+}
+
+void renderThread() {
+    while (running) {
+        const WorldState& state = worldBuffer.getReadBuffer();
+        render(state);
+    }
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Job System 패턴</div>
+                        <pre><code>// 작업 기반 병렬 처리
+class JobSystem {
+private:
+    std::vector<std::thread> workers_;
+    ThreadSafeQueue<std::function<void()>> jobQueue_;
+    std::atomic<int> pendingJobs_{0};
+    std::mutex completionMutex_;
+    std::condition_variable completionCV_;
+
+public:
+    JobSystem(int numThreads = std::thread::hardware_concurrency()) {
+        for (int i = 0; i < numThreads; ++i) {
+            workers_.emplace_back([this] { workerLoop(); });
+        }
+    }
+
+    void submit(std::function<void()> job) {
+        pendingJobs_++;
+        jobQueue_.push(std::move(job));
+    }
+
+    void waitAll() {
+        std::unique_lock<std::mutex> lock(completionMutex_);
+        completionCV_.wait(lock, [this] {
+            return pendingJobs_.load() == 0;
+        });
+    }
+
+private:
+    void workerLoop() {
+        std::function<void()> job;
+        while (jobQueue_.pop(job)) {
+            job();
+            if (--pendingJobs_ == 0) {
+                completionCV_.notify_all();
+            }
+        }
+    }
+};
+
+// 사용: 엔티티 업데이트 병렬화
+JobSystem jobs;
+
+void updateAllEntities() {
+    for (auto& entity : entities) {
+        jobs.submit([&entity] {
+            entity.update();
+        });
+    }
+    jobs.waitAll();  // 모든 업데이트 완료 대기
+}</code></pre>
+                    </div>
+
+                    <p class="key-point">게임 엔진은 락 최소화를 위해 작업 분리, 더블 버퍼링, Job System을 활용합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Race Condition</strong>: 공유 데이터 동시 접근 시 발생, 비결정적 버그의 원인</li>
+                <li><strong>Mutex</strong>: 한 번에 하나의 스레드만 진입, lock_guard로 RAII 사용</li>
+                <li><strong>Spinlock</strong>: 짧은 임계구간에 효과적, 긴 대기에는 비효율</li>
+                <li><strong>Atomic</strong>: 단순 연산은 락 없이 원자적으로 처리</li>
+                <li><strong>Condition Variable</strong>: 이벤트 기반 대기, spurious wakeup 주의</li>
+                <li><strong>shared_mutex</strong>: 읽기 동시 허용, 쓰기는 배타적</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

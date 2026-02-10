@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>화면 안에서 반사를 찾아서 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>화면 안에서 반사를 찾아서</h1>
+            <p class="subtitle">Screen Space Reflections (SSR)</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 반사 렌더링의 과제</h2>
+            <div class="conversation">
+                <div class="q">실시간으로 반사를 렌더링하는 방법은?</div>
+                <div class="a">
+                    <p>전통적인 방법으로는 <span class="highlight">환경 맵(Cubemap)</span>이나 <span class="highlight">평면 반사(Planar Reflection)</span>가 있습니다. 하지만 각각 한계가 있습니다.</p>
+                    <p><span class="key-point">SSR</span>은 이미 렌더링된 화면 정보를 재활용해 반사를 계산합니다!</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>기법</th>
+                        <th>장점</th>
+                        <th>단점</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Cubemap</td>
+                        <td>빠름, 간단</td>
+                        <td>정적, 주변 환경만</td>
+                    </tr>
+                    <tr>
+                        <td>Planar Reflection</td>
+                        <td>정확한 반사</td>
+                        <td>평면만, 씬 2번 렌더링</td>
+                    </tr>
+                    <tr>
+                        <td>Ray Tracing</td>
+                        <td>완벽한 반사</td>
+                        <td>비용 매우 높음</td>
+                    </tr>
+                    <tr>
+                        <td>SSR</td>
+                        <td>동적, 추가 렌더링 없음</td>
+                        <td>화면 밖 정보 없음</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>SSR은 <span class="highlight">이미 찍힌 사진에서 거울에 비친 모습을 찾는 것</span>입니다.</p>
+                <p>사진에 없는 부분(프레임 밖)은 반사할 수 없습니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: SSR의 기본 원리</h2>
+            <div class="conversation">
+                <div class="q">SSR은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>핵심은 <span class="highlight">Screen Space Ray Marching</span>입니다:</p>
+                    <p>1. 반사 방향 계산 (시선 반사)</p>
+                    <p>2. 화면 공간에서 레이 마칭</p>
+                    <p>3. 깊이 버퍼와 교차 검사</p>
+                    <p>4. 교차점의 색상 샘플링</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+SSR Ray Marching:
+
+화면 (Screen Space)
+┌─────────────────────────────────────────┐
+│                                         │
+│      물체 A                             │
+│        ■                                │
+│        │                                │
+│        │ 반사광                         │
+│        ↓                                │
+│  ══════●══════════  반사 표면           │
+│        │\                               │
+│        │ \  반사 레이                   │
+│        │  ●                             │
+│        │   ●                            │
+│        │    ●                           │
+│        │     ◉ ← 깊이 교차!            │
+│                                         │
+└─────────────────────────────────────────┘
+
+◉ 지점의 색상 = 반사될 색상
+                </pre>
+                <p class="diagram-caption">Screen Space Ray Marching</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">SSR 기본 구현 (HLSL)</div>
+                <pre><code>// SSR 메인 함수
+float4 SSR_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    // G-Buffer에서 데이터 읽기
+    float depth = depthBuffer.Sample(pointSampler, uv).r;
+    float3 normal = normalBuffer.Sample(pointSampler, uv).rgb * 2.0 - 1.0;
+
+    // 월드/뷰 공간 위치 재구성
+    float3 viewPos = ReconstructViewPosition(uv, depth);
+
+    // 반사 방향 계산
+    float3 viewDir = normalize(viewPos);
+    float3 reflectDir = reflect(viewDir, normal);
+
+    // Screen Space Ray Marching
+    float3 hitPos;
+    float2 hitUV;
+
+    if (RayMarch(viewPos, reflectDir, hitPos, hitUV))
+    {
+        // 반사된 색상 샘플링
+        float3 reflectionColor = sceneColor.Sample(linearSampler, hitUV).rgb;
+
+        // 페이드 (화면 가장자리에서)
+        float edgeFade = CalculateEdgeFade(hitUV);
+
+        return float4(reflectionColor * edgeFade, 1);
+    }
+
+    // 실패 시 환경 맵 폴백
+    return float4(0, 0, 0, 0);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Linear Ray Marching</h2>
+            <div class="conversation">
+                <div class="q">가장 간단한 레이 마칭 방법은?</div>
+                <div class="a">
+                    <p><span class="highlight">Linear Ray Marching</span>은 일정 간격으로 레이를 따라가며 깊이 교차를 검사합니다. 간단하지만 샘플 수가 많이 필요합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Linear Ray Marching</div>
+                <pre><code>bool LinearRayMarch(
+    float3 rayOrigin,      // 뷰 공간 시작점
+    float3 rayDir,         // 뷰 공간 방향
+    out float2 hitUV,
+    out float3 hitPos)
+{
+    const int maxSteps = 64;
+    const float stepSize = 0.1;
+
+    float3 currentPos = rayOrigin;
+
+    for (int i = 0; i < maxSteps; i++)
+    {
+        currentPos += rayDir * stepSize;
+
+        // 뷰 공간 → 클립 공간 → NDC → UV
+        float4 clipPos = mul(float4(currentPos, 1), projMatrix);
+        float2 screenUV = clipPos.xy / clipPos.w * 0.5 + 0.5;
+        screenUV.y = 1.0 - screenUV.y;  // Y 반전
+
+        // 화면 밖 체크
+        if (screenUV.x < 0 || screenUV.x > 1 ||
+            screenUV.y < 0 || screenUV.y > 1)
+            return false;
+
+        // 깊이 비교
+        float sampledDepth = depthBuffer.SampleLevel(pointSampler, screenUV, 0).r;
+        float rayDepth = clipPos.z / clipPos.w;
+
+        // 레이가 표면 뒤로 갔는지 체크
+        if (rayDepth > sampledDepth)
+        {
+            // 교차 발견!
+            hitUV = screenUV;
+            hitPos = currentPos;
+            return true;
+        }
+    }
+
+    return false;  // 교차 못 찾음
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Hi-Z Tracing</h2>
+            <div class="conversation">
+                <div class="q">더 효율적인 레이 마칭 방법은?</div>
+                <div class="a">
+                    <p><span class="highlight">Hierarchical-Z (Hi-Z) Tracing</span>은 깊이 버퍼의 밉맵을 활용합니다. 빈 공간은 크게 건너뛰고, 잠재적 교차점 근처에서 정밀하게 검사합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Hi-Z Buffer (최대 깊이 밉맵):
+
+MIP 0 (원본):     MIP 1:          MIP 2:
+┌─┬─┬─┬─┬─┬─┬─┬─┐ ┌───┬───┬───┬───┐ ┌───────┬───────┐
+│1│2│3│4│5│6│7│8│ │max│max│max│max│ │  max  │  max  │
+├─┼─┼─┼─┼─┼─┼─┼─┤ │1,2│3,4│5,6│7,8│ │ 1-4   │ 5-8   │
+│ │ │ │ │ │ │ │ │ ├───┼───┼───┼───┤ └───────┴───────┘
+└─┴─┴─┴─┴─┴─┴─┴─┘ │   │   │   │   │
+                  └───┴───┴───┴───┘
+
+높은 MIP = 해당 영역의 최대 깊이
+→ 레이가 확실히 통과할 수 있으면 큰 단계로 점프
+                </pre>
+                <p class="diagram-caption">Hierarchical-Z Buffer 구조</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Hi-Z Ray Marching</div>
+                <pre><code>bool HiZRayMarch(float3 rayOrigin, float3 rayDir,
+                  out float2 hitUV)
+{
+    const int maxLevel = 6;  // Hi-Z 밉맵 레벨
+    int mipLevel = maxLevel;
+
+    float3 currentPos = rayOrigin;
+    float2 screenUV;
+
+    for (int i = 0; i < 128; i++)
+    {
+        // 현재 위치 → 스크린 좌표
+        float4 clipPos = mul(float4(currentPos, 1), projMatrix);
+        screenUV = clipPos.xy / clipPos.w * 0.5 + 0.5;
+
+        // Hi-Z 샘플링 (해당 MIP 레벨)
+        float hiZDepth = hiZBuffer.SampleLevel(
+            pointSampler, screenUV, mipLevel).r;
+
+        float rayDepth = clipPos.z / clipPos.w;
+
+        if (rayDepth > hiZDepth)
+        {
+            // 교차 가능성 있음 → 더 정밀한 레벨로
+            mipLevel = max(mipLevel - 1, 0);
+
+            if (mipLevel == 0)
+            {
+                // 최고 해상도에서 실제 교차 확인
+                hitUV = screenUV;
+                return true;
+            }
+        }
+        else
+        {
+            // 확실히 통과 → 크게 전진
+            float stepSize = GetStepSize(mipLevel);
+            currentPos += rayDir * stepSize;
+
+            // 다시 높은 레벨로
+            mipLevel = min(mipLevel + 1, maxLevel);
+        }
+    }
+
+    return false;
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: SSR의 한계와 해결책</h2>
+            <div class="conversation">
+                <div class="q">SSR의 아티팩트는 어떻게 해결하나요?</div>
+                <div class="a">
+                    <p>SSR은 여러 한계가 있고, 각각에 대한 완화 기법이 있습니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>문제</th>
+                        <th>원인</th>
+                        <th>해결책</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>화면 밖 반사 없음</td>
+                        <td>SSR의 근본적 한계</td>
+                        <td>환경 맵 폴백</td>
+                    </tr>
+                    <tr>
+                        <td>뒷면 반사 없음</td>
+                        <td>뒷면은 렌더링 안됨</td>
+                        <td>이전 프레임 활용</td>
+                    </tr>
+                    <tr>
+                        <td>가장자리 페이드</td>
+                        <td>화면 경계 불연속</td>
+                        <td>Edge Fade 적용</td>
+                    </tr>
+                    <tr>
+                        <td>얇은 물체 누락</td>
+                        <td>레이 간격 > 물체 두께</td>
+                        <td>두께 고려 검사</td>
+                    </tr>
+                    <tr>
+                        <td>거친 표면 노이즈</td>
+                        <td>러프니스 반영 시</td>
+                        <td>디노이징, TAA</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">Edge Fade와 Thickness Check</div>
+                <pre><code>// 화면 가장자리 페이드
+float CalculateEdgeFade(float2 uv)
+{
+    float2 edgeDist = min(uv, 1.0 - uv);
+    float fade = saturate(min(edgeDist.x, edgeDist.y) * 10.0);
+    return fade;
+}
+
+// 두께 검사 (얇은 물체 통과 방지)
+bool ThicknessCheck(float rayDepth, float sampledDepth, float thickness)
+{
+    float depthDiff = rayDepth - sampledDepth;
+
+    // 너무 깊이 들어갔으면 통과한 것
+    if (depthDiff > thickness)
+        return false;
+
+    return depthDiff > 0;  // 표면 뒤에 있음
+}
+
+// Roughness 기반 블러
+float3 SampleReflectionWithRoughness(float2 hitUV, float roughness)
+{
+    // 러프니스에 따라 밉맵 레벨 결정
+    float mipLevel = roughness * 6.0;
+
+    return sceneColor.SampleLevel(linearSampler, hitUV, mipLevel).rgb;
+}</code></pre>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+SSR + Fallback 조합:
+
+┌─────────────────────────────────────────────────────┐
+│                     최종 반사                        │
+└─────────────────────────────────────────────────────┘
+                         ▲
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+   ┌────┴────┐    ┌──────┴──────┐   ┌─────┴─────┐
+   │   SSR   │  + │Environment│ + │ Planar    │
+   │ (우선)  │    │   Map     │   │Reflection │
+   │         │    │ (폴백)    │   │ (선택)    │
+   └─────────┘    └───────────┘   └───────────┘
+
+SSR 실패 시 → 환경 맵으로 자연스럽게 전환
+                </pre>
+                <p class="diagram-caption">하이브리드 반사 시스템</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 성능 최적화</h2>
+            <div class="conversation">
+                <div class="q">SSR 성능을 어떻게 최적화하나요?</div>
+                <div class="a">
+                    <p>SSR은 비용이 높으므로 여러 최적화가 필수입니다:</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 최적화 기법</strong>
+                <p><span class="highlight">절반 해상도</span>: SSR을 1/2 해상도에서 계산 후 업샘플</p>
+                <p><span class="highlight">스텐실 마스킹</span>: 반사 표면만 SSR 계산</p>
+                <p><span class="highlight">Temporal 재사용</span>: 이전 프레임 결과 활용</p>
+                <p><span class="highlight">적응적 샘플링</span>: 러프니스에 따라 샘플 수 조절</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Temporal SSR</div>
+                <pre><code>// 이전 프레임 SSR 결과 재활용
+float3 TemporalSSR(float2 uv, float3 currentSSR)
+{
+    // 현재 픽셀의 월드 위치
+    float3 worldPos = ReconstructWorldPosition(uv);
+
+    // 이전 프레임의 UV 계산 (재투영)
+    float4 prevClip = mul(float4(worldPos, 1), prevViewProjMatrix);
+    float2 prevUV = prevClip.xy / prevClip.w * 0.5 + 0.5;
+
+    // 이전 프레임 SSR 샘플링
+    float3 prevSSR = prevSSRBuffer.Sample(linearSampler, prevUV).rgb;
+
+    // 모션 벡터 기반 유효성 검사
+    float2 motion = motionVector.Sample(pointSampler, uv).xy;
+    float motionMagnitude = length(motion);
+
+    // 블렌딩 (움직임이 크면 현재 프레임 우선)
+    float blend = saturate(1.0 - motionMagnitude * 10.0);
+    blend *= 0.9;  // 최대 90% 재사용
+
+    return lerp(currentSSR, prevSSR, blend);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>SSR</strong>은 화면 정보만으로 반사를 계산, 추가 렌더링 불필요</li>
+                <li>핵심은 <strong>Screen Space Ray Marching</strong>과 깊이 교차 검사</li>
+                <li><strong>Hi-Z Tracing</strong>으로 레이 마칭 효율 대폭 향상</li>
+                <li>화면 밖 반사 불가능 → <strong>환경 맵 폴백</strong> 필수</li>
+                <li><strong>Temporal</strong> 재사용과 <strong>절반 해상도</strong>로 성능 최적화</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

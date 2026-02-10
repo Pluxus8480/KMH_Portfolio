@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>같은 세상을 공유하는 법 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+
+        <header class="content-header">
+            <h1>같은 세상을 공유하는 법</h1>
+            <p class="subtitle">Replication과 네트워크 동기화</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Replication의 기본 개념</h2>
+            <div class="conversation">
+                <div class="q">Replication이 뭔가요?</div>
+                <div class="a">
+                    <p>Replication은 <span class="highlight">서버의 게임 상태를 클라이언트에 복제</span>하는 것입니다. 멀티플레이어 게임에서 모든 플레이어가 "같은 세상"을 보게 만듭니다.</p>
+                    <p>언리얼은 <span class="key-point">서버 권한(Server Authority)</span> 모델을 사용합니다. 서버가 진실의 원천이고, 클라이언트는 그것을 복제받습니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+┌─────────────────────────────────────────────────────────┐
+│                    서버 권한 모델                        │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│                    ┌──────────┐                         │
+│                    │  SERVER  │ ← 진실의 원천           │
+│                    │ (권한)   │                         │
+│                    └────┬─────┘                         │
+│                         │                               │
+│          ┌──────────────┼──────────────┐               │
+│          │ Replicate    │ Replicate    │               │
+│          ▼              ▼              ▼               │
+│    ┌──────────┐   ┌──────────┐   ┌──────────┐         │
+│    │ Client 1 │   │ Client 2 │   │ Client 3 │         │
+│    │ (복제본) │   │ (복제본) │   │ (복제본) │         │
+│    └──────────┘   └──────────┘   └──────────┘         │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">서버가 모든 클라이언트에 상태 복제</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Actor Replication</h2>
+            <div class="conversation">
+                <div class="q">Actor를 복제하려면 어떻게 해야 하나요?</div>
+                <div class="a">
+                    <p>Actor 자체가 복제되려면 <span class="highlight">bReplicates = true</span>로 설정해야 합니다. 이것만으로도 Actor의 생성/파괴가 동기화됩니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Actor Replication 기본 설정</div>
+                <pre><code>AMyActor::AMyActor()
+{
+    // Actor 복제 활성화
+    bReplicates = true;
+
+    // 이동 복제 (Transform 변경 자동 동기화)
+    SetReplicateMovement(true);
+
+    // 복제 빈도 (기본 100Hz)
+    NetUpdateFrequency = 100.0f;
+
+    // 최소 복제 빈도
+    MinNetUpdateFrequency = 33.0f;
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>설정</th>
+                        <th>효과</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>bReplicates</td>
+                        <td>Actor 자체의 복제 여부</td>
+                    </tr>
+                    <tr>
+                        <td>SetReplicateMovement</td>
+                        <td>Transform 자동 복제</td>
+                    </tr>
+                    <tr>
+                        <td>NetUpdateFrequency</td>
+                        <td>최대 업데이트 빈도</td>
+                    </tr>
+                    <tr>
+                        <td>NetPriority</td>
+                        <td>복제 우선순위</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Property Replication</h2>
+            <div class="conversation">
+                <div class="q">변수를 복제하려면 어떻게 하나요?</div>
+                <div class="a">
+                    <p><span class="highlight">UPROPERTY(Replicated)</span>로 선언하고, <span class="highlight">GetLifetimeReplicatedProps</span>에 등록합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Property Replication</div>
+                <pre><code>// 헤더 파일
+UCLASS()
+class AMyCharacter : public ACharacter
+{
+    GENERATED_BODY()
+
+public:
+    // 복제되는 변수
+    UPROPERTY(Replicated)
+    float Health;
+
+    // 변경 시 콜백을 받는 복제 변수
+    UPROPERTY(ReplicatedUsing = OnRep_Ammo)
+    int32 Ammo;
+
+    UFUNCTION()
+    void OnRep_Ammo();
+
+    // 필수: 복제할 프로퍼티 목록
+    virtual void GetLifetimeReplicatedProps(
+        TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+};
+
+// 소스 파일
+void AMyCharacter::GetLifetimeReplicatedProps(
+    TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+    // 기본 복제
+    DOREPLIFETIME(AMyCharacter, Health);
+
+    // 조건부 복제 (소유자에게만)
+    DOREPLIFETIME_CONDITION(AMyCharacter, Ammo, COND_OwnerOnly);
+}
+
+void AMyCharacter::OnRep_Ammo()
+{
+    // 클라이언트에서 Ammo가 변경됐을 때 호출
+    // UI 업데이트 등 처리
+    UpdateAmmoUI(Ammo);
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>조건</th>
+                        <th>복제 대상</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>COND_None</td>
+                        <td>모든 클라이언트</td>
+                    </tr>
+                    <tr>
+                        <td>COND_OwnerOnly</td>
+                        <td>소유자 클라이언트만</td>
+                    </tr>
+                    <tr>
+                        <td>COND_SkipOwner</td>
+                        <td>소유자 제외</td>
+                    </tr>
+                    <tr>
+                        <td>COND_SimulatedOnly</td>
+                        <td>시뮬레이팅 프록시만</td>
+                    </tr>
+                    <tr>
+                        <td>COND_InitialOnly</td>
+                        <td>초기값만 (한 번)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: RPC (Remote Procedure Call)</h2>
+            <div class="conversation">
+                <div class="q">함수를 원격으로 호출하려면 어떻게 하나요?</div>
+                <div class="a">
+                    <p>RPC를 사용합니다. 세 가지 유형이 있습니다:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">RPC 유형</div>
+                <pre><code>UCLASS()
+class AMyCharacter : public ACharacter
+{
+    GENERATED_BODY()
+
+public:
+    // Server RPC: 클라이언트 → 서버
+    // 클라이언트에서 호출하면 서버에서 실행
+    UFUNCTION(Server, Reliable)
+    void Server_Fire();
+
+    // Client RPC: 서버 → 특정 클라이언트
+    // 서버에서 호출하면 해당 클라이언트에서 실행
+    UFUNCTION(Client, Reliable)
+    void Client_ShowDamageNumber(float Damage);
+
+    // Multicast RPC: 서버 → 모든 클라이언트
+    // 서버에서 호출하면 모든 클라이언트에서 실행
+    UFUNCTION(NetMulticast, Unreliable)
+    void Multicast_PlayExplosionEffect();
+};
+
+// 사용 예시
+void AMyCharacter::Fire()
+{
+    if (!HasAuthority())  // 클라이언트라면
+    {
+        Server_Fire();    // 서버에게 요청
+    }
+    else                  // 서버라면
+    {
+        // 실제 발사 로직
+        PerformFire();
+    }
+}
+
+void AMyCharacter::Server_Fire_Implementation()
+{
+    // 서버에서 실행됨
+    if (CanFire())
+    {
+        PerformFire();
+        Multicast_PlayFireEffect();  // 모두에게 이펙트
+    }
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>RPC 유형</th>
+                        <th>호출자</th>
+                        <th>실행자</th>
+                        <th>용도</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Server</td>
+                        <td>클라이언트</td>
+                        <td>서버</td>
+                        <td>입력, 액션 요청</td>
+                    </tr>
+                    <tr>
+                        <td>Client</td>
+                        <td>서버</td>
+                        <td>소유 클라이언트</td>
+                        <td>UI, 피드백</td>
+                    </tr>
+                    <tr>
+                        <td>NetMulticast</td>
+                        <td>서버</td>
+                        <td>모든 클라이언트</td>
+                        <td>이펙트, 사운드</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="conversation">
+                <div class="q">Reliable과 Unreliable의 차이는?</div>
+                <div class="a">
+                    <p><span class="highlight">Reliable</span>: 반드시 도착 보장, 순서 보장. 중요한 게임플레이에 사용</p>
+                    <p><span class="highlight">Unreliable</span>: 도착 미보장, 빠름. 이펙트, 애니메이션에 사용</p>
+                    <p class="warning">Reliable RPC를 남발하면 대역폭 문제 발생!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 네트워크 역할 (Role)</h2>
+            <div class="conversation">
+                <div class="q">Actor의 네트워크 역할은 어떻게 구분하나요?</div>
+                <div class="a">
+                    <p>각 Actor는 <span class="highlight">Role</span>과 <span class="highlight">RemoteRole</span>을 가집니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+┌─────────────────────────────────────────────────────────────┐
+│                    네트워크 Role 예시                        │
+│                   (플레이어 캐릭터)                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │                     SERVER                            │  │
+│  │  Player1의 캐릭터: Authority (권한)                  │  │
+│  │  Player2의 캐릭터: Authority (권한)                  │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌────────────────────┐    ┌────────────────────┐          │
+│  │    CLIENT 1        │    │    CLIENT 2        │          │
+│  │                    │    │                    │          │
+│  │ 내 캐릭터:         │    │ 내 캐릭터:         │          │
+│  │   AutonomousProxy  │    │   AutonomousProxy  │          │
+│  │   (자율 프록시)    │    │   (자율 프록시)    │          │
+│  │                    │    │                    │          │
+│  │ 상대 캐릭터:       │    │ 상대 캐릭터:       │          │
+│  │   SimulatedProxy   │    │   SimulatedProxy   │          │
+│  │   (시뮬레이션)     │    │   (시뮬레이션)     │          │
+│  └────────────────────┘    └────────────────────┘          │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">같은 Actor가 위치에 따라 다른 Role</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Role 확인 방법</div>
+                <pre><code>void AMyCharacter::SomeFunction()
+{
+    // 권한 확인 (서버인지)
+    if (HasAuthority())
+    {
+        // 서버에서만 실행할 코드
+    }
+
+    // 로컬 컨트롤 확인 (내가 조작하는지)
+    if (IsLocallyControlled())
+    {
+        // 로컬 플레이어만 실행할 코드
+    }
+
+    // Role로 분기
+    switch (GetLocalRole())
+    {
+        case ROLE_Authority:
+            // 서버
+            break;
+        case ROLE_AutonomousProxy:
+            // 로컬 플레이어의 캐릭터
+            break;
+        case ROLE_SimulatedProxy:
+            // 다른 플레이어의 캐릭터
+            break;
+    }
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: Ownership과 관련성</h2>
+            <div class="conversation">
+                <div class="q">어떤 Actor가 누구에게 복제되나요?</div>
+                <div class="a">
+                    <p><span class="highlight">Relevancy(관련성)</span>가 있는 Actor만 복제됩니다. 멀리 있는 Actor는 복제하지 않아 대역폭을 절약합니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>Relevancy 조건</th>
+                        <th>설명</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>bAlwaysRelevant</td>
+                        <td>항상 모든 클라이언트에 복제</td>
+                    </tr>
+                    <tr>
+                        <td>bNetUseOwnerRelevancy</td>
+                        <td>Owner의 Relevancy 따름</td>
+                    </tr>
+                    <tr>
+                        <td>bOnlyRelevantToOwner</td>
+                        <td>Owner에게만 복제</td>
+                    </tr>
+                    <tr>
+                        <td>NetCullDistanceSquared</td>
+                        <td>거리 기반 컬링</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">Relevancy 설정</div>
+                <pre><code>AMyActor::AMyActor()
+{
+    bReplicates = true;
+
+    // 항상 복제 (글로벌 매니저 등)
+    bAlwaysRelevant = true;
+
+    // 또는 거리 기반 컬링
+    bAlwaysRelevant = false;
+    NetCullDistanceSquared = 150000000.0f; // ~12km
+}
+
+// Owner 설정
+void AMyCharacter::PickupWeapon(AWeapon* Weapon)
+{
+    // 이 무기의 Owner를 나로 설정
+    // 이제 이 무기는 나의 Relevancy를 따름
+    Weapon->SetOwner(this);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>언리얼은 <strong>서버 권한</strong> 모델 - 서버가 진실의 원천입니다</li>
+                <li><strong>bReplicates</strong>로 Actor를, <strong>UPROPERTY(Replicated)</strong>로 변수를 복제합니다</li>
+                <li>RPC는 <strong>Server</strong>(클라→서버), <strong>Client</strong>(서버→클라), <strong>Multicast</strong>(서버→모두)</li>
+                <li><strong>Authority</strong>는 서버, <strong>AutonomousProxy</strong>는 내 캐릭터, <strong>SimulatedProxy</strong>는 남의 캐릭터</li>
+                <li><strong>Relevancy</strong>로 필요한 Actor만 복제하여 대역폭 최적화</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>std::variant / std::optional 활용 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>nullptr과 union의 안전한 대안</h1>
+            <p class="subtitle">std::optional과 std::variant로 타입 안전하게</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: std::optional이란?</h2>
+            <div class="conversation">
+                <div class="q">왜 optional이 필요한가요?</div>
+                <div class="a">
+                    <p class="warning">"값이 없을 수도 있다"를 표현할 때 nullptr이나 특수값(-1 등)은 위험합니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">기존 방식의 문제점</div>
+                        <pre><code>// 문제 1: nullptr 반환
+User* findUser(int id) {
+    // 못 찾으면 nullptr
+    return nullptr;
+}
+
+User* user = findUser(123);
+user->getName();  // 크래시! null 체크 깜빡
+
+// 문제 2: 특수값 사용
+int findIndex(const std::vector&lt;int&gt;& vec, int value) {
+    // 못 찾으면 -1
+    return -1;
+}
+
+int idx = findIndex(vec, 42);
+vec[idx];  // 문제! -1은 유효한 인덱스 아님
+
+// 문제 3: 출력 매개변수
+bool tryParse(const std::string& str, int& result) {
+    // 성공하면 true, result에 값 저장
+    // 실패하면 false
+}
+
+int value;
+if (tryParse(input, value)) {
+    // value 사용
+}
+// API가 복잡하고 value가 초기화 안 됐을 수 있음</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">std::optional 해결책</div>
+                        <pre><code>#include &lt;optional&gt;
+
+std::optional&lt;User&gt; findUser(int id) {
+    if (auto it = users.find(id); it != users.end()) {
+        return it->second;  // 값 있음
+    }
+    return std::nullopt;    // 값 없음
+}
+
+std::optional&lt;int&gt; findIndex(const std::vector&lt;int&gt;& vec, int value) {
+    for (size_t i = 0; i < vec.size(); i++) {
+        if (vec[i] == value) return i;
+    }
+    return std::nullopt;
+}
+
+std::optional&lt;int&gt; tryParse(const std::string& str) {
+    try {
+        return std::stoi(str);
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+// 사용
+if (auto user = findUser(123)) {
+    std::cout << user->getName();  // 안전!
+}
+
+auto idx = findIndex(vec, 42);
+if (idx) {
+    vec[*idx];  // 안전!
+}</code></pre>
+                    </div>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>optional은 선물 상자와 같습니다. 상자 안에 선물이 있을 수도, 없을 수도 있습니다. 열기 전에 먼저 확인하세요!</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: std::optional API</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">optional 주요 API</div>
+                    <pre><code>std::optional&lt;int&gt; opt;
+
+// 생성
+std::optional&lt;int&gt; a;                    // 빈 상태
+std::optional&lt;int&gt; b = std::nullopt;     // 빈 상태
+std::optional&lt;int&gt; c = 42;               // 값 있음
+std::optional&lt;int&gt; d{std::in_place, 42}; // in-place 생성
+auto e = std::make_optional(42);         // 편의 함수
+
+// 값 확인
+if (opt) { /* 값 있음 */ }
+if (opt.has_value()) { /* 값 있음 */ }
+
+// 값 접근
+int x = *opt;           // 값 없으면 UB!
+int y = opt.value();    // 값 없으면 bad_optional_access 예외
+int z = opt.value_or(0); // 값 없으면 기본값
+
+// 값 변경
+opt = 100;
+opt.emplace(200);      // in-place 생성
+opt.reset();           // 빈 상태로
+
+// 비교
+std::optional&lt;int&gt; a = 1, b = 2;
+a < b;        // true (값 비교)
+a < std::nullopt; // false (빈 optional이 가장 작음)
+
+// C++23: monadic 연산
+opt.and_then([](int x) -> std::optional&lt;int&gt; { return x * 2; });
+opt.transform([](int x) { return x * 2; });
+opt.or_else([]() { return std::optional&lt;int&gt;{0}; });</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">실전 패턴</div>
+                    <pre><code>// 체이닝 패턴
+std::optional&lt;User&gt; user = findUser(id);
+std::optional&lt;std::string&gt; email =
+    user ? std::optional(user->getEmail()) : std::nullopt;
+
+// C++23 스타일 체이닝
+auto email = findUser(id)
+    .and_then([](User& u) { return u.getProfile(); })
+    .transform([](Profile& p) { return p.email; })
+    .value_or("no-email@example.com");
+
+// optional 레퍼런스 (직접 지원 안 함)
+// 대신 포인터나 reference_wrapper 사용
+std::optional&lt;std::reference_wrapper&lt;User&gt;&gt; userRef;
+
+// optional 반환 함수 조합
+template&lt;typename T, typename F&gt;
+auto flatMap(std::optional&lt;T&gt; opt, F&& f)
+    -> decltype(f(*opt)) {
+    if (opt) return f(*opt);
+    return std::nullopt;
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: std::variant란?</h2>
+            <div class="conversation">
+                <div class="q">variant는 무엇인가요?</div>
+                <div class="a">
+                    <p class="highlight">타입 안전한 union입니다. 여러 타입 중 하나의 값을 저장할 수 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">union vs variant</div>
+                        <pre><code>// 기존 union (위험!)
+union Value {
+    int i;
+    float f;
+    std::string s;  // 컴파일 에러! 비trivial 타입
+};
+
+// 수동 태그 관리
+struct TaggedValue {
+    enum Type { INT, FLOAT, STRING } type;
+    union {
+        int i;
+        float f;
+    };
+    std::string s;  // union 밖에 따로
+};
+
+// std::variant (안전!)
+std::variant&lt;int, float, std::string&gt; value;
+
+value = 42;           // int 저장
+value = 3.14f;        // float 저장
+value = "hello";      // string 저장
+
+// 현재 타입 확인
+if (std::holds_alternative&lt;int&gt;(value)) {
+    int i = std::get&lt;int&gt;(value);
+}
+
+// 타입 인덱스
+size_t idx = value.index();  // 0: int, 1: float, 2: string</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: std::visit 패턴</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">variant 방문하기</div>
+                    <pre><code>std::variant&lt;int, float, std::string&gt; value = "hello";
+
+// 방법 1: std::get (예외 발생 가능)
+try {
+    int i = std::get&lt;int&gt;(value);  // bad_variant_access!
+} catch (std::bad_variant_access&) {
+    // 타입이 다름
+}
+
+// 방법 2: std::get_if (nullptr 반환)
+if (int* p = std::get_if&lt;int&gt;(&value)) {
+    std::cout << *p;
+}
+
+// 방법 3: std::visit (가장 권장!)
+std::visit([](auto&& arg) {
+    using T = std::decay_t&lt;decltype(arg)&gt;;
+    if constexpr (std::is_same_v&lt;T, int&gt;) {
+        std::cout << "int: " << arg;
+    } else if constexpr (std::is_same_v&lt;T, float&gt;) {
+        std::cout << "float: " << arg;
+    } else {
+        std::cout << "string: " << arg;
+    }
+}, value);
+
+// 오버로드 패턴 (더 깔끔!)
+template&lt;class... Ts&gt; struct overloaded : Ts... {
+    using Ts::operator()...;
+};
+template&lt;class... Ts&gt; overloaded(Ts...) -> overloaded&lt;Ts...&gt;;
+
+std::visit(overloaded{
+    [](int i)         { std::cout << "int: " << i; },
+    [](float f)       { std::cout << "float: " << f; },
+    [](std::string& s) { std::cout << "string: " << s; }
+}, value);</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 실전 활용 사례</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">variant 실전 예제</div>
+                    <pre><code>// 1. 다형성 없는 Shape
+struct Circle { float radius; };
+struct Rectangle { float width, height; };
+struct Triangle { float base, height; };
+
+using Shape = std::variant&lt;Circle, Rectangle, Triangle&gt;;
+
+float area(const Shape& shape) {
+    return std::visit(overloaded{
+        [](const Circle& c)    { return 3.14159f * c.radius * c.radius; },
+        [](const Rectangle& r) { return r.width * r.height; },
+        [](const Triangle& t)  { return 0.5f * t.base * t.height; }
+    }, shape);
+}
+
+std::vector&lt;Shape&gt; shapes = {
+    Circle{5.0f},
+    Rectangle{3.0f, 4.0f},
+    Triangle{6.0f, 8.0f}
+};
+
+for (const auto& shape : shapes) {
+    std::cout << "Area: " << area(shape) << "\n";
+}
+
+// 2. 파서 결과 타입
+struct ParseError { std::string message; int line; };
+using ParseResult = std::variant&lt;AST, ParseError&gt;;
+
+ParseResult parse(const std::string& code) {
+    if (hasError) {
+        return ParseError{"Syntax error", 42};
+    }
+    return buildAST(code);
+}
+
+auto result = parse(code);
+std::visit(overloaded{
+    [](const AST& ast)        { execute(ast); },
+    [](const ParseError& err) {
+        std::cerr << "Error at line " << err.line << ": " << err.message;
+    }
+}, result);
+
+// 3. 상태 머신
+struct Idle {};
+struct Running { int progress; };
+struct Completed { std::string result; };
+struct Failed { std::string error; };
+
+using State = std::variant&lt;Idle, Running, Completed, Failed&gt;;
+
+class Task {
+    State state = Idle{};
+
+public:
+    void start() {
+        if (std::holds_alternative&lt;Idle&gt;(state)) {
+            state = Running{0};
+        }
+    }
+
+    void update(int progress) {
+        if (auto* r = std::get_if&lt;Running&gt;(&state)) {
+            r->progress = progress;
+            if (progress >= 100) {
+                state = Completed{"Done!"};
+            }
+        }
+    }
+
+    void fail(const std::string& error) {
+        state = Failed{error};
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 성능과 주의사항</h2>
+            <div class="conversation">
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>항목</th>
+                            <th>virtual 다형성</th>
+                            <th>std::variant</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>메모리</td>
+                            <td>힙 할당 + vptr</td>
+                            <td>스택, 가장 큰 타입 크기</td>
+                        </tr>
+                        <tr>
+                            <td>호출 비용</td>
+                            <td>vtable 간접 호출</td>
+                            <td>컴파일 타임 분기 (더 빠름)</td>
+                        </tr>
+                        <tr>
+                            <td>확장성</td>
+                            <td>새 클래스 추가 쉬움</td>
+                            <td>variant 수정 필요</td>
+                        </tr>
+                        <tr>
+                            <td>캐시</td>
+                            <td>포인터 추적 필요</td>
+                            <td>캐시 친화적</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="code-block">
+                    <div class="code-header">주의사항</div>
+                    <pre><code>// 1. variant 크기
+std::variant&lt;char, double[100]&gt; v;  // 800+ 바이트!
+// 큰 타입은 unique_ptr로 감싸기
+std::variant&lt;char, std::unique_ptr&lt;double[100]&gt;&gt; v2;
+
+// 2. valueless_by_exception 상태
+std::variant&lt;std::string, ThrowingType&gt; v = "hello";
+try {
+    v = ThrowingType{};  // 생성자에서 예외 발생
+} catch (...) {
+    v.valueless_by_exception();  // true! 어떤 값도 없음
+}
+
+// 3. monostate로 기본 생성 가능하게
+struct NoDefault { NoDefault(int) {} };
+// std::variant&lt;NoDefault, int&gt; v;  // 에러! 기본 생성 불가
+std::variant&lt;std::monostate, NoDefault, int&gt; v;  // OK
+
+// 4. optional vs variant
+// optional&lt;T&gt;는 variant&lt;std::monostate, T&gt;와 유사
+// 단일 타입의 유무: optional
+// 여러 타입 중 하나: variant</code></pre>
+                </div>
+
+                <p class="key-point">variant는 닫힌 타입 집합에서 가상 함수 없이 다형성을 구현하는 좋은 방법입니다!</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>optional</strong>: 값이 있거나 없는 상태를 안전하게 표현</li>
+                <li><strong>variant</strong>: 여러 타입 중 하나를 타입 안전하게 저장</li>
+                <li><strong>std::visit</strong>: variant 값에 대한 다형적 처리</li>
+                <li><strong>overloaded 패턴</strong>: 람다 오버로딩으로 깔끔한 방문</li>
+                <li><strong>장점</strong>: 힙 할당 없음, 캐시 친화적, 컴파일 타임 타입 체크</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

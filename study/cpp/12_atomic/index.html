@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>std::atomic과 메모리 순서 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>락 없이 스레드 안전하게?</h1>
+            <p class="subtitle">std::atomic과 메모리 오더링의 세계</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 왜 atomic이 필요한가?</h2>
+            <div class="conversation">
+                <div class="q">일반 변수는 왜 스레드 안전하지 않나요?</div>
+                <div class="a">
+                    <p class="warning">단순한 ++i도 읽기-수정-쓰기 3단계라 경쟁 상태가 발생합니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">경쟁 상태 문제</div>
+                        <pre><code>int counter = 0;  // 공유 변수
+
+void increment() {
+    for (int i = 0; i < 100000; i++) {
+        counter++;  // 스레드 안전하지 않음!
+    }
+}
+
+// 두 스레드가 동시에 실행하면?
+// 예상: 200000
+// 실제: 그보다 작은 값 (경쟁 상태!)
+
+// counter++의 실제 동작:
+// 1. counter 값을 레지스터로 읽기 (LOAD)
+// 2. 레지스터에서 1 증가 (ADD)
+// 3. 레지스터 값을 counter에 쓰기 (STORE)
+
+// 두 스레드가 동시에 실행되면:
+// Thread A: LOAD (counter = 0)
+// Thread B: LOAD (counter = 0)
+// Thread A: ADD  (reg = 1)
+// Thread B: ADD  (reg = 1)
+// Thread A: STORE (counter = 1)
+// Thread B: STORE (counter = 1)  // 1이 됨, 2가 아님!</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">std::atomic 해결책</div>
+                        <pre><code>#include &lt;atomic&gt;
+
+std::atomic&lt;int&gt; counter{0};  // 원자적 변수
+
+void increment() {
+    for (int i = 0; i < 100000; i++) {
+        counter++;  // 원자적 증가 (스레드 안전!)
+    }
+}
+
+// 두 스레드 실행 후: 정확히 200000</code></pre>
+                    </div>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>화장실 문에 자물쇠가 있으면 한 사람씩만 들어갈 수 있습니다. atomic은 변수 접근에 보이지 않는 자물쇠를 다는 것과 같습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: std::atomic 기본 사용</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">atomic 연산들</div>
+                    <pre><code>std::atomic&lt;int&gt; value{0};
+
+// 읽기/쓰기
+int x = value.load();   // 원자적 읽기
+value.store(42);        // 원자적 쓰기
+
+// 교환
+int old = value.exchange(100);  // 값 교환 후 이전 값 반환
+
+// 비교-교환 (CAS: Compare-And-Swap)
+int expected = 100;
+bool success = value.compare_exchange_strong(expected, 200);
+// value가 100이면 200으로 변경하고 true 반환
+// value가 100이 아니면 expected에 현재 값 저장하고 false 반환
+
+// 산술 연산
+value.fetch_add(10);    // value += 10, 이전 값 반환
+value.fetch_sub(5);     // value -= 5
+value.fetch_and(0xFF);  // value &= 0xFF
+value.fetch_or(0x80);   // value |= 0x80
+value.fetch_xor(0x01);  // value ^= 0x01
+
+// 연산자 오버로드
+value++;    // fetch_add(1)
+value--;    // fetch_sub(1)
+value += 5; // fetch_add(5)</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">atomic 지원 타입</div>
+                    <pre><code>// 정수형
+std::atomic&lt;int&gt; ai;
+std::atomic&lt;long&gt; al;
+std::atomic&lt;uint64_t&gt; au64;
+
+// 포인터
+std::atomic&lt;int*&gt; ptr;
+ptr.fetch_add(1);  // 포인터 산술
+
+// bool
+std::atomic&lt;bool&gt; flag{false};
+flag.store(true);
+
+// 별칭
+std::atomic_int ai;       // std::atomic&lt;int&gt;
+std::atomic_bool ab;      // std::atomic&lt;bool&gt;
+std::atomic_flag af;      // 특수: 락-프리 보장
+
+// 사용자 정의 타입 (trivially copyable이어야 함)
+struct Point { int x, y; };
+std::atomic&lt;Point&gt; atomicPoint;  // 원자적 Point
+
+// 락-프리 여부 확인
+static_assert(std::atomic&lt;int&gt;::is_always_lock_free);
+std::cout << atomicPoint.is_lock_free();  // 런타임 확인</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 메모리 순서 (Memory Order)</h2>
+            <div class="conversation">
+                <div class="q">메모리 순서가 왜 중요한가요?</div>
+                <div class="a">
+                    <p class="warning">컴파일러와 CPU는 최적화를 위해 명령어 순서를 바꿀 수 있습니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">재배열 문제</div>
+                        <pre><code>int data = 0;
+bool ready = false;
+
+// Thread A (생산자)
+void producer() {
+    data = 42;        // (1)
+    ready = true;     // (2)
+}
+
+// Thread B (소비자)
+void consumer() {
+    while (!ready);   // (3)
+    int x = data;     // (4) x가 42일까?
+}
+
+// 문제: (1)과 (2)의 순서가 바뀔 수 있음!
+// CPU 캐시, 컴파일러 최적화로 인해
+// (2)가 먼저 실행되면 x = 0이 될 수 있음!</code></pre>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+메모리 순서 옵션
+
+relaxed         가장 약함, 원자성만 보장
+├── consume     읽기 의존성만 동기화 (거의 안 씀)
+├── acquire     이 읽기 이후 명령 재배열 방지
+├── release     이 쓰기 이전 명령 재배열 방지
+├── acq_rel     acquire + release
+└── seq_cst     가장 강함, 전역 순서 보장 (기본값)
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">메모리 순서 적용</div>
+                        <pre><code>std::atomic&lt;int&gt; data{0};
+std::atomic&lt;bool&gt; ready{false};
+
+// Thread A (생산자)
+void producer() {
+    data.store(42, std::memory_order_relaxed);    // 데이터 먼저
+    ready.store(true, std::memory_order_release); // release로 쓰기
+    // release 전의 모든 쓰기가 다른 스레드에 보임
+}
+
+// Thread B (소비자)
+void consumer() {
+    while (!ready.load(std::memory_order_acquire)); // acquire로 읽기
+    // acquire 후의 모든 읽기는 최신 값
+    int x = data.load(std::memory_order_relaxed);   // 42 보장!
+}
+
+// release-acquire 동기화
+// producer의 release와 consumer의 acquire가 페어를 이룸
+// release 이전의 모든 쓰기는 acquire 이후에 보임</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 메모리 순서 상세</h2>
+            <div class="conversation">
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>순서</th>
+                            <th>용도</th>
+                            <th>성능</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>relaxed</td>
+                            <td>카운터, 통계</td>
+                            <td>가장 빠름</td>
+                        </tr>
+                        <tr>
+                            <td>acquire</td>
+                            <td>락 획득, 데이터 읽기</td>
+                            <td>중간</td>
+                        </tr>
+                        <tr>
+                            <td>release</td>
+                            <td>락 해제, 데이터 쓰기</td>
+                            <td>중간</td>
+                        </tr>
+                        <tr>
+                            <td>seq_cst</td>
+                            <td>단순함 우선, 디버깅</td>
+                            <td>가장 느림</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="code-block">
+                    <div class="code-header">각 순서의 사용 예</div>
+                    <pre><code>// 1. relaxed: 단순 카운터
+std::atomic&lt;uint64_t&gt; totalOps{0};
+
+void worker() {
+    // 정확한 값은 중요하지 않고 대략적인 통계만 필요
+    totalOps.fetch_add(1, std::memory_order_relaxed);
+}
+
+// 2. acquire-release: 생산자-소비자
+std::atomic&lt;Node*&gt; head{nullptr};
+
+void push(Node* node) {
+    Node* old = head.load(std::memory_order_relaxed);
+    do {
+        node->next = old;
+    } while (!head.compare_exchange_weak(old, node,
+        std::memory_order_release,  // 성공 시
+        std::memory_order_relaxed   // 실패 시
+    ));
+}
+
+Node* pop() {
+    Node* old = head.load(std::memory_order_acquire);
+    // acquire로 읽으면 해당 노드의 데이터도 최신
+    // ...
+}
+
+// 3. seq_cst: 전역 순서 필요
+std::atomic&lt;bool&gt; x{false}, y{false};
+std::atomic&lt;int&gt; z{0};
+
+// Thread 1
+x.store(true, std::memory_order_seq_cst);
+
+// Thread 2
+y.store(true, std::memory_order_seq_cst);
+
+// Thread 3
+while (!x.load(std::memory_order_seq_cst));
+if (y.load(std::memory_order_seq_cst)) z++;
+
+// Thread 4
+while (!y.load(std::memory_order_seq_cst));
+if (x.load(std::memory_order_seq_cst)) z++;
+
+// seq_cst면 z는 반드시 1 이상 (전역 순서 보장)</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Lock-Free 자료구조</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">Lock-Free 스택</div>
+                    <pre><code>template&lt;typename T&gt;
+class LockFreeStack {
+    struct Node {
+        T data;
+        Node* next;
+        Node(T d) : data(std::move(d)), next(nullptr) {}
+    };
+
+    std::atomic&lt;Node*&gt; head{nullptr};
+
+public:
+    void push(T value) {
+        Node* newNode = new Node(std::move(value));
+        newNode->next = head.load(std::memory_order_relaxed);
+
+        // CAS 루프: head가 예상값이면 newNode로 교체
+        while (!head.compare_exchange_weak(
+            newNode->next, newNode,
+            std::memory_order_release,
+            std::memory_order_relaxed
+        ));
+    }
+
+    std::optional&lt;T&gt; pop() {
+        Node* old = head.load(std::memory_order_acquire);
+
+        while (old && !head.compare_exchange_weak(
+            old, old->next,
+            std::memory_order_acquire,
+            std::memory_order_relaxed
+        ));
+
+        if (old) {
+            T data = std::move(old->data);
+            delete old;  // 주의: ABA 문제 가능!
+            return data;
+        }
+        return std::nullopt;
+    }
+};</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">Spinlock 구현</div>
+                    <pre><code>class Spinlock {
+    std::atomic_flag flag = ATOMIC_FLAG_INIT;
+
+public:
+    void lock() {
+        while (flag.test_and_set(std::memory_order_acquire)) {
+            // 스핀 대기
+            // C++20: flag.wait(true);
+        }
+    }
+
+    void unlock() {
+        flag.clear(std::memory_order_release);
+        // C++20: flag.notify_one();
+    }
+};
+
+// RAII 래퍼와 함께
+class SpinlockGuard {
+    Spinlock& lock_;
+public:
+    SpinlockGuard(Spinlock& l) : lock_(l) { lock_.lock(); }
+    ~SpinlockGuard() { lock_.unlock(); }
+};
+
+Spinlock spinlock;
+void criticalSection() {
+    SpinlockGuard guard(spinlock);
+    // 보호된 코드
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 팁과 주의사항</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">False Sharing 방지</div>
+                    <pre><code>// 문제: 같은 캐시 라인에 있으면 성능 저하
+struct BadCounters {
+    std::atomic&lt;int&gt; counter1;  // 같은 캐시 라인
+    std::atomic&lt;int&gt; counter2;  // 서로 경쟁!
+};
+
+// 해결: 캐시 라인 정렬
+struct alignas(64) GoodCounters {
+    std::atomic&lt;int&gt; counter1;
+    char padding[60];  // 캐시 라인 분리
+    std::atomic&lt;int&gt; counter2;
+};
+
+// C++17: hardware_destructive_interference_size
+struct alignas(std::hardware_destructive_interference_size) Counter {
+    std::atomic&lt;int&gt; value;
+};</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">ABA 문제</div>
+                    <pre><code>// ABA 문제: A→B→A 변화를 감지 못함
+// 해결책: 버전 카운터 사용
+
+struct VersionedPtr {
+    void* ptr;
+    uintptr_t version;
+};
+
+std::atomic&lt;VersionedPtr&gt; head;
+
+// 또는 hazard pointer, RCU 사용</code></pre>
+                </div>
+
+                <p class="key-point">기본적으로 seq_cst를 사용하고, 프로파일링 후 필요시에만 약한 순서로 최적화하세요!</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>std::atomic</strong>: 원자적 연산으로 경쟁 상태 방지</li>
+                <li><strong>CAS</strong>: compare_exchange로 락-프리 알고리즘 구현</li>
+                <li><strong>relaxed</strong>: 원자성만, 순서 보장 없음 (카운터용)</li>
+                <li><strong>acquire-release</strong>: 생산자-소비자 동기화</li>
+                <li><strong>seq_cst</strong>: 가장 안전, 기본값으로 시작</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

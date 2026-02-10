@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>템플릿 메타프로그래밍 (TMP) | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>컴파일러를 컴퓨터로 만든다?</h1>
+            <p class="subtitle">템플릿 메타프로그래밍(TMP)으로 컴파일 타임 연산하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: TMP란 무엇인가?</h2>
+            <div class="conversation">
+                <div class="q">템플릿 메타프로그래밍이 뭔가요?</div>
+                <div class="a">
+                    <p class="highlight">컴파일 타임에 템플릿을 사용해 계산이나 코드 생성을 수행하는 기법입니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>요리를 할 때, 재료를 미리 손질해두면 실제 조리 시간이 줄어듭니다.</p>
+                        <p>TMP는 컴파일 타임에 "미리 계산"해서 런타임을 빠르게 합니다.</p>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">컴파일 타임 팩토리얼</div>
+                        <pre><code>// 런타임 팩토리얼
+int factorial(int n) {
+    return n <= 1 ? 1 : n * factorial(n - 1);
+}
+
+// 컴파일 타임 팩토리얼 (TMP)
+template&lt;int N&gt;
+struct Factorial {
+    static constexpr int value = N * Factorial&lt;N - 1&gt;::value;
+};
+
+template&lt;&gt;
+struct Factorial&lt;0&gt; {  // 재귀 종료 조건
+    static constexpr int value = 1;
+};
+
+// 사용
+constexpr int result = Factorial&lt;5&gt;::value;  // 컴파일 타임에 120 계산!</code></pre>
+                    </div>
+
+                    <p class="key-point">TMP의 결과는 컴파일 타임 상수로, 런타임 비용이 0입니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 타입 조작</h2>
+            <div class="conversation">
+                <div class="q">타입도 컴파일 타임에 조작할 수 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">타입 조작 예시</div>
+                        <pre><code>// const 제거
+template&lt;typename T&gt;
+struct RemoveConst {
+    using type = T;
+};
+
+template&lt;typename T&gt;
+struct RemoveConst&lt;const T&gt; {
+    using type = T;
+};
+
+// 사용
+using A = RemoveConst&lt;const int&gt;::type;  // int
+
+// 포인터 제거
+template&lt;typename T&gt;
+struct RemovePointer {
+    using type = T;
+};
+
+template&lt;typename T&gt;
+struct RemovePointer&lt;T*&gt; {
+    using type = T;
+};
+
+using B = RemovePointer&lt;int*&gt;::type;  // int
+
+// 조건부 타입 선택 (std::conditional)
+template&lt;bool Cond, typename T, typename F&gt;
+struct Conditional {
+    using type = T;
+};
+
+template&lt;typename T, typename F&gt;
+struct Conditional&lt;false, T, F&gt; {
+    using type = F;
+};
+
+using C = Conditional&lt;(sizeof(int) > 2), long, short&gt;::type;  // long</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 컴파일 타임 조건문과 반복</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">컴파일 타임 조건문</div>
+                    <pre><code>// if constexpr (C++17) - 가장 현대적인 방법
+template&lt;typename T&gt;
+auto process(T value) {
+    if constexpr (std::is_integral_v&lt;T&gt;) {
+        return value * 2;  // 정수형
+    } else if constexpr (std::is_floating_point_v&lt;T&gt;) {
+        return value / 2.0;  // 부동소수점
+    } else {
+        return value;  // 그 외
+    }
+}
+
+// 전통적인 TMP 방식 (SFINAE / 특수화)
+template&lt;typename T, typename Enable = void&gt;
+struct Processor;
+
+template&lt;typename T&gt;
+struct Processor&lt;T, std::enable_if_t&lt;std::is_integral_v&lt;T&gt;&gt;&gt; {
+    static T process(T val) { return val * 2; }
+};
+
+template&lt;typename T&gt;
+struct Processor&lt;T, std::enable_if_t&lt;std::is_floating_point_v&lt;T&gt;&gt;&gt; {
+    static T process(T val) { return val / 2.0; }
+};</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">컴파일 타임 반복 (재귀)</div>
+                    <pre><code>// N개 요소의 합
+template&lt;int... Ns&gt;
+struct Sum;
+
+template&lt;&gt;
+struct Sum&lt;&gt; {
+    static constexpr int value = 0;
+};
+
+template&lt;int N, int... Rest&gt;
+struct Sum&lt;N, Rest...&gt; {
+    static constexpr int value = N + Sum&lt;Rest...&gt;::value;
+};
+
+constexpr int total = Sum&lt;1, 2, 3, 4, 5&gt;::value;  // 15
+
+// Fold Expression (C++17)
+template&lt;int... Ns&gt;
+constexpr int sum() {
+    return (Ns + ...);  // fold expression
+}
+
+constexpr int total2 = sum&lt;1, 2, 3, 4, 5&gt;();  // 15</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 가변 템플릿 (Variadic Templates)</h2>
+            <div class="conversation">
+                <div class="q">여러 개의 템플릿 인자를 받으려면?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Variadic Templates</div>
+                        <pre><code>// 가변 인자 개수 세기
+template&lt;typename... Ts&gt;
+struct Count {
+    static constexpr size_t value = sizeof...(Ts);
+};
+
+static_assert(Count&lt;int, float, double&gt;::value == 3);
+
+// 타입 리스트
+template&lt;typename... Ts&gt;
+struct TypeList {};
+
+// 첫 번째 타입 추출
+template&lt;typename List&gt;
+struct Front;
+
+template&lt;typename T, typename... Ts&gt;
+struct Front&lt;TypeList&lt;T, Ts...&gt;&gt; {
+    using type = T;
+};
+
+using List = TypeList&lt;int, float, double&gt;;
+using First = Front&lt;List&gt;::type;  // int
+
+// 타입 포함 여부 확인
+template&lt;typename T, typename List&gt;
+struct Contains;
+
+template&lt;typename T&gt;
+struct Contains&lt;T, TypeList&lt;&gt;&gt; : std::false_type {};
+
+template&lt;typename T, typename... Ts&gt;
+struct Contains&lt;T, TypeList&lt;T, Ts...&gt;&gt; : std::true_type {};
+
+template&lt;typename T, typename U, typename... Ts&gt;
+struct Contains&lt;T, TypeList&lt;U, Ts...&gt;&gt; : Contains&lt;T, TypeList&lt;Ts...&gt;&gt; {};
+
+static_assert(Contains&lt;int, TypeList&lt;int, float&gt;&gt;::value == true);
+static_assert(Contains&lt;double, TypeList&lt;int, float&gt;&gt;::value == false);</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 실전 TMP 패턴</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">튜플 구현</div>
+                    <pre><code>// 간단한 튜플 구현
+template&lt;typename... Ts&gt;
+struct Tuple;
+
+template&lt;&gt;
+struct Tuple&lt;&gt; {};
+
+template&lt;typename T, typename... Ts&gt;
+struct Tuple&lt;T, Ts...&gt; {
+    T value;
+    Tuple&lt;Ts...&gt; rest;
+
+    Tuple(T v, Ts... vs) : value(v), rest(vs...) {}
+};
+
+// 인덱스로 접근
+template&lt;size_t I, typename T&gt;
+struct TupleElement;
+
+template&lt;typename T, typename... Ts&gt;
+struct TupleElement&lt;0, Tuple&lt;T, Ts...&gt;&gt; {
+    using type = T;
+    static T& get(Tuple&lt;T, Ts...&gt;& t) {
+        return t.value;
+    }
+};
+
+template&lt;size_t I, typename T, typename... Ts&gt;
+struct TupleElement&lt;I, Tuple&lt;T, Ts...&gt;&gt; {
+    using type = typename TupleElement&lt;I - 1, Tuple&lt;Ts...&gt;&gt;::type;
+    static auto& get(Tuple&lt;T, Ts...&gt;& t) {
+        return TupleElement&lt;I - 1, Tuple&lt;Ts...&gt;&gt;::get(t.rest);
+    }
+};
+
+template&lt;size_t I, typename... Ts&gt;
+auto& get(Tuple&lt;Ts...&gt;& t) {
+    return TupleElement&lt;I, Tuple&lt;Ts...&gt;&gt;::get(t);
+}
+
+// 사용
+Tuple&lt;int, float, double&gt; t(1, 2.0f, 3.0);
+int a = get&lt;0&gt;(t);      // 1
+float b = get&lt;1&gt;(t);    // 2.0f
+double c = get&lt;2&gt;(t);   // 3.0</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">컴파일 타임 문자열</div>
+                    <pre><code>// 컴파일 타임 문자열 해시 (FNV-1a)
+constexpr uint32_t fnv1a_hash(const char* str, size_t len) {
+    uint32_t hash = 2166136261u;
+    for (size_t i = 0; i < len; i++) {
+        hash ^= static_cast&lt;uint32_t&gt;(str[i]);
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+constexpr uint32_t operator""_hash(const char* str, size_t len) {
+    return fnv1a_hash(str, len);
+}
+
+// 사용: switch문에서 문자열 비교
+void process(const std::string& cmd) {
+    switch (fnv1a_hash(cmd.c_str(), cmd.size())) {
+        case "start"_hash:
+            start();
+            break;
+        case "stop"_hash:
+            stop();
+            break;
+        case "pause"_hash:
+            pause();
+            break;
+    }
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: Modern C++에서의 TMP</h2>
+            <div class="conversation">
+                <div class="q">최신 C++에서 TMP가 어떻게 바뀌었나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>기능</th>
+                                <th>전통적 TMP</th>
+                                <th>Modern C++</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>컴파일 타임 계산</td>
+                                <td>재귀 템플릿</td>
+                                <td>constexpr 함수</td>
+                            </tr>
+                            <tr>
+                                <td>조건부 컴파일</td>
+                                <td>SFINAE, 특수화</td>
+                                <td>if constexpr (C++17)</td>
+                            </tr>
+                            <tr>
+                                <td>타입 제약</td>
+                                <td>enable_if</td>
+                                <td>Concepts (C++20)</td>
+                            </tr>
+                            <tr>
+                                <td>가변 인자 처리</td>
+                                <td>재귀 언팩</td>
+                                <td>Fold Expressions</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">Modern C++ 스타일</div>
+                        <pre><code>// C++20 Concepts
+template&lt;typename T&gt;
+concept Numeric = std::is_arithmetic_v&lt;T&gt;;
+
+template&lt;Numeric T&gt;
+T square(T x) {
+    return x * x;
+}
+
+// C++17 if constexpr
+template&lt;typename T&gt;
+auto stringify(T value) {
+    if constexpr (std::is_same_v&lt;T, std::string&gt;) {
+        return value;
+    } else if constexpr (std::is_arithmetic_v&lt;T&gt;) {
+        return std::to_string(value);
+    } else {
+        return std::string("unknown");
+    }
+}
+
+// C++17 Fold Expressions
+template&lt;typename... Args&gt;
+void print(Args&&... args) {
+    (std::cout << ... << args) << '\n';
+}
+
+print(1, " + ", 2, " = ", 3);  // "1 + 2 = 3"</code></pre>
+                    </div>
+
+                    <p class="highlight">Modern C++는 TMP를 더 읽기 쉽고 강력하게 만들었습니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>TMP</strong>: 컴파일 타임에 템플릿으로 계산/코드 생성</li>
+                <li><strong>타입 조작</strong>: RemoveConst, Conditional 등 타입 변환</li>
+                <li><strong>Variadic Templates</strong>: 가변 개수의 템플릿 인자 처리</li>
+                <li><strong>if constexpr</strong>: 컴파일 타임 조건 분기 (C++17)</li>
+                <li><strong>Concepts</strong>: 타입 제약 선언 (C++20)</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

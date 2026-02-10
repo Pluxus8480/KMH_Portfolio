@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>유한 상태 기계 (FSM) 최적화 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>캐릭터 상태를 어떻게 관리할까?</h1>
+            <p class="subtitle">FSM(유한 상태 기계) 패턴과 최적화 기법</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: FSM이란?</h2>
+            <div class="conversation">
+                <div class="q">유한 상태 기계(FSM)가 뭔가요?</div>
+                <div class="a">
+                    <p class="highlight">객체가 가질 수 있는 상태의 집합과 상태 간 전이를 정의하는 패턴입니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>신호등을 생각해보세요. 빨강 → 초록 → 노랑 → 빨강...</p>
+                        <p>각 색깔이 "상태"이고, 시간에 따라 다음 상태로 "전이"됩니다.</p>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+게임 캐릭터 FSM 예시
+
+     ┌──────────────────────────────────┐
+     │                                  │
+     ▼        점프 입력                 │ 착지
+┌─────────┐ ───────────► ┌─────────┐   │
+│  Idle   │              │ Jumping │───┘
+└────┬────┘              └─────────┘
+     │
+     │ 이동 입력
+     ▼
+┌─────────┐   공격 입력   ┌──────────┐
+│ Walking │ ──────────► │ Attacking │
+└────┬────┘              └─────┬────┘
+     │                         │
+     └─────────────────────────┘
+           공격 완료
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">어디에 사용되나요?</div>
+                <div class="a">
+                    <ul>
+                        <li><strong>캐릭터 상태</strong>: Idle, Walk, Run, Jump, Attack</li>
+                        <li><strong>게임 모드</strong>: Menu, Playing, Paused, GameOver</li>
+                        <li><strong>AI 행동</strong>: Patrol, Chase, Attack, Flee</li>
+                        <li><strong>UI 상태</strong>: Normal, Hover, Pressed, Disabled</li>
+                        <li><strong>애니메이션</strong>: 애니메이션 상태 머신</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 기본 FSM 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">Switch-Case 방식 (단순하지만 비추천)</div>
+                    <pre><code>enum class PlayerState {
+    Idle,
+    Walking,
+    Jumping,
+    Attacking
+};
+
+class Player {
+private:
+    PlayerState currentState = PlayerState::Idle;
+
+public:
+    void update(float deltaTime) {
+        switch (currentState) {
+            case PlayerState::Idle:
+                handleIdleState(deltaTime);
+                break;
+            case PlayerState::Walking:
+                handleWalkingState(deltaTime);
+                break;
+            case PlayerState::Jumping:
+                handleJumpingState(deltaTime);
+                break;
+            case PlayerState::Attacking:
+                handleAttackingState(deltaTime);
+                break;
+        }
+    }
+
+    void handleIdleState(float deltaTime) {
+        // 입력 체크
+        if (input.isPressed(KEY_SPACE)) {
+            currentState = PlayerState::Jumping;
+            // 점프 시작 로직
+        }
+        else if (input.isPressed(KEY_LEFT) || input.isPressed(KEY_RIGHT)) {
+            currentState = PlayerState::Walking;
+        }
+    }
+
+    // ... 다른 상태 핸들러들
+};</code></pre>
+                </div>
+
+                <p class="warning">문제점: 상태가 많아지면 switch-case가 길어지고, 전이 로직이 분산됩니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: State 패턴 기반 FSM</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">State 패턴 (권장)</div>
+                    <pre><code>// 상태 인터페이스
+class IState {
+public:
+    virtual ~IState() = default;
+
+    virtual void enter(Player* player) = 0;    // 상태 진입 시
+    virtual void update(Player* player, float deltaTime) = 0;
+    virtual void exit(Player* player) = 0;     // 상태 종료 시
+    virtual IState* checkTransition(Player* player) = 0;  // 전이 조건
+};
+
+// 구체적인 상태들
+class IdleState : public IState {
+public:
+    void enter(Player* player) override {
+        player->playAnimation("idle");
+        player->setVelocity(0, 0);
+    }
+
+    void update(Player* player, float deltaTime) override {
+        // Idle 상태에서의 로직
+    }
+
+    void exit(Player* player) override {
+        // 정리 작업
+    }
+
+    IState* checkTransition(Player* player) override {
+        if (player->input.isPressed(KEY_SPACE)) {
+            return new JumpState();
+        }
+        if (player->input.isMoving()) {
+            return new WalkState();
+        }
+        return nullptr;  // 전이 없음
+    }
+};
+
+class JumpState : public IState {
+private:
+    float jumpTimer = 0;
+    static constexpr float JUMP_DURATION = 0.5f;
+
+public:
+    void enter(Player* player) override {
+        player->playAnimation("jump");
+        player->setVelocityY(JUMP_FORCE);
+        jumpTimer = 0;
+    }
+
+    void update(Player* player, float deltaTime) override {
+        jumpTimer += deltaTime;
+        player->applyGravity(deltaTime);
+    }
+
+    void exit(Player* player) override {
+        player->setVelocityY(0);
+    }
+
+    IState* checkTransition(Player* player) override {
+        if (player->isGrounded()) {
+            return new IdleState();
+        }
+        return nullptr;
+    }
+};
+
+// FSM 관리자
+class StateMachine {
+private:
+    IState* currentState = nullptr;
+    Player* owner;
+
+public:
+    StateMachine(Player* player) : owner(player) {}
+
+    ~StateMachine() {
+        delete currentState;
+    }
+
+    void changeState(IState* newState) {
+        if (currentState) {
+            currentState->exit(owner);
+            delete currentState;
+        }
+        currentState = newState;
+        if (currentState) {
+            currentState->enter(owner);
+        }
+    }
+
+    void update(float deltaTime) {
+        if (!currentState) return;
+
+        // 전이 체크
+        IState* nextState = currentState->checkTransition(owner);
+        if (nextState) {
+            changeState(nextState);
+        }
+
+        // 현재 상태 업데이트
+        currentState->update(owner, deltaTime);
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 테이블 기반 FSM</h2>
+            <div class="conversation">
+                <div class="q">더 효율적인 방법은 없나요?</div>
+                <div class="a">
+                    <p class="highlight">테이블 기반 FSM은 전이 규칙을 데이터로 분리합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">테이블 기반 FSM</div>
+                        <pre><code>enum class State { Idle, Walk, Jump, Attack, StateCount };
+enum class Event { MovePressed, JumpPressed, AttackPressed, Landed, AnimDone, EventCount };
+
+// 전이 테이블: [현재 상태][이벤트] = 다음 상태
+const State transitionTable[(int)State::StateCount][(int)Event::EventCount] = {
+    //              MovePressed  JumpPressed  AttackPressed  Landed       AnimDone
+    /* Idle */    { State::Walk, State::Jump, State::Attack, State::Idle, State::Idle },
+    /* Walk */    { State::Walk, State::Jump, State::Attack, State::Walk, State::Walk },
+    /* Jump */    { State::Jump, State::Jump, State::Jump,   State::Idle, State::Jump },
+    /* Attack */  { State::Attack, State::Attack, State::Attack, State::Attack, State::Idle }
+};
+
+class TableFSM {
+private:
+    State currentState = State::Idle;
+
+    // 상태별 Enter/Update/Exit 함수 포인터 테이블
+    using StateFunc = void(*)(Player*, float);
+
+    StateFunc enterFuncs[(int)State::StateCount];
+    StateFunc updateFuncs[(int)State::StateCount];
+    StateFunc exitFuncs[(int)State::StateCount];
+
+public:
+    void transition(Event event) {
+        State nextState = transitionTable[(int)currentState][(int)event];
+
+        if (nextState != currentState) {
+            exitFuncs[(int)currentState](owner, 0);
+            currentState = nextState;
+            enterFuncs[(int)currentState](owner, 0);
+        }
+    }
+
+    void update(float deltaTime) {
+        updateFuncs[(int)currentState](owner, deltaTime);
+    }
+};</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>방식</th>
+                                <th>장점</th>
+                                <th>단점</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>State 패턴</td>
+                                <td>OOP, 확장 쉬움</td>
+                                <td>동적 할당, 다형성 오버헤드</td>
+                            </tr>
+                            <tr>
+                                <td>테이블 기반</td>
+                                <td>빠름, 캐시 친화적</td>
+                                <td>복잡한 조건 표현 어려움</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 계층적 상태 기계 (HFSM)</h2>
+            <div class="conversation">
+                <div class="q">복잡한 상태를 어떻게 관리하나요?</div>
+                <div class="a">
+                    <p class="highlight">HFSM은 상태 안에 하위 상태 기계를 포함합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+계층적 상태 기계 (HFSM)
+
+┌─────────────── Alive ───────────────┐
+│                                     │
+│   ┌─── Grounded ───┐    ┌──────┐   │
+│   │ Idle ⇄ Walking │    │Airborne│  │
+│   │       ↓        │    │ Jump  │   │
+│   │   Attacking    │    │ Fall  │   │
+│   └────────────────┘    └──────┘   │
+│            │                │       │
+│            └───── Jump ─────┘       │
+│                  Land               │
+└─────────────────────────────────────┘
+               │
+           HP = 0
+               ↓
+          ┌──────┐
+          │ Dead │
+          └──────┘
+
+Grounded 상태 내에서 Idle ↔ Walking ↔ Attacking 전이
+전체 Alive 상태에서 Dead로 전이 가능
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">HFSM 구현</div>
+                        <pre><code>class HierarchicalState : public IState {
+protected:
+    std::unique_ptr&lt;StateMachine&gt; subStateMachine;
+
+public:
+    void update(Player* player, float deltaTime) override {
+        if (subStateMachine) {
+            subStateMachine->update(deltaTime);
+        }
+        // 현재 상태의 추가 로직
+    }
+};
+
+class GroundedState : public HierarchicalState {
+public:
+    GroundedState() {
+        subStateMachine = std::make_unique&lt;StateMachine&gt;();
+        subStateMachine->changeState(new IdleSubState());
+    }
+
+    void enter(Player* player) override {
+        player->enableGroundCollision(true);
+        subStateMachine->changeState(new IdleSubState());
+    }
+
+    IState* checkTransition(Player* player) override {
+        if (player->input.isPressed(KEY_SPACE)) {
+            return new AirborneState();  // 상위 상태 전이
+        }
+        return nullptr;
+    }
+};
+
+class AliveState : public HierarchicalState {
+public:
+    AliveState() {
+        subStateMachine = std::make_unique&lt;StateMachine&gt;();
+        subStateMachine->changeState(new GroundedState());
+    }
+
+    IState* checkTransition(Player* player) override {
+        if (player->health <= 0) {
+            return new DeadState();  // 최상위 전이
+        }
+        return nullptr;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: FSM 최적화 기법</h2>
+            <div class="conversation">
+                <div class="q">FSM을 어떻게 최적화하나요?</div>
+                <div class="a">
+                    <p><strong>1. 메모리 풀링:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">상태 객체 풀링</div>
+                        <pre><code>template&lt;typename T&gt;
+class StatePool {
+private:
+    std::vector&lt;T*&gt; pool;
+    std::vector&lt;T*&gt; available;
+
+public:
+    StatePool(size_t initialSize) {
+        for (size_t i = 0; i < initialSize; i++) {
+            T* state = new T();
+            pool.push_back(state);
+            available.push_back(state);
+        }
+    }
+
+    T* acquire() {
+        if (available.empty()) {
+            T* state = new T();
+            pool.push_back(state);
+            return state;
+        }
+        T* state = available.back();
+        available.pop_back();
+        return state;
+    }
+
+    void release(T* state) {
+        state->reset();
+        available.push_back(state);
+    }
+};</code></pre>
+                    </div>
+
+                    <p><strong>2. 전이 조건 캐싱:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">조건 캐싱</div>
+                        <pre><code>class CachedFSM {
+private:
+    uint32_t conditionFlags = 0;
+
+    // 비트 플래그로 조건 표현
+    enum ConditionFlag : uint32_t {
+        GROUNDED    = 1 << 0,
+        MOVING      = 1 << 1,
+        ATTACKING   = 1 << 2,
+        DAMAGED     = 1 << 3
+    };
+
+public:
+    void updateConditions(Player* player) {
+        conditionFlags = 0;
+
+        if (player->isGrounded()) conditionFlags |= GROUNDED;
+        if (player->input.isMoving()) conditionFlags |= MOVING;
+        if (player->isAttacking()) conditionFlags |= ATTACKING;
+        if (player->wasDamaged()) conditionFlags |= DAMAGED;
+    }
+
+    bool checkConditions(uint32_t required, uint32_t forbidden = 0) {
+        return (conditionFlags & required) == required &&
+               (conditionFlags & forbidden) == 0;
+    }
+};</code></pre>
+                    </div>
+
+                    <p><strong>3. 이벤트 큐 vs 즉시 전이:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">이벤트 큐 방식</div>
+                        <pre><code>class EventQueueFSM {
+private:
+    std::queue&lt;Event&gt; eventQueue;
+    int maxEventsPerFrame = 3;
+
+public:
+    void queueEvent(Event event) {
+        eventQueue.push(event);
+    }
+
+    void processEvents() {
+        int processed = 0;
+        while (!eventQueue.empty() && processed < maxEventsPerFrame) {
+            Event event = eventQueue.front();
+            eventQueue.pop();
+
+            processEvent(event);
+            processed++;
+        }
+    }
+};
+
+// 프레임당 처리 이벤트 수 제한으로 스파이크 방지</code></pre>
+                    </div>
+
+                    <p class="key-point">게임 장르와 복잡도에 맞는 FSM 방식을 선택하세요!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>FSM</strong>: 상태와 전이로 객체 행동 관리</li>
+                <li><strong>State 패턴</strong>: OOP 기반, Enter/Update/Exit 분리</li>
+                <li><strong>테이블 기반</strong>: 전이 규칙을 데이터로 분리, 빠른 조회</li>
+                <li><strong>HFSM</strong>: 계층적 상태로 복잡한 행동 관리</li>
+                <li><strong>최적화</strong>: 메모리 풀링, 조건 캐싱, 이벤트 큐</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

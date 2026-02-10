@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스마트 포인터 내부 구현 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>스마트 포인터는 어떻게 메모리를 자동 관리할까?</h1>
+            <p class="subtitle">unique_ptr, shared_ptr, weak_ptr 내부 구현 파헤치기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 스마트 포인터의 필요성</h2>
+            <div class="conversation">
+                <div class="q">raw 포인터의 문제점은 무엇인가요?</div>
+                <div class="a">
+                    <p class="warning">메모리 누수, 이중 해제, 댕글링 포인터 문제가 발생합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Raw 포인터의 위험성</div>
+                        <pre><code>void riskyFunction() {
+    int* ptr = new int(42);
+
+    if (someCondition) {
+        return;  // 메모리 누수! delete 안 함
+    }
+
+    doSomething(ptr);  // 예외 발생하면? 누수!
+
+    delete ptr;
+}
+
+void doubleFree() {
+    int* p1 = new int(10);
+    int* p2 = p1;  // 같은 메모리 가리킴
+
+    delete p1;
+    delete p2;  // 이중 해제! 정의되지 않은 동작
+}
+
+void danglingPointer() {
+    int* ptr;
+    {
+        int value = 42;
+        ptr = &value;
+    }  // value 소멸
+
+    *ptr = 10;  // 댕글링 포인터! 정의되지 않은 동작
+}</code></pre>
+                    </div>
+
+                    <p class="highlight">스마트 포인터는 RAII로 이 문제들을 해결합니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: unique_ptr 구현</h2>
+            <div class="conversation">
+                <div class="q">unique_ptr은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p class="highlight">단일 소유권을 가지며, 복사 불가, 이동만 가능합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">unique_ptr 직접 구현</div>
+                        <pre><code>template&lt;typename T, typename Deleter = std::default_delete&lt;T&gt;&gt;
+class UniquePtr {
+private:
+    T* ptr;
+    Deleter deleter;
+
+public:
+    // 생성자
+    explicit UniquePtr(T* p = nullptr) noexcept : ptr(p) {}
+
+    // 소멸자: 자동 해제
+    ~UniquePtr() {
+        if (ptr) {
+            deleter(ptr);
+        }
+    }
+
+    // 복사 금지
+    UniquePtr(const UniquePtr&) = delete;
+    UniquePtr& operator=(const UniquePtr&) = delete;
+
+    // 이동 생성자
+    UniquePtr(UniquePtr&& other) noexcept
+        : ptr(other.ptr), deleter(std::move(other.deleter)) {
+        other.ptr = nullptr;
+    }
+
+    // 이동 대입
+    UniquePtr& operator=(UniquePtr&& other) noexcept {
+        if (this != &other) {
+            reset(other.ptr);
+            deleter = std::move(other.deleter);
+            other.ptr = nullptr;
+        }
+        return *this;
+    }
+
+    // nullptr 대입
+    UniquePtr& operator=(std::nullptr_t) noexcept {
+        reset();
+        return *this;
+    }
+
+    // 역참조
+    T& operator*() const { return *ptr; }
+    T* operator->() const noexcept { return ptr; }
+
+    // raw 포인터 접근
+    T* get() const noexcept { return ptr; }
+
+    // 소유권 해제
+    T* release() noexcept {
+        T* temp = ptr;
+        ptr = nullptr;
+        return temp;
+    }
+
+    // 리셋
+    void reset(T* p = nullptr) noexcept {
+        if (ptr) {
+            deleter(ptr);
+        }
+        ptr = p;
+    }
+
+    // bool 변환
+    explicit operator bool() const noexcept {
+        return ptr != nullptr;
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="key-point">unique_ptr은 오버헤드가 거의 없습니다 (raw 포인터와 동일한 크기).</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: shared_ptr 구현</h2>
+            <div class="conversation">
+                <div class="q">shared_ptr은 어떻게 참조 카운트를 관리하나요?</div>
+                <div class="a">
+                    <p class="highlight">제어 블록(Control Block)에서 참조 카운트를 관리합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+shared_ptr 구조
+
+shared_ptr 객체           제어 블록              실제 객체
+┌──────────────┐       ┌──────────────┐       ┌──────────┐
+│ ptr ─────────┼───────┼──────────────┼──────▶│ 데이터   │
+│ control ─────┼──────▶│ strong_count │       └──────────┘
+└──────────────┘       │ weak_count   │
+                       │ deleter      │
+                       │ allocator    │
+                       └──────────────┘
+
+make_shared 사용 시:
+┌──────────────┐       ┌───────────────────────┐
+│ ptr ─────────┼──────▶│ 제어 블록 + 데이터    │
+│ control ─────┼──────▶│ (한 번의 메모리 할당)  │
+└──────────────┘       └───────────────────────┘
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">shared_ptr 핵심 구현</div>
+                        <pre><code>// 제어 블록 (간략화)
+struct ControlBlock {
+    std::atomic&lt;int&gt; strong_count;  // shared_ptr 수
+    std::atomic&lt;int&gt; weak_count;    // weak_ptr 수
+
+    ControlBlock() : strong_count(1), weak_count(0) {}
+
+    virtual void destroy() = 0;       // 객체 삭제
+    virtual void deallocate() = 0;    // 메모리 해제
+    virtual ~ControlBlock() = default;
+};
+
+template&lt;typename T, typename Deleter&gt;
+struct ControlBlockImpl : ControlBlock {
+    T* ptr;
+    Deleter deleter;
+
+    ControlBlockImpl(T* p, Deleter d) : ptr(p), deleter(d) {}
+
+    void destroy() override {
+        deleter(ptr);
+    }
+
+    void deallocate() override {
+        delete this;
+    }
+};
+
+template&lt;typename T&gt;
+class SharedPtr {
+private:
+    T* ptr;
+    ControlBlock* control;
+
+    void release() {
+        if (control) {
+            if (--control->strong_count == 0) {
+                control->destroy();  // 객체 삭제
+
+                if (control->weak_count == 0) {
+                    control->deallocate();  // 제어 블록 삭제
+                }
+            }
+        }
+    }
+
+public:
+    SharedPtr() : ptr(nullptr), control(nullptr) {}
+
+    explicit SharedPtr(T* p)
+        : ptr(p),
+          control(p ? new ControlBlockImpl&lt;T, std::default_delete&lt;T&gt;&gt;(
+                          p, std::default_delete&lt;T&gt;()) : nullptr) {}
+
+    // 복사: 참조 카운트 증가
+    SharedPtr(const SharedPtr& other)
+        : ptr(other.ptr), control(other.control) {
+        if (control) {
+            ++control->strong_count;
+        }
+    }
+
+    // 이동: 소유권 이전
+    SharedPtr(SharedPtr&& other) noexcept
+        : ptr(other.ptr), control(other.control) {
+        other.ptr = nullptr;
+        other.control = nullptr;
+    }
+
+    // 소멸자
+    ~SharedPtr() {
+        release();
+    }
+
+    // 복사 대입
+    SharedPtr& operator=(const SharedPtr& other) {
+        if (this != &other) {
+            release();
+            ptr = other.ptr;
+            control = other.control;
+            if (control) {
+                ++control->strong_count;
+            }
+        }
+        return *this;
+    }
+
+    // 역참조
+    T& operator*() const { return *ptr; }
+    T* operator->() const { return ptr; }
+    T* get() const { return ptr; }
+
+    int use_count() const {
+        return control ? control->strong_count.load() : 0;
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: weak_ptr과 순환 참조 해결</h2>
+            <div class="conversation">
+                <div class="q">weak_ptr은 왜 필요한가요?</div>
+                <div class="a">
+                    <p class="warning">shared_ptr의 순환 참조는 메모리 누수를 일으킵니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">순환 참조 문제</div>
+                        <pre><code>struct Node {
+    std::shared_ptr&lt;Node&gt; next;
+    std::shared_ptr&lt;Node&gt; prev;  // 문제!
+};
+
+void circularReference() {
+    auto node1 = std::make_shared&lt;Node&gt;();
+    auto node2 = std::make_shared&lt;Node&gt;();
+
+    node1->next = node2;
+    node2->prev = node1;  // 순환 참조!
+
+}  // node1, node2 모두 해제 안 됨!
+   // node1의 참조 카운트 = 1 (node2->prev)
+   // node2의 참조 카운트 = 1 (node1->next)</code></pre>
+                    </div>
+
+                    <p class="highlight">weak_ptr은 참조 카운트를 증가시키지 않습니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">weak_ptr로 해결</div>
+                        <pre><code>struct Node {
+    std::shared_ptr&lt;Node&gt; next;
+    std::weak_ptr&lt;Node&gt; prev;  // weak_ptr 사용!
+};
+
+void noLeak() {
+    auto node1 = std::make_shared&lt;Node&gt;();
+    auto node2 = std::make_shared&lt;Node&gt;();
+
+    node1->next = node2;
+    node2->prev = node1;  // weak_ptr은 카운트 안 올림
+
+}  // node1: 카운트 1→0, 해제
+   // node2: 카운트 1→0, 해제
+   // 정상 해제!
+
+// weak_ptr 사용법
+void useWeakPtr() {
+    std::weak_ptr&lt;Node&gt; weak;
+
+    {
+        auto shared = std::make_shared&lt;Node&gt;();
+        weak = shared;
+
+        if (auto locked = weak.lock()) {
+            // shared_ptr 획득 성공
+            // locked 사용
+        }
+    }  // shared 소멸
+
+    if (weak.expired()) {
+        std::cout << "객체 이미 해제됨\n";
+    }
+
+    // lock() 반환 nullptr
+    auto locked = weak.lock();
+    if (!locked) {
+        std::cout << "접근 불가\n";
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: make_shared와 make_unique</h2>
+            <div class="conversation">
+                <div class="q">왜 make_shared를 사용해야 하나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>방식</th>
+                                <th>메모리 할당</th>
+                                <th>예외 안전성</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>new + shared_ptr</td>
+                                <td>2회 (객체 + 제어블록)</td>
+                                <td>취약</td>
+                            </tr>
+                            <tr>
+                                <td>make_shared</td>
+                                <td>1회 (한 번에 할당)</td>
+                                <td>안전</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">make_shared의 장점</div>
+                        <pre><code>// 비추천: 예외 안전하지 않음
+void unsafe(std::shared_ptr&lt;Widget&gt; sp, int priority);
+
+unsafe(std::shared_ptr&lt;Widget&gt;(new Widget), getPriority());
+// 가능한 실행 순서:
+// 1. new Widget
+// 2. getPriority() → 예외 발생!
+// 3. shared_ptr 생성 (실행 안 됨)
+// → Widget 누수!
+
+// 권장: 예외 안전
+unsafe(std::make_shared&lt;Widget&gt;(), getPriority());
+
+// make_unique (C++14)
+auto ptr1 = std::make_unique&lt;int&gt;(42);
+auto ptr2 = std::make_unique&lt;int[]&gt;(10);  // 배열
+
+// make_shared
+auto ptr3 = std::make_shared&lt;Widget&gt;(arg1, arg2);
+
+// make_shared의 단점: weak_ptr이 있으면 메모리가 늦게 해제됨
+// (제어 블록과 객체가 함께 할당되므로)</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 스마트 포인터 사용 가이드</h2>
+            <div class="conversation">
+                <div class="q">어떤 스마트 포인터를 사용해야 하나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>상황</th>
+                                <th>선택</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>단일 소유권</td>
+                                <td>unique_ptr (기본 선택)</td>
+                            </tr>
+                            <tr>
+                                <td>공유 소유권 필요</td>
+                                <td>shared_ptr</td>
+                            </tr>
+                            <tr>
+                                <td>순환 참조 가능성</td>
+                                <td>weak_ptr</td>
+                            </tr>
+                            <tr>
+                                <td>소유권 없이 관찰</td>
+                                <td>raw pointer 또는 weak_ptr</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">실전 사용 패턴</div>
+                        <pre><code>class GameEngine {
+private:
+    // 엔진이 소유 → unique_ptr
+    std::unique_ptr&lt;Renderer&gt; renderer;
+    std::unique_ptr&lt;AudioSystem&gt; audio;
+
+    // 여러 곳에서 참조 필요 → shared_ptr
+    std::shared_ptr&lt;ResourceManager&gt; resources;
+
+public:
+    GameEngine()
+        : renderer(std::make_unique&lt;Renderer&gt;()),
+          audio(std::make_unique&lt;AudioSystem&gt;()),
+          resources(std::make_shared&lt;ResourceManager&gt;()) {}
+
+    // 소유권 이전 (팩토리 패턴)
+    std::unique_ptr&lt;Entity&gt; createEntity() {
+        return std::make_unique&lt;Entity&gt;(resources);
+    }
+
+    // 소유권 공유 (관찰자에게)
+    std::shared_ptr&lt;ResourceManager&gt; getResources() {
+        return resources;
+    }
+
+    // 소유권 없이 전달 (일시적 사용)
+    void processEntity(Entity* entity) {
+        // raw pointer: 소유권 의미 없음
+    }
+};
+
+class Entity {
+private:
+    std::weak_ptr&lt;ResourceManager&gt; resources;  // 순환 참조 방지
+
+public:
+    Entity(std::shared_ptr&lt;ResourceManager&gt; res)
+        : resources(res) {}
+
+    void loadAsset() {
+        if (auto res = resources.lock()) {
+            res->load("texture.png");
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>unique_ptr</strong>: 단일 소유권, 오버헤드 없음, 복사 불가</li>
+                <li><strong>shared_ptr</strong>: 공유 소유권, 참조 카운팅, 제어 블록 사용</li>
+                <li><strong>weak_ptr</strong>: 비소유 관찰자, 순환 참조 해결</li>
+                <li><strong>make_shared/make_unique</strong>: 예외 안전, 효율적 할당</li>
+                <li><strong>기본 선택</strong>: unique_ptr, 필요시에만 shared_ptr</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

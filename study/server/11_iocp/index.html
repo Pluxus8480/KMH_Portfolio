@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IOCP와 비동기 네트워크 프로그래밍 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../server.html" class="back-link">← 목록으로</a>
+            <h1>만 명을 스레드 10개로 처리한다고?</h1>
+            <p class="subtitle">IOCP와 비동기 I/O로 고성능 네트워크 서버 만들기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 동기 vs 비동기 I/O</h2>
+            <div class="conversation">
+                <div class="q">왜 동기 I/O가 문제인가요?</div>
+                <div class="a">
+                    <p>동기 방식에서는 I/O 작업 중 스레드가 <strong>멈춰서 대기</strong>합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+동기 I/O (Blocking):
+
+Thread 1  ────┬──[recv()]──────────대기──────────┬──처리──▶
+              │         데이터 도착 기다림         │
+              └─────────────────────────────────┘
+                        이 시간 동안 아무것도 못 함!
+
+1 클라이언트 = 1 스레드 필요
+10,000 클라이언트 = 10,000 스레드? → 메모리 폭발, 컨텍스트 스위칭 지옥
+
+비동기 I/O (Non-blocking):
+
+Thread 1  ────[recv 요청]──▶ 다른 작업 ──▶ 다른 작업 ──▶ [완료 통보] ──처리──▶
+                    │                                        ▲
+                    └────────OS가 백그라운드에서 처리──────────┘
+
+1 스레드가 수천 개 연결을 처리 가능!
+                        </pre>
+                    </div>
+                    <p class="highlight">비동기 I/O는 "요청만 하고 다른 일"을 할 수 있습니다.</p>
+                </div>
+
+                <div class="q">각 OS의 비동기 I/O 모델은 뭐가 있나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>OS</th>
+                                <th>모델</th>
+                                <th>특징</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Windows</td>
+                                <td>IOCP</td>
+                                <td>완료 통지 기반, 스레드 풀 친화적</td>
+                            </tr>
+                            <tr>
+                                <td>Linux</td>
+                                <td>epoll</td>
+                                <td>준비 상태 통지, 가장 널리 사용</td>
+                            </tr>
+                            <tr>
+                                <td>Linux 5.1+</td>
+                                <td>io_uring</td>
+                                <td>진정한 비동기, 최신/최고 성능</td>
+                            </tr>
+                            <tr>
+                                <td>BSD/macOS</td>
+                                <td>kqueue</td>
+                                <td>epoll과 유사</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: IOCP 동작 원리</h2>
+            <div class="conversation">
+                <div class="q">IOCP는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>IOCP는 <strong>I/O Completion Port</strong>의 약자로, 완료된 I/O를 큐에 모아서 통지합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+IOCP 동작 과정:
+
+1. 소켓을 IOCP에 연결
+   Socket ───────▶ IOCP (Completion Port)
+
+2. 비동기 I/O 요청
+   WSARecv() ──▶ OS 커널
+                    │
+                    ▼
+              [네트워크 카드가 데이터 수신 중...]
+
+3. 완료 시 Completion Queue에 추가
+   ┌─────────────────────────────────┐
+   │     IOCP Completion Queue       │
+   │  ┌─────┬─────┬─────┬─────┐     │
+   │  │ IO1 │ IO2 │ IO3 │ ... │     │
+   │  └─────┴─────┴─────┴─────┘     │
+   └─────────────────────────────────┘
+                    │
+                    ▼
+4. Worker Thread가 완료된 I/O 처리
+   Worker 1 ◀── GetQueuedCompletionStatus()
+   Worker 2 ◀── GetQueuedCompletionStatus()
+   Worker 3 ◀── GetQueuedCompletionStatus()
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">기본 IOCP 코드는 어떻게 생겼나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">IOCP 기본 구조</div>
+                        <pre><code>// IOCP 서버 기본 구조
+class IOCPServer {
+    HANDLE iocpHandle;
+    std::vector<std::thread> workerThreads;
+
+public:
+    void Initialize() {
+        // 1. IOCP 생성
+        iocpHandle = CreateIoCompletionPort(
+            INVALID_HANDLE_VALUE,
+            NULL,
+            0,
+            0  // 시스템이 최적 스레드 수 결정
+        );
+
+        // 2. Worker 스레드 생성 (CPU 코어 * 2 정도)
+        int numThreads = std::thread::hardware_concurrency() * 2;
+        for (int i = 0; i < numThreads; i++) {
+            workerThreads.emplace_back(&IOCPServer::WorkerThread, this);
+        }
+    }
+
+    void RegisterSocket(SOCKET socket, void* userData) {
+        // 3. 소켓을 IOCP에 연결
+        CreateIoCompletionPort(
+            (HANDLE)socket,
+            iocpHandle,
+            (ULONG_PTR)userData,  // 완료 시 받을 키
+            0
+        );
+    }
+
+    void WorkerThread() {
+        DWORD bytesTransferred;
+        ULONG_PTR completionKey;
+        OVERLAPPED* overlapped;
+
+        while (running) {
+            // 4. 완료된 I/O 대기
+            BOOL result = GetQueuedCompletionStatus(
+                iocpHandle,
+                &bytesTransferred,
+                &completionKey,
+                &overlapped,
+                INFINITE  // 무한 대기
+            );
+
+            if (!result || bytesTransferred == 0) {
+                // 연결 종료 또는 에러
+                HandleDisconnect(completionKey);
+                continue;
+            }
+
+            // 5. 완료된 I/O 처리
+            auto* context = (IOContext*)overlapped;
+            ProcessCompletion(context, bytesTransferred);
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Overlapped I/O와 Context 관리</h2>
+            <div class="conversation">
+                <div class="q">OVERLAPPED 구조체는 뭔가요?</div>
+                <div class="a">
+                    <p>비동기 I/O 요청을 식별하고 상태를 추적하는 구조체입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">IO Context 구조</div>
+                        <pre><code>// I/O 작업 타입
+enum class IOOperation {
+    Accept,
+    Receive,
+    Send,
+    Disconnect
+};
+
+// 확장된 OVERLAPPED 구조체
+struct IOContext : OVERLAPPED {
+    IOOperation operation;
+    SOCKET socket;
+    WSABUF wsaBuf;
+    char buffer[8192];  // 수신 버퍼
+
+    IOContext() {
+        memset(static_cast<OVERLAPPED*>(this), 0, sizeof(OVERLAPPED));
+        wsaBuf.buf = buffer;
+        wsaBuf.len = sizeof(buffer);
+    }
+};
+
+// 세션(연결) 정보
+struct Session {
+    SOCKET socket;
+    std::string address;
+
+    IOContext recvContext;
+    IOContext sendContext;
+
+    // 수신 버퍼 (조각난 패킷 조립용)
+    std::vector<char> recvBuffer;
+
+    // 송신 큐
+    std::queue<std::vector<char>> sendQueue;
+    std::mutex sendMutex;
+    bool isSending = false;
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">비동기 Recv/Send는 어떻게 하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">비동기 송수신</div>
+                        <pre><code>class IOCPServer {
+public:
+    void PostRecv(Session* session) {
+        session->recvContext.operation = IOOperation::Receive;
+        session->recvContext.socket = session->socket;
+
+        DWORD flags = 0;
+        DWORD bytesReceived;
+
+        int result = WSARecv(
+            session->socket,
+            &session->recvContext.wsaBuf,
+            1,  // 버퍼 개수
+            &bytesReceived,
+            &flags,
+            &session->recvContext,  // OVERLAPPED
+            NULL
+        );
+
+        if (result == SOCKET_ERROR) {
+            int error = WSAGetLastError();
+            if (error != WSA_IO_PENDING) {
+                // 실제 에러
+                HandleError(session, error);
+            }
+            // WSA_IO_PENDING은 정상 (비동기 진행 중)
+        }
+    }
+
+    void PostSend(Session* session, const char* data, int size) {
+        std::lock_guard<std::mutex> lock(session->sendMutex);
+
+        // 송신 큐에 추가
+        session->sendQueue.emplace(data, data + size);
+
+        // 이미 송신 중이면 대기
+        if (session->isSending) return;
+
+        // 송신 시작
+        StartSend(session);
+    }
+
+private:
+    void StartSend(Session* session) {
+        if (session->sendQueue.empty()) {
+            session->isSending = false;
+            return;
+        }
+
+        session->isSending = true;
+        auto& data = session->sendQueue.front();
+
+        session->sendContext.operation = IOOperation::Send;
+        memcpy(session->sendContext.buffer, data.data(), data.size());
+        session->sendContext.wsaBuf.len = data.size();
+
+        DWORD bytesSent;
+        WSASend(
+            session->socket,
+            &session->sendContext.wsaBuf,
+            1,
+            &bytesSent,
+            0,
+            &session->sendContext,
+            NULL
+        );
+    }
+
+    void OnSendComplete(Session* session) {
+        std::lock_guard<std::mutex> lock(session->sendMutex);
+        session->sendQueue.pop();
+        StartSend(session);  // 다음 데이터 송신
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: epoll (Linux)</h2>
+            <div class="conversation">
+                <div class="q">Linux의 epoll은 어떻게 다른가요?</div>
+                <div class="a">
+                    <p>epoll은 <strong>준비 상태 통지</strong> 방식입니다. "읽을 수 있다"를 알려줍니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+IOCP vs epoll:
+
+IOCP (Proactor 패턴):
+1. "데이터 읽어줘" (WSARecv)
+2. OS가 읽음
+3. "읽기 완료!" 통지
+4. 데이터 사용
+
+epoll (Reactor 패턴):
+1. "읽을 수 있으면 알려줘" (epoll_wait)
+2. "읽을 수 있어!" 통지
+3. 직접 읽음 (recv)
+4. 데이터 사용
+
+차이:
+- IOCP: OS가 I/O 완료까지 처리
+- epoll: 준비됐다는 것만 알려줌, 실제 I/O는 직접
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">epoll 기본 코드는 어떻게 되나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">epoll 서버 기본 구조</div>
+                        <pre><code>class EpollServer {
+    int epollFd;
+    static const int MAX_EVENTS = 1024;
+
+public:
+    void Initialize() {
+        // 1. epoll 인스턴스 생성
+        epollFd = epoll_create1(0);
+    }
+
+    void RegisterSocket(int socket, void* userData) {
+        epoll_event event;
+        event.events = EPOLLIN | EPOLLET;  // Edge Triggered
+        event.data.ptr = userData;
+
+        epoll_ctl(epollFd, EPOLL_CTL_ADD, socket, &event);
+    }
+
+    void EventLoop() {
+        epoll_event events[MAX_EVENTS];
+
+        while (running) {
+            // 2. 이벤트 대기
+            int numEvents = epoll_wait(epollFd, events, MAX_EVENTS, -1);
+
+            for (int i = 0; i < numEvents; i++) {
+                auto* session = (Session*)events[i].data.ptr;
+
+                if (events[i].events & EPOLLIN) {
+                    // 3. 읽기 가능 → 직접 읽기
+                    HandleRead(session);
+                }
+
+                if (events[i].events & EPOLLOUT) {
+                    // 쓰기 가능
+                    HandleWrite(session);
+                }
+
+                if (events[i].events & (EPOLLERR | EPOLLHUP)) {
+                    // 에러 또는 연결 종료
+                    HandleDisconnect(session);
+                }
+            }
+        }
+    }
+
+private:
+    void HandleRead(Session* session) {
+        // Edge Triggered: 한 번에 모든 데이터 읽어야 함
+        while (true) {
+            char buffer[4096];
+            ssize_t bytesRead = recv(session->socket, buffer, sizeof(buffer), 0);
+
+            if (bytesRead > 0) {
+                ProcessData(session, buffer, bytesRead);
+            }
+            else if (bytesRead == 0) {
+                // 연결 종료
+                HandleDisconnect(session);
+                break;
+            }
+            else {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    // 더 이상 읽을 데이터 없음 (정상)
+                    break;
+                }
+                // 실제 에러
+                HandleError(session, errno);
+                break;
+            }
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 고성능 서버 패턴</h2>
+            <div class="conversation">
+                <div class="q">실제 게임 서버에서 어떤 패턴을 사용하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">멀티 Reactor 패턴</div>
+                        <pre><code>// 메인 Reactor + 서브 Reactor 패턴
+class MultiReactorServer {
+    // Accept 전담 스레드
+    std::thread acceptThread;
+
+    // I/O 처리 스레드 (CPU 코어당 1개)
+    struct SubReactor {
+        int epollFd;
+        std::thread thread;
+        std::vector<Session*> sessions;
+    };
+    std::vector<SubReactor> subReactors;
+
+    // 로직 처리 스레드 풀
+    ThreadPool logicPool;
+
+public:
+    void Initialize() {
+        int numCores = std::thread::hardware_concurrency();
+
+        // 서브 리액터 생성
+        for (int i = 0; i < numCores; i++) {
+            SubReactor reactor;
+            reactor.epollFd = epoll_create1(0);
+            reactor.thread = std::thread(&MultiReactorServer::SubReactorLoop, this, i);
+            subReactors.push_back(std::move(reactor));
+        }
+
+        // Accept 스레드
+        acceptThread = std::thread(&MultiReactorServer::AcceptLoop, this);
+    }
+
+    void AcceptLoop() {
+        int listenFd = CreateListenSocket();
+        int roundRobin = 0;
+
+        while (running) {
+            sockaddr_in clientAddr;
+            socklen_t addrLen = sizeof(clientAddr);
+
+            int clientFd = accept(listenFd, (sockaddr*)&clientAddr, &addrLen);
+            if (clientFd < 0) continue;
+
+            // 논블로킹 설정
+            SetNonBlocking(clientFd);
+
+            // 라운드 로빈으로 서브 리액터에 분배
+            int reactorIdx = roundRobin++ % subReactors.size();
+            auto* session = new Session(clientFd);
+
+            subReactors[reactorIdx].RegisterSocket(clientFd, session);
+        }
+    }
+
+    void SubReactorLoop(int reactorIdx) {
+        auto& reactor = subReactors[reactorIdx];
+        epoll_event events[1024];
+
+        while (running) {
+            int numEvents = epoll_wait(reactor.epollFd, events, 1024, 100);
+
+            for (int i = 0; i < numEvents; i++) {
+                auto* session = (Session*)events[i].data.ptr;
+
+                if (events[i].events & EPOLLIN) {
+                    auto data = ReadAllData(session);
+                    // 로직 스레드 풀로 처리 위임
+                    logicPool.Submit([this, session, data = std::move(data)]() {
+                        ProcessGameLogic(session, data);
+                    });
+                }
+            }
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">Lock-free 큐로 성능을 높일 수 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Lock-free SPSC Queue</div>
+                        <pre><code>// Single Producer Single Consumer Lock-free Queue
+template<typename T, size_t Capacity>
+class SPSCQueue {
+    std::array<T, Capacity> buffer;
+    std::atomic<size_t> head{0};
+    std::atomic<size_t> tail{0};
+
+public:
+    bool Push(const T& item) {
+        size_t currentTail = tail.load(std::memory_order_relaxed);
+        size_t nextTail = (currentTail + 1) % Capacity;
+
+        if (nextTail == head.load(std::memory_order_acquire)) {
+            return false;  // 큐 가득 참
+        }
+
+        buffer[currentTail] = item;
+        tail.store(nextTail, std::memory_order_release);
+        return true;
+    }
+
+    bool Pop(T& item) {
+        size_t currentHead = head.load(std::memory_order_relaxed);
+
+        if (currentHead == tail.load(std::memory_order_acquire)) {
+            return false;  // 큐 비어있음
+        }
+
+        item = buffer[currentHead];
+        head.store((currentHead + 1) % Capacity, std::memory_order_release);
+        return true;
+    }
+};
+
+// 사용: 네트워크 스레드 → 로직 스레드 통신
+// Producer: 네트워크 스레드 (데이터 수신)
+// Consumer: 로직 스레드 (게임 처리)</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 성능 최적화 팁</h2>
+            <div class="conversation">
+                <div class="q">IOCP/epoll 서버 최적화 팁이 있나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>최적화</th>
+                                <th>설명</th>
+                                <th>효과</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>버퍼 풀</td>
+                                <td>버퍼 재사용, 메모리 할당 감소</td>
+                                <td>메모리 단편화 방지</td>
+                            </tr>
+                            <tr>
+                                <td>Zero-copy</td>
+                                <td>sendfile, splice 활용</td>
+                                <td>복사 오버헤드 제거</td>
+                            </tr>
+                            <tr>
+                                <td>TCP_NODELAY</td>
+                                <td>Nagle 알고리즘 비활성화</td>
+                                <td>작은 패킷 지연 감소</td>
+                            </tr>
+                            <tr>
+                                <td>SO_REUSEPORT</td>
+                                <td>여러 프로세스가 같은 포트 공유</td>
+                                <td>Accept 병렬화</td>
+                            </tr>
+                            <tr>
+                                <td>Edge Triggered</td>
+                                <td>상태 변화 시에만 통지</td>
+                                <td>이벤트 수 감소</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">버퍼 풀 구현</div>
+                        <pre><code>class BufferPool {
+    static const size_t BUFFER_SIZE = 8192;
+    static const size_t POOL_SIZE = 1000;
+
+    std::stack<char*> freeBuffers;
+    std::mutex mutex;
+
+public:
+    BufferPool() {
+        for (int i = 0; i < POOL_SIZE; i++) {
+            freeBuffers.push(new char[BUFFER_SIZE]);
+        }
+    }
+
+    char* Acquire() {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (freeBuffers.empty()) {
+            return new char[BUFFER_SIZE];  // 풀 부족 시 새로 할당
+        }
+        char* buffer = freeBuffers.top();
+        freeBuffers.pop();
+        return buffer;
+    }
+
+    void Release(char* buffer) {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (freeBuffers.size() < POOL_SIZE) {
+            freeBuffers.push(buffer);
+        } else {
+            delete[] buffer;  // 풀이 가득 차면 해제
+        }
+    }
+};
+
+// Thread-local 버퍼 풀 (락 없이)
+thread_local BufferPool localPool;</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>동기 I/O</strong>: 완료까지 대기, 연결당 스레드 필요</li>
+                <li><strong>비동기 I/O</strong>: 요청 후 다른 작업, 소수 스레드로 다수 연결 처리</li>
+                <li><strong>IOCP</strong>: Windows, 완료 통지 방식 (Proactor)</li>
+                <li><strong>epoll</strong>: Linux, 준비 상태 통지 방식 (Reactor)</li>
+                <li><strong>OVERLAPPED</strong>: 비동기 I/O 식별 및 상태 추적</li>
+                <li><strong>멀티 Reactor</strong>: Accept 분리, I/O 스레드 분산</li>
+                <li><strong>최적화</strong>: 버퍼 풀, Zero-copy, TCP_NODELAY, Edge Triggered</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

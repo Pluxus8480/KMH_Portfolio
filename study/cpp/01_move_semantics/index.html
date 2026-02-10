@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Move Semantics 완벽 이해 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>복사 대신 이사를 간다?</h1>
+            <p class="subtitle">Move Semantics로 불필요한 복사 제거하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 왜 Move Semantics가 필요한가?</h2>
+            <div class="conversation">
+                <div class="q">기존 C++의 문제점은 무엇이었나요?</div>
+                <div class="a">
+                    <p class="warning">임시 객체도 복사됩니다. 어차피 버릴 데이터를 왜 복사할까요?</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++03 시절의 비효율</div>
+                        <pre><code>std::vector&lt;int&gt; createBigVector() {
+    std::vector&lt;int&gt; v(1000000);
+    // ... 데이터 채우기
+    return v;  // 복사 발생! (RVO 없을 경우)
+}
+
+void processVector(std::vector&lt;int&gt; v) {  // 인자 전달 시 복사!
+    // ...
+}
+
+int main() {
+    std::vector&lt;int&gt; data = createBigVector();  // 복사 1
+    processVector(data);  // 복사 2 (100만 개 복사!)
+}</code></pre>
+                    </div>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>이사할 때 모든 가구를 "복사"해서 새 집에 놓는다고 상상해보세요.</p>
+                        <p>원본은 버릴 건데 왜 똑같이 만들죠? 그냥 "옮기면" 됩니다!</p>
+                    </div>
+                </div>
+
+                <div class="q">Move Semantics는 어떻게 해결하나요?</div>
+                <div class="a">
+                    <p class="highlight">임시 객체(rvalue)의 자원을 "훔쳐옵니다". 복사 없이 포인터만 가져갑니다!</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+복사 vs 이동
+
+복사 (Copy):
+┌─────────┐     복사     ┌─────────┐
+│ 원본    │  ─────────▶  │ 사본    │
+│ [데이터]│             │ [데이터]│
+└─────────┘             └─────────┘
+데이터 2개, 메모리 2배 사용
+
+이동 (Move):
+┌─────────┐     이동     ┌─────────┐
+│ 원본    │  ─────────▶  │ 사본    │
+│ [null]  │  ◀─ 포인터   │ [데이터]│
+└─────────┘             └─────────┘
+데이터 1개, 포인터만 교환
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: lvalue vs rvalue</h2>
+            <div class="conversation">
+                <div class="q">lvalue와 rvalue가 뭔가요?</div>
+                <div class="a">
+                    <p><strong>lvalue (left value)</strong>: 이름이 있고, 주소를 가져올 수 있는 값</p>
+                    <p><strong>rvalue (right value)</strong>: 임시적이고, 주소를 가져올 수 없는 값</p>
+
+                    <div class="code-block">
+                        <div class="code-header">lvalue와 rvalue 예시</div>
+                        <pre><code>int x = 10;        // x는 lvalue, 10은 rvalue
+int y = x + 5;     // y는 lvalue, (x + 5)는 rvalue
+
+int* p = &x;       // OK: lvalue의 주소
+// int* q = &(x + 5);  // 에러! rvalue의 주소 불가
+
+std::string s1 = "hello";              // lvalue
+std::string s2 = s1 + " world";        // s1 + " world"는 rvalue
+std::string s3 = std::move(s1);        // std::move로 lvalue를 rvalue로 캐스팅
+
+// 함수 반환값
+std::string getName() { return "Kim"; }
+getName();  // rvalue (임시 객체)</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>lvalue</th>
+                                <th>rvalue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>이름</td>
+                                <td>있음</td>
+                                <td>없음 (임시)</td>
+                            </tr>
+                            <tr>
+                                <td>주소</td>
+                                <td>가져올 수 있음 (&x)</td>
+                                <td>불가능</td>
+                            </tr>
+                            <tr>
+                                <td>수명</td>
+                                <td>스코프 끝까지</td>
+                                <td>표현식 끝나면 소멸</td>
+                            </tr>
+                            <tr>
+                                <td>참조</td>
+                                <td>T&</td>
+                                <td>T&&</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 이동 생성자와 이동 대입 연산자</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">이동 생성자 / 이동 대입 연산자 구현</div>
+                    <pre><code>class MyString {
+private:
+    char* data;
+    size_t size;
+
+public:
+    // 기본 생성자
+    MyString() : data(nullptr), size(0) {}
+
+    // 일반 생성자
+    MyString(const char* str) {
+        size = strlen(str);
+        data = new char[size + 1];
+        strcpy(data, str);
+    }
+
+    // 복사 생성자 (lvalue 참조)
+    MyString(const MyString& other) {
+        size = other.size;
+        data = new char[size + 1];
+        strcpy(data, other.data);  // 깊은 복사
+        std::cout << "복사 생성자 호출\n";
+    }
+
+    // 이동 생성자 (rvalue 참조)
+    MyString(MyString&& other) noexcept {
+        data = other.data;    // 포인터만 가져옴
+        size = other.size;
+        other.data = nullptr;  // 원본 무효화
+        other.size = 0;
+        std::cout << "이동 생성자 호출\n";
+    }
+
+    // 복사 대입 연산자
+    MyString& operator=(const MyString& other) {
+        if (this != &other) {
+            delete[] data;
+            size = other.size;
+            data = new char[size + 1];
+            strcpy(data, other.data);
+        }
+        std::cout << "복사 대입 호출\n";
+        return *this;
+    }
+
+    // 이동 대입 연산자
+    MyString& operator=(MyString&& other) noexcept {
+        if (this != &other) {
+            delete[] data;
+            data = other.data;
+            size = other.size;
+            other.data = nullptr;
+            other.size = 0;
+        }
+        std::cout << "이동 대입 호출\n";
+        return *this;
+    }
+
+    ~MyString() {
+        delete[] data;
+    }
+};</code></pre>
+                </div>
+
+                <p class="key-point">noexcept를 붙이면 std::vector 등에서 이동 연산이 사용됩니다!</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: std::move의 정체</h2>
+            <div class="conversation">
+                <div class="q">std::move는 실제로 무엇을 하나요?</div>
+                <div class="a">
+                    <p class="warning">std::move는 아무것도 "이동"하지 않습니다!</p>
+                    <p class="highlight">단지 lvalue를 rvalue 참조로 캐스팅할 뿐입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">std::move 내부 구현</div>
+                        <pre><code>// std::move의 실제 구현 (단순화)
+template&lt;typename T&gt;
+typename std::remove_reference&lt;T&gt;::type&& move(T&& arg) noexcept {
+    return static_cast&lt;typename std::remove_reference&lt;T&gt;::type&&>(arg);
+}
+
+// 더 단순화하면:
+template&lt;typename T&gt;
+T&& move(T& arg) {
+    return static_cast&lt;T&&>(arg);  // lvalue를 rvalue 참조로 캐스팅
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">std::move 사용 예시</div>
+                        <pre><code>std::string str = "Hello";
+
+// std::move 없이
+std::string str2 = str;  // 복사 생성자 호출
+
+// std::move 사용
+std::string str3 = std::move(str);  // 이동 생성자 호출
+// 이제 str은 빈 상태 (valid but unspecified state)
+
+std::cout << "str: " << str << "\n";    // 빈 문자열 또는 불확정
+std::cout << "str3: " << str3 << "\n";  // "Hello"</code></pre>
+                    </div>
+
+                    <p class="warning">std::move 후 원본 객체는 "유효하지만 불확정 상태"입니다. 재사용하려면 다시 값을 할당해야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Rule of Five</h2>
+            <div class="conversation">
+                <div class="q">언제 이동 연산자를 정의해야 하나요?</div>
+                <div class="a">
+                    <p class="highlight">Rule of Five: 하나를 정의하면 다섯 개 모두 정의하세요!</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>Rule of</th>
+                                <th>필요한 특수 멤버 함수</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Rule of Zero</td>
+                                <td>아무것도 정의 안 함 (RAII 사용)</td>
+                            </tr>
+                            <tr>
+                                <td>Rule of Three</td>
+                                <td>소멸자, 복사 생성자, 복사 대입</td>
+                            </tr>
+                            <tr>
+                                <td>Rule of Five</td>
+                                <td>+ 이동 생성자, 이동 대입</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">Rule of Five 적용</div>
+                        <pre><code>class Resource {
+public:
+    Resource();                                    // 기본 생성자
+    ~Resource();                                   // 1. 소멸자
+    Resource(const Resource&);                     // 2. 복사 생성자
+    Resource& operator=(const Resource&);          // 3. 복사 대입
+    Resource(Resource&&) noexcept;                 // 4. 이동 생성자
+    Resource& operator=(Resource&&) noexcept;      // 5. 이동 대입
+};
+
+// 또는 명시적으로 default/delete
+class ModernResource {
+public:
+    ModernResource() = default;
+    ~ModernResource() = default;
+
+    // 복사 금지
+    ModernResource(const ModernResource&) = delete;
+    ModernResource& operator=(const ModernResource&) = delete;
+
+    // 이동만 허용
+    ModernResource(ModernResource&&) = default;
+    ModernResource& operator=(ModernResource&&) = default;
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 활용</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">STL 컨테이너에서의 Move</div>
+                    <pre><code>// vector에 요소 추가
+std::vector&lt;std::string&gt; vec;
+
+std::string str = "Hello";
+vec.push_back(str);            // 복사 (str 유지)
+vec.push_back(std::move(str)); // 이동 (str은 빈 상태)
+
+// emplace_back: 생성자 인자를 직접 전달
+vec.emplace_back("World");     // 제자리 생성 (복사/이동 없음)
+
+// unique_ptr은 이동만 가능
+std::unique_ptr&lt;int&gt; ptr1 = std::make_unique&lt;int&gt;(42);
+// std::unique_ptr&lt;int&gt; ptr2 = ptr1;  // 에러! 복사 금지
+std::unique_ptr&lt;int&gt; ptr2 = std::move(ptr1);  // OK, 이동
+
+// 함수에서 이동
+std::vector&lt;int&gt; createVector() {
+    std::vector&lt;int&gt; v = {1, 2, 3, 4, 5};
+    return v;  // NRVO 또는 암시적 이동
+}
+
+// 이동으로 swap 최적화
+template&lt;typename T&gt;
+void efficient_swap(T& a, T& b) {
+    T temp = std::move(a);  // 이동
+    a = std::move(b);       // 이동
+    b = std::move(temp);    // 이동
+    // 복사 0번!
+}</code></pre>
+                </div>
+
+                <p class="key-point">Modern C++에서는 값 반환이 효율적입니다. RVO와 Move가 최적화합니다!</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Move Semantics</strong>: 임시 객체의 자원을 복사 없이 "훔쳐옴"</li>
+                <li><strong>rvalue 참조 (&&)</strong>: 임시 객체를 받는 참조 타입</li>
+                <li><strong>std::move</strong>: lvalue를 rvalue로 캐스팅 (이동 자체가 아님)</li>
+                <li><strong>noexcept</strong>: 이동 연산자에 붙여야 STL에서 사용됨</li>
+                <li><strong>Rule of Five</strong>: 소멸자/복사/이동 생성자와 대입 연산자</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

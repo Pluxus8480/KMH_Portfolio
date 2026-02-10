@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스킬 시스템의 정석을 찾아서 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+
+        <header class="content-header">
+            <h1>스킬 시스템의 정석을 찾아서</h1>
+            <p class="subtitle">Unreal Engine의 Gameplay Ability System (GAS) 구조 분석</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 왜 GAS가 필요한가?</h2>
+            <div class="conversation">
+                <div class="q">게임에서 스킬이나 능력을 구현할 때 가장 어려운 점은 무엇인가요?</div>
+                <div class="a">
+                    <p>스킬 시스템을 직접 만들어보면 금방 문제에 부딪힙니다. 처음에는 "불 마법 쓰면 데미지 주기"처럼 간단해 보이지만, 실제로는 훨씬 복잡합니다.</p>
+                    <p class="highlight">쿨다운, 마나 소모, 버프/디버프, 스킬 취소, 콤보 연계, 네트워크 동기화...</p>
+                    <p>이 모든 것을 일관성 있게 처리하려면 탄탄한 아키텍처가 필요합니다. 그래서 에픽게임즈가 만든 것이 바로 GAS입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: GAS의 핵심 구성요소</h2>
+            <div class="conversation">
+                <div class="q">GAS는 어떤 부품들로 이루어져 있나요?</div>
+                <div class="a">
+                    <p>GAS는 크게 4가지 핵심 요소로 구성됩니다:</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+┌─────────────────────────────────────────────────────────┐
+│                 Ability System Component                │
+│                    (능력 관리자)                        │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │   Gameplay   │  │   Gameplay   │  │   Gameplay   │  │
+│  │   Ability    │  │   Effect     │  │   Attribute  │  │
+│  │  (실행 로직) │  │   (효과)     │  │   (스탯)     │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│           │                │                │          │
+│           └────────────────┼────────────────┘          │
+│                            ▼                           │
+│                   ┌──────────────┐                     │
+│                   │  Gameplay    │                     │
+│                   │    Cue       │                     │
+│                   │ (시각효과)   │                     │
+│                   └──────────────┘                     │
+└─────────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">GAS의 4가지 핵심 구성요소</p>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p><span class="key-point">Ability System Component</span>는 요리사입니다.</p>
+                <p><span class="key-point">Gameplay Ability</span>는 레시피(어떻게 요리할지)입니다.</p>
+                <p><span class="key-point">Gameplay Effect</span>는 요리의 결과(맛, 영양 등 효과)입니다.</p>
+                <p><span class="key-point">Attribute</span>는 재료의 상태(신선도, 양)입니다.</p>
+                <p><span class="key-point">Gameplay Cue</span>는 요리의 비주얼(플레이팅)입니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Gameplay Ability 깊게 파보기</h2>
+            <div class="conversation">
+                <div class="q">Gameplay Ability는 실제로 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>Gameplay Ability는 <span class="highlight">스킬의 실행 로직</span>을 담당합니다. 발동 조건, 실행 과정, 종료 처리를 모두 포함합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ - 기본 Ability 구조</div>
+                <pre><code>UCLASS()
+class UGA_FireBall : public UGameplayAbility
+{
+    GENERATED_BODY()
+
+public:
+    UGA_FireBall();
+
+    // 이 스킬을 사용할 수 있는가?
+    virtual bool CanActivateAbility(...) const override;
+
+    // 스킬 발동
+    virtual void ActivateAbility(...) override;
+
+    // 스킬 종료
+    virtual void EndAbility(...) override;
+
+protected:
+    // 실제 파이어볼 발사 로직
+    UFUNCTION()
+    void SpawnFireBall();
+
+    // 쿨다운 시간
+    UPROPERTY(EditDefaultsOnly)
+    float CooldownTime = 3.0f;
+};</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">스킬의 실행 흐름은 어떻게 되나요?</div>
+                <div class="a">
+                    <p>스킬이 발동되면 다음과 같은 흐름을 거칩니다:</p>
+                    <p>1. <span class="highlight">CanActivateAbility</span> - 발동 조건 체크 (쿨다운, 마나 등)</p>
+                    <p>2. <span class="highlight">ActivateAbility</span> - 스킬 실행 시작</p>
+                    <p>3. <span class="highlight">CommitAbility</span> - 비용 지불 (마나 차감 등)</p>
+                    <p>4. 실제 로직 수행 (데미지, 이펙트 등)</p>
+                    <p>5. <span class="highlight">EndAbility</span> - 스킬 종료 처리</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Gameplay Effect로 효과 적용하기</h2>
+            <div class="conversation">
+                <div class="q">Gameplay Effect는 무엇인가요?</div>
+                <div class="a">
+                    <p>Gameplay Effect는 <span class="highlight">Attribute를 변경하는 방법</span>을 정의합니다. 데미지, 힐, 버프, 디버프 모두 GE로 처리합니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>Duration Policy</th>
+                        <th>설명</th>
+                        <th>사용 예시</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Instant</td>
+                        <td>즉시 적용 후 사라짐</td>
+                        <td>데미지, 즉시 회복</td>
+                    </tr>
+                    <tr>
+                        <td>Duration</td>
+                        <td>지정된 시간 동안 유지</td>
+                        <td>독 데미지, 일시적 버프</td>
+                    </tr>
+                    <tr>
+                        <td>Infinite</td>
+                        <td>명시적으로 제거할 때까지 유지</td>
+                        <td>패시브 스킬, 장비 효과</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">Blueprint에서 GE 설정</div>
+                <pre><code>// Gameplay Effect: GE_Burn (화상 효과)
+Duration Policy: Has Duration (5초)
+
+Modifiers:
+  - Attribute: Health
+  - Operation: Add
+  - Magnitude: -10 (초당 -10 HP)
+
+Period: 1.0초 (1초마다 적용)
+
+Gameplay Cues:
+  - GameplayCue.Character.Burn (불타는 이펙트)</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Gameplay Tags의 힘</h2>
+            <div class="conversation">
+                <div class="q">Gameplay Tag는 왜 중요한가요?</div>
+                <div class="a">
+                    <p>Gameplay Tag는 GAS의 <span class="highlight">"언어"</span>입니다. 스킬 간의 상호작용, 조건 체크, 상태 관리를 모두 태그로 처리합니다.</p>
+                    <p class="warning">태그 설계를 잘못하면 나중에 수정이 매우 어려워집니다. 초기 설계가 중요합니다!</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">태그 계층 구조 예시</div>
+                <pre><code>Ability.Skill.Fire.Fireball      // 파이어볼 스킬
+Ability.Skill.Fire.Meteor        // 메테오 스킬
+Ability.Skill.Ice.Freeze         // 프리즈 스킬
+
+State.Debuff.Burning             // 화상 상태
+State.Debuff.Frozen              // 빙결 상태
+State.Buff.Shield                // 보호막 상태
+
+Cooldown.Skill.Fire.Fireball     // 파이어볼 쿨다운</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">태그로 스킬 간 상호작용을 어떻게 구현하나요?</div>
+                <div class="a">
+                    <p>예를 들어, "빙결 상태에서는 불 스킬이 2배 데미지"를 구현한다면:</p>
+                    <p>1. 프리즈 스킬이 적용되면 <span class="highlight">State.Debuff.Frozen</span> 태그 부여</p>
+                    <p>2. 불 스킬의 GE에서 <span class="highlight">조건부 Modifier</span> 설정</p>
+                    <p>3. 대상이 Frozen 태그를 가지면 데미지 2배 적용</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 네트워크 동기화</h2>
+            <div class="conversation">
+                <div class="q">멀티플레이어에서 GAS는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>GAS는 기본적으로 <span class="highlight">서버 권한(Server Authority)</span> 모델을 따릅니다. 스킬 발동은 서버에서 검증하고, 결과는 클라이언트에 복제됩니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>Replication Policy</th>
+                        <th>설명</th>
+                        <th>사용 상황</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Local Only</td>
+                        <td>클라이언트에서만 실행</td>
+                        <td>UI 전용 능력</td>
+                    </tr>
+                    <tr>
+                        <td>Local Predicted</td>
+                        <td>클라이언트 예측 + 서버 검증</td>
+                        <td>반응성 중요한 스킬</td>
+                    </tr>
+                    <tr>
+                        <td>Server Only</td>
+                        <td>서버에서만 실행</td>
+                        <td>중요 판정 (데미지 등)</td>
+                    </tr>
+                    <tr>
+                        <td>Server Initiated</td>
+                        <td>서버에서 시작, 모두에게 복제</td>
+                        <td>AI 스킬, 환경 효과</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>GAS</strong>는 스킬/능력 시스템을 위한 언리얼의 표준 프레임워크입니다</li>
+                <li><strong>Ability System Component</strong>가 모든 것을 관리하는 중앙 허브입니다</li>
+                <li><strong>Gameplay Ability</strong>는 스킬의 "어떻게"를, <strong>Gameplay Effect</strong>는 "무엇을"을 정의합니다</li>
+                <li><strong>Gameplay Tag</strong>는 시스템 간 통신의 핵심 언어입니다</li>
+                <li>네트워크 게임에서는 <strong>Replication Policy</strong>를 신중히 선택해야 합니다</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

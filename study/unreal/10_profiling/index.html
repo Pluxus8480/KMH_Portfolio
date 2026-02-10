@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>병목을 찾아 해결하라 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+
+        <header class="content-header">
+            <h1>병목을 찾아 해결하라</h1>
+            <p class="subtitle">프로파일링과 최적화 기법</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 최적화의 첫 번째 규칙</h2>
+            <div class="conversation">
+                <div class="q">성능 최적화를 시작하기 전에 알아야 할 것은?</div>
+                <div class="a">
+                    <p><span class="warning">추측으로 최적화하지 마세요!</span></p>
+                    <p>개발자의 직감은 종종 틀립니다. 반드시 <span class="highlight">측정(Profiling)</span>을 먼저 하고, 실제 병목 지점을 찾은 뒤 최적화해야 합니다.</p>
+                    <p class="key-point">"Premature optimization is the root of all evil" - Donald Knuth</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 최적화 워크플로우</strong>
+                <p>1. <span class="highlight">측정</span> - 프로파일러로 병목 찾기</p>
+                <p>2. <span class="highlight">분석</span> - 왜 느린지 이해하기</p>
+                <p>3. <span class="highlight">수정</span> - 한 번에 하나씩 고치기</p>
+                <p>4. <span class="highlight">검증</span> - 다시 측정해서 개선 확인</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 언리얼 프로파일링 도구</h2>
+            <div class="conversation">
+                <div class="q">어떤 도구들을 사용할 수 있나요?</div>
+                <div class="a">
+                    <p>언리얼은 강력한 내장 프로파일링 도구를 제공합니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>도구</th>
+                        <th>용도</th>
+                        <th>실행 방법</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Unreal Insights</td>
+                        <td>종합 프로파일링</td>
+                        <td>-trace=cpu,frame,bookmark</td>
+                    </tr>
+                    <tr>
+                        <td>stat 명령어</td>
+                        <td>실시간 통계</td>
+                        <td>콘솔에서 stat xxx</td>
+                    </tr>
+                    <tr>
+                        <td>GPU Visualizer</td>
+                        <td>GPU 병목 분석</td>
+                        <td>Ctrl+Shift+, 또는 ProfileGPU</td>
+                    </tr>
+                    <tr>
+                        <td>Session Frontend</td>
+                        <td>원격 프로파일링</td>
+                        <td>Window → Developer Tools</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">유용한 stat 명령어</div>
+                <pre><code>// 기본 프레임 통계
+stat fps           // FPS 표시
+stat unit          // Game/Draw/GPU 시간 분리
+stat unitgraph     // 그래프로 시각화
+
+// 상세 분석
+stat game          // 게임 스레드 상세
+stat gpu           // GPU 렌더링 상세
+stat scenerendering // 렌더 패스별 시간
+stat rhi           // RHI 레벨 통계
+
+// 특정 시스템
+stat physics       // 물리 엔진
+stat anim          // 애니메이션
+stat ai            // AI 시스템
+stat particles     // 파티클 시스템
+stat ScriptTime    // Blueprint 실행 시간
+
+// 메모리
+stat memory        // 메모리 사용량
+stat streaming     // 스트리밍 상태</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: CPU vs GPU 병목 구분</h2>
+            <div class="conversation">
+                <div class="q">CPU와 GPU 중 어디가 병목인지 어떻게 알 수 있나요?</div>
+                <div class="a">
+                    <p><span class="highlight">stat unit</span> 명령어로 확인합니다. Game, Draw, GPU 중 가장 큰 값이 병목입니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+stat unit 결과 해석:
+
+Frame: 33.3ms (30 fps)
+├── Game:  5.0ms  ← CPU 게임 로직 (Tick, Physics 등)
+├── Draw: 10.0ms  ← CPU 렌더 스레드 (컬링, 드로우콜)
+└── GPU:  20.0ms  ← GPU 렌더링 시간
+
+이 경우: GPU가 병목! (20ms로 가장 큼)
+
+┌──────────────────────────────────────────────────────┐
+│                    병목 판단                          │
+├──────────────────────────────────────────────────────┤
+│ Game > Draw, GPU     → CPU 게임로직 병목             │
+│ Draw > Game, GPU     → CPU 렌더스레드 병목 (드로우콜)│
+│ GPU > Game, Draw     → GPU 병목 (셰이더, 폴리곤)    │
+└──────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">stat unit으로 병목 판단하기</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: CPU 최적화</h2>
+            <div class="conversation">
+                <div class="q">CPU 병목을 해결하는 방법은?</div>
+                <div class="a">
+                    <p>병목 원인에 따라 다른 접근이 필요합니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>원인</th>
+                        <th>증상</th>
+                        <th>해결책</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Tick 과부하</td>
+                        <td>Game 시간 높음</td>
+                        <td>Tick 간격 조절, Timer 사용</td>
+                    </tr>
+                    <tr>
+                        <td>Blueprint 과다</td>
+                        <td>ScriptTime 높음</td>
+                        <td>C++로 이식, 루프 최적화</td>
+                    </tr>
+                    <tr>
+                        <td>Physics 과부하</td>
+                        <td>stat physics 높음</td>
+                        <td>콜리전 단순화, 서브스텝 조절</td>
+                    </tr>
+                    <tr>
+                        <td>드로우콜 과다</td>
+                        <td>Draw 시간 높음</td>
+                        <td>인스턴싱, 메시 병합</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">Tick 최적화 기법</div>
+                <pre><code>// ❌ 나쁜 예: 모든 Actor가 매 프레임 Tick
+void AMyActor::Tick(float DeltaTime)
+{
+    // 멀리 있어도 항상 실행
+    DoExpensiveCalculation();
+}
+
+// ✅ 좋은 예 1: Tick 비활성화
+AMyActor::AMyActor()
+{
+    PrimaryActorTick.bCanEverTick = false;  // Tick 사용 안함
+}
+
+// ✅ 좋은 예 2: Tick 간격 조절
+AMyActor::AMyActor()
+{
+    PrimaryActorTick.TickInterval = 0.1f;  // 0.1초마다
+}
+
+// ✅ 좋은 예 3: Timer 사용
+void AMyActor::BeginPlay()
+{
+    GetWorld()->GetTimerManager().SetTimer(
+        TimerHandle,
+        this,
+        &AMyActor::DoPeriodicWork,
+        1.0f,  // 1초마다
+        true   // 반복
+    );
+}
+
+// ✅ 좋은 예 4: 거리 기반 Tick
+void AMyActor::Tick(float DeltaTime)
+{
+    float Distance = GetDistanceToPlayer();
+    if (Distance > 5000.0f)
+    {
+        // 멀면 저빈도 업데이트
+        SetActorTickInterval(0.5f);
+        return;
+    }
+    SetActorTickInterval(0.0f);  // 가까우면 매 프레임
+    DoWork();
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: GPU 최적화</h2>
+            <div class="conversation">
+                <div class="q">GPU 병목을 해결하는 방법은?</div>
+                <div class="a">
+                    <p>GPU 병목은 주로 <span class="highlight">폴리곤 수</span>, <span class="highlight">셰이더 복잡도</span>, <span class="highlight">텍스처 대역폭</span>에서 발생합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">GPU Visualizer 분석</div>
+                <pre><code>// ProfileGPU 또는 Ctrl+Shift+, 실행
+
+주요 항목:
+├── BasePass:       8.5ms  ← 기본 지오메트리 렌더링
+├── Lighting:       4.0ms  ← 라이팅 계산
+├── Translucency:   2.0ms  ← 반투명 오브젝트
+├── PostProcessing: 3.0ms  ← 후처리 효과
+└── UI:             0.5ms  ← UI 렌더링
+
+병목 판단:
+• BasePass 높음 → 폴리곤/드로우콜 문제
+• Lighting 높음 → 광원 수/그림자 문제
+• PostProcessing 높음 → 후처리 효과 과다</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>최적화 기법</th>
+                        <th>효과</th>
+                        <th>적용 방법</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>LOD 시스템</td>
+                        <td>먼 거리 폴리곤 감소</td>
+                        <td>메시에 LOD 설정</td>
+                    </tr>
+                    <tr>
+                        <td>오클루전 컬링</td>
+                        <td>안 보이는 것 스킵</td>
+                        <td>Precomputed Visibility</td>
+                    </tr>
+                    <tr>
+                        <td>텍스처 스트리밍</td>
+                        <td>VRAM 절약</td>
+                        <td>Texture Streaming Pool</td>
+                    </tr>
+                    <tr>
+                        <td>HLOD</td>
+                        <td>원거리 메시 병합</td>
+                        <td>World Settings</td>
+                    </tr>
+                    <tr>
+                        <td>인스턴싱</td>
+                        <td>드로우콜 감소</td>
+                        <td>Instanced Static Mesh</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: Unreal Insights 활용</h2>
+            <div class="conversation">
+                <div class="q">Unreal Insights는 어떻게 사용하나요?</div>
+                <div class="a">
+                    <p>Unreal Insights는 가장 강력한 프로파일링 도구입니다. 트레이스 파일을 기록하고 상세 분석할 수 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Insights 실행 방법</div>
+                <pre><code>// 방법 1: 에디터에서
+Window → Developer Tools → Session Frontend → Profiler
+
+// 방법 2: 실행 인자로 트레이스
+MyGame.exe -trace=cpu,frame,bookmark,file
+
+// 방법 3: 콘솔 명령어
+trace.start cpu,gpu,frame,bookmark
+// ... 게임 플레이 ...
+trace.stop
+
+// Insights 뷰어 실행
+UnrealInsights.exe [trace파일경로]</code></pre>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Unreal Insights 분석 화면:
+
+Timeline View
+┌────────────────────────────────────────────────────────┐
+│ GameThread  │████████│  │████│     │████████│         │
+│ RenderThread│    │████████│    │████████│             │
+│ GPU         │        │██████████████│     │███████│   │
+└────────────────────────────────────────────────────────┘
+               0ms     5ms    10ms    15ms    20ms
+
+각 블록을 클릭하면:
+• 함수 이름
+• 실행 시간
+• 호출 스택
+• 자식 함수 시간 분포
+
+핫스팟 찾기: 가장 넓은 블록 → 가장 시간 많이 쓰는 함수
+                </pre>
+                <p class="diagram-caption">Insights Timeline 분석</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>측정 먼저!</strong> 추측으로 최적화하지 마세요</li>
+                <li><strong>stat unit</strong>으로 CPU(Game/Draw) vs GPU 병목 구분</li>
+                <li>CPU 최적화: <strong>Tick 간격 조절</strong>, <strong>Timer 사용</strong>, <strong>Blueprint→C++</strong></li>
+                <li>GPU 최적화: <strong>LOD</strong>, <strong>오클루전 컬링</strong>, <strong>인스턴싱</strong></li>
+                <li><strong>Unreal Insights</strong>로 상세한 타임라인 분석</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

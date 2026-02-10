@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TCP vs UDP | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../server.html" class="back-link">← 목록으로</a>
+            <h1>빠른 게 좋을까, 확실한 게 좋을까?</h1>
+            <p class="subtitle">게임 장르별 TCP vs UDP 선택 기준</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: TCP와 UDP의 근본적 차이</h2>
+            <div class="conversation">
+                <div class="q">TCP와 UDP의 가장 큰 차이는 무엇인가요?</div>
+                <div class="a">
+                    <p><strong>신뢰성</strong>과 <strong>속도</strong>의 트레이드오프입니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+TCP (Transmission Control Protocol):
+┌─────────────────────────────────────────────────────────────┐
+│  "확실하게, 순서대로 배달합니다"                               │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Sender                                      Receiver       │
+│    │                                            │           │
+│    │── [1] Hello ─────────────────────────────▶│           │
+│    │◀──────────────────────────────── ACK [1] ──│           │
+│    │                                            │           │
+│    │── [2] World ──────────X (손실)              │           │
+│    │         ...타임아웃...                       │           │
+│    │── [2] World (재전송) ───────────────────▶│           │
+│    │◀──────────────────────────────── ACK [2] ──│           │
+│                                                             │
+│  ✅ 장점: 모든 패킷 도착 보장, 순서 보장                      │
+│  ❌ 단점: 손실 시 대기, Head-of-Line Blocking               │
+└─────────────────────────────────────────────────────────────┘
+
+UDP (User Datagram Protocol):
+┌─────────────────────────────────────────────────────────────┐
+│  "빠르게, 최선을 다해 배달합니다 (보장은 없음)"                 │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Sender                                      Receiver       │
+│    │                                            │           │
+│    │── [1] Position ─────────────────────────▶│  ✓        │
+│    │── [2] Position ──────────X (손실)         │  ✗        │
+│    │── [3] Position ─────────────────────────▶│  ✓        │
+│    │                                            │           │
+│    │  (손실 무시, 그냥 계속 진행)                  │           │
+│                                                             │
+│  ✅ 장점: 빠름, 지연 없음                                    │
+│  ❌ 단점: 손실/순서 미보장, 직접 처리 필요                    │
+└─────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">Head-of-Line Blocking이 뭔가요?</div>
+                <div class="a">
+                    <p>TCP에서 하나의 패킷이 손실되면, <strong>그 뒤의 모든 패킷이 대기</strong>해야 합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+Head-of-Line Blocking 문제:
+
+시간 →
+패킷:   [1]  [2]  [3]  [4]  [5]
+         ✓    ✗    ✓    ✓    ✓
+              │
+              └── [2] 손실!
+
+수신 버퍼:
+         [1] [?] [3] [4] [5]
+              │
+              └── [2]가 올 때까지 [3][4][5]를 애플리케이션에 전달 못함
+
+결과: 50ms 후 [2] 재전송 도착
+      → [2][3][4][5] 한꺼번에 전달
+      → 실제론 [3][4][5]도 50ms 지연됨!
+                        </pre>
+                    </div>
+                    <p class="warning">FPS에서 위치 정보가 50ms 지연되면 캐릭터가 순간이동하는 것처럼 보입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 게임 데이터 특성 분석</h2>
+            <div class="conversation">
+                <div class="q">게임에서 어떤 데이터가 오가나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>데이터 유형</th>
+                                <th>특성</th>
+                                <th>손실 허용?</th>
+                                <th>순서 중요?</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>위치/이동</td>
+                                <td>빈번, 작음</td>
+                                <td>✅ 예 (최신 값이면 됨)</td>
+                                <td>❌ 아니오</td>
+                            </tr>
+                            <tr>
+                                <td>사격/스킬</td>
+                                <td>중요 이벤트</td>
+                                <td>❌ 아니오</td>
+                                <td>⚠️ 상황에 따라</td>
+                            </tr>
+                            <tr>
+                                <td>채팅</td>
+                                <td>텍스트</td>
+                                <td>❌ 아니오</td>
+                                <td>✅ 예</td>
+                            </tr>
+                            <tr>
+                                <td>인벤토리 변경</td>
+                                <td>중요, 드묾</td>
+                                <td>❌ 아니오</td>
+                                <td>✅ 예</td>
+                            </tr>
+                            <tr>
+                                <td>게임 결과</td>
+                                <td>매우 중요</td>
+                                <td>❌ 아니오</td>
+                                <td>✅ 예</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">대부분의 게임은 "위치 데이터"가 가장 빈번합니다. 이게 UDP를 선호하는 이유입니다.</p>
+                </div>
+
+                <div class="q">그러면 중요한 데이터는 어떻게 보내나요?</div>
+                <div class="a">
+                    <p>UDP 위에 <strong>신뢰성 계층</strong>을 직접 구현합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Reliable UDP 패킷 구조</div>
+                        <pre><code>// 패킷 헤더 구조
+struct PacketHeader {
+    uint16_t sequence;      // 패킷 순번
+    uint16_t ack;           // 마지막으로 받은 패킷 순번
+    uint32_t ackBitfield;   // 최근 32개 패킷 수신 여부 비트마스크
+    uint8_t channelId;      // 채널 (unreliable, reliable, ordered)
+    uint8_t packetType;     // 패킷 타입
+};
+
+// 채널 타입
+enum class ChannelType : uint8_t {
+    Unreliable = 0,        // 손실 허용, 순서 무관 (위치)
+    UnreliableSequenced,   // 손실 허용, 최신만 처리 (상태)
+    Reliable,              // 손실 불허, 순서 무관 (이벤트)
+    ReliableOrdered,       // 손실 불허, 순서 보장 (채팅, RPC)
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Reliable UDP 구현</h2>
+            <div class="conversation">
+                <div class="q">ACK와 재전송은 어떻게 구현하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Reliable UDP 핵심 로직</div>
+                        <pre><code>class ReliableUDP {
+    static const int WINDOW_SIZE = 32;
+
+    // 송신 측
+    struct SendBuffer {
+        uint16_t sequence;
+        std::vector<uint8_t> data;
+        float sendTime;
+        int retryCount;
+    };
+
+    std::deque<SendBuffer> pendingAcks;  // ACK 대기 중인 패킷
+    uint16_t localSequence = 0;
+
+    // 수신 측
+    uint16_t remoteSequence = 0;
+    uint32_t receivedBits = 0;  // 최근 32개 패킷 수신 비트맵
+
+public:
+    void SendReliable(const std::vector<uint8_t>& data) {
+        PacketHeader header;
+        header.sequence = localSequence++;
+        header.ack = remoteSequence;
+        header.ackBitfield = receivedBits;
+        header.channelId = (uint8_t)ChannelType::Reliable;
+
+        // 패킷 전송
+        SendPacket(header, data);
+
+        // 재전송 큐에 추가
+        pendingAcks.push_back({
+            header.sequence,
+            data,
+            GetTime(),
+            0
+        });
+    }
+
+    void OnPacketReceived(const PacketHeader& header,
+                          const std::vector<uint8_t>& data) {
+        // 1. ACK 처리 (상대가 내 패킷을 받았는지)
+        ProcessAcks(header.ack, header.ackBitfield);
+
+        // 2. 시퀀스 처리 (내가 상대 패킷을 받았음을 기록)
+        if (IsNewer(header.sequence, remoteSequence)) {
+            // 건너뛴 패킷들 비트 시프트
+            int shift = header.sequence - remoteSequence;
+            receivedBits = (receivedBits << shift) | 1;
+            remoteSequence = header.sequence;
+        } else {
+            // 과거 패킷
+            int diff = remoteSequence - header.sequence;
+            if (diff < 32) {
+                receivedBits |= (1 << diff);
+            }
+        }
+
+        // 3. 데이터 처리 (채널 타입에 따라)
+        ProcessData(header.channelId, header.sequence, data);
+    }
+
+private:
+    void ProcessAcks(uint16_t ack, uint32_t ackBits) {
+        // ack: 상대가 받은 가장 최근 시퀀스
+        // ackBits: ack-1, ack-2, ... ack-32까지의 수신 여부
+
+        auto it = pendingAcks.begin();
+        while (it != pendingAcks.end()) {
+            uint16_t seq = it->sequence;
+
+            bool acked = false;
+            if (seq == ack) {
+                acked = true;
+            } else if (IsOlder(seq, ack)) {
+                int diff = ack - seq;
+                if (diff <= 32 && (ackBits & (1 << (diff - 1)))) {
+                    acked = true;
+                }
+            }
+
+            if (acked) {
+                it = pendingAcks.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    void Update() {
+        float now = GetTime();
+
+        for (auto& pending : pendingAcks) {
+            // 100ms 타임아웃 시 재전송
+            if (now - pending.sendTime > 0.1f) {
+                if (pending.retryCount < MAX_RETRIES) {
+                    // 재전송
+                    PacketHeader header;
+                    header.sequence = pending.sequence;
+                    header.ack = remoteSequence;
+                    header.ackBitfield = receivedBits;
+
+                    SendPacket(header, pending.data);
+
+                    pending.sendTime = now;
+                    pending.retryCount++;
+                } else {
+                    // 연결 끊김 처리
+                    OnConnectionLost();
+                }
+            }
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">Ordered 채널은 어떻게 구현하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Reliable Ordered 채널</div>
+                        <pre><code>class ReliableOrderedChannel {
+    uint16_t nextExpectedSeq = 0;
+    std::map<uint16_t, std::vector<uint8_t>> outOfOrderBuffer;
+
+public:
+    void OnDataReceived(uint16_t sequence,
+                        const std::vector<uint8_t>& data) {
+        if (sequence == nextExpectedSeq) {
+            // 순서대로 도착
+            DeliverToApplication(data);
+            nextExpectedSeq++;
+
+            // 버퍼에 있던 다음 패킷들도 전달
+            while (outOfOrderBuffer.count(nextExpectedSeq)) {
+                DeliverToApplication(outOfOrderBuffer[nextExpectedSeq]);
+                outOfOrderBuffer.erase(nextExpectedSeq);
+                nextExpectedSeq++;
+            }
+        } else if (IsNewer(sequence, nextExpectedSeq)) {
+            // 미래 패킷 → 버퍼에 저장
+            outOfOrderBuffer[sequence] = data;
+        }
+        // 과거 패킷은 이미 처리됨, 무시
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 게임 장르별 선택</h2>
+            <div class="conversation">
+                <div class="q">FPS 게임은 뭘 사용하나요?</div>
+                <div class="a">
+                    <p><strong>UDP</strong>가 압도적으로 유리합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+FPS에서 TCP vs UDP:
+
+[TCP 사용 시]
+t=0ms:   위치 패킷 1 전송
+t=16ms:  위치 패킷 2 전송 (패킷 손실!)
+t=32ms:  위치 패킷 3 전송
+t=48ms:  위치 패킷 4 전송
+         ...
+t=100ms: 패킷 2 재전송 도착
+         → 이제서야 패킷 2,3,4 순서대로 처리
+         → 패킷 4의 실제 지연: 100ms - 48ms = 52ms 추가 지연!
+
+[UDP 사용 시]
+t=0ms:   위치 패킷 1 전송 → 즉시 처리
+t=16ms:  위치 패킷 2 전송 (패킷 손실) → 무시
+t=32ms:  위치 패킷 3 전송 → 즉시 처리 (패킷 2 건너뜀)
+t=48ms:  위치 패킷 4 전송 → 즉시 처리
+         → 패킷 2만 손실, 나머지는 정상 처리!
+                        </pre>
+                    </div>
+                    <p class="highlight">FPS에서 오래된 위치 정보는 의미가 없습니다. 최신 정보만 중요합니다.</p>
+                </div>
+
+                <div class="q">MMORPG는 어떤가요?</div>
+                <div class="a">
+                    <p>대부분 <strong>TCP</strong>를 사용하거나, <strong>하이브리드</strong>를 사용합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 MMORPG의 특수성</strong>
+                        <p>- 이동 속도가 느려서 16ms 지연이 덜 눈에 띔</p>
+                        <p>- 거래, 퀘스트, 채팅 등 신뢰성이 중요한 데이터 많음</p>
+                        <p>- 동시 접속자가 많아서 UDP 구현 복잡도 부담</p>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>게임 장르</th>
+                                <th>권장 프로토콜</th>
+                                <th>이유</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>FPS/TPS</td>
+                                <td>UDP (+Reliable)</td>
+                                <td>반응 속도 최우선</td>
+                            </tr>
+                            <tr>
+                                <td>RTS</td>
+                                <td>UDP (Lockstep)</td>
+                                <td>입력만 전송, 손실 불가</td>
+                            </tr>
+                            <tr>
+                                <td>MMORPG</td>
+                                <td>TCP or 하이브리드</td>
+                                <td>신뢰성 중요, 속도 덜 중요</td>
+                            </tr>
+                            <tr>
+                                <td>모바일 캐주얼</td>
+                                <td>TCP</td>
+                                <td>개발 편의성, 불안정한 네트워크</td>
+                            </tr>
+                            <tr>
+                                <td>턴제 게임</td>
+                                <td>TCP</td>
+                                <td>실시간 아님, 신뢰성 필수</td>
+                            </tr>
+                            <tr>
+                                <td>격투 게임</td>
+                                <td>UDP (롤백)</td>
+                                <td>프레임 단위 정밀도 필요</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 하이브리드 접근법</h2>
+            <div class="conversation">
+                <div class="q">TCP와 UDP를 동시에 사용할 수 있나요?</div>
+                <div class="a">
+                    <p>네, 많은 게임이 <strong>이중 연결</strong>을 사용합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">하이브리드 네트워크 구조</div>
+                        <pre><code>class HybridConnection {
+    TCPConnection tcpConn;   // 신뢰성 데이터용
+    UDPConnection udpConn;   // 실시간 데이터용
+
+public:
+    void Send(const Packet& packet) {
+        switch (packet.priority) {
+            case Priority::RealTime:
+                // 위치, 회전, 상태
+                udpConn.SendUnreliable(packet);
+                break;
+
+            case Priority::Important:
+                // 사격, 스킬 사용, 히트 판정
+                udpConn.SendReliable(packet);
+                break;
+
+            case Priority::Critical:
+                // 거래, 결제, 인벤토리
+                tcpConn.Send(packet);
+                break;
+        }
+    }
+
+    void OnUDPFailed() {
+        // UDP 차단 시 TCP로 폴백
+        useTCPOnly = true;
+        Log("UDP unavailable, falling back to TCP");
+    }
+};
+
+// 데이터 타입별 채널 매핑
+std::map<PacketType, ChannelConfig> channelMap = {
+    { PacketType::Position,     { UDP, Unreliable } },
+    { PacketType::Rotation,     { UDP, UnreliableSequenced } },
+    { PacketType::Shoot,        { UDP, Reliable } },
+    { PacketType::Chat,         { TCP, - } },
+    { PacketType::Trade,        { TCP, - } },
+    { PacketType::Login,        { TCP, - } },
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">WebSocket/WebRTC는 어떤가요?</div>
+                <div class="a">
+                    <p>브라우저 게임에서 사용됩니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>기술</th>
+                                <th>기반</th>
+                                <th>특징</th>
+                                <th>용도</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>WebSocket</td>
+                                <td>TCP</td>
+                                <td>양방향, 웹 친화적</td>
+                                <td>브라우저 게임 (캐주얼)</td>
+                            </tr>
+                            <tr>
+                                <td>WebRTC DataChannel</td>
+                                <td>SCTP/UDP</td>
+                                <td>P2P 가능, 신뢰/비신뢰 선택</td>
+                                <td>브라우저 게임 (실시간)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">WebRTC DataChannel 설정</div>
+                        <pre><code>// JavaScript (브라우저)
+const peerConnection = new RTCPeerConnection(config);
+
+// 비신뢰 채널 (위치 데이터)
+const unreliableChannel = peerConnection.createDataChannel("position", {
+    ordered: false,
+    maxRetransmits: 0  // 재전송 없음 = UDP-like
+});
+
+// 신뢰 채널 (이벤트)
+const reliableChannel = peerConnection.createDataChannel("events", {
+    ordered: true,
+    // maxRetransmits 미지정 = 무한 재전송 = TCP-like
+});</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 고려사항</h2>
+            <div class="conversation">
+                <div class="q">UDP가 막히는 네트워크 환경이 있나요?</div>
+                <div class="a">
+                    <p>네, 일부 기업/학교 네트워크, 일부 국가에서 UDP가 차단됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">UDP 가용성 체크 및 폴백</div>
+                        <pre><code>class ConnectionManager {
+    enum class ConnectionState {
+        TryingUDP,
+        UDPActive,
+        FallingBackToTCP,
+        TCPOnly
+    };
+
+    ConnectionState state = ConnectionState::TryingUDP;
+    float udpTimeout = 5.0f;
+
+public:
+    void Connect(const std::string& serverAddr) {
+        // TCP는 항상 연결 (기본 통신)
+        tcpConn.Connect(serverAddr, TCP_PORT);
+
+        // UDP 연결 시도
+        udpConn.SendHandshake(serverAddr, UDP_PORT);
+        state = ConnectionState::TryingUDP;
+
+        // 5초 내 응답 없으면 TCP만 사용
+        StartTimer(udpTimeout, [this]() {
+            if (state == ConnectionState::TryingUDP) {
+                state = ConnectionState::TCPOnly;
+                Log("UDP unavailable, using TCP only");
+            }
+        });
+    }
+
+    void OnUDPHandshakeResponse() {
+        state = ConnectionState::UDPActive;
+        Log("UDP connection established");
+    }
+
+    void Send(const Packet& packet, bool reliable) {
+        if (state == ConnectionState::UDPActive && !reliable) {
+            udpConn.Send(packet);
+        } else {
+            // TCP 폴백
+            tcpConn.Send(packet);
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">NAT 통과(NAT Traversal)는 어떻게 하나요?</div>
+                <div class="a">
+                    <p>P2P 연결이 필요할 때 NAT를 통과해야 합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+NAT Traversal 기법:
+
+1. STUN (Simple Traversal of UDP through NATs)
+   ┌─────────┐                          ┌─────────┐
+   │ Client  │──▶ STUN Server ◀─────────│ Client  │
+   │  (NAT)  │      │                   │  (NAT)  │
+   └─────────┘      │                   └─────────┘
+                    ▼
+           "너의 공인 IP:Port는 1.2.3.4:5000이야"
+           → 이 정보를 상대에게 전달
+
+2. TURN (Traversal Using Relays around NAT)
+   - STUN 실패 시 중계 서버 사용
+   ┌─────────┐      ┌─────────┐      ┌─────────┐
+   │ Client A│◀────▶│  TURN   │◀────▶│ Client B│
+   └─────────┘      │ Server  │      └─────────┘
+                    └─────────┘
+   - 모든 트래픽이 서버 경유 (느림, 비용↑)
+
+3. UDP Hole Punching
+   - 양쪽이 동시에 상대 NAT에 패킷 전송
+   - 타이밍 맞으면 직접 연결 성공
+                        </pre>
+                    </div>
+                    <p class="key-point">게임 서버 연결은 보통 서버가 공인 IP라 NAT 문제 없음. P2P 필요 시에만 STUN/TURN 사용.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>TCP</strong>: 신뢰성 보장, 순서 보장, 하지만 Head-of-Line Blocking</li>
+                <li><strong>UDP</strong>: 빠르지만 손실/순서 미보장, 직접 구현 필요</li>
+                <li><strong>Reliable UDP</strong>: 시퀀스, ACK, 재전송으로 TCP 수준 신뢰성 구현</li>
+                <li><strong>FPS/격투</strong>: UDP 필수 (반응 속도 최우선)</li>
+                <li><strong>MMO/턴제</strong>: TCP 적합 (신뢰성 중요, 속도 덜 중요)</li>
+                <li><strong>하이브리드</strong>: TCP + UDP 동시 사용, 데이터별 채널 분리</li>
+                <li><strong>폴백</strong>: UDP 차단 환경 대비 TCP 폴백 필수</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

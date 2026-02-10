@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>절두체 컬링 (Frustum Culling) | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>카메라에 안 보이는 물체를 왜 그릴까?</h1>
+            <p class="subtitle">절두체 컬링으로 불필요한 렌더링 제거하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 절두체란 무엇인가?</h2>
+            <div class="conversation">
+                <div class="q">절두체(Frustum)가 뭔가요?</div>
+                <div class="a">
+                    <p>카메라가 볼 수 있는 3D 공간의 범위입니다.</p>
+                    <p class="highlight">피라미드의 꼭대기를 잘라낸 형태로, 6개의 평면으로 둘러싸여 있습니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+카메라 절두체 (View Frustum)
+
+            Near Plane
+               ┌──┐
+              /    \
+             /      \     Top Plane
+            /        \    ─────────
+           /    👁    \
+          /   Camera   \
+         /              \
+        /                \
+       └──────────────────┘
+            Far Plane
+
+6개 평면:
+• Near (가까운 면)   • Far (먼 면)
+• Left (왼쪽)        • Right (오른쪽)
+• Top (위)          • Bottom (아래)
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">왜 절두체 바깥의 물체를 검사해야 하나요?</div>
+                <div class="a">
+                    <p>GPU에 그리기 명령을 보내는 것 자체가 비용입니다.</p>
+                    <p class="warning">화면에 안 보여도 드로우 콜이 발생하면 성능 낭비!</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>사진을 찍을 때 카메라 뒤에 있는 사람은 찍히지 않습니다.</p>
+                        <p>그런데 그 사람에게 "포즈 취해!"라고 하면 시간 낭비죠. 그것이 불필요한 드로우 콜입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 절두체 평면 추출</h2>
+            <div class="conversation">
+                <div class="q">절두체의 6개 평면을 어떻게 구하나요?</div>
+                <div class="a">
+                    <p class="key-point">View-Projection 행렬에서 직접 추출할 수 있습니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++ 절두체 평면 추출</div>
+                        <pre><code>struct Plane {
+    float a, b, c, d;  // ax + by + cz + d = 0
+
+    void normalize() {
+        float len = std::sqrt(a*a + b*b + c*c);
+        a /= len; b /= len; c /= len; d /= len;
+    }
+
+    // 점과 평면의 부호 거리
+    float distance(float x, float y, float z) const {
+        return a * x + b * y + c * z + d;
+    }
+};
+
+class Frustum {
+public:
+    Plane planes[6];  // Left, Right, Bottom, Top, Near, Far
+
+    // View-Projection 행렬에서 절두체 추출
+    void extractFromMatrix(const float* vp) {
+        // vp는 4x4 행렬 (column-major)
+        // m[row][col] = vp[col * 4 + row]
+
+        // Left: row3 + row0
+        planes[0] = {vp[3] + vp[0], vp[7] + vp[4],
+                     vp[11] + vp[8], vp[15] + vp[12]};
+
+        // Right: row3 - row0
+        planes[1] = {vp[3] - vp[0], vp[7] - vp[4],
+                     vp[11] - vp[8], vp[15] - vp[12]};
+
+        // Bottom: row3 + row1
+        planes[2] = {vp[3] + vp[1], vp[7] + vp[5],
+                     vp[11] + vp[9], vp[15] + vp[13]};
+
+        // Top: row3 - row1
+        planes[3] = {vp[3] - vp[1], vp[7] - vp[5],
+                     vp[11] - vp[9], vp[15] - vp[13]};
+
+        // Near: row3 + row2
+        planes[4] = {vp[3] + vp[2], vp[7] + vp[6],
+                     vp[11] + vp[10], vp[15] + vp[14]};
+
+        // Far: row3 - row2
+        planes[5] = {vp[3] - vp[2], vp[7] - vp[6],
+                     vp[11] - vp[10], vp[15] - vp[14]};
+
+        // 정규화
+        for (int i = 0; i < 6; i++) {
+            planes[i].normalize();
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: AABB vs 절두체 판정</h2>
+            <div class="conversation">
+                <div class="q">물체가 절두체 안에 있는지 어떻게 검사하나요?</div>
+                <div class="a">
+                    <p>물체의 바운딩 박스(AABB)를 6개 평면과 비교합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+AABB vs 평면 판정
+
+        평면
+          │
+    ●─────┼─────●   모든 점이 평면 앞: Inside
+          │
+          │
+    ●─────┼─────●   일부 점이 평면 뒤: Intersect
+          │    ●
+          │
+          │         모든 점이 평면 뒤: Outside
+    ●─────●─────●
+                        </pre>
+                    </div>
+
+                    <p><strong>최적화된 판정 방법:</strong></p>
+                    <ul>
+                        <li>각 평면에 대해 "가장 가까운 점"만 검사</li>
+                        <li>그 점이 평면 뒤에 있으면 완전히 밖</li>
+                    </ul>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">최적화된 AABB-절두체 검사</div>
+                    <pre><code>struct AABB {
+    float minX, minY, minZ;
+    float maxX, maxY, maxZ;
+
+    // 평면 법선 방향으로 가장 먼 점 (P-vertex)
+    Vec3 getPositiveVertex(const Plane& plane) const {
+        return {
+            plane.a >= 0 ? maxX : minX,
+            plane.b >= 0 ? maxY : minY,
+            plane.c >= 0 ? maxZ : minZ
+        };
+    }
+
+    // 평면 법선 반대 방향으로 가장 먼 점 (N-vertex)
+    Vec3 getNegativeVertex(const Plane& plane) const {
+        return {
+            plane.a >= 0 ? minX : maxX,
+            plane.b >= 0 ? minY : maxY,
+            plane.c >= 0 ? minZ : maxZ
+        };
+    }
+};
+
+enum class CullResult {
+    Inside,      // 완전히 내부
+    Outside,     // 완전히 외부
+    Intersect    // 경계에 걸침
+};
+
+CullResult frustumCullAABB(const Frustum& frustum, const AABB& box) {
+    CullResult result = CullResult::Inside;
+
+    for (int i = 0; i < 6; i++) {
+        const Plane& plane = frustum.planes[i];
+
+        // N-vertex가 평면 앞에 있으면 완전히 내부
+        Vec3 nVertex = box.getNegativeVertex(plane);
+        if (plane.distance(nVertex.x, nVertex.y, nVertex.z) > 0) {
+            // P-vertex 검사 불필요
+        }
+        else {
+            // P-vertex가 평면 뒤에 있으면 완전히 외부
+            Vec3 pVertex = box.getPositiveVertex(plane);
+            if (plane.distance(pVertex.x, pVertex.y, pVertex.z) < 0) {
+                return CullResult::Outside;  // 컬링!
+            }
+            result = CullResult::Intersect;
+        }
+    }
+
+    return result;
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 구(Sphere)를 이용한 빠른 검사</h2>
+            <div class="conversation">
+                <div class="q">더 빠른 방법은 없나요?</div>
+                <div class="a">
+                    <p class="highlight">바운딩 스피어를 먼저 검사하면 더 빠릅니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">바운딩 스피어 절두체 검사</div>
+                        <pre><code>struct BoundingSphere {
+    float x, y, z;   // 중심
+    float radius;
+};
+
+bool frustumCullSphere(const Frustum& frustum, const BoundingSphere& sphere) {
+    for (int i = 0; i < 6; i++) {
+        const Plane& plane = frustum.planes[i];
+
+        // 중심과 평면의 거리
+        float dist = plane.distance(sphere.x, sphere.y, sphere.z);
+
+        // 구 전체가 평면 뒤에 있으면 컬링
+        if (dist < -sphere.radius) {
+            return true;  // 컬링됨!
+        }
+    }
+
+    return false;  // 보임
+}</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>바운딩 볼륨</th>
+                                <th>연산량</th>
+                                <th>정확도</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>스피어</td>
+                                <td>6번 내적</td>
+                                <td>낮음 (여유 공간)</td>
+                            </tr>
+                            <tr>
+                                <td>AABB</td>
+                                <td>12~24번 연산</td>
+                                <td>중간</td>
+                            </tr>
+                            <tr>
+                                <td>OBB</td>
+                                <td>더 많음</td>
+                                <td>높음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="key-point">스피어로 빠르게 걸러내고, 경계에 걸치면 AABB로 정밀 검사!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 계층적 컬링 시스템</h2>
+            <div class="conversation">
+                <div class="q">수천 개의 물체를 효율적으로 컬링하려면?</div>
+                <div class="a">
+                    <p>공간 분할 구조와 결합하여 계층적으로 컬링합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Octree + Frustum Culling
+
+           [루트]
+          /      \
+      [전체       [전체
+       밖]        안]
+       ↓          ↓
+     스킵!      자식 검사
+                /    \
+           [일부    [일부
+            안]      밖]
+             ↓        ↓
+           더 검사   스킵!
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Octree + Frustum Culling</div>
+                        <pre><code>class OctreeFrustumCuller {
+public:
+    void cullNode(OctreeNode* node, const Frustum& frustum,
+                  std::vector&lt;GameObject*&gt;& visible) {
+        // 1. 노드 바운딩 박스 검사
+        CullResult result = frustumCullAABB(frustum, node->bounds);
+
+        if (result == CullResult::Outside) {
+            return;  // 전체 노드 컬링!
+        }
+
+        if (result == CullResult::Inside) {
+            // 전체 노드가 절두체 안 - 모든 물체 추가
+            addAllObjects(node, visible);
+            return;
+        }
+
+        // Intersect - 자식 노드 또는 개별 물체 검사
+        if (node->isLeaf()) {
+            for (auto* obj : node->objects) {
+                if (!frustumCullSphere(frustum, obj->boundingSphere)) {
+                    visible.push_back(obj);
+                }
+            }
+        } else {
+            for (int i = 0; i < 8; i++) {
+                if (node->children[i]) {
+                    cullNode(node->children[i], frustum, visible);
+                }
+            }
+        }
+    }
+
+private:
+    void addAllObjects(OctreeNode* node, std::vector&lt;GameObject*&gt;& visible) {
+        for (auto* obj : node->objects) {
+            visible.push_back(obj);
+        }
+        if (!node->isLeaf()) {
+            for (int i = 0; i < 8; i++) {
+                if (node->children[i]) {
+                    addAllObjects(node->children[i], visible);
+                }
+            }
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: GPU 기반 컬링</h2>
+            <div class="conversation">
+                <div class="q">CPU 컬링의 한계는?</div>
+                <div class="a">
+                    <p>물체 수가 매우 많으면 CPU 컬링도 병목이 됩니다.</p>
+                    <p class="highlight">GPU Compute Shader로 병렬 컬링이 가능합니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">HLSL GPU Frustum Culling</div>
+                        <pre><code>// ComputeShader
+[numthreads(64, 1, 1)]
+void FrustumCull(uint3 id : SV_DispatchThreadID)
+{
+    uint instanceIndex = id.x;
+    if (instanceIndex >= instanceCount) return;
+
+    // 인스턴스 바운딩 스피어
+    float4 boundingSphere = instanceData[instanceIndex].boundingSphere;
+    float3 center = boundingSphere.xyz;
+    float radius = boundingSphere.w;
+
+    // 6개 평면 테스트
+    bool visible = true;
+    for (int i = 0; i < 6; i++)
+    {
+        float dist = dot(frustumPlanes[i].xyz, center) + frustumPlanes[i].w;
+        if (dist < -radius)
+        {
+            visible = false;
+            break;
+        }
+    }
+
+    // Indirect Draw Buffer에 가시 인스턴스만 추가
+    if (visible)
+    {
+        uint index;
+        InterlockedAdd(visibleCount[0], 1, index);
+        visibleInstances[index] = instanceIndex;
+    }
+}</code></pre>
+                    </div>
+
+                    <p class="key-point">GPU 컬링 + Indirect Drawing = 수십만 물체도 빠르게 처리!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>절두체</strong>: 카메라 시야 범위, 6개 평면으로 정의</li>
+                <li><strong>평면 추출</strong>: VP 행렬에서 직접 계산 가능</li>
+                <li><strong>스피어 테스트</strong>: 빠른 대략적 검사, 6번 내적</li>
+                <li><strong>AABB 테스트</strong>: P/N-vertex로 최적화된 정밀 검사</li>
+                <li><strong>계층적 컬링</strong>: Octree와 결합하여 노드 단위 조기 종료</li>
+                <li><strong>GPU 컬링</strong>: Compute Shader로 대규모 병렬 처리</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

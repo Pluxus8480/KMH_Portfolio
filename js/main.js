@@ -7,7 +7,6 @@ const header = document.getElementById('header');
 const navToggle = document.getElementById('nav-toggle');
 const navMenu = document.getElementById('nav-menu');
 const navLinks = document.querySelectorAll('.nav__link');
-const floatingNavBtns = document.querySelectorAll('.floating-nav__btn');
 const typingText = document.getElementById('typing-text');
 
 // ===== Header Scroll Effect =====
@@ -22,28 +21,29 @@ function handleScroll() {
 window.addEventListener('scroll', handleScroll);
 
 // ===== Mobile Navigation =====
-navToggle.addEventListener('click', () => {
-    navToggle.classList.toggle('active');
-    navMenu.classList.toggle('active');
-});
+if (navToggle) {
+    navToggle.addEventListener('click', () => {
+        navToggle.classList.toggle('active');
+        navMenu.classList.toggle('active');
+    });
+}
 
 // Close menu when clicking a link
 navLinks.forEach(link => {
     link.addEventListener('click', () => {
-        navToggle.classList.remove('active');
-        navMenu.classList.remove('active');
+        if (navToggle) navToggle.classList.remove('active');
+        if (navMenu) navMenu.classList.remove('active');
     });
 });
 
-// ===== Floating Navigation =====
-floatingNavBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        floatingNavBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+// ===== Skill Badge Click -> Navigate to Study Page with Filter =====
+const skillBadges = document.querySelectorAll('.skill-badge[data-skill]');
 
-        // Optional: Add tab switching logic here
-        const tab = btn.dataset.tab;
-        console.log('Switched to:', tab);
+skillBadges.forEach(badge => {
+    badge.addEventListener('click', () => {
+        const skill = badge.dataset.skill.toLowerCase();
+        // Navigate to study page with filter parameter
+        window.location.href = `study.html?filter=${encodeURIComponent(skill)}`;
     });
 });
 
@@ -214,3 +214,65 @@ window.addEventListener('scroll', parallaxEffect);
 // ===== Console Easter Egg =====
 console.log('%c🎮 Welcome to KMH Portfolio!', 'color: #00FF99; font-size: 24px; font-weight: bold;');
 console.log('%cLooking for a developer? Let\'s connect!', 'color: #A1A1AA; font-size: 14px;');
+
+// ===== Private/Public Mode Toggle =====
+// Public = 개발 포트폴리오 (기본 페이지)
+// Private = 개인 정보 (오버레이)
+const modeToggle = document.getElementById('mode-toggle');
+const privateOverlay = document.getElementById('private-overlay');
+const privateClose = document.getElementById('private-close');
+const modeButtons = document.querySelectorAll('.mode-toggle__btn');
+
+if (modeToggle && privateOverlay) {
+    // Handle mode toggle button clicks
+    modeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.dataset.mode;
+
+            // Update active button state
+            modeButtons.forEach(b => b.classList.remove('mode-toggle__btn--active'));
+            btn.classList.add('mode-toggle__btn--active');
+
+            // Toggle overlay visibility
+            if (mode === 'private') {
+                privateOverlay.classList.add('active');
+                document.body.style.overflow = 'hidden'; // Prevent background scrolling
+            } else {
+                privateOverlay.classList.remove('active');
+                document.body.style.overflow = ''; // Restore scrolling
+            }
+        });
+    });
+
+    // Handle close button
+    if (privateClose) {
+        privateClose.addEventListener('click', () => {
+            privateOverlay.classList.remove('active');
+            document.body.style.overflow = '';
+
+            // Reset toggle button state
+            modeButtons.forEach(btn => {
+                btn.classList.remove('mode-toggle__btn--active');
+                if (btn.dataset.mode === 'public') {
+                    btn.classList.add('mode-toggle__btn--active');
+                }
+            });
+        });
+    }
+
+    // Close overlay with Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && privateOverlay.classList.contains('active')) {
+            privateOverlay.classList.remove('active');
+            document.body.style.overflow = '';
+
+            // Reset toggle button state
+            modeButtons.forEach(btn => {
+                btn.classList.remove('mode-toggle__btn--active');
+                if (btn.dataset.mode === 'public') {
+                    btn.classList.add('mode-toggle__btn--active');
+                }
+            });
+        }
+    });
+}

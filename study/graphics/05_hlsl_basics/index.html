@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU의 언어를 배우다 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>GPU의 언어를 배우다</h1>
+            <p class="subtitle">HLSL 셰이더 프로그래밍 기초</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: HLSL이란?</h2>
+            <div class="conversation">
+                <div class="q">HLSL은 무엇인가요?</div>
+                <div class="a">
+                    <p>HLSL(High-Level Shading Language)은 <span class="highlight">DirectX용 셰이더 언어</span>입니다. C와 비슷한 문법으로 GPU에서 실행될 코드를 작성합니다.</p>
+                    <p>OpenGL은 GLSL, NVIDIA는 Cg를 사용하지만, 핵심 개념은 동일합니다.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>CPU 코드가 <span class="highlight">"혼자 열심히 일하는 전문가"</span>라면,</p>
+                <p>GPU 셰이더는 <span class="highlight">"수천 명이 같은 일을 동시에 하는 공장"</span>입니다.</p>
+                <p>각 픽셀(또는 정점)이 독립적으로 같은 코드를 실행합니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 데이터 타입</h2>
+            <div class="conversation">
+                <div class="q">HLSL에서 사용하는 데이터 타입은?</div>
+                <div class="a">
+                    <p>벡터와 행렬 타입이 기본 내장되어 있습니다:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">HLSL 데이터 타입</div>
+                <pre><code>// 스칼라 타입
+float   x = 1.0f;      // 32비트 부동소수점
+half    y = 1.0h;      // 16비트 (모바일 최적화)
+int     i = 42;        // 정수
+uint    u = 10u;       // 부호 없는 정수
+bool    b = true;      // 불리언
+
+// 벡터 타입
+float2  uv = float2(0.5, 0.5);           // 2D 벡터
+float3  pos = float3(1, 2, 3);           // 3D 벡터
+float4  color = float4(1, 0, 0, 1);      // RGBA
+
+// 스위즐링 (Swizzling)
+float3 rgb = color.rgb;      // x, y, z로도 접근 가능
+float2 yx = pos.yx;          // 순서 바꾸기
+float4 rrrr = color.rrrr;    // 반복
+
+// 행렬 타입
+float4x4 worldMatrix;        // 4x4 행렬
+float3x3 normalMatrix;       // 3x3 행렬
+
+// 배열
+float weights[8];</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>타입</th>
+                        <th>용도</th>
+                        <th>예시</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>float3</td>
+                        <td>위치, 방향, 색상</td>
+                        <td>position, normal, rgb</td>
+                    </tr>
+                    <tr>
+                        <td>float4</td>
+                        <td>동차 좌표, RGBA</td>
+                        <td>clipPos, rgba</td>
+                    </tr>
+                    <tr>
+                        <td>float4x4</td>
+                        <td>변환 행렬</td>
+                        <td>MVP matrix</td>
+                    </tr>
+                    <tr>
+                        <td>float2</td>
+                        <td>텍스처 좌표</td>
+                        <td>UV coordinates</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 셰이더 구조</h2>
+            <div class="conversation">
+                <div class="q">기본적인 셰이더 구조는 어떻게 되나요?</div>
+                <div class="a">
+                    <p>Vertex Shader와 Pixel(Fragment) Shader가 기본입니다:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">기본 셰이더 구조</div>
+                <pre><code>// ========== 상수 버퍼 (CPU에서 전달받는 데이터) ==========
+cbuffer PerFrame : register(b0)
+{
+    float4x4 viewProj;
+    float3 cameraPos;
+    float time;
+};
+
+cbuffer PerObject : register(b1)
+{
+    float4x4 world;
+    float4 color;
+};
+
+// ========== 텍스처와 샘플러 ==========
+Texture2D diffuseTexture : register(t0);
+SamplerState linearSampler : register(s0);
+
+// ========== 입출력 구조체 ==========
+struct VSInput
+{
+    float3 position : POSITION;
+    float3 normal   : NORMAL;
+    float2 uv       : TEXCOORD0;
+};
+
+struct PSInput
+{
+    float4 position : SV_Position;
+    float3 worldPos : TEXCOORD0;
+    float3 normal   : TEXCOORD1;
+    float2 uv       : TEXCOORD2;
+};
+
+// ========== Vertex Shader ==========
+PSInput VS_Main(VSInput input)
+{
+    PSInput output;
+
+    float4 worldPos = mul(float4(input.position, 1), world);
+    output.position = mul(worldPos, viewProj);
+    output.worldPos = worldPos.xyz;
+    output.normal = mul(input.normal, (float3x3)world);
+    output.uv = input.uv;
+
+    return output;
+}
+
+// ========== Pixel Shader ==========
+float4 PS_Main(PSInput input) : SV_Target
+{
+    float3 albedo = diffuseTexture.Sample(linearSampler, input.uv).rgb;
+    float3 normal = normalize(input.normal);
+
+    // 간단한 램버트 라이팅
+    float3 lightDir = normalize(float3(1, 1, -1));
+    float NdotL = max(dot(normal, lightDir), 0);
+
+    float3 finalColor = albedo * NdotL;
+    return float4(finalColor, 1);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 시맨틱</h2>
+            <div class="conversation">
+                <div class="q">POSITION, SV_Position 같은 건 뭔가요?</div>
+                <div class="a">
+                    <p><span class="highlight">시맨틱(Semantic)</span>은 데이터의 용도를 GPU에게 알려줍니다. 입력 데이터와 셰이더 스테이지를 연결합니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>시맨틱</th>
+                        <th>용도</th>
+                        <th>사용 위치</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>POSITION</td>
+                        <td>정점 위치 (입력)</td>
+                        <td>VS 입력</td>
+                    </tr>
+                    <tr>
+                        <td>SV_Position</td>
+                        <td>클립 공간 위치</td>
+                        <td>VS 출력 / PS 입력</td>
+                    </tr>
+                    <tr>
+                        <td>NORMAL</td>
+                        <td>법선 벡터</td>
+                        <td>VS 입력</td>
+                    </tr>
+                    <tr>
+                        <td>TEXCOORD0~n</td>
+                        <td>텍스처 좌표 / 커스텀 데이터</td>
+                        <td>VS↔PS</td>
+                    </tr>
+                    <tr>
+                        <td>SV_Target</td>
+                        <td>렌더 타겟 출력</td>
+                        <td>PS 출력</td>
+                    </tr>
+                    <tr>
+                        <td>SV_Depth</td>
+                        <td>깊이 출력</td>
+                        <td>PS 출력</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="conversation">
+                <div class="q">SV_ 접두사는 뭔가요?</div>
+                <div class="a">
+                    <p><span class="highlight">SV = System Value</span>로, GPU가 특별히 처리하는 값입니다. SV_Position은 래스터라이저가 사용하고, SV_Target은 렌더 타겟에 기록됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 내장 함수</h2>
+            <div class="conversation">
+                <div class="q">자주 쓰는 내장 함수는?</div>
+                <div class="a">
+                    <p>HLSL은 그래픽스에 유용한 함수를 많이 제공합니다:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">자주 쓰는 내장 함수</div>
+                <pre><code>// 수학 함수
+float a = abs(x);           // 절대값
+float s = sign(x);          // 부호 (-1, 0, 1)
+float f = floor(x);         // 내림
+float c = ceil(x);          // 올림
+float r = frac(x);          // 소수부
+float m = fmod(x, y);       // 나머지
+
+// 보간
+float l = lerp(a, b, t);    // 선형 보간
+float s = smoothstep(a, b, x);  // 부드러운 보간
+float h = step(edge, x);    // x >= edge ? 1 : 0
+
+// 벡터 연산
+float d = dot(a, b);        // 내적
+float3 c = cross(a, b);     // 외적
+float len = length(v);      // 길이
+float3 n = normalize(v);    // 정규화
+float dist = distance(a, b); // 거리
+float3 r = reflect(i, n);   // 반사
+float3 t = refract(i, n, eta); // 굴절
+
+// 범위 제한
+float c = clamp(x, min, max);   // 범위 제한
+float s = saturate(x);      // clamp(x, 0, 1)
+float3 m = min(a, b);       // 최소값
+float3 x = max(a, b);       // 최대값
+
+// 텍스처 샘플링
+float4 c = tex.Sample(samp, uv);
+float4 c = tex.SampleLevel(samp, uv, mip);
+float4 c = tex.Load(int3(x, y, mip));</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 예제</h2>
+            <div class="conversation">
+                <div class="q">실제로 자주 쓰는 패턴은?</div>
+                <div class="a">
+                    <p>몇 가지 유용한 셰이더 패턴:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">유용한 패턴들</div>
+                <pre><code>// 1. 프레넬 효과 (가장자리 빛나기)
+float fresnel = pow(1.0 - saturate(dot(normal, viewDir)), 5.0);
+
+// 2. 디졸브 효과
+float noise = noiseTexture.Sample(samp, uv).r;
+clip(noise - dissolveAmount);  // 음수면 픽셀 버림
+
+// 3. UV 스크롤
+float2 scrolledUV = uv + time * float2(0.1, 0.0);
+
+// 4. Checkerboard 패턴
+float checker = fmod(floor(uv.x * 10) + floor(uv.y * 10), 2);
+
+// 5. 림 라이트
+float rim = 1.0 - saturate(dot(normal, viewDir));
+float3 rimColor = rimLight * pow(rim, rimPower);
+
+// 6. 반구 라이팅 (스카이/그라운드)
+float NdotUp = dot(normal, float3(0, 1, 0)) * 0.5 + 0.5;
+float3 ambient = lerp(groundColor, skyColor, NdotUp);
+
+// 7. 트리플래너 매핑 가중치
+float3 blending = abs(normal);
+blending = blending / (blending.x + blending.y + blending.z);</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 디버깅 팁</strong>
+                <p><span class="highlight">값 시각화</span>: return float4(value, value, value, 1);</p>
+                <p><span class="highlight">법선 시각화</span>: return float4(normal * 0.5 + 0.5, 1);</p>
+                <p><span class="highlight">UV 시각화</span>: return float4(uv, 0, 1);</p>
+                <p><span class="highlight">깊이 시각화</span>: return float4(depth.xxx, 1);</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>HLSL</strong>은 DirectX용 셰이더 언어, C와 비슷한 문법</li>
+                <li><strong>float2/3/4</strong>, <strong>float4x4</strong> 등 벡터/행렬 타입 내장</li>
+                <li><strong>시맨틱</strong>으로 데이터 용도 지정 (POSITION, SV_Target 등)</li>
+                <li><strong>cbuffer</strong>로 CPU 데이터 전달, <strong>Texture/Sampler</strong>로 텍스처 접근</li>
+                <li><strong>내장 함수</strong>: dot, normalize, lerp, saturate 등 그래픽스 필수 함수</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

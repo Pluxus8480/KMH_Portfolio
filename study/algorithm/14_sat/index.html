@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>분리축 정리 (SAT) 구현 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>모든 그림자가 겹쳐야 충돌이다?</h1>
+            <p class="subtitle">분리축 정리(SAT) 완전 정복 - 2D부터 3D까지</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 분리축 정리의 핵심</h2>
+            <div class="conversation">
+                <div class="q">SAT(Separating Axis Theorem)란 무엇인가요?</div>
+                <div class="a">
+                    <p class="highlight">두 볼록 다각형이 분리되어 있다면, 반드시 둘을 분리하는 축이 존재합니다.</p>
+                    <p>역으로, 모든 가능한 축에서 투영이 겹친다면 충돌!</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+SAT의 핵심 원리
+
+    축에 투영했을 때:
+
+    분리됨 (충돌 X)              겹침 (충돌 ?)
+    ─────────────              ─────────────
+    [A]     [B]                [A  [B]  ]
+       ↑ 갭                       ↑ 겹침
+
+    하나의 축에서라도 분리 → 충돌 아님!
+    모든 축에서 겹침 → 충돌!
+                        </pre>
+                    </div>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>손전등을 여러 방향에서 비춰 두 물체의 그림자를 보세요.</p>
+                        <p>어느 방향에서든 그림자가 떨어져 있으면 → 물체는 분리됨</p>
+                        <p>모든 방향에서 그림자가 겹치면 → 물체가 맞닿아 있음</p>
+                    </div>
+                </div>
+
+                <div class="q">어떤 축을 검사해야 하나요?</div>
+                <div class="a">
+                    <p><strong>2D 다각형:</strong> 각 변에 수직인 법선 벡터</p>
+                    <p><strong>3D 다면체:</strong> 각 면의 법선 + 엣지 쌍의 외적</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>도형 조합</th>
+                                <th>검사 축 수</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>2D 삼각형 vs 삼각형</td>
+                                <td>최대 6개 (3+3)</td>
+                            </tr>
+                            <tr>
+                                <td>2D 사각형 vs 사각형</td>
+                                <td>최대 4개 (평행 축 제외)</td>
+                            </tr>
+                            <tr>
+                                <td>3D 박스 vs 박스</td>
+                                <td>최대 15개 (3+3+9)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 2D SAT 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">C++ 2D SAT 완전 구현</div>
+                    <pre><code>#include &lt;vector&gt;
+#include &lt;cmath&gt;
+#include &lt;limits&gt;
+
+struct Vec2 {
+    float x, y;
+
+    Vec2 operator-(const Vec2& o) const { return {x - o.x, y - o.y}; }
+    Vec2 operator+(const Vec2& o) const { return {x + o.x, y + o.y}; }
+    Vec2 operator*(float s) const { return {x * s, y * s}; }
+    float dot(const Vec2& o) const { return x * o.x + y * o.y; }
+    Vec2 perp() const { return {-y, x}; }  // 90도 회전
+    float length() const { return std::sqrt(x * x + y * y); }
+    Vec2 normalized() const { float l = length(); return {x/l, y/l}; }
+};
+
+struct Polygon {
+    std::vector&lt;Vec2&gt; vertices;
+
+    // 축에 투영하여 min, max 반환
+    void project(const Vec2& axis, float& min, float& max) const {
+        min = max = vertices[0].dot(axis);
+        for (size_t i = 1; i < vertices.size(); i++) {
+            float proj = vertices[i].dot(axis);
+            min = std::min(min, proj);
+            max = std::max(max, proj);
+        }
+    }
+
+    // 모든 변의 법선(축 후보) 반환
+    std::vector&lt;Vec2&gt; getAxes() const {
+        std::vector&lt;Vec2&gt; axes;
+        for (size_t i = 0; i < vertices.size(); i++) {
+            Vec2 edge = vertices[(i + 1) % vertices.size()] - vertices[i];
+            axes.push_back(edge.perp().normalized());
+        }
+        return axes;
+    }
+};
+
+struct CollisionInfo {
+    bool colliding = false;
+    float penetration = 0;    // 침투 깊이
+    Vec2 normal = {0, 0};     // 분리 방향 (A를 밀어낼 방향)
+};
+
+class SAT2D {
+public:
+    static CollisionInfo test(const Polygon& a, const Polygon& b) {
+        CollisionInfo result;
+        result.colliding = true;
+        result.penetration = std::numeric_limits&lt;float&gt;::max();
+
+        // A의 축들 검사
+        for (const Vec2& axis : a.getAxes()) {
+            float overlap;
+            if (!testAxis(a, b, axis, overlap)) {
+                result.colliding = false;
+                return result;  // 분리축 발견!
+            }
+            if (overlap < result.penetration) {
+                result.penetration = overlap;
+                result.normal = axis;
+            }
+        }
+
+        // B의 축들 검사
+        for (const Vec2& axis : b.getAxes()) {
+            float overlap;
+            if (!testAxis(a, b, axis, overlap)) {
+                result.colliding = false;
+                return result;  // 분리축 발견!
+            }
+            if (overlap < result.penetration) {
+                result.penetration = overlap;
+                result.normal = axis;
+            }
+        }
+
+        // 법선 방향 보정 (A→B 방향으로)
+        Vec2 centerA = getCenter(a);
+        Vec2 centerB = getCenter(b);
+        Vec2 direction = centerB - centerA;
+        if (direction.dot(result.normal) < 0) {
+            result.normal = result.normal * -1.0f;
+        }
+
+        return result;
+    }
+
+private:
+    static bool testAxis(const Polygon& a, const Polygon& b,
+                         const Vec2& axis, float& overlap) {
+        float minA, maxA, minB, maxB;
+        a.project(axis, minA, maxA);
+        b.project(axis, minB, maxB);
+
+        // 겹침 확인
+        if (maxA < minB || maxB < minA) {
+            overlap = 0;
+            return false;  // 분리됨!
+        }
+
+        // 겹침량 계산
+        overlap = std::min(maxA - minB, maxB - minA);
+        return true;
+    }
+
+    static Vec2 getCenter(const Polygon& p) {
+        Vec2 center = {0, 0};
+        for (const Vec2& v : p.vertices) {
+            center = center + v;
+        }
+        return center * (1.0f / p.vertices.size());
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: OBB (Oriented Bounding Box) 충돌</h2>
+            <div class="conversation">
+                <div class="q">회전된 박스끼리 충돌은 어떻게 검사하나요?</div>
+                <div class="a">
+                    <p class="highlight">OBB는 2D에서 4개 축만 검사하면 됩니다 (각 박스당 2개).</p>
+
+                    <div class="code-block">
+                        <div class="code-header">OBB vs OBB (최적화된 SAT)</div>
+                        <pre><code>struct OBB2D {
+    Vec2 center;
+    Vec2 halfExtents;  // 반 너비, 반 높이
+    float rotation;     // 라디안
+
+    // 로컬 축 (회전 적용됨)
+    Vec2 axisX() const {
+        return {std::cos(rotation), std::sin(rotation)};
+    }
+    Vec2 axisY() const {
+        return {-std::sin(rotation), std::cos(rotation)};
+    }
+
+    // 4개 정점 계산
+    std::array&lt;Vec2, 4&gt; getVertices() const {
+        Vec2 ax = axisX() * halfExtents.x;
+        Vec2 ay = axisY() * halfExtents.y;
+        return {
+            center - ax - ay,
+            center + ax - ay,
+            center + ax + ay,
+            center - ax + ay
+        };
+    }
+};
+
+bool testOBBvsOBB(const OBB2D& a, const OBB2D& b) {
+    Vec2 axesA[2] = {a.axisX(), a.axisY()};
+    Vec2 axesB[2] = {b.axisX(), b.axisY()};
+
+    Vec2 d = b.center - a.center;
+
+    // A의 축 검사
+    for (int i = 0; i < 2; i++) {
+        float ra = a.halfExtents.x * std::abs(axesA[0].dot(axesA[i])) +
+                   a.halfExtents.y * std::abs(axesA[1].dot(axesA[i]));
+        float rb = b.halfExtents.x * std::abs(axesB[0].dot(axesA[i])) +
+                   b.halfExtents.y * std::abs(axesB[1].dot(axesA[i]));
+        float dist = std::abs(d.dot(axesA[i]));
+
+        if (dist > ra + rb) return false;  // 분리!
+    }
+
+    // B의 축 검사
+    for (int i = 0; i < 2; i++) {
+        float ra = a.halfExtents.x * std::abs(axesA[0].dot(axesB[i])) +
+                   a.halfExtents.y * std::abs(axesA[1].dot(axesB[i]));
+        float rb = b.halfExtents.x * std::abs(axesB[0].dot(axesB[i])) +
+                   b.halfExtents.y * std::abs(axesB[1].dot(axesB[i]));
+        float dist = std::abs(d.dot(axesB[i]));
+
+        if (dist > ra + rb) return false;  // 분리!
+    }
+
+    return true;  // 모든 축에서 겹침 = 충돌!
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 3D SAT (OBB vs OBB)</h2>
+            <div class="conversation">
+                <div class="q">3D에서는 어떤 축을 검사해야 하나요?</div>
+                <div class="a">
+                    <p><strong>15개의 축:</strong></p>
+                    <ul>
+                        <li>A의 3개 로컬 축 (ax, ay, az)</li>
+                        <li>B의 3개 로컬 축 (bx, by, bz)</li>
+                        <li>9개의 엣지 외적 (ax×bx, ax×by, ... az×bz)</li>
+                    </ul>
+
+                    <div class="code-block">
+                        <div class="code-header">3D OBB SAT (15축 테스트)</div>
+                        <pre><code>struct OBB3D {
+    Vec3 center;
+    Vec3 halfExtents;
+    Mat3 orientation;  // 회전 행렬
+
+    Vec3 axis(int i) const {
+        return Vec3(orientation[0][i], orientation[1][i], orientation[2][i]);
+    }
+};
+
+bool testOBBvsOBB3D(const OBB3D& a, const OBB3D& b) {
+    Vec3 aAxes[3] = {a.axis(0), a.axis(1), a.axis(2)};
+    Vec3 bAxes[3] = {b.axis(0), b.axis(1), b.axis(2)};
+
+    // 회전 행렬: A의 프레임에서 본 B의 방향
+    float R[3][3], absR[3][3];
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            R[i][j] = aAxes[i].dot(bAxes[j]);
+            absR[i][j] = std::abs(R[i][j]) + 1e-6f;  // 수치 안정성
+        }
+    }
+
+    Vec3 t = b.center - a.center;
+    t = Vec3(t.dot(aAxes[0]), t.dot(aAxes[1]), t.dot(aAxes[2]));
+
+    float ra, rb;
+
+    // A의 축 테스트 (3개)
+    for (int i = 0; i < 3; i++) {
+        ra = a.halfExtents[i];
+        rb = b.halfExtents[0] * absR[i][0] +
+             b.halfExtents[1] * absR[i][1] +
+             b.halfExtents[2] * absR[i][2];
+        if (std::abs(t[i]) > ra + rb) return false;
+    }
+
+    // B의 축 테스트 (3개)
+    for (int i = 0; i < 3; i++) {
+        ra = a.halfExtents[0] * absR[0][i] +
+             a.halfExtents[1] * absR[1][i] +
+             a.halfExtents[2] * absR[2][i];
+        rb = b.halfExtents[i];
+        float separation = std::abs(t[0] * R[0][i] + t[1] * R[1][i] + t[2] * R[2][i]);
+        if (separation > ra + rb) return false;
+    }
+
+    // 엣지 외적 테스트 (9개)
+    // A.axis[0] × B.axis[0]
+    ra = a.halfExtents[1] * absR[2][0] + a.halfExtents[2] * absR[1][0];
+    rb = b.halfExtents[1] * absR[0][2] + b.halfExtents[2] * absR[0][1];
+    if (std::abs(t[2] * R[1][0] - t[1] * R[2][0]) > ra + rb) return false;
+
+    // A.axis[0] × B.axis[1]
+    ra = a.halfExtents[1] * absR[2][1] + a.halfExtents[2] * absR[1][1];
+    rb = b.halfExtents[0] * absR[0][2] + b.halfExtents[2] * absR[0][0];
+    if (std::abs(t[2] * R[1][1] - t[1] * R[2][1]) > ra + rb) return false;
+
+    // ... (나머지 7개 외적 축도 동일하게)
+
+    return true;  // 모든 15개 축에서 겹침 = 충돌!
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: MTV (Minimum Translation Vector)</h2>
+            <div class="conversation">
+                <div class="q">충돌 후 물체를 어떻게 분리하나요?</div>
+                <div class="a">
+                    <p class="highlight">MTV는 두 물체를 분리하기 위한 최소 이동 벡터입니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+MTV (Minimum Translation Vector)
+
+    충돌 상태              분리 후
+    ┌─────┐              ┌─────┐
+    │  A  │──MTV──→     │  A  │
+    │ ┌───┼───┐          └─────┘
+    └─┼───┘   │              ┌───┐
+      │   B   │              │ B │
+      └───────┘              └───┘
+
+MTV = 침투 깊이가 가장 작은 축 × 겹침량
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">MTV 계산 및 적용</div>
+                        <pre><code>// SAT에서 MTV 추출 (이전 코드에서)
+CollisionInfo info = SAT2D::test(polyA, polyB);
+
+if (info.colliding) {
+    Vec2 mtv = info.normal * info.penetration;
+
+    // 물체 분리 (질량 비례 분배)
+    float totalMass = bodyA.mass + bodyB.mass;
+    float ratioA = bodyB.mass / totalMass;
+    float ratioB = bodyA.mass / totalMass;
+
+    bodyA.position = bodyA.position - mtv * ratioA;
+    bodyB.position = bodyB.position + mtv * ratioB;
+}
+
+// 충돌 응답 (반발)
+void resolveCollision(RigidBody& a, RigidBody& b,
+                      const CollisionInfo& info) {
+    Vec2 relVel = a.velocity - b.velocity;
+    float velAlongNormal = relVel.dot(info.normal);
+
+    // 멀어지고 있으면 무시
+    if (velAlongNormal > 0) return;
+
+    // 반발 계수
+    float e = std::min(a.restitution, b.restitution);
+
+    // 임펄스 크기
+    float j = -(1 + e) * velAlongNormal;
+    j /= (1.0f / a.mass + 1.0f / b.mass);
+
+    // 임펄스 적용
+    Vec2 impulse = info.normal * j;
+    a.velocity = a.velocity + impulse * (1.0f / a.mass);
+    b.velocity = b.velocity - impulse * (1.0f / b.mass);
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: SAT 최적화</h2>
+            <div class="conversation">
+                <div class="q">SAT를 더 빠르게 할 수 있나요?</div>
+                <div class="a">
+                    <p><strong>1. 조기 종료 (Early Exit):</strong></p>
+                    <p>분리축이 발견되면 즉시 반환</p>
+
+                    <p><strong>2. 축 캐싱:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">마지막 분리축 캐싱</div>
+                        <pre><code>class CachedSAT {
+private:
+    std::unordered_map&lt;uint64_t, int&gt; lastSeparatingAxis;
+
+    uint64_t getPairKey(int idA, int idB) {
+        return ((uint64_t)std::min(idA, idB) << 32) | std::max(idA, idB);
+    }
+
+public:
+    bool testWithCache(const Polygon& a, int idA,
+                       const Polygon& b, int idB) {
+        uint64_t key = getPairKey(idA, idB);
+
+        // 이전 프레임의 분리축 먼저 테스트
+        auto it = lastSeparatingAxis.find(key);
+        if (it != lastSeparatingAxis.end()) {
+            Vec2 cachedAxis = getAxisByIndex(a, b, it->second);
+            float overlap;
+            if (!testAxis(a, b, cachedAxis, overlap)) {
+                return false;  // 캐시된 축이 여전히 분리축!
+            }
+        }
+
+        // 전체 테스트
+        auto axes = getAllAxes(a, b);
+        for (int i = 0; i < axes.size(); i++) {
+            float overlap;
+            if (!testAxis(a, b, axes[i], overlap)) {
+                lastSeparatingAxis[key] = i;  // 캐싱
+                return false;
+            }
+        }
+
+        lastSeparatingAxis.erase(key);  // 충돌 중이면 캐시 제거
+        return true;
+    }
+};</code></pre>
+                    </div>
+
+                    <p><strong>3. SIMD 투영:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">SSE로 4개 정점 동시 투영</div>
+                        <pre><code>void projectSIMD(const Vec2* vertices, int count,
+                 const Vec2& axis,
+                 float& minProj, float& maxProj) {
+    __m128 axisX = _mm_set1_ps(axis.x);
+    __m128 axisY = _mm_set1_ps(axis.y);
+    __m128 minV = _mm_set1_ps(FLT_MAX);
+    __m128 maxV = _mm_set1_ps(-FLT_MAX);
+
+    // 4개씩 처리
+    for (int i = 0; i < count; i += 4) {
+        // x좌표 4개, y좌표 4개 로드
+        __m128 vx = _mm_set_ps(vertices[i+3].x, vertices[i+2].x,
+                               vertices[i+1].x, vertices[i].x);
+        __m128 vy = _mm_set_ps(vertices[i+3].y, vertices[i+2].y,
+                               vertices[i+1].y, vertices[i].y);
+
+        // 내적: axis.x * v.x + axis.y * v.y
+        __m128 proj = _mm_add_ps(_mm_mul_ps(axisX, vx),
+                                  _mm_mul_ps(axisY, vy));
+
+        minV = _mm_min_ps(minV, proj);
+        maxV = _mm_max_ps(maxV, proj);
+    }
+
+    // 4개 결과에서 최종 min/max 추출
+    float mins[4], maxs[4];
+    _mm_store_ps(mins, minV);
+    _mm_store_ps(maxs, maxV);
+
+    minProj = std::min({mins[0], mins[1], mins[2], mins[3]});
+    maxProj = std::max({maxs[0], maxs[1], maxs[2], maxs[3]});
+}</code></pre>
+                    </div>
+
+                    <p class="key-point">시간적 일관성 + SIMD = 수배 성능 향상!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>SAT 원리</strong>: 모든 축에서 투영이 겹쳐야 충돌</li>
+                <li><strong>2D 축</strong>: 각 변의 법선 (삼각형 6개, 사각형 4개)</li>
+                <li><strong>3D OBB</strong>: 15개 축 (각 3 + 9 외적)</li>
+                <li><strong>MTV</strong>: 최소 겹침 축 × 겹침량 = 분리 벡터</li>
+                <li><strong>최적화</strong>: 조기 종료, 축 캐싱, SIMD 투영</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

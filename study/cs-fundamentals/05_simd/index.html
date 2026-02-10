@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIMD와 벡터화 연산 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+            <h1>"한 번에 4개씩 계산하기"</h1>
+            <p class="subtitle">SIMD로 게임 연산 가속하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: SIMD란?</h2>
+            <div class="conversation">
+                <div class="q">SIMD가 무엇인가요?</div>
+                <div class="a">
+                    <p><strong>Single Instruction, Multiple Data</strong>: 하나의 명령으로 여러 데이터를 동시 처리합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    SISD vs SIMD 비교                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   SISD (일반 연산):                                                  │
+│   ┌─────┐   ┌─────┐   ┌─────┐   ┌─────┐                            │
+│   │ A1  │ + │ B1  │ = │ C1  │   │     │  사이클 1                  │
+│   └─────┘   └─────┘   └─────┘   └─────┘                            │
+│   ┌─────┐   ┌─────┐   ┌─────┐   ┌─────┐                            │
+│   │ A2  │ + │ B2  │ = │ C2  │   │     │  사이클 2                  │
+│   └─────┘   └─────┘   └─────┘   └─────┘                            │
+│   ┌─────┐   ┌─────┐   ┌─────┐   ┌─────┐                            │
+│   │ A3  │ + │ B3  │ = │ C3  │   │     │  사이클 3                  │
+│   └─────┘   └─────┘   └─────┘   └─────┘                            │
+│   ┌─────┐   ┌─────┐   ┌─────┐   ┌─────┐                            │
+│   │ A4  │ + │ B4  │ = │ C4  │   │     │  사이클 4                  │
+│   └─────┘   └─────┘   └─────┘   └─────┘                            │
+│   → 4번의 연산                                                      │
+│                                                                     │
+│   ─────────────────────────────────────────────────────────────    │
+│                                                                     │
+│   SIMD (벡터 연산):                                                  │
+│   ┌─────┬─────┬─────┬─────┐   ┌─────┬─────┬─────┬─────┐           │
+│   │ A1  │ A2  │ A3  │ A4  │ + │ B1  │ B2  │ B3  │ B4  │           │
+│   └─────┴─────┴─────┴─────┘   └─────┴─────┴─────┴─────┘           │
+│               ↓ 사이클 1 ↓                                          │
+│   ┌─────┬─────┬─────┬─────┐                                        │
+│   │ C1  │ C2  │ C3  │ C4  │                                        │
+│   └─────┴─────┴─────┴─────┘                                        │
+│   → 1번의 연산으로 4개 동시 처리!                                    │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <p class="highlight">이론상 4~8배 성능 향상 가능!</p>
+                </div>
+
+                <div class="q">어떤 SIMD 명령어 셋이 있나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>명령어 셋</th>
+                                <th>레지스터 크기</th>
+                                <th>float 개수</th>
+                                <th>도입 시기</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>SSE</td>
+                                <td>128비트</td>
+                                <td>4개</td>
+                                <td>1999</td>
+                            </tr>
+                            <tr>
+                                <td>SSE2~4.2</td>
+                                <td>128비트</td>
+                                <td>4개 (int 지원 추가)</td>
+                                <td>2001~2008</td>
+                            </tr>
+                            <tr>
+                                <td>AVX</td>
+                                <td>256비트</td>
+                                <td>8개</td>
+                                <td>2011</td>
+                            </tr>
+                            <tr>
+                                <td>AVX-512</td>
+                                <td>512비트</td>
+                                <td>16개</td>
+                                <td>2016</td>
+                            </tr>
+                            <tr>
+                                <td>ARM NEON</td>
+                                <td>128비트</td>
+                                <td>4개</td>
+                                <td>2005</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: SSE 기본 사용법</h2>
+            <div class="conversation">
+                <div class="q">SSE Intrinsics는 어떻게 사용하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">SSE 벡터 덧셈</div>
+                        <pre><code>#include <xmmintrin.h>  // SSE
+#include <emmintrin.h>  // SSE2
+
+// 스칼라 버전 (느림)
+void addArrays_scalar(const float* a, const float* b, float* c, int n) {
+    for (int i = 0; i < n; ++i) {
+        c[i] = a[i] + b[i];
+    }
+}
+
+// SSE 버전 (4배 빠름)
+void addArrays_sse(const float* a, const float* b, float* c, int n) {
+    int i = 0;
+
+    // 4개씩 처리
+    for (; i + 4 <= n; i += 4) {
+        __m128 va = _mm_loadu_ps(&a[i]);  // 4개 float 로드
+        __m128 vb = _mm_loadu_ps(&b[i]);
+        __m128 vc = _mm_add_ps(va, vb);   // 4개 동시 덧셈
+        _mm_storeu_ps(&c[i], vc);         // 결과 저장
+    }
+
+    // 나머지 처리 (4의 배수가 아닌 경우)
+    for (; i < n; ++i) {
+        c[i] = a[i] + b[i];
+    }
+}
+
+// 정렬된 메모리 사용 (더 빠름)
+void addArrays_sse_aligned(const float* a, const float* b, float* c, int n) {
+    // a, b, c가 16바이트 정렬되어 있다고 가정
+    for (int i = 0; i + 4 <= n; i += 4) {
+        __m128 va = _mm_load_ps(&a[i]);   // 정렬된 로드 (더 빠름)
+        __m128 vb = _mm_load_ps(&b[i]);
+        __m128 vc = _mm_add_ps(va, vb);
+        _mm_store_ps(&c[i], vc);          // 정렬된 저장
+    }
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">주요 SSE Intrinsics</div>
+                        <pre><code>// === 로드/저장 ===
+__m128 _mm_load_ps(float* p);      // 정렬된 로드 (16바이트)
+__m128 _mm_loadu_ps(float* p);     // 비정렬 로드
+void _mm_store_ps(float* p, __m128 a);
+void _mm_storeu_ps(float* p, __m128 a);
+
+// === 초기화 ===
+__m128 _mm_set_ps(f3, f2, f1, f0);  // 개별 값 설정
+__m128 _mm_set1_ps(float f);        // 모든 요소 같은 값
+__m128 _mm_setzero_ps();            // 모두 0
+
+// === 산술 연산 ===
+__m128 _mm_add_ps(a, b);   // a + b (4개씩)
+__m128 _mm_sub_ps(a, b);   // a - b
+__m128 _mm_mul_ps(a, b);   // a * b
+__m128 _mm_div_ps(a, b);   // a / b
+__m128 _mm_sqrt_ps(a);     // sqrt(a)
+__m128 _mm_rsqrt_ps(a);    // 1/sqrt(a) 근사값
+
+// === 비교 ===
+__m128 _mm_cmpgt_ps(a, b);  // a > b ? 0xFFFFFFFF : 0
+__m128 _mm_cmpeq_ps(a, b);  // a == b
+
+// === 논리 연산 ===
+__m128 _mm_and_ps(a, b);   // AND
+__m128 _mm_or_ps(a, b);    // OR
+__m128 _mm_xor_ps(a, b);   // XOR
+
+// === 셔플/재배열 ===
+__m128 _mm_shuffle_ps(a, b, mask);  // 요소 재배열
+float _mm_cvtss_f32(a);             // 첫 번째 float 추출</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 게임 수학 최적화</h2>
+            <div class="conversation">
+                <div class="q">벡터 연산을 SIMD로 최적화하면?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">3D 벡터 내적 (Dot Product)</div>
+                        <pre><code>// 스칼라 버전
+float dot_scalar(const Vector3& a, const Vector3& b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+// SSE 버전 (하나의 벡터 쌍)
+float dot_sse(const Vector3& a, const Vector3& b) {
+    __m128 va = _mm_set_ps(0, a.z, a.y, a.x);
+    __m128 vb = _mm_set_ps(0, b.z, b.y, b.x);
+
+    __m128 mul = _mm_mul_ps(va, vb);  // [0, z*z, y*y, x*x]
+
+    // Horizontal add: x + y + z
+    __m128 shuf = _mm_shuffle_ps(mul, mul, _MM_SHUFFLE(2, 3, 0, 1));
+    __m128 sums = _mm_add_ps(mul, shuf);      // [?, ?, x+y, z+0]
+    shuf = _mm_movehl_ps(shuf, sums);
+    sums = _mm_add_ss(sums, shuf);            // 최종 합
+
+    return _mm_cvtss_f32(sums);
+}
+
+// SSE4.1 버전 (더 간단)
+#include <smmintrin.h>
+float dot_sse41(const Vector3& a, const Vector3& b) {
+    __m128 va = _mm_set_ps(0, a.z, a.y, a.x);
+    __m128 vb = _mm_set_ps(0, b.z, b.y, b.x);
+
+    // dpps: dot product with mask
+    // 0x71 = 0111 0001 (3요소 사용, 결과는 첫 번째에)
+    __m128 dp = _mm_dp_ps(va, vb, 0x71);
+    return _mm_cvtss_f32(dp);
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">대량 벡터 정규화</div>
+                        <pre><code>// SoA 구조 (SIMD에 최적)
+struct Vectors {
+    float* x;
+    float* y;
+    float* z;
+    int count;
+};
+
+// 4개의 벡터를 동시에 정규화
+void normalizeVectors_sse(Vectors& v) {
+    for (int i = 0; i + 4 <= v.count; i += 4) {
+        // 4개의 x, y, z 로드
+        __m128 vx = _mm_loadu_ps(&v.x[i]);
+        __m128 vy = _mm_loadu_ps(&v.y[i]);
+        __m128 vz = _mm_loadu_ps(&v.z[i]);
+
+        // 길이 제곱 계산: x² + y² + z²
+        __m128 lenSq = _mm_add_ps(
+            _mm_add_ps(_mm_mul_ps(vx, vx), _mm_mul_ps(vy, vy)),
+            _mm_mul_ps(vz, vz)
+        );
+
+        // 역제곱근 (빠른 근사값)
+        __m128 invLen = _mm_rsqrt_ps(lenSq);
+
+        // 정규화: v * invLen
+        _mm_storeu_ps(&v.x[i], _mm_mul_ps(vx, invLen));
+        _mm_storeu_ps(&v.y[i], _mm_mul_ps(vy, invLen));
+        _mm_storeu_ps(&v.z[i], _mm_mul_ps(vz, invLen));
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">행렬 연산도 가속할 수 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">4x4 행렬-벡터 곱셈</div>
+                        <pre><code>// 행렬은 row-major로 저장
+struct Matrix4x4 {
+    __m128 rows[4];  // 각 행이 __m128
+};
+
+// 벡터 * 행렬 변환
+__m128 transformVector(const Matrix4x4& m, __m128 v) {
+    // v = [x, y, z, w]
+    // 각 요소를 4개로 확장하여 행과 곱함
+
+    __m128 x = _mm_shuffle_ps(v, v, _MM_SHUFFLE(0, 0, 0, 0));  // [x,x,x,x]
+    __m128 y = _mm_shuffle_ps(v, v, _MM_SHUFFLE(1, 1, 1, 1));  // [y,y,y,y]
+    __m128 z = _mm_shuffle_ps(v, v, _MM_SHUFFLE(2, 2, 2, 2));  // [z,z,z,z]
+    __m128 w = _mm_shuffle_ps(v, v, _MM_SHUFFLE(3, 3, 3, 3));  // [w,w,w,w]
+
+    // result = x * row0 + y * row1 + z * row2 + w * row3
+    __m128 result = _mm_mul_ps(x, m.rows[0]);
+    result = _mm_add_ps(result, _mm_mul_ps(y, m.rows[1]));
+    result = _mm_add_ps(result, _mm_mul_ps(z, m.rows[2]));
+    result = _mm_add_ps(result, _mm_mul_ps(w, m.rows[3]));
+
+    return result;
+}
+
+// 4x4 행렬 곱셈
+Matrix4x4 multiplyMatrices(const Matrix4x4& a, const Matrix4x4& b) {
+    Matrix4x4 result;
+
+    for (int i = 0; i < 4; ++i) {
+        result.rows[i] = transformVector(b, a.rows[i]);
+    }
+
+    return result;
+}</code></pre>
+                    </div>
+
+                    <p class="key-point">DirectXMath, GLM, Eigen 등의 라이브러리는 이미 SIMD 최적화되어 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 자동 벡터화</h2>
+            <div class="conversation">
+                <div class="q">컴파일러가 자동으로 SIMD를 사용해주나요?</div>
+                <div class="a">
+                    <p>네! <strong>자동 벡터화(Auto-Vectorization)</strong>가 가능하지만, 조건이 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">자동 벡터화 조건</div>
+                        <pre><code>// ✅ 자동 벡터화 가능
+void vectorizable(float* a, float* b, float* c, int n) {
+    // 1. 단순 루프
+    // 2. 의존성 없음
+    // 3. 고정 스트라이드 접근
+    for (int i = 0; i < n; ++i) {
+        c[i] = a[i] + b[i];
+    }
+}
+
+// ❌ 자동 벡터화 불가 - 포인터 앨리어싱
+void not_vectorizable1(float* a, float* b, int n) {
+    for (int i = 0; i < n; ++i) {
+        a[i] = a[i] + b[i];  // a와 b가 겹칠 수 있음
+    }
+}
+
+// ✅ restrict로 해결
+void vectorizable_restrict(float* __restrict a, float* __restrict b, int n) {
+    for (int i = 0; i < n; ++i) {
+        a[i] = a[i] + b[i];  // a와 b가 겹치지 않음을 보장
+    }
+}
+
+// ❌ 자동 벡터화 불가 - 데이터 의존성
+void not_vectorizable2(float* a, int n) {
+    for (int i = 1; i < n; ++i) {
+        a[i] = a[i-1] * 2;  // 이전 결과에 의존
+    }
+}
+
+// ❌ 자동 벡터화 불가 - 함수 호출
+void not_vectorizable3(float* a, float* b, int n) {
+    for (int i = 0; i < n; ++i) {
+        a[i] = expf(b[i]);  // 복잡한 함수 호출
+    }
+}
+
+// 컴파일러 힌트
+#pragma omp simd  // OpenMP SIMD 지시어
+void forced_vectorize(float* a, float* b, float* c, int n) {
+    for (int i = 0; i < n; ++i) {
+        c[i] = a[i] + b[i];
+    }
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">자동 벡터화 확인 방법</div>
+                        <pre><code># GCC: 벡터화 리포트
+g++ -O3 -ftree-vectorize -fopt-info-vec-optimized main.cpp
+
+# 출력 예시:
+# main.cpp:10:5: optimized: loop vectorized using 16 byte vectors
+
+# Clang: 벡터화 리포트
+clang++ -O3 -Rpass=loop-vectorize main.cpp
+
+# MSVC: 벡터화 리포트
+cl /O2 /Qvec-report:2 main.cpp</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 실전 최적화 예제</h2>
+            <div class="conversation">
+                <div class="q">파티클 시스템에 SIMD를 적용하면?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">SIMD 파티클 업데이트</div>
+                        <pre><code>// SoA 파티클 시스템
+struct ParticleSystem {
+    alignas(32) float posX[MAX_PARTICLES];
+    alignas(32) float posY[MAX_PARTICLES];
+    alignas(32) float posZ[MAX_PARTICLES];
+    alignas(32) float velX[MAX_PARTICLES];
+    alignas(32) float velY[MAX_PARTICLES];
+    alignas(32) float velZ[MAX_PARTICLES];
+    alignas(32) float life[MAX_PARTICLES];
+    int count;
+};
+
+void updateParticles_avx(ParticleSystem& ps, float dt) {
+    __m256 vdt = _mm256_set1_ps(dt);
+    __m256 gravity = _mm256_set1_ps(-9.8f * dt);
+    __m256 lifeDecay = _mm256_set1_ps(-dt);
+    __m256 zero = _mm256_setzero_ps();
+
+    for (int i = 0; i + 8 <= ps.count; i += 8) {
+        // 8개 파티클 동시 로드
+        __m256 px = _mm256_load_ps(&ps.posX[i]);
+        __m256 py = _mm256_load_ps(&ps.posY[i]);
+        __m256 pz = _mm256_load_ps(&ps.posZ[i]);
+        __m256 vx = _mm256_load_ps(&ps.velX[i]);
+        __m256 vy = _mm256_load_ps(&ps.velY[i]);
+        __m256 vz = _mm256_load_ps(&ps.velZ[i]);
+        __m256 l = _mm256_load_ps(&ps.life[i]);
+
+        // 중력 적용
+        vy = _mm256_add_ps(vy, gravity);
+
+        // 위치 업데이트: pos += vel * dt
+        px = _mm256_fmadd_ps(vx, vdt, px);  // FMA: a*b+c
+        py = _mm256_fmadd_ps(vy, vdt, py);
+        pz = _mm256_fmadd_ps(vz, vdt, pz);
+
+        // 수명 감소
+        l = _mm256_add_ps(l, lifeDecay);
+
+        // 저장
+        _mm256_store_ps(&ps.posX[i], px);
+        _mm256_store_ps(&ps.posY[i], py);
+        _mm256_store_ps(&ps.posZ[i], pz);
+        _mm256_store_ps(&ps.velX[i], vx);
+        _mm256_store_ps(&ps.velY[i], vy);
+        _mm256_store_ps(&ps.velZ[i], vz);
+        _mm256_store_ps(&ps.life[i], l);
+    }
+}
+
+// 벤치마크 (10만 파티클):
+// 스칼라: 2.5ms
+// SSE: 0.8ms (3배)
+// AVX: 0.4ms (6배)</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>SIMD</strong>: 하나의 명령으로 여러 데이터 동시 처리 (SSE: 4개, AVX: 8개)</li>
+                <li><strong>SoA 구조</strong>: SIMD에 최적화된 데이터 배치 (같은 필드를 연속 배열로)</li>
+                <li><strong>메모리 정렬</strong>: 16/32바이트 정렬 시 로드/저장 속도 향상</li>
+                <li><strong>자동 벡터화</strong>: 컴파일러가 조건 충족 시 자동 SIMD 적용</li>
+                <li><strong>게임 활용</strong>: 파티클, 물리, 행렬 연산에서 2~8배 성능 향상 가능</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

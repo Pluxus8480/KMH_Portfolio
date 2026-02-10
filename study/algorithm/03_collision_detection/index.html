@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>충돌 감지 최적화 (SAT, GJK) | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>두 물체가 부딪혔는지 어떻게 알까?</h1>
+            <p class="subtitle">SAT(분리축 정리)와 GJK 충돌 감지 알고리즘</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 충돌 감지의 단계</h2>
+            <div class="conversation">
+                <div class="q">게임에서 충돌 감지는 어떤 단계로 이루어지나요?</div>
+                <div class="a">
+                    <p>효율성을 위해 두 단계로 나눕니다:</p>
+                    <p class="highlight">Broad Phase → Narrow Phase</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+충돌 감지 파이프라인
+
+┌─────────────────────────────────────────────┐
+│           모든 물체 (1000개)                  │
+└─────────────────────────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────────┐
+│  Broad Phase (대략적 검사)                    │
+│  - AABB 검사, 공간 분할                       │
+│  - O(n log n) ~ O(n)                        │
+└─────────────────────────────────────────────┘
+                    │
+              (후보 50쌍)
+                    ▼
+┌─────────────────────────────────────────────┐
+│  Narrow Phase (정밀 검사)                     │
+│  - SAT, GJK 알고리즘                         │
+│  - 실제 충돌 여부 판정                         │
+└─────────────────────────────────────────────┘
+                    │
+              (실제 충돌 10쌍)
+                    ▼
+┌─────────────────────────────────────────────┐
+│  충돌 응답 (Response)                         │
+│  - 밀어내기, 반발, 데미지 등                   │
+└─────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">왜 두 단계로 나누나요?</div>
+                <div class="a">
+                    <p>정밀 검사는 비용이 높기 때문입니다.</p>
+                    <ul>
+                        <li><strong>AABB 검사</strong>: 단순 비교 6번 (빠름)</li>
+                        <li><strong>SAT 검사</strong>: 축 투영 + 겹침 체크 (느림)</li>
+                        <li><strong>GJK 검사</strong>: 반복 계산 (더 느림)</li>
+                    </ul>
+                    <p class="key-point">Broad Phase로 99%를 걸러내고, 1%만 정밀 검사!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: SAT (Separating Axis Theorem)</h2>
+            <div class="conversation">
+                <div class="q">분리축 정리(SAT)란 무엇인가요?</div>
+                <div class="a">
+                    <p class="highlight">두 볼록 다각형이 분리되려면, 적어도 하나의 축에서 그림자가 겹치지 않아야 합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>손전등으로 두 물체에 빛을 비췄을 때 그림자를 보세요.</p>
+                        <p>모든 방향에서 그림자가 겹치면 충돌! 한 방향이라도 분리되면 충돌 아님!</p>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+SAT 원리
+
+        축1 투영                    축2 투영
+        ───────                    ───────
+
+  A ▓▓▓▓▓▓                    A ▓▓▓▓
+        B ▓▓▓▓▓▓               B    ▓▓▓▓▓
+        ────────                   ────────
+        겹침! ✓                   겹침! ✓
+
+        → 모든 축에서 겹침 = 충돌!
+
+        축3 투영 (분리축 발견)
+        ───────
+  A ▓▓▓▓
+              B ▓▓▓▓▓
+        ─────────────
+        분리! ✗
+
+        → 하나라도 분리 = 충돌 아님!
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">어떤 축을 검사해야 하나요?</div>
+                <div class="a">
+                    <p>두 다각형의 모든 변에 수직인 축만 검사하면 됩니다.</p>
+                    <ul>
+                        <li><strong>사각형 vs 사각형</strong>: 최대 4개 축</li>
+                        <li><strong>삼각형 vs 삼각형</strong>: 최대 6개 축</li>
+                        <li><strong>n각형 vs m각형</strong>: 최대 n + m개 축</li>
+                    </ul>
+                    <p class="warning">3D에서는 면의 법선 + 엣지 조합으로 축이 많아집니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: SAT 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">C++ SAT 알고리즘</div>
+                    <pre><code>#include &lt;vector&gt;
+#include &lt;cmath&gt;
+#include &lt;limits&gt;
+
+struct Vec2 {
+    float x, y;
+
+    Vec2 operator-(const Vec2& other) const {
+        return {x - other.x, y - other.y};
+    }
+
+    Vec2 perpendicular() const {
+        return {-y, x};  // 90도 회전 (법선 벡터)
+    }
+
+    float dot(const Vec2& other) const {
+        return x * other.x + y * other.y;
+    }
+
+    Vec2 normalize() const {
+        float len = std::sqrt(x * x + y * y);
+        return {x / len, y / len};
+    }
+};
+
+struct Polygon {
+    std::vector&lt;Vec2&gt; vertices;
+
+    // 축에 투영했을 때 min/max 값
+    void project(const Vec2& axis, float& min, float& max) const {
+        min = max = vertices[0].dot(axis);
+
+        for (size_t i = 1; i < vertices.size(); i++) {
+            float proj = vertices[i].dot(axis);
+            if (proj < min) min = proj;
+            if (proj > max) max = proj;
+        }
+    }
+
+    // 모든 변의 법선 벡터 (축 후보)
+    std::vector&lt;Vec2&gt; getAxes() const {
+        std::vector&lt;Vec2&gt; axes;
+        for (size_t i = 0; i < vertices.size(); i++) {
+            Vec2 edge = vertices[(i + 1) % vertices.size()] - vertices[i];
+            axes.push_back(edge.perpendicular().normalize());
+        }
+        return axes;
+    }
+};
+
+class SAT {
+public:
+    struct CollisionResult {
+        bool colliding;
+        float penetration;  // 침투 깊이
+        Vec2 normal;        // 충돌 법선 (밀어낼 방향)
+    };
+
+    static CollisionResult checkCollision(const Polygon& a, const Polygon& b) {
+        CollisionResult result = {true, std::numeric_limits&lt;float&gt;::max(), {0, 0}};
+
+        // A의 축들에서 검사
+        auto axesA = a.getAxes();
+        for (const auto& axis : axesA) {
+            if (!checkAxis(a, b, axis, result)) {
+                result.colliding = false;
+                return result;  // 분리축 발견!
+            }
+        }
+
+        // B의 축들에서 검사
+        auto axesB = b.getAxes();
+        for (const auto& axis : axesB) {
+            if (!checkAxis(a, b, axis, result)) {
+                result.colliding = false;
+                return result;  // 분리축 발견!
+            }
+        }
+
+        return result;  // 모든 축에서 겹침 = 충돌!
+    }
+
+private:
+    static bool checkAxis(const Polygon& a, const Polygon& b,
+                          const Vec2& axis, CollisionResult& result) {
+        float minA, maxA, minB, maxB;
+        a.project(axis, minA, maxA);
+        b.project(axis, minB, maxB);
+
+        // 겹침 체크
+        if (maxA < minB || maxB < minA) {
+            return false;  // 분리됨!
+        }
+
+        // 침투 깊이 계산 (가장 작은 겹침 저장)
+        float overlap = std::min(maxA - minB, maxB - minA);
+        if (overlap < result.penetration) {
+            result.penetration = overlap;
+            result.normal = axis;
+        }
+
+        return true;  // 이 축에서는 겹침
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: GJK 알고리즘</h2>
+            <div class="conversation">
+                <div class="q">GJK는 SAT와 무엇이 다른가요?</div>
+                <div class="a">
+                    <p class="highlight">GJK는 민코프스키 차(Minkowski Difference)를 이용합니다.</p>
+                    <p>두 도형의 민코프스키 차가 원점을 포함하면 충돌!</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+민코프스키 차 (A - B)
+
+    도형 A          도형 B         A - B (민코프스키 차)
+    ┌───┐          ┌───┐
+    │   │    -     │   │    =    ┌───────────┐
+    └───┘          └───┘         │     ●     │ 원점 포함!
+                                  │  (원점)   │ → 충돌
+                                  └───────────┘
+
+두 도형이 떨어져 있으면:
+
+    A - B가 원점을 포함하지 않음 → 충돌 아님
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">GJK의 장점은 무엇인가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>SAT</th>
+                                <th>GJK</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>적용 범위</td>
+                                <td>볼록 다각형만</td>
+                                <td>모든 볼록 도형</td>
+                            </tr>
+                            <tr>
+                                <td>곡선 도형</td>
+                                <td>근사 필요</td>
+                                <td>직접 처리 가능</td>
+                            </tr>
+                            <tr>
+                                <td>조기 종료</td>
+                                <td>분리축 발견 시</td>
+                                <td>원점 미포함 확인 시</td>
+                            </tr>
+                            <tr>
+                                <td>확장</td>
+                                <td>-</td>
+                                <td>EPA로 침투 정보</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="key-point">GJK는 원, 타원 등 곡선 도형에도 사용 가능!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: GJK 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">C++ GJK 알고리즘</div>
+                    <pre><code>struct Vec2 {
+    float x, y;
+
+    Vec2 operator+(const Vec2& o) const { return {x + o.x, y + o.y}; }
+    Vec2 operator-(const Vec2& o) const { return {x - o.x, y - o.y}; }
+    Vec2 operator*(float s) const { return {x * s, y * s}; }
+    Vec2 operator-() const { return {-x, -y}; }
+    float dot(const Vec2& o) const { return x * o.x + y * o.y; }
+    float cross(const Vec2& o) const { return x * o.y - y * o.x; }
+};
+
+// Support 함수: 주어진 방향으로 가장 먼 점
+Vec2 support(const Polygon& shape, const Vec2& direction) {
+    float maxDot = -std::numeric_limits&lt;float&gt;::max();
+    Vec2 result;
+
+    for (const auto& v : shape.vertices) {
+        float d = v.dot(direction);
+        if (d > maxDot) {
+            maxDot = d;
+            result = v;
+        }
+    }
+    return result;
+}
+
+// 민코프스키 차의 Support
+Vec2 minkowskiSupport(const Polygon& a, const Polygon& b, const Vec2& dir) {
+    return support(a, dir) - support(b, -dir);
+}
+
+class GJK {
+public:
+    static bool checkCollision(const Polygon& a, const Polygon& b) {
+        Vec2 direction = {1, 0};  // 초기 방향
+        std::vector&lt;Vec2&gt; simplex;
+
+        // 첫 번째 점
+        Vec2 pointA = minkowskiSupport(a, b, direction);
+        simplex.push_back(pointA);
+        direction = -pointA;  // 원점 방향으로
+
+        const int MAX_ITERATIONS = 50;
+        for (int i = 0; i < MAX_ITERATIONS; i++) {
+            Vec2 newPoint = minkowskiSupport(a, b, direction);
+
+            // 새 점이 원점을 지나지 못함 = 충돌 없음
+            if (newPoint.dot(direction) < 0) {
+                return false;
+            }
+
+            simplex.push_back(newPoint);
+
+            // 심플렉스가 원점을 포함하는지 확인
+            if (handleSimplex(simplex, direction)) {
+                return true;  // 충돌!
+            }
+        }
+
+        return false;
+    }
+
+private:
+    static bool handleSimplex(std::vector&lt;Vec2&gt;& simplex, Vec2& direction) {
+        if (simplex.size() == 2) {
+            return handleLine(simplex, direction);
+        }
+        return handleTriangle(simplex, direction);
+    }
+
+    static bool handleLine(std::vector&lt;Vec2&gt;& simplex, Vec2& direction) {
+        Vec2 a = simplex[1];
+        Vec2 b = simplex[0];
+        Vec2 ab = b - a;
+        Vec2 ao = -a;  // 원점 방향
+
+        // 원점이 AB 선분의 어느 쪽에 있는지
+        direction = tripleProduct(ab, ao, ab);
+        return false;
+    }
+
+    static bool handleTriangle(std::vector&lt;Vec2&gt;& simplex, Vec2& direction) {
+        Vec2 a = simplex[2];
+        Vec2 b = simplex[1];
+        Vec2 c = simplex[0];
+
+        Vec2 ab = b - a;
+        Vec2 ac = c - a;
+        Vec2 ao = -a;
+
+        Vec2 abPerp = tripleProduct(ac, ab, ab);
+        Vec2 acPerp = tripleProduct(ab, ac, ac);
+
+        // 원점이 AB 외부
+        if (abPerp.dot(ao) > 0) {
+            simplex.erase(simplex.begin());  // C 제거
+            direction = abPerp;
+            return false;
+        }
+
+        // 원점이 AC 외부
+        if (acPerp.dot(ao) > 0) {
+            simplex.erase(simplex.begin() + 1);  // B 제거
+            direction = acPerp;
+            return false;
+        }
+
+        // 원점이 삼각형 내부!
+        return true;
+    }
+
+    static Vec2 tripleProduct(const Vec2& a, const Vec2& b, const Vec2& c) {
+        float ac = a.dot(c);
+        float bc = b.dot(c);
+        return {b.x * ac - a.x * bc, b.y * ac - a.y * bc};
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: EPA와 충돌 응답</h2>
+            <div class="conversation">
+                <div class="q">충돌 후 어떻게 처리하나요?</div>
+                <div class="a">
+                    <p>GJK는 충돌 여부만 알려주므로, EPA(Expanding Polytope Algorithm)로 침투 정보를 얻습니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+EPA (Expanding Polytope Algorithm)
+
+1. GJK가 찾은 심플렉스에서 시작
+
+   ┌─────────┐
+   │  ●      │  심플렉스 (삼각형)
+   │ (원점)  │
+   └─────────┘
+
+2. 원점에서 가장 가까운 엣지 찾기
+
+3. 그 방향으로 새 Support 점 추가
+
+4. 반복하여 침투 벡터(MTV) 계산
+
+   MTV = Minimum Translation Vector
+   → 물체를 밀어낼 최소 거리와 방향
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">실제 충돌 응답은 어떻게 구현하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">충돌 응답 (밀어내기)</div>
+                        <pre><code>void resolveCollision(GameObject& a, GameObject& b,
+                      const Vec2& mtv, float penetration) {
+    // 두 물체를 침투 깊이만큼 분리
+    // 질량에 반비례하여 분배
+
+    float totalMass = a.mass + b.mass;
+    float ratioA = b.mass / totalMass;
+    float ratioB = a.mass / totalMass;
+
+    Vec2 correction = mtv * penetration;
+
+    a.position = a.position + correction * ratioA;
+    b.position = b.position - correction * ratioB;
+
+    // 속도 반영 (반발 계수)
+    float restitution = std::min(a.restitution, b.restitution);
+
+    float relativeVel = (a.velocity - b.velocity).dot(mtv);
+    if (relativeVel > 0) return;  // 이미 분리 중
+
+    float impulse = -(1 + restitution) * relativeVel / totalMass;
+
+    a.velocity = a.velocity + mtv * (impulse * b.mass);
+    b.velocity = b.velocity - mtv * (impulse * a.mass);
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Broad Phase → Narrow Phase</strong>: 계층적 필터링으로 검사량 감소</li>
+                <li><strong>SAT</strong>: 분리축 정리, 모든 축에서 겹쳐야 충돌</li>
+                <li><strong>GJK</strong>: 민코프스키 차가 원점 포함 시 충돌, 곡선 도형 지원</li>
+                <li><strong>EPA</strong>: GJK 후 침투 깊이와 방향(MTV) 계산</li>
+                <li><strong>충돌 응답</strong>: MTV로 분리 + 반발 계수로 속도 조정</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

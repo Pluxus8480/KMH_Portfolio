@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BVH (Bounding Volume Hierarchy) | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>수백만 삼각형에서 광선이 어디에 닿을까?</h1>
+            <p class="subtitle">BVH로 레이트레이싱 가속하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: BVH란 무엇인가?</h2>
+            <div class="conversation">
+                <div class="q">BVH(Bounding Volume Hierarchy)가 뭔가요?</div>
+                <div class="a">
+                    <p class="highlight">물체들을 계층적으로 감싸는 바운딩 볼륨 트리입니다.</p>
+                    <p>레이트레이싱에서 광선-물체 교차 검사를 가속화하는 핵심 자료구조입니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+BVH 구조
+
+레벨 0:  [───────────────────── 전체 씬 ─────────────────────]
+                            │
+레벨 1:      [──── 왼쪽 절반 ────]    [──── 오른쪽 절반 ────]
+                   │                         │
+레벨 2:      [물체A] [물체B]            [물체C] [물체D]
+                         │
+레벨 3:              [삼각형1~100]
+
+광선이 "전체 씬" 바운딩 박스에 안 맞으면 → 모든 하위 검사 스킵!
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">왜 필요한가요?</div>
+                <div class="a">
+                    <p>레이트레이싱에서 광선 하나당 모든 삼각형을 검사하면:</p>
+                    <p class="warning">100만 삼각형 × 1920×1080 픽셀 = 2조 번 검사! 💀</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>도서관에서 책을 찾을 때 모든 책장을 뒤지지 않습니다.</p>
+                        <p>"과학" → "물리학" → "양자역학" 순으로 범위를 좁히듯, BVH는 공간을 계층적으로 좁혀갑니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: BVH 구축 알고리즘</h2>
+            <div class="conversation">
+                <div class="q">BVH는 어떻게 만드나요?</div>
+                <div class="a">
+                    <p>Top-Down 방식으로 재귀적으로 분할합니다.</p>
+                    <p class="key-point">핵심은 "어떤 기준으로 분할하느냐"입니다.</p>
+
+                    <p><strong>분할 방법:</strong></p>
+                    <ul>
+                        <li><strong>중앙 분할 (Midpoint)</strong>: 가장 긴 축의 중앙에서 분할</li>
+                        <li><strong>동등 분할 (Equal Counts)</strong>: 물체 수가 같도록 분할</li>
+                        <li><strong>SAH (Surface Area Heuristic)</strong>: 비용 최소화 분할</li>
+                    </ul>
+                </div>
+
+                <div class="visual-section">
+                    <pre class="diagram">
+분할 방법 비교
+
+중앙 분할 (Midpoint)         동등 분할 (Equal Counts)
+
+┌─────────┬─────────┐       ┌───────────┬───────┐
+│ ●●      │         │       │ ●●●       │ ●●●   │
+│   ●     │   ●●●   │       │           │       │
+│         │    ●    │       │           │       │
+└─────────┴─────────┘       └───────────┴───────┘
+
+공간 중앙에서 분할            물체 3개씩 분할
+불균형 가능                  균형 트리
+
+SAH (Surface Area Heuristic)
+
+┌────────┬───────────────┐
+│ ●●●    │               │
+│        │   ●●          │  ← 표면적 기반 비용 최소화
+│        │               │
+└────────┴───────────────┘
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: SAH (Surface Area Heuristic)</h2>
+            <div class="conversation">
+                <div class="q">SAH가 왜 중요한가요?</div>
+                <div class="a">
+                    <p class="highlight">SAH는 광선이 바운딩 박스에 교차할 확률을 기반으로 최적 분할을 찾습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">SAH 비용 공식</div>
+                        <pre><code>// SAH 비용 = 교차 비용 + (왼쪽 확률 × 왼쪽 비용) + (오른쪽 확률 × 오른쪽 비용)
+
+// 확률 = 자식 표면적 / 부모 표면적
+float cost = TRAVERSE_COST +
+             (leftSurfaceArea / parentSurfaceArea) * leftCount * INTERSECT_COST +
+             (rightSurfaceArea / parentSurfaceArea) * rightCount * INTERSECT_COST;
+
+// TRAVERSE_COST: 노드 순회 비용 (보통 1)
+// INTERSECT_COST: 프리미티브 교차 비용 (보통 1~4)</code></pre>
+                    </div>
+
+                    <p><strong>SAH 최적화:</strong></p>
+                    <ul>
+                        <li>여러 분할점을 시도하여 비용이 최소인 지점 선택</li>
+                        <li>Binning: 축을 N개 구간으로 나누어 빠르게 근사</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: BVH 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">C++ BVH 구현</div>
+                    <pre><code>#include &lt;vector&gt;
+#include &lt;algorithm&gt;
+
+struct AABB {
+    Vec3 min, max;
+
+    void expand(const AABB& other) {
+        min = Vec3::min(min, other.min);
+        max = Vec3::max(max, other.max);
+    }
+
+    float surfaceArea() const {
+        Vec3 d = max - min;
+        return 2.0f * (d.x * d.y + d.y * d.z + d.z * d.x);
+    }
+
+    int longestAxis() const {
+        Vec3 d = max - min;
+        if (d.x > d.y && d.x > d.z) return 0;
+        if (d.y > d.z) return 1;
+        return 2;
+    }
+};
+
+struct BVHNode {
+    AABB bounds;
+    int leftChild;    // 내부 노드: 왼쪽 자식 인덱스
+    int rightChild;   // 내부 노드: 오른쪽 자식 인덱스
+    int firstPrim;    // 리프 노드: 첫 프리미티브 인덱스
+    int primCount;    // 리프 노드: 프리미티브 개수
+
+    bool isLeaf() const { return primCount > 0; }
+};
+
+class BVH {
+private:
+    std::vector&lt;BVHNode&gt; nodes;
+    std::vector&lt;Triangle&gt; primitives;
+    int nodesUsed = 0;
+
+    static const int MAX_PRIMS_PER_LEAF = 4;
+
+public:
+    void build(std::vector&lt;Triangle&gt;& tris) {
+        primitives = std::move(tris);
+        nodes.resize(primitives.size() * 2);  // 최대 노드 수
+
+        // 루트 노드 생성
+        BVHNode& root = nodes[0];
+        root.firstPrim = 0;
+        root.primCount = primitives.size();
+        nodesUsed = 1;
+
+        updateNodeBounds(0);
+        subdivide(0);
+    }
+
+    void updateNodeBounds(int nodeIdx) {
+        BVHNode& node = nodes[nodeIdx];
+        node.bounds = AABB{Vec3(1e30f), Vec3(-1e30f)};
+
+        for (int i = 0; i < node.primCount; i++) {
+            Triangle& tri = primitives[node.firstPrim + i];
+            node.bounds.expand(tri.getBounds());
+        }
+    }
+
+    void subdivide(int nodeIdx) {
+        BVHNode& node = nodes[nodeIdx];
+
+        // 리프 조건: 프리미티브가 적으면 중단
+        if (node.primCount <= MAX_PRIMS_PER_LEAF) {
+            return;
+        }
+
+        // SAH로 최적 분할점 찾기
+        int axis = node.bounds.longestAxis();
+        int splitPos = findBestSplit(node, axis);
+
+        if (splitPos == node.firstPrim ||
+            splitPos == node.firstPrim + node.primCount) {
+            return;  // 분할 불가
+        }
+
+        // 자식 노드 생성
+        int leftIdx = nodesUsed++;
+        int rightIdx = nodesUsed++;
+
+        nodes[leftIdx].firstPrim = node.firstPrim;
+        nodes[leftIdx].primCount = splitPos - node.firstPrim;
+
+        nodes[rightIdx].firstPrim = splitPos;
+        nodes[rightIdx].primCount = node.primCount - nodes[leftIdx].primCount;
+
+        node.leftChild = leftIdx;
+        node.rightChild = rightIdx;
+        node.primCount = 0;  // 내부 노드로 전환
+
+        updateNodeBounds(leftIdx);
+        updateNodeBounds(rightIdx);
+
+        subdivide(leftIdx);
+        subdivide(rightIdx);
+    }
+
+    int findBestSplit(BVHNode& node, int axis) {
+        float bestCost = 1e30f;
+        int bestPos = node.firstPrim;
+
+        // 프리미티브를 축 기준으로 정렬
+        std::sort(primitives.begin() + node.firstPrim,
+                  primitives.begin() + node.firstPrim + node.primCount,
+                  [axis](const Triangle& a, const Triangle& b) {
+                      return a.centroid()[axis] < b.centroid()[axis];
+                  });
+
+        // 모든 분할점에서 SAH 비용 계산
+        for (int i = 1; i < node.primCount; i++) {
+            AABB leftBox, rightBox;
+
+            for (int j = 0; j < i; j++) {
+                leftBox.expand(primitives[node.firstPrim + j].getBounds());
+            }
+            for (int j = i; j < node.primCount; j++) {
+                rightBox.expand(primitives[node.firstPrim + j].getBounds());
+            }
+
+            float cost = leftBox.surfaceArea() * i +
+                         rightBox.surfaceArea() * (node.primCount - i);
+
+            if (cost < bestCost) {
+                bestCost = cost;
+                bestPos = node.firstPrim + i;
+            }
+        }
+
+        return bestPos;
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: BVH 순회 (Ray Traversal)</h2>
+            <div class="conversation">
+                <div class="q">BVH에서 광선 교차를 어떻게 찾나요?</div>
+                <div class="a">
+                    <p class="highlight">루트부터 시작해서 광선이 교차하는 노드만 재귀적으로 탐색합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">BVH 광선 순회</div>
+                        <pre><code>struct Ray {
+    Vec3 origin;
+    Vec3 direction;
+    Vec3 invDir;  // 1/direction (사전 계산)
+};
+
+struct HitInfo {
+    float t;       // 교차 거리
+    int primIdx;   // 교차한 프리미티브
+    Vec3 normal;
+};
+
+bool BVH::intersect(const Ray& ray, HitInfo& hit) {
+    hit.t = 1e30f;
+    return intersectNode(ray, 0, hit);
+}
+
+bool BVH::intersectNode(const Ray& ray, int nodeIdx, HitInfo& hit) {
+    BVHNode& node = nodes[nodeIdx];
+
+    // 바운딩 박스 교차 검사
+    if (!intersectAABB(ray, node.bounds, hit.t)) {
+        return false;  // 이 노드 전체 스킵!
+    }
+
+    if (node.isLeaf()) {
+        // 리프 노드: 모든 프리미티브 검사
+        bool hitAny = false;
+        for (int i = 0; i < node.primCount; i++) {
+            Triangle& tri = primitives[node.firstPrim + i];
+            float t;
+            if (intersectTriangle(ray, tri, t) && t < hit.t) {
+                hit.t = t;
+                hit.primIdx = node.firstPrim + i;
+                hit.normal = tri.normal;
+                hitAny = true;
+            }
+        }
+        return hitAny;
+    }
+
+    // 내부 노드: 자식 순회
+    bool hitLeft = intersectNode(ray, node.leftChild, hit);
+    bool hitRight = intersectNode(ray, node.rightChild, hit);
+
+    return hitLeft || hitRight;
+}
+
+// AABB-Ray 교차 (Slab method)
+bool intersectAABB(const Ray& ray, const AABB& box, float maxT) {
+    float tmin = 0, tmax = maxT;
+
+    for (int i = 0; i < 3; i++) {
+        float t1 = (box.min[i] - ray.origin[i]) * ray.invDir[i];
+        float t2 = (box.max[i] - ray.origin[i]) * ray.invDir[i];
+
+        tmin = std::max(tmin, std::min(t1, t2));
+        tmax = std::min(tmax, std::max(t1, t2));
+    }
+
+    return tmax >= tmin;
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">순회 순서를 최적화할 수 있나요?</div>
+                <div class="a">
+                    <p class="key-point">광선 방향에 따라 가까운 자식을 먼저 방문하면 조기 종료가 많아집니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">순회 순서 최적화</div>
+                        <pre><code>// 광선 방향에 따른 순회 순서
+int firstChild, secondChild;
+if (ray.direction[node.splitAxis] > 0) {
+    firstChild = node.leftChild;
+    secondChild = node.rightChild;
+} else {
+    firstChild = node.rightChild;
+    secondChild = node.leftChild;
+}
+
+// 가까운 자식 먼저
+if (intersectNode(ray, firstChild, hit)) {
+    // 가까운 곳에서 히트 → 먼 곳은 스킵 가능
+    if (hit.t < tToSecondChild) {
+        return true;  // 조기 종료!
+    }
+}
+intersectNode(ray, secondChild, hit);</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: BVH 최적화 기법</h2>
+            <div class="conversation">
+                <div class="q">실제 레이트레이서에서 어떤 최적화를 하나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>최적화 기법</th>
+                                <th>설명</th>
+                                <th>효과</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>MBVH (Multi-BVH)</td>
+                                <td>이진 대신 4~8개 자식</td>
+                                <td>SIMD 활용</td>
+                            </tr>
+                            <tr>
+                                <td>QBVH</td>
+                                <td>4개 자식 동시 테스트</td>
+                                <td>SSE/AVX 최적화</td>
+                            </tr>
+                            <tr>
+                                <td>CWBVH</td>
+                                <td>압축된 와이드 BVH</td>
+                                <td>GPU 최적화</td>
+                            </tr>
+                            <tr>
+                                <td>TLAS/BLAS</td>
+                                <td>2단계 계층 (인스턴싱)</td>
+                                <td>동적 씬 지원</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">SIMD 4-way AABB 테스트</div>
+                        <pre><code>// 4개 AABB를 동시에 테스트 (SSE)
+__m128 intersectAABB4(const Ray& ray, const AABB4& boxes) {
+    __m128 tmin = _mm_setzero_ps();
+    __m128 tmax = _mm_set1_ps(1e30f);
+
+    for (int i = 0; i < 3; i++) {
+        __m128 t1 = _mm_mul_ps(
+            _mm_sub_ps(boxes.min[i], _mm_set1_ps(ray.origin[i])),
+            _mm_set1_ps(ray.invDir[i]));
+        __m128 t2 = _mm_mul_ps(
+            _mm_sub_ps(boxes.max[i], _mm_set1_ps(ray.origin[i])),
+            _mm_set1_ps(ray.invDir[i]));
+
+        tmin = _mm_max_ps(tmin, _mm_min_ps(t1, t2));
+        tmax = _mm_min_ps(tmax, _mm_max_ps(t1, t2));
+    }
+
+    return _mm_cmple_ps(tmin, tmax);  // 4개 결과 동시 반환
+}</code></pre>
+                    </div>
+
+                    <p class="highlight">RTX GPU의 RT Core는 BVH 순회를 하드웨어로 가속합니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>BVH</strong>: 물체를 계층적 바운딩 볼륨으로 감싸는 트리 구조</li>
+                <li><strong>SAH</strong>: 표면적 기반 휴리스틱으로 최적 분할점 결정</li>
+                <li><strong>순회 최적화</strong>: 광선 방향 기반 순서, 조기 종료</li>
+                <li><strong>MBVH/QBVH</strong>: 다중 자식으로 SIMD 활용</li>
+                <li><strong>레이트레이싱</strong>: 100만 삼각형도 O(log n) 검색 가능</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

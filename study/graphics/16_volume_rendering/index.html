@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>공기 속을 그리다 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>공기 속을 그리다</h1>
+            <p class="subtitle">Volume Rendering과 Fog 효과</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 볼륨 효과의 필요성</h2>
+            <div class="conversation">
+                <div class="q">왜 안개나 연기를 특별히 처리해야 하나요?</div>
+                <div class="a">
+                    <p>안개, 연기, 빛줄기 등은 <span class="highlight">표면이 아닌 공간 자체</span>에 존재합니다. 일반 메시로는 표현하기 어렵습니다.</p>
+                    <p><span class="key-point">Volumetric Rendering</span>은 빛이 매체(공기, 먼지)를 통과하며 산란/흡수되는 현상을 시뮬레이션합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+빛의 산란과 흡수:
+
+    태양 ☀️
+         \
+          \  입사광
+           \
+    ─────────────────────  안개/매체
+        ↗ ↑ ↗
+       산란광              👁️ 카메라
+        (여러 방향으로)       ↑
+                            │
+    ═════════════════════   지면
+
+In-Scattering: 다른 방향의 빛이 시선으로 산란
+Out-Scattering: 시선 방향 빛이 다른 곳으로 산란
+Absorption: 빛이 매체에 흡수됨
+
+최종 색상 = 원래 색상 × 투과율 + 산란광
+                </pre>
+                <p class="diagram-caption">대기 산란의 원리</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 거리 기반 Fog</h2>
+            <div class="conversation">
+                <div class="q">가장 간단한 안개 구현은?</div>
+                <div class="a">
+                    <p><span class="highlight">거리 기반 Fog</span>는 카메라와의 거리에 따라 안개색을 블렌딩합니다. 계산이 간단하지만 사실적이지 않습니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">거리 기반 Fog</div>
+                <pre><code>// 선형 Fog
+float LinearFog(float distance)
+{
+    return saturate((fogEnd - distance) / (fogEnd - fogStart));
+}
+
+// 지수 Fog
+float ExponentialFog(float distance)
+{
+    return exp(-distance * fogDensity);
+}
+
+// 지수 제곱 Fog (더 급격한 변화)
+float ExponentialSquaredFog(float distance)
+{
+    float f = distance * fogDensity;
+    return exp(-f * f);
+}
+
+// 적용
+float4 ApplyFog(float4 sceneColor, float3 worldPos)
+{
+    float distance = length(worldPos - cameraPos);
+    float fogFactor = ExponentialFog(distance);
+
+    // 블렌딩: 멀수록 fogColor에 가까워짐
+    return lerp(fogColor, sceneColor, fogFactor);
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>Fog 유형</th>
+                        <th>공식</th>
+                        <th>특징</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Linear</td>
+                        <td>(end - d) / (end - start)</td>
+                        <td>단순, 급격한 전환</td>
+                    </tr>
+                    <tr>
+                        <td>Exponential</td>
+                        <td>e^(-d × density)</td>
+                        <td>자연스러운 감쇠</td>
+                    </tr>
+                    <tr>
+                        <td>Exp Squared</td>
+                        <td>e^(-(d × density)²)</td>
+                        <td>가까이는 맑고 멀리는 짙음</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Height Fog</h2>
+            <div class="conversation">
+                <div class="q">골짜기에만 안개가 깔리게 하려면?</div>
+                <div class="a">
+                    <p><span class="highlight">Height Fog</span>는 높이에 따라 밀도가 변합니다. 낮은 곳은 짙고 높은 곳은 옅은 안개를 표현합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Height Fog 개념:
+
+높이
+  ↑
+  │  ☀️
+  │     맑음
+  │
+  │  ═══════════  fogHeight
+  │  ░░░░░░░░░░  옅은 안개
+  │  ▒▒▒▒▒▒▒▒▒▒  중간
+  │  ▓▓▓▓▓▓▓▓▓▓  짙은 안개
+  ├──────────────────→ 거리
+  지면
+
+밀도 = baseDensity × e^(-높이 × falloff)
+                </pre>
+                <p class="diagram-caption">Height Fog 밀도 분포</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Height Fog 구현</div>
+                <pre><code>// 높이 기반 밀도 계산
+float GetHeightFogDensity(float3 worldPos)
+{
+    float height = worldPos.y - fogBaseHeight;
+
+    // 높이에 따른 지수 감쇠
+    float density = fogDensity * exp(-height * fogFalloff);
+
+    return max(density, 0);
+}
+
+// Ray Marching을 통한 적분
+float CalculateHeightFog(float3 startPos, float3 endPos)
+{
+    float3 rayDir = endPos - startPos;
+    float rayLength = length(rayDir);
+    rayDir /= rayLength;
+
+    const int steps = 16;
+    float stepSize = rayLength / steps;
+
+    float totalDensity = 0;
+
+    for (int i = 0; i < steps; i++)
+    {
+        float3 samplePos = startPos + rayDir * (i + 0.5) * stepSize;
+        totalDensity += GetHeightFogDensity(samplePos) * stepSize;
+    }
+
+    // Beer's Law: 투과율 = e^(-광학 밀도)
+    return exp(-totalDensity);
+}
+
+// 해석적 적분 (더 빠름)
+float CalculateHeightFogAnalytic(float3 startPos, float3 endPos)
+{
+    float heightStart = startPos.y - fogBaseHeight;
+    float heightEnd = endPos.y - fogBaseHeight;
+
+    // 적분 결과 (간략화)
+    float integral = fogDensity / fogFalloff *
+        (exp(-heightStart * fogFalloff) - exp(-heightEnd * fogFalloff));
+
+    return exp(-integral);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Volumetric Fog (God Rays)</h2>
+            <div class="conversation">
+                <div class="q">빛줄기(God Rays)는 어떻게 구현하나요?</div>
+                <div class="a">
+                    <p><span class="highlight">Volumetric Fog</span>는 빛이 공기 입자에 의해 산란되는 현상을 시뮬레이션합니다. Ray Marching으로 구현합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Volumetric Light 원리:
+
+    태양 ☀️ ─────────────────────
+              \   \   \   \   \
+               \   \   \   \   \   빛줄기
+                \   \   \   \   \
+         ━━━━━━━━━━━━━━━━━━━━━━   그림자 생성 물체
+                    │
+                    │  그림자 영역
+                    │  (빛 없음)
+         ───────────────────────
+                        👁️ 카메라
+
+Ray Marching:
+카메라에서 각 픽셀로 레이를 쏘고
+일정 간격마다 라이트 가시성 체크
+→ 가시적인 빛 누적 = 빛줄기 효과
+                </pre>
+                <p class="diagram-caption">Volumetric Light 원리</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Volumetric Fog Ray Marching</div>
+                <pre><code>// Volumetric Fog (Post-Process)
+float4 VolumetricFog_PS(float2 uv : TEXCOORD) : SV_Target
+{
+    float depth = depthBuffer.Sample(pointSamp, uv).r;
+    float3 worldPos = ReconstructWorldPosition(uv, depth);
+    float3 rayStart = cameraPos;
+    float3 rayEnd = worldPos;
+
+    float3 rayDir = normalize(rayEnd - rayStart);
+    float rayLength = length(rayEnd - rayStart);
+
+    const int numSteps = 64;
+    float stepSize = rayLength / numSteps;
+
+    float3 scatteredLight = 0;
+    float transmittance = 1;
+
+    // Ray Marching
+    for (int i = 0; i < numSteps; i++)
+    {
+        float3 samplePos = rayStart + rayDir * (i + 0.5) * stepSize;
+
+        // 1. 매체 밀도
+        float density = GetFogDensity(samplePos);
+
+        // 2. 빛 가시성 (그림자 맵 샘플)
+        float lightVisibility = SampleShadowMap(samplePos);
+
+        // 3. In-Scattering (빛이 시선으로 산란)
+        float3 inScattering = lightColor * lightVisibility * density;
+
+        // Phase Function (Henyey-Greenstein)
+        float3 lightDir = normalize(lightPosition - samplePos);
+        float phase = HenyeyGreenstein(dot(rayDir, -lightDir), 0.3);
+        inScattering *= phase;
+
+        // 4. 누적
+        float extinction = density * extinctionCoeff;
+        float stepTransmittance = exp(-extinction * stepSize);
+
+        scatteredLight += inScattering * transmittance * stepSize;
+        transmittance *= stepTransmittance;
+
+        // 조기 종료
+        if (transmittance < 0.01) break;
+    }
+
+    // 원본 씬과 합성
+    float3 sceneColor = sceneTexture.Sample(linearSamp, uv).rgb;
+    float3 finalColor = sceneColor * transmittance + scatteredLight;
+
+    return float4(finalColor, 1);
+}
+
+// Henyey-Greenstein Phase Function
+float HenyeyGreenstein(float cosTheta, float g)
+{
+    float g2 = g * g;
+    return (1 - g2) / (4 * PI * pow(1 + g2 - 2 * g * cosTheta, 1.5));
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Froxel 기반 최적화</h2>
+            <div class="conversation">
+                <div class="q">Ray Marching이 너무 비싼데 최적화 방법은?</div>
+                <div class="a">
+                    <p><span class="highlight">Froxel (Frustum + Voxel)</span>은 절두체를 3D 그리드로 나눕니다. 한 번의 Compute Pass로 전체 볼륨을 계산하고 재사용합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Froxel 구조:
+
+         카메라
+            ╲
+             ╲
+┌──────────────────────────────┐
+│ ┌───┬───┬───┬───┬───┬───┐   │
+│ │   │   │   │   │   │   │   │  Z0 (가까움)
+│ ├───┼───┼───┼───┼───┼───┤   │
+│ │   │   │   │   │   │   │   │  Z1
+│ ├───┼───┼───┼───┼───┼───┤   │
+│ │   │   │   │   │   │   │   │  Z2
+│ └───┴───┴───┴───┴───┴───┘   │
+│                              │  Z3 (멀리)
+└──────────────────────────────┘
+
+각 Froxel에 미리 Fog 계산 결과 저장
+→ 픽셀 셰이더에서 3D 텍스처 샘플링만
+                </pre>
+                <p class="diagram-caption">Froxel 볼륨 분할</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Froxel Volumetric Fog</div>
+                <pre><code>// Froxel 볼륨 (3D 텍스처)
+RWTexture3D<float4> froxelVolume : register(u0);  // RGB = 산란광, A = 투과율
+
+[numthreads(8, 8, 1)]
+void CS_InjectFog(uint3 id : SV_DispatchThreadID)
+{
+    // Froxel → 월드 좌표
+    float3 worldPos = FroxelToWorld(id);
+
+    // 밀도와 산란 계산
+    float density = GetFogDensity(worldPos);
+    float3 scattering = CalculateScattering(worldPos);
+
+    froxelVolume[id] = float4(scattering, density);
+}
+
+// Temporal Reprojection (시간적 재사용)
+[numthreads(8, 8, 8)]
+void CS_TemporalAccumulate(uint3 id : SV_DispatchThreadID)
+{
+    // 현재 Froxel 값
+    float4 current = froxelVolume[id];
+
+    // 이전 프레임 위치 계산
+    float3 worldPos = FroxelToWorld(id);
+    float3 prevUVW = WorldToPrevFroxel(worldPos);
+
+    // 이전 프레임 샘플
+    float4 history = prevFroxelVolume.SampleLevel(linearSamp, prevUVW, 0);
+
+    // 블렌딩 (90% 이전 + 10% 현재)
+    froxelVolume[id] = lerp(current, history, 0.9);
+}
+
+// 레이 마칭 (단순화)
+[numthreads(8, 8, 1)]
+void CS_RayMarch(uint3 id : SV_DispatchThreadID)
+{
+    float3 scatteredLight = 0;
+    float transmittance = 1;
+
+    // 뒤에서 앞으로 누적
+    for (int z = froxelDepth - 1; z >= 0; z--)
+    {
+        float4 froxel = froxelVolume[uint3(id.xy, z)];
+        float3 scattering = froxel.rgb;
+        float density = froxel.a;
+
+        float extinction = density * extinctionCoeff * sliceThickness;
+        float sliceTransmittance = exp(-extinction);
+
+        scatteredLight += scattering * transmittance;
+        transmittance *= sliceTransmittance;
+    }
+
+    integratedFog[id.xy] = float4(scatteredLight, transmittance);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 대기 산란 (Atmospheric Scattering)</h2>
+            <div class="conversation">
+                <div class="q">하늘의 파란색과 석양의 붉은색은 어떻게 표현하나요?</div>
+                <div class="a">
+                    <p><span class="highlight">Rayleigh/Mie 산란</span>으로 대기 효과를 시뮬레이션합니다. 파장에 따라 산란량이 다릅니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>산란 유형</th>
+                        <th>원인</th>
+                        <th>특징</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Rayleigh</td>
+                        <td>공기 분자</td>
+                        <td>짧은 파장(파랑) 더 많이 산란</td>
+                    </tr>
+                    <tr>
+                        <td>Mie</td>
+                        <td>먼지, 에어로졸</td>
+                        <td>모든 파장 비슷, 전방 산란 강함</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">대기 산란 (간략화)</div>
+                <pre><code>// Rayleigh 산란 계수 (파장 의존)
+float3 RayleighCoeff()
+{
+    // λ^-4 의존성 → 파랑 > 초록 > 빨강
+    return float3(5.8e-6, 13.5e-6, 33.1e-6);
+}
+
+// Mie 산란 계수
+float MieCoeff()
+{
+    return 21e-6;  // 파장 독립
+}
+
+// 대기 산란 계산
+float3 AtmosphericScattering(float3 rayDir, float3 sunDir)
+{
+    float cosTheta = dot(rayDir, sunDir);
+
+    // Rayleigh Phase
+    float rayleighPhase = 3.0 / (16.0 * PI) * (1 + cosTheta * cosTheta);
+
+    // Mie Phase (전방 산란 강조)
+    float miePhase = HenyeyGreenstein(cosTheta, 0.76);
+
+    // 광학 깊이 (간략화)
+    float opticalDepth = CalculateOpticalDepth(rayDir);
+
+    // 산란광
+    float3 rayleigh = RayleighCoeff() * rayleighPhase;
+    float3 mie = MieCoeff() * miePhase;
+
+    float3 scattering = (rayleigh + mie) * sunIntensity;
+
+    return scattering * (1 - exp(-opticalDepth));
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 대기 효과 요약</strong>
+                <p><span class="highlight">낮하늘</span>: Rayleigh 산란 → 파란색</p>
+                <p><span class="highlight">석양</span>: 긴 광경로 → 파랑 산란되어 빠지고 빨강 남음</p>
+                <p><span class="highlight">안개/연무</span>: Mie 산란 → 흰색/회색</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Volume Rendering</strong>: 공간 자체의 빛 산란/흡수 시뮬레이션</li>
+                <li><strong>Height Fog</strong>: 높이에 따른 밀도 변화, 해석적 적분 가능</li>
+                <li><strong>Volumetric Fog</strong>: Ray Marching + 그림자 = God Rays</li>
+                <li><strong>Froxel</strong>: 3D 그리드로 볼륨 정보 사전 계산, Temporal 재사용</li>
+                <li><strong>Atmospheric</strong>: Rayleigh(파랑) + Mie(흰색) 산란</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

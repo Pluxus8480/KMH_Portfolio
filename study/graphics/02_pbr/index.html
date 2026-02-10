@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>현실의 재질을 수학으로 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>현실의 재질을 수학으로</h1>
+            <p class="subtitle">PBR (Physically Based Rendering) 재질 시스템</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: PBR이란?</h2>
+            <div class="conversation">
+                <div class="q">PBR이 기존 렌더링과 다른 점은 무엇인가요?</div>
+                <div class="a">
+                    <p>PBR은 <span class="highlight">물리 법칙에 기반한 렌더링</span>입니다. 빛이 실제로 물질과 상호작용하는 방식을 시뮬레이션합니다.</p>
+                    <p>기존 방식은 "이 정도 밝기가 예뻐 보이니까"였다면, PBR은 <span class="key-point">"에너지 보존 법칙에 따라 이렇게 되어야 해"</span>입니다.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>기존 방식은 <span class="highlight">아티스트의 직관</span>에 의존했습니다. 낮에는 이 값, 밤에는 저 값...</p>
+                <p>PBR은 <span class="highlight">물리 공식</span>을 따릅니다. 어떤 조명에서도 일관되게 사실적으로 보입니다.</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 반사 방정식 (Rendering Equation)</h2>
+            <div class="conversation">
+                <div class="q">PBR의 수학적 기반은 무엇인가요?</div>
+                <div class="a">
+                    <p>모든 것의 시작은 <span class="highlight">렌더링 방정식</span>입니다:</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Lo(p, ωo) = Le(p, ωo) + ∫Ω fr(p, ωi, ωo) Li(p, ωi) (n · ωi) dωi
+
+여기서:
+• Lo = 나가는 빛 (우리가 보는 것)
+• Le = 자체 발광
+• fr = BRDF (양방향 반사 분포 함수)
+• Li = 들어오는 빛
+• n · ωi = 코사인 항 (램버트 법칙)
+• Ω = 모든 입사 방향에 대한 적분
+                </pre>
+                <p class="diagram-caption">렌더링 방정식의 핵심</p>
+            </div>
+
+            <div class="conversation">
+                <div class="q">BRDF가 뭔가요?</div>
+                <div class="a">
+                    <p>BRDF(Bidirectional Reflectance Distribution Function)는 <span class="highlight">"빛이 어떻게 반사되는가"</span>를 정의하는 함수입니다.</p>
+                    <p>입사각과 반사각이 주어지면, 그 조합에서 얼마나 많은 빛이 반사되는지 알려줍니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Cook-Torrance BRDF</h2>
+            <div class="conversation">
+                <div class="q">실시간 그래픽에서 주로 쓰는 BRDF는?</div>
+                <div class="a">
+                    <p><span class="highlight">Cook-Torrance BRDF</span>가 업계 표준입니다. Diffuse와 Specular 두 부분으로 나뉩니다:</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Cook-Torrance BRDF:
+
+fr = kd * fLambert + ks * fCookTorrance
+
+       Diffuse           Specular
+    (난반사 부분)      (정반사 부분)
+
+┌─────────────────────────────────────────────────────┐
+│                                                      │
+│  fLambert = albedo / π                              │
+│                                                      │
+│              D * F * G                              │
+│  fCook-Torrance = ─────────────                     │
+│                   4(ωo·n)(ωi·n)                     │
+│                                                      │
+│  D = Normal Distribution Function (미세면 분포)    │
+│  F = Fresnel Equation (프레넬)                      │
+│  G = Geometry Function (기하 감쇠)                 │
+│                                                      │
+└─────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">Cook-Torrance BRDF 구조</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: D, F, G 함수</h2>
+            <div class="conversation">
+                <div class="q">D, F, G 각각은 무엇을 의미하나요?</div>
+                <div class="a">
+                    <p>Specular 반사의 세 가지 핵심 요소입니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>함수</th>
+                        <th>역할</th>
+                        <th>영향받는 파라미터</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>D (NDF)</td>
+                        <td>하이라이트 모양</td>
+                        <td>Roughness</td>
+                    </tr>
+                    <tr>
+                        <td>F (Fresnel)</td>
+                        <td>각도에 따른 반사량</td>
+                        <td>F0 (기본 반사율)</td>
+                    </tr>
+                    <tr>
+                        <td>G (Geometry)</td>
+                        <td>미세면 가림 효과</td>
+                        <td>Roughness</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">HLSL - PBR 핵심 함수들</div>
+                <pre><code>// D: GGX/Trowbridge-Reitz NDF
+float D_GGX(float NdotH, float roughness)
+{
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float denom = NdotH * NdotH * (a2 - 1.0) + 1.0;
+    return a2 / (PI * denom * denom);
+}
+
+// F: Fresnel-Schlick
+float3 F_Schlick(float cosTheta, float3 F0)
+{
+    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+// G: Smith's method with GGX
+float G_Smith(float NdotV, float NdotL, float roughness)
+{
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;
+    float ggx1 = NdotV / (NdotV * (1.0 - k) + k);
+    float ggx2 = NdotL / (NdotL * (1.0 - k) + k);
+    return ggx1 * ggx2;
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 핵심 파라미터</h2>
+            <div class="conversation">
+                <div class="q">PBR 머티리얼의 주요 입력은 무엇인가요?</div>
+                <div class="a">
+                    <p>대부분의 PBR 워크플로우는 <span class="highlight">Metallic-Roughness</span> 방식을 사용합니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>파라미터</th>
+                        <th>설명</th>
+                        <th>값 범위</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Base Color</td>
+                        <td>표면의 기본 색상 (알베도)</td>
+                        <td>sRGB 색상</td>
+                    </tr>
+                    <tr>
+                        <td>Metallic</td>
+                        <td>금속인가 비금속인가</td>
+                        <td>0 (비금속) ~ 1 (금속)</td>
+                    </tr>
+                    <tr>
+                        <td>Roughness</td>
+                        <td>표면 거칠기</td>
+                        <td>0 (매끄러움) ~ 1 (거침)</td>
+                    </tr>
+                    <tr>
+                        <td>Normal</td>
+                        <td>표면 미세 요철</td>
+                        <td>탄젠트 공간 법선</td>
+                    </tr>
+                    <tr>
+                        <td>AO</td>
+                        <td>환경 차폐</td>
+                        <td>0 (완전 차폐) ~ 1 (노출)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="conversation">
+                <div class="q">Metallic이 중요한 이유는?</div>
+                <div class="a">
+                    <p>금속과 비금속은 빛과 <span class="highlight">완전히 다르게</span> 상호작용합니다:</p>
+                    <p>• <span class="key-point">금속</span>: Diffuse 없음, 색이 있는 Specular</p>
+                    <p>• <span class="key-point">비금속</span>: 대부분 Diffuse, 무채색 Specular</p>
+                    <p class="warning">Metallic은 0 또는 1만 사용! 중간값은 물리적으로 말이 안 됩니다. (예외: 먼지 낀 금속)</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 전체 셰이더 구현</h2>
+            <div class="conversation">
+                <div class="q">PBR 셰이더의 전체 구조는?</div>
+                <div class="a">
+                    <p>모든 요소를 합쳐 최종 색상을 계산합니다:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">HLSL - 단순화된 PBR Shader</div>
+                <pre><code>float3 PBR(float3 albedo, float metallic, float roughness,
+           float3 N, float3 V, float3 L, float3 lightColor)
+{
+    float3 H = normalize(V + L);
+
+    float NdotL = max(dot(N, L), 0.0);
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotH = max(dot(N, H), 0.0);
+    float VdotH = max(dot(V, H), 0.0);
+
+    // F0: 기본 반사율 (비금속 = 0.04, 금속 = albedo)
+    float3 F0 = lerp(float3(0.04, 0.04, 0.04), albedo, metallic);
+
+    // Cook-Torrance BRDF
+    float  D = D_GGX(NdotH, roughness);
+    float3 F = F_Schlick(VdotH, F0);
+    float  G = G_Smith(NdotV, NdotL, roughness);
+
+    float3 specular = (D * F * G) /
+                      (4.0 * NdotV * NdotL + 0.0001);
+
+    // Diffuse (금속은 없음)
+    float3 kD = (1.0 - F) * (1.0 - metallic);
+    float3 diffuse = kD * albedo / PI;
+
+    return (diffuse + specular) * lightColor * NdotL;
+}</code></pre>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Metallic = 0 (플라스틱)          Metallic = 1 (금)
+┌─────────────────────┐         ┌─────────────────────┐
+│  Diffuse: 색상 있음 │         │  Diffuse: 없음      │
+│  Specular: 흰색    │         │  Specular: 금색     │
+│                     │         │                     │
+│  F0 = 0.04 (4%)    │         │  F0 = albedo        │
+└─────────────────────┘         └─────────────────────┘
+                </pre>
+                <p class="diagram-caption">금속 vs 비금속의 반사 특성</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>PBR</strong>은 물리 법칙에 기반, 어떤 조명에서도 일관된 결과</li>
+                <li><strong>Cook-Torrance BRDF</strong> = Diffuse (Lambert) + Specular (D×F×G)</li>
+                <li><strong>D</strong>는 하이라이트 모양, <strong>F</strong>는 프레넬, <strong>G</strong>는 기하 감쇠</li>
+                <li><strong>Metallic</strong>으로 금속/비금속 구분 (0 또는 1 사용)</li>
+                <li><strong>Roughness</strong>로 표면 거칠기 조절 (하이라이트 크기)</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

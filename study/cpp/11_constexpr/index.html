@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>constexpr과 컴파일 타임 연산 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+            <h1>실행 전에 답을 알 수 있다면?</h1>
+            <p class="subtitle">constexpr로 컴파일 타임에 계산하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: constexpr 기초</h2>
+            <div class="conversation">
+                <div class="q">constexpr은 무엇인가요?</div>
+                <div class="a">
+                    <p class="highlight">컴파일 타임에 평가될 수 있는 상수 표현식을 정의합니다!</p>
+
+                    <div class="code-block">
+                        <div class="code-header">const vs constexpr</div>
+                        <pre><code>// const: 런타임에 초기화, 이후 변경 불가
+const int x = getValue();     // 런타임에 결정
+const int y = 10;             // 컴파일 타임에 결정 가능
+
+// constexpr: 반드시 컴파일 타임에 초기화 가능해야 함
+constexpr int a = 10;         // OK
+// constexpr int b = getValue(); // 에러! (getValue가 constexpr이 아니면)
+
+// 컴파일 타임 vs 런타임 사용 가능 여부
+int arr1[y];        // C++에서 허용 (y는 상수 표현식)
+int arr2[a];        // OK
+int arr3[x];        // 에러! x는 상수 표현식이 아님
+
+// template 인자
+std::array&lt;int, a&gt; arr;  // OK
+// std::array&lt;int, x&gt; arr2; // 에러!</code></pre>
+                    </div>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>요리 레시피(코드)를 작성할 때, 재료 양(값)을 미리 계산해서 적어두면(constexpr) 요리할 때(런타임) 계산할 필요가 없습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: constexpr 함수</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">constexpr 함수 정의</div>
+                    <pre><code>// C++11: 단일 return 문만 허용
+constexpr int factorial_11(int n) {
+    return n <= 1 ? 1 : n * factorial_11(n - 1);
+}
+
+// C++14: 일반 함수처럼 작성 가능
+constexpr int factorial_14(int n) {
+    int result = 1;
+    for (int i = 2; i <= n; i++) {
+        result *= i;
+    }
+    return result;
+}
+
+// 컴파일 타임 사용
+constexpr int five_fact = factorial_14(5);  // 120, 컴파일 타임
+static_assert(five_fact == 120);            // 컴파일 타임 검증
+
+// 런타임에도 사용 가능!
+int n;
+std::cin >> n;
+int result = factorial_14(n);  // 런타임 호출
+
+// constexpr 클래스
+class Point {
+    int x_, y_;
+public:
+    constexpr Point(int x, int y) : x_(x), y_(y) {}
+    constexpr int x() const { return x_; }
+    constexpr int y() const { return y_; }
+
+    constexpr Point operator+(const Point& other) const {
+        return Point(x_ + other.x_, y_ + other.y_);
+    }
+};
+
+constexpr Point p1(1, 2);
+constexpr Point p2(3, 4);
+constexpr Point p3 = p1 + p2;  // 컴파일 타임!
+static_assert(p3.x() == 4 && p3.y() == 6);</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: C++17/20 확장</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">if constexpr (C++17)</div>
+                    <pre><code>// 컴파일 타임 조건 분기
+template&lt;typename T&gt;
+auto get_value(T t) {
+    if constexpr (std::is_pointer_v&lt;T&gt;) {
+        return *t;  // 포인터일 때만 컴파일
+    } else {
+        return t;   // 그 외
+    }
+}
+
+int x = 42;
+get_value(x);    // 42
+get_value(&x);   // 42 (역참조)
+
+// 타입에 따른 다른 처리
+template&lt;typename T&gt;
+void print(const T& value) {
+    if constexpr (std::is_same_v&lt;T, std::string&gt;) {
+        std::cout << "String: " << value;
+    } else if constexpr (std::is_integral_v&lt;T&gt;) {
+        std::cout << "Integer: " << value;
+    } else if constexpr (std::is_floating_point_v&lt;T&gt;) {
+        std::cout << "Float: " << value;
+    } else {
+        std::cout << "Unknown type";
+    }
+}</code></pre>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">C++20 constexpr 확장</div>
+                    <pre><code>// constexpr virtual 함수 (C++20)
+class Base {
+public:
+    constexpr virtual int getValue() const { return 1; }
+};
+
+class Derived : public Base {
+public:
+    constexpr int getValue() const override { return 2; }
+};
+
+constexpr int test() {
+    Derived d;
+    const Base& b = d;
+    return b.getValue();  // 2, 컴파일 타임!
+}
+
+// constexpr new/delete (C++20)
+constexpr int* allocTest() {
+    int* p = new int(42);
+    int value = *p;
+    delete p;
+    return nullptr;  // 할당/해제가 컴파일 타임 내에서 완료
+}
+
+// constexpr std::vector (C++20)
+constexpr auto createVector() {
+    std::vector&lt;int&gt; v = {1, 2, 3, 4, 5};
+    v.push_back(6);
+    return v.size();  // 6
+}
+
+static_assert(createVector() == 6);
+
+// consteval: 반드시 컴파일 타임에만
+consteval int square(int x) {
+    return x * x;
+}
+
+constexpr int a = square(5);  // OK
+// int runtime_value = square(x);  // 에러! 런타임 호출 불가
+
+// constinit: 컴파일 타임 초기화 보장
+constinit int global = 42;  // 정적 초기화 순서 문제 방지</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 컴파일 타임 자료구조</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">constexpr 배열과 알고리즘</div>
+                    <pre><code>// 컴파일 타임 배열
+constexpr std::array&lt;int, 5&gt; arr = {5, 3, 1, 4, 2};
+
+// 컴파일 타임 정렬 (C++20)
+constexpr auto sorted = []() {
+    auto a = arr;
+    std::sort(a.begin(), a.end());
+    return a;
+}();
+
+static_assert(sorted[0] == 1 && sorted[4] == 5);
+
+// 컴파일 타임 문자열 처리
+constexpr size_t strlen_ce(const char* str) {
+    size_t len = 0;
+    while (str[len]) len++;
+    return len;
+}
+
+constexpr const char* hello = "Hello, World!";
+constexpr size_t len = strlen_ce(hello);  // 13
+
+// 컴파일 타임 해시
+constexpr uint32_t fnv1a_32(const char* str) {
+    uint32_t hash = 2166136261u;
+    while (*str) {
+        hash ^= static_cast&lt;uint32_t&gt;(*str++);
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+// 문자열 switch 구현!
+void dispatch(const char* command) {
+    constexpr uint32_t hash_start = fnv1a_32("start");
+    constexpr uint32_t hash_stop = fnv1a_32("stop");
+    constexpr uint32_t hash_pause = fnv1a_32("pause");
+
+    switch (fnv1a_32(command)) {
+        case hash_start: /* start 처리 */ break;
+        case hash_stop:  /* stop 처리 */  break;
+        case hash_pause: /* pause 처리 */ break;
+    }
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 실전 활용</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">실용적인 constexpr 예제</div>
+                    <pre><code>// 1. 컴파일 타임 타입 정보
+template&lt;typename T&gt;
+constexpr const char* type_name() {
+    if constexpr (std::is_same_v&lt;T, int&gt;) return "int";
+    else if constexpr (std::is_same_v&lt;T, float&gt;) return "float";
+    else if constexpr (std::is_same_v&lt;T, double&gt;) return "double";
+    else return "unknown";
+}
+
+// 2. 컴파일 타임 수학 상수
+namespace math {
+    constexpr double PI = 3.14159265358979323846;
+    constexpr double E = 2.71828182845904523536;
+
+    constexpr double pow(double base, int exp) {
+        double result = 1.0;
+        for (int i = 0; i < exp; i++) result *= base;
+        return result;
+    }
+
+    constexpr double sqrt(double x, double curr = 1.0, double prev = 0.0) {
+        return curr == prev ? curr
+            : sqrt(x, 0.5 * (curr + x / curr), curr);
+    }
+}
+
+constexpr double sqrt2 = math::sqrt(2.0);
+
+// 3. 컴파일 타임 룩업 테이블
+constexpr auto createSinTable() {
+    std::array&lt;double, 360&gt; table{};
+    for (int i = 0; i < 360; i++) {
+        double rad = i * 3.14159265 / 180.0;
+        // 테일러 급수로 sin 근사
+        double x = rad;
+        double term = rad;
+        double result = rad;
+        for (int n = 1; n < 10; n++) {
+            term *= -rad * rad / ((2*n) * (2*n + 1));
+            result += term;
+        }
+        table[i] = result;
+    }
+    return table;
+}
+
+constexpr auto sinTable = createSinTable();
+
+// 4. 컴파일 타임 검증
+template&lt;typename T&gt;
+constexpr bool isValidConfig() {
+    if constexpr (sizeof(T) > 1024) {
+        return false;  // 너무 큰 타입
+    }
+    return true;
+}
+
+template&lt;typename Config&gt;
+class System {
+    static_assert(isValidConfig&lt;Config&gt;(), "Config too large!");
+    // ...
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 성능과 제한</h2>
+            <div class="conversation">
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>키워드</th>
+                            <th>평가 시점</th>
+                            <th>런타임 호출</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>const</td>
+                            <td>런타임 가능</td>
+                            <td>O</td>
+                        </tr>
+                        <tr>
+                            <td>constexpr</td>
+                            <td>컴파일/런타임</td>
+                            <td>O</td>
+                        </tr>
+                        <tr>
+                            <td>consteval</td>
+                            <td>컴파일만</td>
+                            <td>X</td>
+                        </tr>
+                        <tr>
+                            <td>constinit</td>
+                            <td>초기화만 컴파일</td>
+                            <td>O (사용 시)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="code-block">
+                    <div class="code-header">주의사항</div>
+                    <pre><code>// 컴파일 시간 증가
+constexpr auto hugeTable = createHugeTable();  // 컴파일 느려짐
+
+// 복잡한 constexpr은 디버깅 어려움
+constexpr int complex() {
+    // 에러 메시지가 불친절할 수 있음
+}
+
+// 런타임 입력은 constexpr로 처리 불가
+int input;
+std::cin >> input;
+// constexpr int result = factorial(input);  // 에러!
+
+// 해결: 템플릿 사용
+template&lt;int N&gt;
+struct Factorial {
+    static constexpr int value = N * Factorial&lt;N-1&gt;::value;
+};
+
+template&lt;&gt;
+struct Factorial&lt;0&gt; {
+    static constexpr int value = 1;
+};
+
+constexpr int fact5 = Factorial&lt;5&gt;::value;  // 120</code></pre>
+                </div>
+
+                <p class="key-point">constexpr은 런타임 비용을 컴파일 타임으로 옮깁니다. 적절히 활용하면 성능 향상!</p>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>constexpr 변수</strong>: 반드시 컴파일 타임에 초기화</li>
+                <li><strong>constexpr 함수</strong>: 컴파일/런타임 모두 호출 가능</li>
+                <li><strong>if constexpr</strong>: 컴파일 타임 조건 분기 (C++17)</li>
+                <li><strong>consteval</strong>: 반드시 컴파일 타임에만 (C++20)</li>
+                <li><strong>활용</strong>: 룩업 테이블, 해시, 검증, 메타프로그래밍</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

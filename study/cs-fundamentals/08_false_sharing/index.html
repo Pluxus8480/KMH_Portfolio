@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>False Sharing 문제와 해결 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+            <h1>"스레드를 늘렸는데 더 느려졌어요"</h1>
+            <p class="subtitle">멀티코어의 숨은 적, False Sharing</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: False Sharing이란?</h2>
+            <div class="conversation">
+                <div class="q">False Sharing이 뭔가요?</div>
+                <div class="a">
+                    <p>서로 다른 데이터지만 <strong>같은 캐시 라인</strong>에 있어서 발생하는 성능 저하입니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    False Sharing 발생 상황                           │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Cache Line (64 bytes)                                             │
+│   ┌────────────────────────────────────────────────────────────┐   │
+│   │ counter[0] │ counter[1] │ counter[2] │ counter[3] │ ...    │   │
+│   │  (Core 0)  │  (Core 1)  │  (Core 2)  │  (Core 3)  │        │   │
+│   └────────────────────────────────────────────────────────────┘   │
+│         ↓            ↓            ↓            ↓                    │
+│      Core 0       Core 1       Core 2       Core 3                  │
+│                                                                     │
+│   Core 0이 counter[0]을 수정하면:                                   │
+│   → 전체 캐시 라인이 "Invalidate"됨                                 │
+│   → Core 1, 2, 3의 캐시가 무효화됨                                  │
+│   → Core 1이 counter[1]을 읽으려면 메모리에서 다시 로드!            │
+│                                                                     │
+│   실제로는 공유하지 않는 데이터인데                                  │
+│   캐시 라인 단위로 동기화되어 성능 저하 발생!                        │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <p class="highlight">True Sharing: 같은 데이터 접근<br>False Sharing: 다른 데이터지만 같은 캐시 라인</p>
+                </div>
+
+                <div class="q">얼마나 심각한 문제인가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">False Sharing 벤치마크</div>
+                        <pre><code>#include <thread>
+#include <atomic>
+#include <chrono>
+
+// ❌ False Sharing 발생
+struct BadCounters {
+    std::atomic<int> counter[4];  // 16바이트, 같은 캐시 라인에!
+};
+
+// ✅ False Sharing 방지
+struct GoodCounters {
+    alignas(64) std::atomic<int> counter0;
+    alignas(64) std::atomic<int> counter1;
+    alignas(64) std::atomic<int> counter2;
+    alignas(64) std::atomic<int> counter3;
+};
+
+void incrementBad(BadCounters& c, int idx) {
+    for (int i = 0; i < 10000000; ++i) {
+        c.counter[idx]++;
+    }
+}
+
+void incrementGood(GoodCounters& c, int idx) {
+    std::atomic<int>* counters[] = {
+        &c.counter0, &c.counter1, &c.counter2, &c.counter3
+    };
+    for (int i = 0; i < 10000000; ++i) {
+        (*counters[idx])++;
+    }
+}
+
+// 벤치마크 결과 (4코어):
+// BadCounters:  약 800ms
+// GoodCounters: 약 100ms
+// → 8배 성능 차이!</code></pre>
+                    </div>
+
+                    <p class="warning">코어가 많을수록 False Sharing의 영향이 커집니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 캐시 일관성 프로토콜</h2>
+            <div class="conversation">
+                <div class="q">왜 한 코어가 쓰면 다른 코어 캐시가 무효화되나요?</div>
+                <div class="a">
+                    <p><strong>캐시 일관성(Cache Coherence)</strong>을 유지하기 위해서입니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                    MESI 프로토콜 상태                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Modified (M): 이 캐시만 가지고 있고, 수정됨                        │
+│                 메모리와 다른 값                                     │
+│                                                                     │
+│   Exclusive (E): 이 캐시만 가지고 있고, 깨끗함                      │
+│                  메모리와 같은 값                                    │
+│                                                                     │
+│   Shared (S): 여러 캐시가 가지고 있고, 깨끗함                       │
+│               읽기만 가능                                           │
+│                                                                     │
+│   Invalid (I): 무효 (사용 불가)                                     │
+│                                                                     │
+│   상태 전이 예시 (False Sharing):                                   │
+│                                                                     │
+│   Core 0 (counter[0])         Core 1 (counter[1])                  │
+│   ────────────────────        ────────────────────                  │
+│   1. Read  → S                1. Read  → S                         │
+│   2. Write → M                   (S → I) 무효화!                   │
+│                               3. Read  → 메모리에서 다시 로드       │
+│      (M → S)                     → S                               │
+│   4. Write → M                   (S → I) 무효화!                   │
+│   ...무한 반복...                                                   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+
+                    <p class="key-point">False Sharing = 캐시 라인 핑퐁 (Cache Line Ping-Pong)</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 해결 방법</h2>
+            <div class="conversation">
+                <div class="q">False Sharing을 어떻게 방지하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">방법 1: 패딩으로 분리</div>
+                        <pre><code>#define CACHE_LINE_SIZE 64
+
+// 패딩 구조체
+struct alignas(CACHE_LINE_SIZE) PaddedCounter {
+    std::atomic<int> value;
+    char padding[CACHE_LINE_SIZE - sizeof(std::atomic<int>)];
+};
+
+// 또는 C++17 hardware_destructive_interference_size
+#include <new>
+struct alignas(std::hardware_destructive_interference_size) Counter {
+    std::atomic<int> value;
+};
+
+// 배열 사용 시
+struct ThreadData {
+    PaddedCounter counters[MAX_THREADS];
+};
+
+// 각 스레드는 자신의 counters[threadId]만 접근
+// 서로 다른 캐시 라인이므로 False Sharing 없음</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">방법 2: 로컬 변수 + 최종 병합</div>
+                        <pre><code>// ❌ 매번 공유 변수 접근
+std::atomic<long long> globalSum{0};
+
+void badWorker(const int* data, int start, int end) {
+    for (int i = start; i < end; ++i) {
+        globalSum += data[i];  // 매번 atomic 연산!
+    }
+}
+
+// ✅ 로컬에서 계산 후 한 번만 병합
+void goodWorker(const int* data, int start, int end) {
+    long long localSum = 0;  // 스레드 로컬 변수
+
+    for (int i = start; i < end; ++i) {
+        localSum += data[i];  // 빠른 로컬 연산
+    }
+
+    globalSum += localSum;  // 마지막에 한 번만 atomic
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">방법 3: Thread-Local Storage</div>
+                        <pre><code>// 스레드별 전용 저장소
+thread_local long long tls_counter = 0;
+
+void worker(const int* data, int count) {
+    for (int i = 0; i < count; ++i) {
+        tls_counter += data[i];  // 완전히 독립된 메모리
+    }
+}
+
+// 결과 수집
+std::vector<long long*> threadCounters;  // 각 스레드의 tls_counter 주소
+
+long long getTotal() {
+    long long total = 0;
+    for (auto* counter : threadCounters) {
+        total += *counter;
+    }
+    return total;
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 게임 엔진에서의 사례</h2>
+            <div class="conversation">
+                <div class="q">게임에서 False Sharing이 발생하기 쉬운 곳은?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Job System 통계</div>
+                        <pre><code>// ❌ 나쁜 설계: 워커 스레드 통계가 인접
+struct JobSystemBad {
+    struct WorkerStats {
+        int jobsCompleted;
+        int jobsStolen;
+        float totalTime;
+    };
+    WorkerStats stats[MAX_WORKERS];  // False Sharing!
+};
+
+// ✅ 좋은 설계: 캐시 라인 분리
+struct JobSystemGood {
+    struct alignas(64) WorkerStats {
+        int jobsCompleted;
+        int jobsStolen;
+        float totalTime;
+        // 자동으로 64바이트 정렬 + 패딩
+    };
+    WorkerStats stats[MAX_WORKERS];
+};</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">파티클 시스템</div>
+                        <pre><code>// ❌ 나쁜 설계: 인접한 파티클을 다른 스레드가 처리
+void updateParticlesBad(Particle* particles, int count, int numThreads) {
+    // 스레드 0: particles[0], particles[4], particles[8]...
+    // 스레드 1: particles[1], particles[5], particles[9]...
+    // 인접 메모리를 다른 스레드가 접근 → False Sharing!
+}
+
+// ✅ 좋은 설계: 연속 청크로 분할
+void updateParticlesGood(Particle* particles, int count, int numThreads) {
+    int chunkSize = (count + numThreads - 1) / numThreads;
+
+    for (int t = 0; t < numThreads; ++t) {
+        int start = t * chunkSize;
+        int end = std::min(start + chunkSize, count);
+        // 스레드 t: particles[start] ~ particles[end-1]
+        // 연속된 메모리를 한 스레드가 독점
+    }
+}
+
+// 추가 최적화: 청크 시작을 캐시 라인에 정렬
+int alignedChunkStart(int rawStart, int particleSize) {
+    int particlesPerCacheLine = 64 / particleSize;
+    return (rawStart / particlesPerCacheLine) * particlesPerCacheLine;
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 탐지와 프로파일링</h2>
+            <div class="conversation">
+                <div class="q">False Sharing을 어떻게 찾나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Linux perf로 탐지</div>
+                        <pre><code># 캐시 무효화 이벤트 측정
+perf stat -e L1-dcache-load-misses,L1-dcache-store-misses \
+    -e LLC-load-misses,LLC-store-misses \
+    ./game
+
+# False Sharing 의심 지표:
+# - 높은 캐시 미스율
+# - 코어 수에 비례하여 성능 저하
+
+# Intel VTune / AMD uProf에서 "Contested Access" 확인
+
+# perf c2c (Cache-to-Cache) - Linux 4.2+
+perf c2c record ./game
+perf c2c report
+
+# 출력에서 "HITM" (Hit Modified) 항목 확인
+# HITM이 높은 캐시 라인 = False Sharing 의심</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">코드 레벨 탐지</div>
+                        <pre><code>// 주소가 같은 캐시 라인인지 확인
+bool sameCacheLine(const void* a, const void* b) {
+    constexpr size_t CACHE_LINE = 64;
+    return (reinterpret_cast<uintptr_t>(a) / CACHE_LINE) ==
+           (reinterpret_cast<uintptr_t>(b) / CACHE_LINE);
+}
+
+// 디버그용: 멀티스레드 접근 변수 검사
+template<typename T>
+void checkFalseSharing(const char* name, const T& array, int count) {
+    for (int i = 0; i < count - 1; ++i) {
+        if (sameCacheLine(&array[i], &array[i+1])) {
+            printf("Warning: %s[%d] and %s[%d] share cache line!\n",
+                   name, i, name, i+1);
+        }
+    }
+}
+
+// 사용
+checkFalseSharing("threadCounters", threadCounters, numThreads);</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>False Sharing</strong>: 다른 데이터지만 같은 캐시 라인 공유로 인한 성능 저하</li>
+                <li><strong>원인</strong>: 캐시 일관성 유지 위한 캐시 라인 단위 무효화</li>
+                <li><strong>해결책</strong>: 64바이트 정렬, 패딩, 로컬 변수 사용, Thread-Local Storage</li>
+                <li><strong>게임 적용</strong>: 청크 분할로 연속 메모리를 한 스레드가 독점 처리</li>
+                <li><strong>탐지</strong>: perf c2c, HITM 지표, 캐시 미스율 확인</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

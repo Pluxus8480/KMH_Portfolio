@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>빛을 그리는 두 가지 철학 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+
+        <header class="content-header">
+            <h1>빛을 그리는 두 가지 철학</h1>
+            <p class="subtitle">Deferred vs Forward 렌더링</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Forward Rendering의 원리</h2>
+            <div class="conversation">
+                <div class="q">Forward Rendering은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>Forward Rendering은 가장 직관적인 방식입니다. 각 오브젝트를 그릴 때 <span class="highlight">모든 라이트의 영향을 한 번에 계산</span>합니다.</p>
+                    <p>마치 화가가 캔버스에 그림을 그릴 때, 한 붓터치로 색상과 명암을 모두 표현하는 것과 같습니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Forward Rendering 파이프라인:
+
+For each Object:
+    For each Light:
+        ┌─────────────────────────────────────────────┐
+        │  Vertex Shader                              │
+        │  → 정점 변환                                │
+        └─────────────────┬───────────────────────────┘
+                          ▼
+        ┌─────────────────────────────────────────────┐
+        │  Fragment Shader                            │
+        │  → 텍스처 샘플링                            │
+        │  → 라이팅 계산 (모든 라이트)               │
+        │  → 최종 색상 출력                          │
+        └─────────────────┬───────────────────────────┘
+                          ▼
+                    Frame Buffer
+                </pre>
+                <p class="diagram-caption">Forward Rendering의 기본 흐름</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Forward Rendering Fragment Shader (개념)</div>
+                <pre><code>// 각 픽셀마다 모든 라이트 계산
+float4 ForwardPS(VSOutput input) : SV_Target
+{
+    float3 albedo = texAlbedo.Sample(sampler, input.UV);
+    float3 normal = normalize(input.Normal);
+    float3 finalColor = float3(0, 0, 0);
+
+    // 모든 라이트 순회
+    for (int i = 0; i < numLights; i++)
+    {
+        float3 lightDir = normalize(lights[i].Position - input.WorldPos);
+        float NdotL = max(dot(normal, lightDir), 0);
+        finalColor += albedo * lights[i].Color * NdotL;
+    }
+
+    return float4(finalColor, 1.0);
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Forward의 한계</h2>
+            <div class="conversation">
+                <div class="q">Forward Rendering의 문제점은 무엇인가요?</div>
+                <div class="a">
+                    <p>가장 큰 문제는 <span class="warning">복잡도가 O(오브젝트 × 라이트)</span>라는 것입니다.</p>
+                    <p>오브젝트 1000개, 라이트 100개면? 100,000번의 라이팅 계산이 필요합니다. 게다가 <span class="warning">오버드로우</span> 문제도 있습니다 - 보이지 않는 픽셀도 계산됩니다.</p>
+                </div>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 오버드로우 문제</strong>
+                <p>Forward는 <span class="highlight">뒤에서 앞으로</span> 그리든 <span class="highlight">앞에서 뒤로</span> 그리든, 겹쳐서 가려지는 픽셀도 모두 계산합니다.</p>
+                <p>마치 벽 뒤에 있는 그림도 먼저 완벽하게 그린 뒤에 벽으로 덮어버리는 것과 같습니다. 낭비죠!</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Deferred Rendering의 등장</h2>
+            <div class="conversation">
+                <div class="q">Deferred Rendering은 어떻게 이 문제를 해결하나요?</div>
+                <div class="a">
+                    <p>Deferred는 렌더링을 <span class="highlight">두 단계로 분리</span>합니다:</p>
+                    <p>1. <span class="key-point">Geometry Pass</span>: 지오메트리 정보만 G-Buffer에 저장</p>
+                    <p>2. <span class="key-point">Lighting Pass</span>: G-Buffer를 읽어 라이팅 계산</p>
+                    <p>이렇게 하면 <span class="highlight">보이는 픽셀만</span> 라이팅을 계산합니다!</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <pre class="diagram">
+Deferred Rendering 파이프라인:
+
+┌─────────────────────────────────────────────────────────┐
+│                    Geometry Pass                         │
+│  For each Object:                                       │
+│    → G-Buffer에 기하 정보 저장                          │
+│                                                          │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐   │
+│  │ Albedo   │ │ Normal   │ │ Depth    │ │ Specular │   │
+│  │ (RGB)    │ │ (XYZ)    │ │ (Z)      │ │ (RGB)    │   │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘   │
+│                    G-Buffer                              │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│                    Lighting Pass                         │
+│  For each Light:                                        │
+│    → G-Buffer 샘플링                                    │
+│    → 라이팅 계산                                        │
+│    → 결과 누적                                          │
+│                                                          │
+│  최종 결과 = Σ(각 라이트의 기여)                       │
+└─────────────────────────────────────────────────────────┘
+                </pre>
+                <p class="diagram-caption">Deferred Rendering의 2단계 구조</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: G-Buffer 구조</h2>
+            <div class="conversation">
+                <div class="q">G-Buffer에는 무엇이 저장되나요?</div>
+                <div class="a">
+                    <p>라이팅에 필요한 <span class="highlight">모든 표면 정보</span>를 저장합니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>버퍼</th>
+                        <th>내용</th>
+                        <th>포맷 예시</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Albedo</td>
+                        <td>기본 색상 (RGB)</td>
+                        <td>R8G8B8A8</td>
+                    </tr>
+                    <tr>
+                        <td>Normal</td>
+                        <td>표면 법선 (XYZ)</td>
+                        <td>R16G16B16A16F</td>
+                    </tr>
+                    <tr>
+                        <td>Depth</td>
+                        <td>깊이 값</td>
+                        <td>D24S8 / D32F</td>
+                    </tr>
+                    <tr>
+                        <td>Specular/Roughness</td>
+                        <td>반사 특성</td>
+                        <td>R8G8B8A8</td>
+                    </tr>
+                    <tr>
+                        <td>Metallic</td>
+                        <td>금속성</td>
+                        <td>R8 (또는 패킹)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block">
+                <div class="code-header">G-Buffer 출력 (Geometry Pass)</div>
+                <pre><code>struct GBufferOutput
+{
+    float4 Albedo   : SV_Target0;  // RGB = Color, A = AO
+    float4 Normal   : SV_Target1;  // RGB = Normal (encoded)
+    float4 Material : SV_Target2;  // R = Metallic, G = Roughness
+};
+
+GBufferOutput GeometryPS(VSOutput input)
+{
+    GBufferOutput output;
+
+    output.Albedo = texAlbedo.Sample(sampler, input.UV);
+    output.Normal = float4(EncodeNormal(input.Normal), 1);
+    output.Material.r = texMetallic.Sample(sampler, input.UV);
+    output.Material.g = texRoughness.Sample(sampler, input.UV);
+
+    return output;
+}</code></pre>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 성능 비교</h2>
+            <div class="conversation">
+                <div class="q">어떤 상황에서 어떤 방식이 유리한가요?</div>
+                <div class="a">
+                    <p>간단한 규칙: <span class="highlight">라이트가 많으면 Deferred, 적으면 Forward</span></p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th>Forward</th>
+                        <th>Deferred</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>복잡도</td>
+                        <td>O(오브젝트 × 라이트)</td>
+                        <td>O(오브젝트) + O(라이트)</td>
+                    </tr>
+                    <tr>
+                        <td>대역폭</td>
+                        <td>낮음</td>
+                        <td>높음 (G-Buffer)</td>
+                    </tr>
+                    <tr>
+                        <td>반투명</td>
+                        <td>쉬움</td>
+                        <td>별도 패스 필요</td>
+                    </tr>
+                    <tr>
+                        <td>MSAA</td>
+                        <td>쉬움</td>
+                        <td>어려움 (비용 높음)</td>
+                    </tr>
+                    <tr>
+                        <td>머티리얼 다양성</td>
+                        <td>자유로움</td>
+                        <td>G-Buffer 제한</td>
+                    </tr>
+                    <tr>
+                        <td>메모리</td>
+                        <td>적음</td>
+                        <td>G-Buffer 크기</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="analogy-box">
+                <strong>🎯 언제 무엇을 선택?</strong>
+                <p><span class="highlight">Forward</span>: 모바일, VR, 반투명 많은 씬, 라이트 적은 실외</p>
+                <p><span class="highlight">Deferred</span>: PC/콘솔, 라이트 많은 실내, 복잡한 조명 효과</p>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 하이브리드 접근법</h2>
+            <div class="conversation">
+                <div class="q">둘 중 하나만 써야 하나요?</div>
+                <div class="a">
+                    <p>아니요! 현대 엔진들은 <span class="highlight">하이브리드 방식</span>을 사용합니다.</p>
+                    <p>• 불투명 오브젝트: Deferred</p>
+                    <p>• 반투명 오브젝트: Forward</p>
+                    <p>• 특수 머티리얼: Forward (Deferred 제한 회피)</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">하이브리드 파이프라인</div>
+                <pre><code>// 1. Deferred Pass - 불투명 오브젝트
+RenderOpaqueToGBuffer();
+DeferredLightingPass();
+
+// 2. Forward Pass - 반투명 + 특수 머티리얼
+EnableDepthRead();  // Deferred의 깊이 재사용
+for (Object obj : forwardObjects)
+{
+    if (obj.IsTranslucent())
+    {
+        RenderForwardTranslucent(obj);
+    }
+    else if (obj.NeedsForward())  // 커스텀 셰이더 등
+    {
+        RenderForwardOpaque(obj);
+    }
+}
+
+// 3. Post Processing
+ApplyPostProcessing();</code></pre>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Forward</strong>: 오브젝트별로 모든 라이트 계산, 단순하지만 라이트 많으면 느림</li>
+                <li><strong>Deferred</strong>: G-Buffer에 정보 저장 후 라이팅, 라이트 많을 때 유리</li>
+                <li>Deferred의 <strong>G-Buffer</strong>는 대역폭을 많이 사용하고 반투명 처리가 어려움</li>
+                <li>현대 엔진은 <strong>하이브리드</strong>: 불투명은 Deferred, 반투명은 Forward</li>
+                <li>선택 기준: <strong>라이트 수, 반투명 양, 타겟 플랫폼</strong></li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

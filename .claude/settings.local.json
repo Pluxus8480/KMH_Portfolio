@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: Add portfolio website with radnaabazar-style design\n\n- Hero section with typing effect and glowing profile\n- Sticky header with blur effect on scroll\n- Floating navigation pill \\(Professional/Personal tabs\\)\n- Stats section with counter animation\n- About section with info cards\n- Skills section with Bento grid layout\n- Projects section with hover effects\n- Timeline section for journey/experience\n- Contact section with social links\n- Responsive design for mobile/tablet/desktop\n- CSS custom properties following design system\n- Smooth scroll and intersection observer animations\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git reset:*)",
+      "Bash(gh repo view:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:myoungseungho.github.io)",
+      "Bash(python -c:*)",
+      "Bash(iconv:*)",
+      "Bash(chcp:*)",
+      "Bash(cmd /c \"chcp 65001 >nul & python -c \"\"\nimport zipfile\nimport xml.etree.ElementTree as ET\nimport os\nimport sys\nimport io\n\nsys.stdout = io.TextIOWrapper\\(sys.stdout.buffer, encoding=''utf-8''\\)\n\ndef extract_docx_text\\(filepath\\):\n    try:\n        with zipfile.ZipFile\\(filepath, ''r''\\) as docx:\n            xml_content = docx.read\\(''word/document.xml''\\)\n            tree = ET.fromstring\\(xml_content\\)\n            \n            paragraphs = []\n            for para in tree.iter\\(''{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p''\\):\n                texts = []\n                for node in para.iter\\(''{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t''\\):\n                    if node.text:\n                        texts.append\\(node.text\\)\n                if texts:\n                    paragraphs.append\\(''''.join\\(texts\\)\\)\n            \n            return ''\\\\n''.join\\(paragraphs\\)\n    except Exception as e:\n        return f''Error: {e}''\n\nbase_path = r''C:\\\\Users\\\\MYPC\\\\Downloads''\nfiles = [\n    ''Portfolio_file_30195755_1.docx'',\n    ''Portfolio_file_22210031_1.docx'',\n    ''Portfolio_file_30195433_1.docx''\n]\n\nfor f in files:\n    filepath = os.path.join\\(base_path, f\\)\n    print\\(f''\\\\n===== {f} =====\\\\n''\\)\n    content = extract_docx_text\\(filepath\\)\n    print\\(content\\)\n    print\\(''\\\\n'' + ''=''*50\\)\n\"\"\")",
+      "Bash(python:*)"
+    ]
+  }
+}

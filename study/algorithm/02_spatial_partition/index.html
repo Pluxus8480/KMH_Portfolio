@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>공간 분할 (Quadtree, Octree) | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>1000개 물체 중 충돌을 어떻게 빨리 찾을까?</h1>
+            <p class="subtitle">Quadtree와 Octree를 활용한 공간 분할 기법</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 공간 분할의 필요성</h2>
+            <div class="conversation">
+                <div class="q">왜 공간 분할이 필요한가요?</div>
+                <div class="a">
+                    <p>게임에서 충돌 감지를 할 때, 모든 물체 쌍을 검사하면 O(n²)입니다.</p>
+                    <p class="warning">1000개 물체 = 약 50만 번의 충돌 체크, 프레임마다!</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Brute Force 방식: O(n²)
+
+물체 1000개 → 1000 × 999 / 2 = 499,500 쌍
+60 FPS → 초당 약 3천만 번 충돌 체크! 💀
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">공간 분할은 어떻게 이 문제를 해결하나요?</div>
+                <div class="a">
+                    <p class="highlight">공간을 작은 영역으로 나누고, 같은 영역 내의 물체끼리만 충돌 체크합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>도서관에서 책을 찾을 때 모든 책을 뒤지지 않고, 분류 번호로 구역을 좁히는 것과 같습니다.</p>
+                        <p>"컴퓨터 서적" → "프로그래밍" → "C++" 순으로 범위를 좁혀 원하는 책을 빠르게 찾습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Quadtree (쿼드트리)</h2>
+            <div class="conversation">
+                <div class="q">Quadtree는 어떤 구조인가요?</div>
+                <div class="a">
+                    <p>2D 공간을 4개의 사분면으로 재귀적으로 분할하는 트리 구조입니다.</p>
+                    <p class="key-point">Quad(4) + Tree = 4개로 나누는 트리</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Quadtree 분할 과정
+
+┌─────────────────┐       ┌────────┬────────┐
+│                 │       │   NW   │   NE   │
+│    전체 공간     │  →    ├────────┼────────┤
+│                 │       │   SW   │   SE   │
+└─────────────────┘       └────────┴────────┘
+
+각 사분면에 물체가 많으면 다시 4분할:
+
+┌────┬────┬────────┐
+│    │    │   NE   │
+├────┼────┤        │
+│    │ ★ ├────────┤  ★ 위치의 물체를 찾으려면
+├────┴────┤   SE   │  → NW → SE만 탐색!
+│   SW    │        │
+└─────────┴────────┘
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">언제 분할하고, 언제 멈추나요?</div>
+                <div class="a">
+                    <p><strong>분할 조건:</strong></p>
+                    <ul>
+                        <li>영역 내 물체 수가 임계값(예: 4개) 초과</li>
+                        <li>현재 깊이가 최대 깊이 미만</li>
+                    </ul>
+                    <p><strong>분할 중지 조건:</strong></p>
+                    <ul>
+                        <li>물체 수가 임계값 이하</li>
+                        <li>최대 깊이 도달</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Quadtree 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">C++ Quadtree 구현</div>
+                    <pre><code>#include &lt;vector&gt;
+#include &lt;memory&gt;
+
+struct AABB {  // Axis-Aligned Bounding Box
+    float x, y;      // 중심 좌표
+    float halfW, halfH;  // 절반 너비/높이
+
+    bool contains(float px, float py) const {
+        return px >= x - halfW && px <= x + halfW &&
+               py >= y - halfH && py <= y + halfH;
+    }
+
+    bool intersects(const AABB& other) const {
+        return !(other.x - other.halfW > x + halfW ||
+                 other.x + other.halfW < x - halfW ||
+                 other.y - other.halfH > y + halfH ||
+                 other.y + other.halfH < y - halfH);
+    }
+};
+
+struct GameObject {
+    int id;
+    float x, y;
+    float radius;
+};
+
+class Quadtree {
+private:
+    static const int MAX_OBJECTS = 4;
+    static const int MAX_DEPTH = 8;
+
+    AABB bounds;
+    int depth;
+    std::vector&lt;GameObject*&gt; objects;
+    std::unique_ptr&lt;Quadtree&gt; children[4];  // NW, NE, SW, SE
+    bool divided = false;
+
+    void subdivide() {
+        float halfW = bounds.halfW / 2;
+        float halfH = bounds.halfH / 2;
+        float x = bounds.x;
+        float y = bounds.y;
+
+        // NW (Northwest)
+        children[0] = std::make_unique&lt;Quadtree&gt;(
+            AABB{x - halfW, y - halfH, halfW, halfH}, depth + 1);
+        // NE (Northeast)
+        children[1] = std::make_unique&lt;Quadtree&gt;(
+            AABB{x + halfW, y - halfH, halfW, halfH}, depth + 1);
+        // SW (Southwest)
+        children[2] = std::make_unique&lt;Quadtree&gt;(
+            AABB{x - halfW, y + halfH, halfW, halfH}, depth + 1);
+        // SE (Southeast)
+        children[3] = std::make_unique&lt;Quadtree&gt;(
+            AABB{x + halfW, y + halfH, halfW, halfH}, depth + 1);
+
+        divided = true;
+
+        // 기존 물체들을 자식 노드로 재분배
+        for (auto* obj : objects) {
+            for (int i = 0; i < 4; i++) {
+                if (children[i]->bounds.contains(obj->x, obj->y)) {
+                    children[i]->insert(obj);
+                    break;
+                }
+            }
+        }
+        objects.clear();
+    }
+
+public:
+    Quadtree(const AABB& boundary, int d = 0)
+        : bounds(boundary), depth(d) {}
+
+    bool insert(GameObject* obj) {
+        // 경계 밖이면 실패
+        if (!bounds.contains(obj->x, obj->y)) {
+            return false;
+        }
+
+        // 분할되지 않았고, 공간이 있으면 추가
+        if (!divided && objects.size() < MAX_OBJECTS) {
+            objects.push_back(obj);
+            return true;
+        }
+
+        // 분할 필요
+        if (!divided && depth < MAX_DEPTH) {
+            subdivide();
+        }
+
+        // 자식 노드에 추가
+        if (divided) {
+            for (int i = 0; i < 4; i++) {
+                if (children[i]->insert(obj)) {
+                    return true;
+                }
+            }
+        }
+
+        // 최대 깊이 도달 시 현재 노드에 추가
+        objects.push_back(obj);
+        return true;
+    }
+
+    // 범위 내 물체 질의
+    void query(const AABB& range, std::vector&lt;GameObject*&gt;& found) {
+        if (!bounds.intersects(range)) {
+            return;  // 범위 밖
+        }
+
+        // 현재 노드의 물체 확인
+        for (auto* obj : objects) {
+            if (range.contains(obj->x, obj->y)) {
+                found.push_back(obj);
+            }
+        }
+
+        // 자식 노드 탐색
+        if (divided) {
+            for (int i = 0; i < 4; i++) {
+                children[i]->query(range, found);
+            }
+        }
+    }
+
+    // 트리 초기화 (매 프레임)
+    void clear() {
+        objects.clear();
+        if (divided) {
+            for (int i = 0; i < 4; i++) {
+                children[i]->clear();
+                children[i].reset();
+            }
+            divided = false;
+        }
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Octree (옥트리) - 3D 확장</h2>
+            <div class="conversation">
+                <div class="q">3D 게임에서는 어떻게 하나요?</div>
+                <div class="a">
+                    <p class="highlight">Quadtree의 3D 버전이 Octree입니다. 공간을 8개의 영역으로 분할합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Octree 8분할
+
+     ┌────────┬────────┐
+    /│  UNW   │  UNE  /│
+   / ├────────┼──────/ ┤
+  ┌────────┬────────┐  │
+  │  USW   │  USE   │  │   U = Upper (위)
+  ├────────┼────────┤  │   L = Lower (아래)
+  │  LNW   │  LNE   │ /│
+  ├────────┼────────┤/ ┤   N/S = North/South
+  │  LSW   │  LSE   │  │   E/W = East/West
+  └────────┴────────┘──┘
+                        </pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>Quadtree</th>
+                                <th>Octree</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>차원</td>
+                                <td>2D</td>
+                                <td>3D</td>
+                            </tr>
+                            <tr>
+                                <td>분할 수</td>
+                                <td>4개</td>
+                                <td>8개</td>
+                            </tr>
+                            <tr>
+                                <td>사용 예</td>
+                                <td>2D 게임, 지도</td>
+                                <td>3D 게임, VFX</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Octree 구현</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">C++ Octree 구현</div>
+                    <pre><code>struct AABB3D {
+    float x, y, z;
+    float halfW, halfH, halfD;
+
+    bool contains(float px, float py, float pz) const {
+        return px >= x - halfW && px <= x + halfW &&
+               py >= y - halfH && py <= y + halfH &&
+               pz >= z - halfD && pz <= z + halfD;
+    }
+
+    bool intersects(const AABB3D& other) const {
+        return !(other.x - other.halfW > x + halfW ||
+                 other.x + other.halfW < x - halfW ||
+                 other.y - other.halfH > y + halfH ||
+                 other.y + other.halfH < y - halfH ||
+                 other.z - other.halfD > z + halfD ||
+                 other.z + other.halfD < z - halfD);
+    }
+};
+
+class Octree {
+private:
+    static const int MAX_OBJECTS = 8;
+    static const int MAX_DEPTH = 6;
+
+    AABB3D bounds;
+    int depth;
+    std::vector&lt;GameObject3D*&gt; objects;
+    std::unique_ptr&lt;Octree&gt; children[8];
+    bool divided = false;
+
+    // 8개 자식 노드 인덱스
+    enum OctantIndex {
+        LNW = 0, LNE = 1, LSW = 2, LSE = 3,  // Lower
+        UNW = 4, UNE = 5, USW = 6, USE = 7   // Upper
+    };
+
+    void subdivide() {
+        float hw = bounds.halfW / 2;
+        float hh = bounds.halfH / 2;
+        float hd = bounds.halfD / 2;
+
+        // 8개 영역 생성
+        children[LNW] = std::make_unique&lt;Octree&gt;(
+            AABB3D{bounds.x - hw, bounds.y - hh, bounds.z - hd, hw, hh, hd},
+            depth + 1);
+        children[LNE] = std::make_unique&lt;Octree&gt;(
+            AABB3D{bounds.x + hw, bounds.y - hh, bounds.z - hd, hw, hh, hd},
+            depth + 1);
+        children[LSW] = std::make_unique&lt;Octree&gt;(
+            AABB3D{bounds.x - hw, bounds.y + hh, bounds.z - hd, hw, hh, hd},
+            depth + 1);
+        children[LSE] = std::make_unique&lt;Octree&gt;(
+            AABB3D{bounds.x + hw, bounds.y + hh, bounds.z - hd, hw, hh, hd},
+            depth + 1);
+        children[UNW] = std::make_unique&lt;Octree&gt;(
+            AABB3D{bounds.x - hw, bounds.y - hh, bounds.z + hd, hw, hh, hd},
+            depth + 1);
+        children[UNE] = std::make_unique&lt;Octree&gt;(
+            AABB3D{bounds.x + hw, bounds.y - hh, bounds.z + hd, hw, hh, hd},
+            depth + 1);
+        children[USW] = std::make_unique&lt;Octree&gt;(
+            AABB3D{bounds.x - hw, bounds.y + hh, bounds.z + hd, hw, hh, hd},
+            depth + 1);
+        children[USE] = std::make_unique&lt;Octree&gt;(
+            AABB3D{bounds.x + hw, bounds.y + hh, bounds.z + hd, hw, hh, hd},
+            depth + 1);
+
+        divided = true;
+
+        // 물체 재분배
+        for (auto* obj : objects) {
+            insertToChild(obj);
+        }
+        objects.clear();
+    }
+
+    void insertToChild(GameObject3D* obj) {
+        for (int i = 0; i < 8; i++) {
+            if (children[i]->bounds.contains(obj->x, obj->y, obj->z)) {
+                children[i]->insert(obj);
+                return;
+            }
+        }
+    }
+
+public:
+    Octree(const AABB3D& boundary, int d = 0)
+        : bounds(boundary), depth(d) {}
+
+    bool insert(GameObject3D* obj) {
+        if (!bounds.contains(obj->x, obj->y, obj->z)) {
+            return false;
+        }
+
+        if (!divided && objects.size() < MAX_OBJECTS) {
+            objects.push_back(obj);
+            return true;
+        }
+
+        if (!divided && depth < MAX_DEPTH) {
+            subdivide();
+        }
+
+        if (divided) {
+            insertToChild(obj);
+            return true;
+        }
+
+        objects.push_back(obj);
+        return true;
+    }
+
+    void queryFrustum(const Frustum& frustum,
+                      std::vector&lt;GameObject3D*&gt;& visible) {
+        // 절두체 컬링과 결합
+        if (!frustum.intersects(bounds)) {
+            return;
+        }
+
+        for (auto* obj : objects) {
+            if (frustum.contains(obj->x, obj->y, obj->z)) {
+                visible.push_back(obj);
+            }
+        }
+
+        if (divided) {
+            for (int i = 0; i < 8; i++) {
+                children[i]->queryFrustum(frustum, visible);
+            }
+        }
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 성능 최적화와 실무 활용</h2>
+            <div class="conversation">
+                <div class="q">실제 게임에서 어떻게 최적화하나요?</div>
+                <div class="a">
+                    <p><strong>1. Loose Quadtree/Octree:</strong></p>
+                    <p>경계를 약간 넓혀서 물체가 여러 노드에 걸치는 문제 해결</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+일반 Quadtree                 Loose Quadtree
+┌────┬────┐                  ┌────┬────┐
+│  ○│    │  물체가 경계에    │  (○)   │  경계를 확장하여
+│   │    │  걸치면 처리 복잡  │        │  단일 노드에 포함
+├───┼────┤                  ├────┼────┤
+│   │    │                  │        │
+└───┴────┘                  └────┴────┘
+                        </pre>
+                    </div>
+
+                    <p><strong>2. Object Pool 사용:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">Object Pool로 메모리 할당 최소화</div>
+                        <pre><code>class QuadtreeNodePool {
+private:
+    std::vector&lt;Quadtree&gt; pool;
+    size_t nextFree = 0;
+
+public:
+    QuadtreeNodePool(size_t capacity) {
+        pool.resize(capacity);
+    }
+
+    Quadtree* allocate(const AABB& bounds, int depth) {
+        if (nextFree >= pool.size()) {
+            pool.resize(pool.size() * 2);
+        }
+        Quadtree* node = &pool[nextFree++];
+        node->initialize(bounds, depth);
+        return node;
+    }
+
+    void reset() {
+        nextFree = 0;  // 매 프레임 재사용
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">성능 비교 결과는?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>물체 수</th>
+                                <th>Brute Force</th>
+                                <th>Quadtree</th>
+                                <th>성능 향상</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>100개</td>
+                                <td>4,950 체크</td>
+                                <td>~200 체크</td>
+                                <td>25배</td>
+                            </tr>
+                            <tr>
+                                <td>1,000개</td>
+                                <td>499,500 체크</td>
+                                <td>~2,000 체크</td>
+                                <td>250배</td>
+                            </tr>
+                            <tr>
+                                <td>10,000개</td>
+                                <td>50M 체크</td>
+                                <td>~20,000 체크</td>
+                                <td>2,500배</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="highlight">물체가 많을수록 공간 분할의 효과가 극대화됩니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>공간 분할</strong>: O(n²) → O(n log n) 충돌 체크 복잡도 감소</li>
+                <li><strong>Quadtree</strong>: 2D 공간을 4분할, MAX_OBJECTS/MAX_DEPTH로 조절</li>
+                <li><strong>Octree</strong>: 3D 공간을 8분할, 3D 게임/렌더링에 필수</li>
+                <li><strong>Loose 변형</strong>: 경계 확장으로 다중 노드 참조 문제 해결</li>
+                <li><strong>Object Pool</strong>: 매 프레임 재구축 시 메모리 할당 오버헤드 제거</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

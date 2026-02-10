@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인벤토리 시스템 DB 설계 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../database.html" class="back-link">← 목록으로</a>
+            <h1>아이템 복사 버그는 왜 생길까?</h1>
+            <p class="subtitle">안전한 인벤토리 시스템 DB 설계와 아이템 무결성</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 인벤토리 시스템 요구사항</h2>
+            <div class="conversation">
+                <div class="q">인벤토리 시스템에서 고려해야 할 점은?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+인벤토리 시스템 핵심 요구사항:
+
+1. 데이터 무결성
+   - 아이템 복사 방지
+   - 아이템 소실 방지
+   - 음수 수량 방지
+
+2. 성능
+   - 인벤토리 전체 로드: 50ms 이내
+   - 아이템 이동/사용: 100ms 이내
+   - 동시 거래 처리
+
+3. 유연성
+   - 다양한 아이템 타입 (장비, 소모품, 재료)
+   - 아이템별 고유 속성 (강화, 인챈트, 소켓)
+   - 스택 가능/불가능 아이템
+
+4. 추적
+   - 아이템 획득/소비 로그
+   - 거래 이력
+   - 롤백 지원
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 스키마 설계</h2>
+            <div class="conversation">
+                <div class="q">인벤토리 테이블 구조는 어떻게 설계하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">인벤토리 스키마</div>
+                        <pre><code>-- 아이템 정의 (정적 데이터)
+CREATE TABLE item_templates (
+    template_id     INT PRIMARY KEY,
+    name            VARCHAR(100) NOT NULL,
+    item_type       TINYINT NOT NULL,  -- 0:장비, 1:소모품, 2:재료
+    rarity          TINYINT DEFAULT 0,
+    max_stack       INT DEFAULT 1,     -- 1이면 스택 불가
+    is_tradeable    BOOLEAN DEFAULT TRUE,
+    is_destroyable  BOOLEAN DEFAULT TRUE,
+    base_stats      JSON              -- 기본 스탯
+);
+
+-- 인벤토리 아이템 (동적 데이터)
+CREATE TABLE inventory_items (
+    item_id         BIGINT PRIMARY KEY AUTO_INCREMENT,
+    char_id         BIGINT NOT NULL,
+    template_id     INT NOT NULL,
+    slot_type       TINYINT DEFAULT 0,   -- 0:인벤토리, 1:장착, 2:창고
+    slot_index      SMALLINT,
+    quantity        INT DEFAULT 1,
+    instance_data   JSON,                -- 개별 아이템 데이터
+    bound_type      TINYINT DEFAULT 0,   -- 0:없음, 1:획득시, 2:장착시
+    expires_at      TIMESTAMP NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (char_id) REFERENCES characters(char_id),
+    FOREIGN KEY (template_id) REFERENCES item_templates(template_id),
+    INDEX idx_char_slot (char_id, slot_type, slot_index),
+    INDEX idx_expires (expires_at) WHERE expires_at IS NOT NULL
+);
+
+-- 장착 슬롯 (별도 테이블로 명확하게)
+CREATE TABLE equipment_slots (
+    char_id         BIGINT NOT NULL,
+    slot_type       TINYINT NOT NULL,    -- 0:무기, 1:투구, 2:갑옷...
+    item_id         BIGINT,
+
+    PRIMARY KEY (char_id, slot_type),
+    FOREIGN KEY (item_id) REFERENCES inventory_items(item_id)
+);</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">instance_data에는 어떤 정보가 들어가나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">아이템 인스턴스 데이터 예시</div>
+                        <pre><code>-- 장비 아이템 instance_data
+{
+    "enchant_level": 7,
+    "enchant_exp": 450,
+    "durability": 85,
+    "max_durability": 100,
+    "sockets": [
+        {"gem_id": 101, "level": 3},
+        {"gem_id": null},
+        {"gem_id": 205, "level": 5}
+    ],
+    "random_stats": [
+        {"stat": "strength", "value": 15},
+        {"stat": "critical_rate", "value": 0.05}
+    ],
+    "crafted_by": "홍길동",
+    "crafted_at": "2024-01-15T10:30:00Z"
+}
+
+-- 소모품 아이템 (보통 instance_data 없음)
+-- quantity만 사용
+
+-- 펫/탈것 아이템
+{
+    "nickname": "번개",
+    "exp": 15000,
+    "level": 5,
+    "skills": [101, 102, 103],
+    "stats": {
+        "speed": 150,
+        "stamina": 100
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 안전한 아이템 조작</h2>
+            <div class="conversation">
+                <div class="q">아이템 복사 버그는 왜 생기나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+아이템 복사 버그 시나리오:
+
+1. Race Condition (동시 요청)
+   ┌─────────────────────────────────────────────────┐
+   │ Request A: 아이템 사용          Request B: 거래 │
+   │     │                               │          │
+   │  아이템 존재 확인 ✓             아이템 확인 ✓   │
+   │     │                               │          │
+   │  아이템 사용 처리               아이템 이동     │
+   │     │                               │          │
+   │  삭제                           삭제 (이미 없음)│
+   │                                     │          │
+   │  결과: 아이템 사용 + 거래 모두 성공! │          │
+   └─────────────────────────────────────────────────┘
+
+2. 롤백 타이밍 악용
+   - 아이템 거래 후 연결 끊기
+   - 서버가 롤백하면 아이템 복구
+   - 상대방은 이미 받은 아이템 보유
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">어떻게 방지하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">안전한 아이템 이동</div>
+                        <pre><code>class InventoryService {
+public:
+    // 아이템 이동 (인벤토리 내)
+    bool MoveItem(int64_t charId, int64_t itemId, int targetSlot) {
+        return db.Transaction([&]() {
+            // 1. 아이템 락 (FOR UPDATE)
+            auto item = db.Query<InventoryItem>(
+                "SELECT * FROM inventory_items "
+                "WHERE item_id = ? AND char_id = ? "
+                "FOR UPDATE",
+                itemId, charId
+            );
+
+            if (!item) {
+                throw ItemNotFoundException();
+            }
+
+            // 2. 대상 슬롯 확인 (락)
+            auto targetItem = db.Query<InventoryItem>(
+                "SELECT * FROM inventory_items "
+                "WHERE char_id = ? AND slot_type = 0 AND slot_index = ? "
+                "FOR UPDATE",
+                charId, targetSlot
+            );
+
+            if (targetItem) {
+                // 슬롯 교환
+                db.Execute(
+                    "UPDATE inventory_items SET slot_index = ? WHERE item_id = ?",
+                    item->slotIndex, targetItem->itemId
+                );
+            }
+
+            // 3. 아이템 이동
+            db.Execute(
+                "UPDATE inventory_items SET slot_index = ? WHERE item_id = ?",
+                targetSlot, itemId
+            );
+
+            return true;
+        });
+    }
+
+    // 아이템 사용 (소모품)
+    bool UseItem(int64_t charId, int64_t itemId, int amount = 1) {
+        return db.Transaction([&]() {
+            // 원자적 차감 + 조건 체크
+            int affected = db.Execute(
+                "UPDATE inventory_items "
+                "SET quantity = quantity - ? "
+                "WHERE item_id = ? AND char_id = ? AND quantity >= ?",
+                amount, itemId, charId, amount
+            );
+
+            if (affected == 0) {
+                throw InsufficientQuantityException();
+            }
+
+            // 수량 0이면 삭제
+            db.Execute(
+                "DELETE FROM inventory_items "
+                "WHERE item_id = ? AND quantity <= 0",
+                itemId
+            );
+
+            // 아이템 효과 적용...
+            ApplyItemEffect(charId, itemId);
+
+            // 로그 기록
+            LogItemUse(charId, itemId, amount);
+
+            return true;
+        });
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 거래 시스템</h2>
+            <div class="conversation">
+                <div class="q">플레이어 간 거래는 어떻게 구현하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">안전한 거래 시스템</div>
+                        <pre><code>class TradeService {
+public:
+    // 거래 실행 (양쪽 동의 후)
+    TradeResult ExecuteTrade(const TradeOffer& offerA,
+                             const TradeOffer& offerB) {
+        // 항상 낮은 ID 먼저 락 (데드락 방지)
+        int64_t firstChar = std::min(offerA.charId, offerB.charId);
+        int64_t secondChar = std::max(offerA.charId, offerB.charId);
+
+        return db.Transaction([&]() {
+            // 1. 양쪽 캐릭터 락
+            LockCharacter(firstChar);
+            LockCharacter(secondChar);
+
+            // 2. 모든 거래 아이템 락 및 검증
+            ValidateAndLockItems(offerA);
+            ValidateAndLockItems(offerB);
+
+            // 3. 골드 검증
+            ValidateGold(offerA.charId, offerA.gold);
+            ValidateGold(offerB.charId, offerB.gold);
+
+            // 4. 아이템 이동
+            TransferItems(offerA.charId, offerB.charId, offerA.items);
+            TransferItems(offerB.charId, offerA.charId, offerB.items);
+
+            // 5. 골드 이동
+            TransferGold(offerA.charId, offerB.charId, offerA.gold);
+            TransferGold(offerB.charId, offerA.charId, offerB.gold);
+
+            // 6. 거래 로그 기록
+            LogTrade(offerA, offerB);
+
+            return TradeResult::Success;
+        });
+    }
+
+private:
+    void ValidateAndLockItems(const TradeOffer& offer) {
+        for (auto& itemId : offer.items) {
+            auto item = db.Query<InventoryItem>(
+                "SELECT * FROM inventory_items "
+                "WHERE item_id = ? AND char_id = ? "
+                "FOR UPDATE",
+                itemId, offer.charId
+            );
+
+            if (!item) {
+                throw ItemNotFoundException(itemId);
+            }
+
+            // 거래 가능 여부 확인
+            auto template = GetItemTemplate(item->templateId);
+            if (!template.isTradeable || item->boundType != 0) {
+                throw ItemNotTradeableException(itemId);
+            }
+        }
+    }
+
+    void TransferItems(int64_t fromChar, int64_t toChar,
+                       const std::vector<int64_t>& itemIds) {
+        for (auto itemId : itemIds) {
+            // 소유자 변경
+            db.Execute(
+                "UPDATE inventory_items "
+                "SET char_id = ?, slot_type = 0, slot_index = NULL "
+                "WHERE item_id = ?",
+                toChar, itemId
+            );
+
+            // 빈 슬롯 찾아서 배치
+            AssignToEmptySlot(toChar, itemId);
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 아이템 로그와 롤백</h2>
+            <div class="conversation">
+                <div class="q">아이템 변경 이력은 어떻게 관리하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">아이템 로그 테이블</div>
+                        <pre><code>-- 아이템 이력 로그
+CREATE TABLE item_logs (
+    log_id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    item_id         BIGINT NOT NULL,
+    char_id         BIGINT NOT NULL,
+    action          ENUM('create', 'acquire', 'use', 'destroy',
+                        'trade_out', 'trade_in', 'enhance',
+                        'equip', 'unequip', 'expire'),
+    quantity_change INT DEFAULT 0,
+    quantity_after  INT,
+    related_char_id BIGINT,           -- 거래 상대
+    related_data    JSON,             -- 추가 정보
+    snapshot        JSON,             -- 변경 전 아이템 상태
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_item (item_id, created_at),
+    INDEX idx_char_time (char_id, created_at),
+    INDEX idx_action (action, created_at)
+);
+
+-- 로그 기록 함수
+void LogItemAction(int64_t itemId, int64_t charId,
+                   const string& action, JSON data) {
+    auto item = GetItem(itemId);
+
+    db.Execute(
+        "INSERT INTO item_logs "
+        "(item_id, char_id, action, quantity_after, related_data, snapshot) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        itemId, charId, action,
+        item ? item->quantity : 0,
+        data.dump(),
+        item ? SerializeItem(*item) : "{}"
+    );
+}
+
+-- 아이템 생성 시
+LogItemAction(newItemId, charId, "create", {
+    {"source", "quest_reward"},
+    {"quest_id", questId}
+});
+
+-- 거래 시
+LogItemAction(itemId, fromChar, "trade_out", {
+    {"to_char", toChar},
+    {"gold_received", goldAmount}
+});
+LogItemAction(itemId, toChar, "trade_in", {
+    {"from_char", fromChar},
+    {"gold_paid", goldAmount}
+});</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">아이템 롤백은 어떻게 하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">아이템 롤백 (CS 대응)</div>
+                        <pre><code>class ItemRecoveryService {
+public:
+    // 특정 시점 이후의 아이템 복구
+    void RollbackCharacterItems(int64_t charId, Timestamp rollbackPoint) {
+        // 1. 롤백 시점 이후의 로그 조회
+        auto logs = db.Query<ItemLog>(
+            "SELECT * FROM item_logs "
+            "WHERE char_id = ? AND created_at > ? "
+            "ORDER BY created_at DESC",
+            charId, rollbackPoint
+        );
+
+        db.Transaction([&]() {
+            for (auto& log : logs) {
+                ReverseAction(log);
+            }
+
+            // 복구 로그 기록
+            LogRecovery(charId, rollbackPoint, logs.size());
+        });
+    }
+
+private:
+    void ReverseAction(const ItemLog& log) {
+        switch (log.action) {
+            case "use":
+            case "destroy":
+                // 아이템 복구
+                RestoreItemFromSnapshot(log.snapshot);
+                break;
+
+            case "trade_out":
+                // 아이템 되돌리기 (상대방에게서)
+                // ⚠️ 상대방 동의 또는 관리자 권한 필요
+                ReturnItemFromTrade(log);
+                break;
+
+            case "acquire":
+            case "create":
+                // 획득 취소 = 삭제
+                DeleteItem(log.itemId);
+                break;
+
+            case "enhance":
+                // 강화 전 상태로 복구
+                RestoreItemFromSnapshot(log.snapshot);
+                break;
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 성능 최적화</h2>
+            <div class="conversation">
+                <div class="q">인벤토리 로딩을 빠르게 하려면?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">인벤토리 로딩 최적화</div>
+                        <pre><code>class InventoryCache {
+    Redis redis;
+    const int CACHE_TTL = 3600;
+
+public:
+    // 캐시된 인벤토리 로드
+    Inventory LoadInventory(int64_t charId) {
+        string key = "inventory:" + std::to_string(charId);
+
+        // 1. 캐시 확인
+        auto cached = redis.Get(key);
+        if (cached) {
+            return Deserialize<Inventory>(*cached);
+        }
+
+        // 2. DB 조회 (한 번에 모두)
+        auto items = db.Query<InventoryItem>(
+            "SELECT i.*, t.name, t.item_type, t.max_stack "
+            "FROM inventory_items i "
+            "JOIN item_templates t ON i.template_id = t.template_id "
+            "WHERE i.char_id = ?",
+            charId
+        );
+
+        Inventory inv(charId);
+        for (auto& item : items) {
+            inv.AddItem(item);
+        }
+
+        // 3. 캐시 저장
+        redis.SetEx(key, Serialize(inv), CACHE_TTL);
+
+        return inv;
+    }
+
+    // 아이템 변경 시 캐시 무효화
+    void InvalidateCache(int64_t charId) {
+        redis.Del("inventory:" + std::to_string(charId));
+    }
+};
+
+// 배치 로딩 (길드원 인벤토리 등)
+std::vector<Inventory> LoadMultipleInventories(
+    const std::vector<int64_t>& charIds
+) {
+    // IN 쿼리로 한 번에 조회
+    auto items = db.Query<InventoryItem>(
+        "SELECT * FROM inventory_items WHERE char_id IN (?)",
+        charIds
+    );
+
+    // 캐릭터별로 그룹화
+    std::map<int64_t, Inventory> inventories;
+    for (auto& item : items) {
+        inventories[item.charId].AddItem(item);
+    }
+
+    return inventories;
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>스키마 설계</strong>: 템플릿(정적) + 인스턴스(동적) 분리, JSON으로 유연한 속성</li>
+                <li><strong>복사 버그 방지</strong>: FOR UPDATE 락, 원자적 UPDATE, 트랜잭션 필수</li>
+                <li><strong>거래 시스템</strong>: 낮은 ID 먼저 락(데드락 방지), 모든 검증 후 이동</li>
+                <li><strong>로그 기록</strong>: 모든 변경에 snapshot 저장, 롤백 가능하게</li>
+                <li><strong>캐시</strong>: Redis에 인벤토리 캐시, 변경 시 무효화</li>
+                <li><strong>핵심 원칙</strong>: 항상 락 → 검증 → 실행 → 로그 순서</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

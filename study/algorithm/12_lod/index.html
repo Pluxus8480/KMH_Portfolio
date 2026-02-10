@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LOD (Level of Detail) 시스템 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>멀리 있는 나무를 왜 정밀하게 그릴까?</h1>
+            <p class="subtitle">LOD 시스템으로 렌더링 성능 최적화하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: LOD의 필요성</h2>
+            <div class="conversation">
+                <div class="q">왜 LOD가 필요한가요?</div>
+                <div class="a">
+                    <p>멀리 있는 물체는 화면에서 몇 픽셀만 차지합니다.</p>
+                    <p class="warning">10만 폴리곤 모델이 화면에 10픽셀로 그려진다면? → 99.99% 낭비!</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+같은 캐릭터, 다른 거리
+
+가까움 (LOD 0)        중간 (LOD 1)        멀리 (LOD 2)
+
+    ╭─────╮             ╭───╮               ╭╮
+   ╱│     │╲           ╱│   │╲             ││
+  ╱ │     │ ╲         │ │   │ │            ││
+ │  │     │  │        │ └───┘ │            ╰╯
+ │  │     │  │        │       │
+ │  │     │  │        ╰───────╯
+ ╰──┴─────┴──╯
+
+ 50,000 폴리곤        5,000 폴리곤       500 폴리곤
+ 화면 500px           화면 50px          화면 5px
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">어떤 기준으로 LOD를 선택하나요?</div>
+                <div class="a">
+                    <p class="highlight">거리 또는 화면 점유율(Screen Coverage)을 기준으로 선택합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>멀리서 볼 때는 숲 전체를 보지만, 가까이 가면 나무 한 그루의 나뭇잎이 보입니다.</p>
+                        <p>거리에 따라 디테일 수준을 조절하는 것이 LOD입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 거리 기반 LOD</h2>
+            <div class="conversation">
+                <div class="code-block">
+                    <div class="code-header">기본 거리 기반 LOD</div>
+                    <pre><code>struct LODLevel {
+    float maxDistance;      // 이 LOD가 사용되는 최대 거리
+    Mesh* mesh;             // 해당 레벨의 메시
+    int triangleCount;      // 삼각형 수 (디버깅용)
+};
+
+class LODObject {
+private:
+    std::vector&lt;LODLevel&gt; levels;
+    Vec3 position;
+    float boundingRadius;
+
+public:
+    void setupLOD() {
+        // LOD 레벨 설정 (거리순 정렬)
+        levels = {
+            {50.0f,  highDetailMesh,   50000},   // LOD 0: 50m 이내
+            {150.0f, mediumDetailMesh, 10000},   // LOD 1: 50~150m
+            {500.0f, lowDetailMesh,    2000},    // LOD 2: 150~500m
+            {FLT_MAX, billboardMesh,   2}        // LOD 3: 500m 이상 (빌보드)
+        };
+    }
+
+    int selectLOD(const Vec3& cameraPos) const {
+        float distance = (cameraPos - position).length();
+
+        for (int i = 0; i < levels.size(); i++) {
+            if (distance <= levels[i].maxDistance) {
+                return i;
+            }
+        }
+        return levels.size() - 1;
+    }
+
+    Mesh* getMeshForLOD(const Vec3& cameraPos) const {
+        int lodIndex = selectLOD(cameraPos);
+        return levels[lodIndex].mesh;
+    }
+};</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 화면 점유율 기반 LOD</h2>
+            <div class="conversation">
+                <div class="q">거리만으로 충분하지 않나요?</div>
+                <div class="a">
+                    <p>큰 물체와 작은 물체가 같은 거리에 있어도 화면 점유율은 다릅니다.</p>
+                    <p class="key-point">화면 점유율 = 물체가 차지하는 픽셀 수 / 전체 픽셀</p>
+
+                    <div class="code-block">
+                        <div class="code-header">화면 점유율 기반 LOD</div>
+                        <pre><code>class ScreenCoverageLOD {
+private:
+    float screenWidth, screenHeight;
+    float fov;  // Field of View (라디안)
+
+public:
+    // 화면에서 물체가 차지하는 대략적 높이 (픽셀)
+    float computeScreenSize(float objectRadius, float distance) const {
+        // 투영된 크기 계산
+        float projectedSize = objectRadius / (distance * tan(fov * 0.5f));
+        return projectedSize * screenHeight;
+    }
+
+    int selectLOD(float objectRadius, float distance,
+                  const std::vector&lt;float&gt;& thresholds) const {
+        float screenSize = computeScreenSize(objectRadius, distance);
+
+        // 화면 크기가 클수록 높은 LOD 필요
+        for (int i = 0; i < thresholds.size(); i++) {
+            if (screenSize >= thresholds[i]) {
+                return i;  // LOD 0이 가장 상세
+            }
+        }
+        return thresholds.size();  // 가장 낮은 LOD
+    }
+};
+
+// 사용 예
+ScreenCoverageLOD lodSelector(1920, 1080, glm::radians(60.0f));
+
+// 화면에서 100픽셀 이상 → LOD 0
+// 50~100픽셀 → LOD 1
+// 50픽셀 미만 → LOD 2
+std::vector&lt;float&gt; thresholds = {100.0f, 50.0f, 20.0f};
+
+int lod = lodSelector.selectLOD(object.radius, distanceToCamera, thresholds);</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: LOD 전환 기법</h2>
+            <div class="conversation">
+                <div class="q">LOD 전환이 눈에 띄지 않게 하려면?</div>
+                <div class="a">
+                    <p class="warning">갑작스러운 LOD 전환은 "팝핑(Popping)" 현상을 유발합니다.</p>
+
+                    <p><strong>해결책 1: 히스테리시스(Hysteresis)</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">히스테리시스 적용</div>
+                        <pre><code>class LODWithHysteresis {
+private:
+    int currentLOD = 0;
+    float hysteresis = 0.1f;  // 10% 마진
+
+public:
+    int selectLOD(float distance, const std::vector&lt;float&gt;& thresholds) {
+        int newLOD = 0;
+
+        for (int i = 0; i < thresholds.size(); i++) {
+            float threshold = thresholds[i];
+
+            // 현재 LOD보다 낮은 LOD로 전환 시: 더 멀리 가야 함
+            if (i >= currentLOD) {
+                threshold *= (1.0f + hysteresis);
+            }
+            // 현재 LOD보다 높은 LOD로 전환 시: 더 가까이 와야 함
+            else {
+                threshold *= (1.0f - hysteresis);
+            }
+
+            if (distance <= threshold) {
+                newLOD = i;
+                break;
+            }
+            newLOD = i + 1;
+        }
+
+        currentLOD = newLOD;
+        return currentLOD;
+    }
+};</code></pre>
+                    </div>
+
+                    <p><strong>해결책 2: Alpha 블렌딩 전환</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">부드러운 LOD 전환</div>
+                        <pre><code>class SmoothLODTransition {
+private:
+    float transitionProgress = 0.0f;
+    int fromLOD = 0;
+    int toLOD = 0;
+    bool transitioning = false;
+    float transitionSpeed = 2.0f;  // 초당 전환 속도
+
+public:
+    void update(float deltaTime, int targetLOD) {
+        if (targetLOD != toLOD && !transitioning) {
+            // 새로운 전환 시작
+            fromLOD = toLOD;
+            toLOD = targetLOD;
+            transitioning = true;
+            transitionProgress = 0.0f;
+        }
+
+        if (transitioning) {
+            transitionProgress += deltaTime * transitionSpeed;
+            if (transitionProgress >= 1.0f) {
+                transitionProgress = 1.0f;
+                transitioning = false;
+                fromLOD = toLOD;
+            }
+        }
+    }
+
+    void render(const Camera& camera) {
+        if (transitioning) {
+            // 두 LOD를 블렌딩하여 렌더링
+            float alpha = smoothstep(0.0f, 1.0f, transitionProgress);
+
+            renderMesh(getLODMesh(fromLOD), 1.0f - alpha);
+            renderMesh(getLODMesh(toLOD), alpha);
+        } else {
+            renderMesh(getLODMesh(toLOD), 1.0f);
+        }
+    }
+
+    float smoothstep(float edge0, float edge1, float x) {
+        x = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+        return x * x * (3 - 2 * x);
+    }
+};</code></pre>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+LOD 전환 방법 비교
+
+즉시 전환:          히스테리시스:         블렌딩:
+LOD 0 ━━━┓         LOD 0 ━━━╮          LOD 0 ━━━╲
+         ┃              │   ╰╮              ╲
+LOD 1    ┗━━━       LOD 1   ╰━━━        LOD 1 ━━╲━━
+                                                 ╲
+팝핑 발생!        전환 빈도 감소       부드러운 전환
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 연속 LOD (CLOD)</h2>
+            <div class="conversation">
+                <div class="q">미리 만든 LOD 메시 외에 다른 방법은?</div>
+                <div class="a">
+                    <p class="highlight">연속 LOD(CLOD)는 런타임에 메시 해상도를 동적으로 조절합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Progressive Mesh 기반 CLOD</div>
+                        <pre><code>// Edge Collapse 연산
+struct EdgeCollapse {
+    int vertexFrom;    // 제거될 정점
+    int vertexTo;      // 병합될 정점
+    float error;       // 이 연산의 오차
+    std::vector&lt;int&gt; affectedTriangles;
+};
+
+class ProgressiveMesh {
+private:
+    std::vector&lt;Vec3&gt; vertices;
+    std::vector&lt;Triangle&gt; triangles;
+    std::vector&lt;EdgeCollapse&gt; collapseSequence;  // 사전 계산
+    int currentDetail = 0;  // 현재 적용된 collapse 수
+
+public:
+    void precompute() {
+        // QEM (Quadric Error Metrics) 기반 순서 결정
+        while (triangles.size() > minTriangles) {
+            EdgeCollapse bestCollapse = findLowestErrorCollapse();
+            collapseSequence.push_back(bestCollapse);
+            applyCollapse(bestCollapse);
+        }
+    }
+
+    // 런타임에 LOD 레벨 설정
+    void setDetailLevel(float t) {  // t: 0 (최저) ~ 1 (최고)
+        int targetDetail = static_cast&lt;int&gt;(
+            (1.0f - t) * collapseSequence.size());
+
+        // 현재보다 낮은 디테일 필요
+        while (currentDetail < targetDetail) {
+            applyCollapse(collapseSequence[currentDetail]);
+            currentDetail++;
+        }
+
+        // 현재보다 높은 디테일 필요
+        while (currentDetail > targetDetail) {
+            currentDetail--;
+            undoCollapse(collapseSequence[currentDetail]);
+        }
+    }
+
+private:
+    EdgeCollapse findLowestErrorCollapse() {
+        // QEM을 사용하여 각 엣지의 collapse 오차 계산
+        // 가장 오차가 작은 엣지 선택
+        // ...
+    }
+};</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>방식</th>
+                                <th>장점</th>
+                                <th>단점</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Discrete LOD</td>
+                                <td>단순, 예측 가능</td>
+                                <td>전환 팝핑, 고정 레벨</td>
+                            </tr>
+                            <tr>
+                                <td>Progressive Mesh</td>
+                                <td>연속적 디테일 조절</td>
+                                <td>CPU 오버헤드</td>
+                            </tr>
+                            <tr>
+                                <td>GPU Tessellation</td>
+                                <td>실시간 서브디비전</td>
+                                <td>특수 지오메트리 필요</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: HLOD와 Impostor</h2>
+            <div class="conversation">
+                <div class="q">도시 같은 복잡한 씬은 어떻게 처리하나요?</div>
+                <div class="a">
+                    <p class="highlight">HLOD(Hierarchical LOD)는 여러 물체를 하나로 병합합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+HLOD 계층 구조
+
+가까움:                  멀리:
+┌─────┐ ┌─────┐         ┌───────────┐
+│건물1│ │건물2│   →    │  건물 그룹  │
+└─────┘ └─────┘         │   (병합)   │
+┌─────┐ ┌─────┐         └───────────┘
+│건물3│ │건물4│
+└─────┘ └─────┘
+
+개별 렌더링 (4 draw calls)   단일 렌더링 (1 draw call)
+                        </pre>
+                    </div>
+
+                    <p><strong>Impostor (빌보드):</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">Impostor 시스템</div>
+                        <pre><code>class ImpostorSystem {
+private:
+    struct Impostor {
+        int objectId;
+        std::vector&lt;Texture&gt; views;  // 여러 각도에서 캡처한 이미지
+        float captureDistance;
+    };
+
+    std::unordered_map&lt;int, Impostor&gt; impostors;
+
+public:
+    // 오프라인: 여러 각도에서 물체 렌더링하여 텍스처 생성
+    void generateImpostor(Object& object, int viewCount = 8) {
+        Impostor impostor;
+        impostor.objectId = object.id;
+
+        for (int i = 0; i < viewCount; i++) {
+            float angle = (2.0f * M_PI * i) / viewCount;
+
+            // 해당 각도에서 렌더링
+            Texture capture = renderToTexture(object, angle);
+            impostor.views.push_back(capture);
+        }
+
+        impostors[object.id] = impostor;
+    }
+
+    // 런타임: 카메라 각도에 맞는 빌보드 렌더링
+    void renderImpostor(int objectId, const Vec3& objectPos,
+                        const Camera& camera) {
+        Impostor& impostor = impostors[objectId];
+
+        // 카메라에서 물체를 보는 각도 계산
+        Vec3 toObject = objectPos - camera.position;
+        float angle = atan2(toObject.x, toObject.z);
+
+        // 가장 가까운 뷰 선택 (또는 두 뷰 블렌딩)
+        int viewIndex = selectBestView(angle, impostor.views.size());
+
+        // 빌보드 렌더링
+        renderBillboard(objectPos, impostor.views[viewIndex], camera);
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="key-point">Unreal Engine의 Nanite는 HLOD + 가상 텍스처링을 자동화합니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>LOD</strong>: 거리/화면 점유율에 따라 메시 디테일 조절</li>
+                <li><strong>팝핑 방지</strong>: 히스테리시스, 알파 블렌딩으로 부드러운 전환</li>
+                <li><strong>CLOD</strong>: Progressive Mesh로 연속적 디테일 조절</li>
+                <li><strong>HLOD</strong>: 여러 물체를 그룹으로 병합하여 드로우 콜 감소</li>
+                <li><strong>Impostor</strong>: 매우 먼 물체는 빌보드 텍스처로 대체</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>연속 충돌 감지 (CCD) | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+            <h1>총알이 벽을 뚫고 지나간다고요?</h1>
+            <p class="subtitle">연속 충돌 감지(CCD)로 터널링 문제 해결하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 터널링 문제</h2>
+            <div class="conversation">
+                <div class="q">터널링(Tunneling)이 무엇인가요?</div>
+                <div class="a">
+                    <p class="warning">빠르게 움직이는 물체가 얇은 장애물을 통과해버리는 현상입니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+터널링 문제
+
+프레임 N:                     프레임 N+1:
+    ○ 총알                         벽
+    ↓                              │
+    │                         ○    │  총알이 벽을
+    │                         (충돌 │  통과해버림!
+    │                          안 함) │
+    벽                              │
+
+물체 속도 > 장애물 두께 / 프레임 시간
+→ 이산적 충돌 검사로는 감지 불가!
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">왜 이런 문제가 발생하나요?</div>
+                <div class="a">
+                    <p>일반적인 충돌 검사(Discrete Collision Detection)는 각 프레임의 위치만 확인합니다.</p>
+                    <p class="highlight">연속 충돌 감지(CCD)는 프레임 사이의 이동 경로도 검사합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>사진을 찍을 때 셔터 속도가 느리면 빠른 물체가 흐릿하게 나옵니다.</p>
+                        <p>CCD는 "움직임 전체"를 포착하는 것과 같습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: CCD 접근 방식</h2>
+            <div class="conversation">
+                <div class="q">CCD는 어떻게 구현하나요?</div>
+                <div class="a">
+                    <p><strong>주요 접근 방식:</strong></p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>방식</th>
+                                <th>원리</th>
+                                <th>정확도</th>
+                                <th>비용</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Swept Volume</td>
+                                <td>이동 경로를 볼륨으로</td>
+                                <td>높음</td>
+                                <td>높음</td>
+                            </tr>
+                            <tr>
+                                <td>Ray Casting</td>
+                                <td>점 물체에 레이캐스트</td>
+                                <td>중간</td>
+                                <td>낮음</td>
+                            </tr>
+                            <tr>
+                                <td>Speculative</td>
+                                <td>확장된 AABB로 후보 찾기</td>
+                                <td>중간</td>
+                                <td>중간</td>
+                            </tr>
+                            <tr>
+                                <td>TOI (Time of Impact)</td>
+                                <td>충돌 시점 정밀 계산</td>
+                                <td>매우 높음</td>
+                                <td>높음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Swept Volume 방식</h2>
+            <div class="conversation">
+                <div class="q">Swept Volume은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p class="highlight">이동 경로 전체를 하나의 볼륨으로 만들어 충돌 검사합니다.</p>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Swept Sphere
+
+시작 위치        끝 위치
+    ○───────────○
+   ╱             ╲
+  (  캡슐 형태    )  ← Swept Volume
+   ╲             ╱
+    ○───────────○
+
+구 + 이동 = 캡슐
+박스 + 이동 = 확장된 박스 + 끝 캡
+                        </pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Swept Sphere vs AABB</div>
+                        <pre><code>struct Sphere {
+    Vec3 center;
+    float radius;
+};
+
+struct SweptSphere {
+    Vec3 start;
+    Vec3 end;
+    float radius;
+};
+
+// Swept Sphere vs 정적 AABB 충돌
+bool sweptSphereVsAABB(const SweptSphere& sphere, const AABB& box,
+                       float& hitTime, Vec3& hitNormal) {
+    // AABB를 반지름만큼 확장
+    AABB expandedBox = {
+        box.min - Vec3(sphere.radius),
+        box.max + Vec3(sphere.radius)
+    };
+
+    // 레이캐스트로 변환
+    Vec3 rayOrigin = sphere.start;
+    Vec3 rayDir = sphere.end - sphere.start;
+
+    if (rayVsAABB(rayOrigin, rayDir, expandedBox, hitTime, hitNormal)) {
+        if (hitTime >= 0.0f && hitTime <= 1.0f) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// Ray vs AABB (Slab method)
+bool rayVsAABB(const Vec3& origin, const Vec3& dir, const AABB& box,
+               float& tMin, Vec3& normal) {
+    tMin = 0.0f;
+    float tMax = 1.0f;
+    Vec3 invDir = 1.0f / dir;
+
+    for (int i = 0; i < 3; i++) {
+        float t1 = (box.min[i] - origin[i]) * invDir[i];
+        float t2 = (box.max[i] - origin[i]) * invDir[i];
+
+        if (t1 > t2) std::swap(t1, t2);
+
+        if (t1 > tMin) {
+            tMin = t1;
+            normal = Vec3(0);
+            normal[i] = (dir[i] > 0) ? -1.0f : 1.0f;
+        }
+        tMax = std::min(tMax, t2);
+
+        if (tMin > tMax) return false;
+    }
+
+    return true;
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: TOI (Time of Impact) 계산</h2>
+            <div class="conversation">
+                <div class="q">정확한 충돌 시점을 어떻게 찾나요?</div>
+                <div class="a">
+                    <p class="highlight">이진 탐색 또는 GJK 기반 알고리즘으로 TOI를 계산합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Conservative Advancement (보수적 전진)</div>
+                        <pre><code>// 보수적 전진법으로 TOI 계산
+float computeTOI(const Shape& shapeA, const Vec3& velA,
+                 const Shape& shapeB, const Vec3& velB,
+                 float maxTime) {
+    const float tolerance = 0.001f;
+    const int maxIterations = 20;
+
+    float t = 0.0f;
+
+    for (int i = 0; i < maxIterations; i++) {
+        // 현재 시간 t에서의 위치로 형상 이동
+        Shape tempA = shapeA.transformed(velA * t);
+        Shape tempB = shapeB.transformed(velB * t);
+
+        // GJK로 최단 거리 계산
+        float distance;
+        Vec3 closest;
+        if (!gjkDistance(tempA, tempB, distance, closest)) {
+            // 이미 침투 중
+            return t;
+        }
+
+        if (distance < tolerance) {
+            // 충돌!
+            return t;
+        }
+
+        // 상대 속도를 향해 안전하게 전진
+        Vec3 relVel = velA - velB;
+        float relSpeed = relVel.length();
+
+        if (relSpeed < tolerance) {
+            // 상대적으로 정지
+            return maxTime;
+        }
+
+        // 거리 / 속도 = 최소 안전 시간
+        float dt = distance / relSpeed;
+        t += dt * 0.9f;  // 안전 마진
+
+        if (t >= maxTime) {
+            return maxTime;  // 충돌 없음
+        }
+    }
+
+    return t;
+}</code></pre>
+                    </div>
+
+                    <div class="visual-section">
+                        <pre class="diagram">
+Conservative Advancement
+
+t=0.0       t=0.3       t=0.6       t=0.85 (충돌!)
+  ○─────────○─────────○─────────○──►│
+                                      │ 벽
+  거리 계산    거리 계산    거리 계산    │
+  전진        전진        전진        │
+
+각 단계에서:
+1. 현재 위치에서 거리 계산
+2. 거리/속도 만큼 안전하게 전진
+3. 거리가 tolerance 이하면 충돌!
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Speculative Contacts</h2>
+            <div class="conversation">
+                <div class="q">더 빠른 방법은 없나요?</div>
+                <div class="a">
+                    <p class="highlight">Speculative Contacts는 확장된 AABB로 예측하여 성능을 높입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Speculative CCD</div>
+                        <pre><code>class SpeculativeCCD {
+public:
+    struct Contact {
+        Vec3 point;
+        Vec3 normal;
+        float distance;  // 음수 = 침투
+        float toi;       // 예상 충돌 시간
+    };
+
+    // 확장된 AABB 생성
+    AABB computeSweptAABB(const AABB& aabb, const Vec3& velocity,
+                          float deltaTime) {
+        AABB swept = aabb;
+
+        // 속도 방향으로 확장
+        Vec3 displacement = velocity * deltaTime;
+
+        if (displacement.x > 0) swept.max.x += displacement.x;
+        else swept.min.x += displacement.x;
+
+        if (displacement.y > 0) swept.max.y += displacement.y;
+        else swept.min.y += displacement.y;
+
+        if (displacement.z > 0) swept.max.z += displacement.z;
+        else swept.min.z += displacement.z;
+
+        return swept;
+    }
+
+    // Speculative Contact 생성
+    void generateSpeculativeContacts(
+            RigidBody& bodyA, RigidBody& bodyB,
+            float deltaTime,
+            std::vector&lt;Contact&gt;& contacts) {
+
+        // 1. Swept AABB 교차 확인
+        AABB sweptA = computeSweptAABB(bodyA.aabb, bodyA.velocity, deltaTime);
+        AABB sweptB = computeSweptAABB(bodyB.aabb, bodyB.velocity, deltaTime);
+
+        if (!sweptA.intersects(sweptB)) {
+            return;  // 충돌 가능성 없음
+        }
+
+        // 2. 현재 위치에서 거리/침투 계산
+        float distance;
+        Vec3 normal, pointA, pointB;
+
+        gjkClosestPoints(bodyA.shape, bodyB.shape,
+                        distance, pointA, pointB, normal);
+
+        // 3. 상대 속도로 TOI 예측
+        Vec3 relVel = bodyA.velocity - bodyB.velocity;
+        float approachSpeed = -relVel.dot(normal);
+
+        if (approachSpeed <= 0 && distance > 0) {
+            return;  // 멀어지고 있음
+        }
+
+        Contact contact;
+        contact.point = (pointA + pointB) * 0.5f;
+        contact.normal = normal;
+        contact.distance = distance;
+
+        if (distance > 0 && approachSpeed > 0) {
+            contact.toi = distance / approachSpeed;
+            if (contact.toi > deltaTime) {
+                return;  // 이번 프레임에 충돌 안 함
+            }
+        } else {
+            contact.toi = 0;  // 이미 접촉 중
+        }
+
+        contacts.push_back(contact);
+    }
+
+    // Solver에서 Speculative Contact 처리
+    void solveSpeculativeContact(Contact& contact, RigidBody& bodyA,
+                                 RigidBody& bodyB, float deltaTime) {
+        // 침투 방지를 위한 속도 제한
+        Vec3 relVel = bodyA.velocity - bodyB.velocity;
+        float normalVel = relVel.dot(contact.normal);
+
+        // 목표: 다음 프레임에 distance = 0이 되도록
+        float targetVel = contact.distance / deltaTime;
+        float deltaVel = targetVel - normalVel;
+
+        if (deltaVel > 0) {
+            // 임펄스 계산 및 적용
+            float impulse = deltaVel / (bodyA.invMass + bodyB.invMass);
+            bodyA.velocity += contact.normal * impulse * bodyA.invMass;
+            bodyB.velocity -= contact.normal * impulse * bodyB.invMass;
+        }
+    }
+};</code></pre>
+                    </div>
+
+                    <p class="key-point">Speculative CCD는 정확도를 약간 희생하고 성능을 크게 향상시킵니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 적용</h2>
+            <div class="conversation">
+                <div class="q">실제 게임에서 어떻게 사용하나요?</div>
+                <div class="a">
+                    <p><strong>하이브리드 접근:</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">CCD 정책 선택</div>
+                        <pre><code>enum class CCDMode {
+    None,           // 느린 물체
+    Speculative,    // 중간 속도
+    Full            // 매우 빠른 물체 (총알 등)
+};
+
+CCDMode selectCCDMode(const RigidBody& body, float deltaTime) {
+    float displacement = body.velocity.length() * deltaTime;
+    float minDimension = body.aabb.minDimension();
+
+    // 이동 거리가 크기의 절반 이하면 CCD 불필요
+    if (displacement < minDimension * 0.5f) {
+        return CCDMode::None;
+    }
+
+    // 이동 거리가 크기보다 크면 Full CCD
+    if (displacement > minDimension) {
+        return CCDMode::Full;
+    }
+
+    return CCDMode::Speculative;
+}
+
+class PhysicsWorld {
+public:
+    void step(float deltaTime) {
+        // 1. Broad Phase (Swept AABB 사용)
+        auto pairs = broadPhase.findPairs(deltaTime);
+
+        // 2. Narrow Phase
+        for (auto& [bodyA, bodyB] : pairs) {
+            CCDMode mode = std::max(
+                selectCCDMode(*bodyA, deltaTime),
+                selectCCDMode(*bodyB, deltaTime)
+            );
+
+            switch (mode) {
+                case CCDMode::None:
+                    discreteCollision(bodyA, bodyB);
+                    break;
+                case CCDMode::Speculative:
+                    speculativeCollision(bodyA, bodyB, deltaTime);
+                    break;
+                case CCDMode::Full:
+                    fullCCD(bodyA, bodyB, deltaTime);
+                    break;
+            }
+        }
+
+        // 3. Integration
+        integrateVelocities(deltaTime);
+    }
+
+    void fullCCD(RigidBody* bodyA, RigidBody* bodyB, float deltaTime) {
+        float toi = computeTOI(bodyA, bodyB, deltaTime);
+
+        if (toi < deltaTime) {
+            // 충돌 시점까지만 전진
+            bodyA->position += bodyA->velocity * toi;
+            bodyB->position += bodyB->velocity * toi;
+
+            // 충돌 응답
+            resolveCollision(bodyA, bodyB);
+
+            // 남은 시간 처리
+            float remainingTime = deltaTime - toi;
+            step(remainingTime);  // 재귀적 처리
+        }
+    }
+};</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>물체 타입</th>
+                                <th>권장 CCD 모드</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>플레이어, 적</td>
+                                <td>Speculative</td>
+                            </tr>
+                            <tr>
+                                <td>총알, 화살</td>
+                                <td>Full CCD 또는 Ray Cast</td>
+                            </tr>
+                            <tr>
+                                <td>상자, 바위</td>
+                                <td>None 또는 Speculative</td>
+                            </tr>
+                            <tr>
+                                <td>차량</td>
+                                <td>Speculative</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>터널링</strong>: 빠른 물체가 장애물을 통과하는 문제</li>
+                <li><strong>Swept Volume</strong>: 이동 경로를 볼륨으로 변환</li>
+                <li><strong>TOI</strong>: Conservative Advancement로 정확한 충돌 시점 계산</li>
+                <li><strong>Speculative CCD</strong>: 확장 AABB + 속도 제한으로 빠른 처리</li>
+                <li><strong>하이브리드</strong>: 물체 속도에 따라 적절한 모드 선택</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

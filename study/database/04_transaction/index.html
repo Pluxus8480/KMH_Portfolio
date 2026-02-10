@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>트랜잭션과 동시성 제어 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../database.html" class="back-link">← 목록으로</a>
+            <h1>두 명이 동시에 같은 아이템을 가져가면?</h1>
+            <p class="subtitle">트랜잭션 ACID와 게임에서의 동시성 제어</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 트랜잭션과 ACID</h2>
+            <div class="conversation">
+                <div class="q">트랜잭션이 왜 필요한가요?</div>
+                <div class="a">
+                    <p>여러 작업을 <strong>하나의 단위</strong>로 묶어 안전하게 처리합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+아이템 거래 예시 (트랜잭션 없을 때):
+
+1. A의 골드 -1000       ✓ 성공
+2. B의 골드 +1000       ✗ 실패 (DB 에러)
+3. A의 아이템 제거       실행 안 됨
+4. B의 아이템 추가       실행 안 됨
+
+결과: A만 골드 손실! 💀
+
+트랜잭션으로 처리:
+
+BEGIN TRANSACTION
+1. A의 골드 -1000       ✓
+2. B의 골드 +1000       ✗ 실패
+ROLLBACK
+
+결과: 모든 변경 취소, 원상복구 ✓
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">ACID가 무엇인가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>속성</th>
+                                <th>의미</th>
+                                <th>게임 예시</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>A</strong>tomicity (원자성)</td>
+                                <td>전부 성공 또는 전부 실패</td>
+                                <td>거래: 양쪽 다 반영 or 둘 다 안 반영</td>
+                            </tr>
+                            <tr>
+                                <td><strong>C</strong>onsistency (일관성)</td>
+                                <td>규칙 위반 불가</td>
+                                <td>골드 음수 불가, 아이템 중복 불가</td>
+                            </tr>
+                            <tr>
+                                <td><strong>I</strong>solation (격리성)</td>
+                                <td>동시 작업 간 간섭 없음</td>
+                                <td>두 거래가 동시에 같은 아이템 접근</td>
+                            </tr>
+                            <tr>
+                                <td><strong>D</strong>urability (영속성)</td>
+                                <td>커밋 후 영구 저장</td>
+                                <td>서버 크래시 후에도 데이터 유지</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 동시성 문제들</h2>
+            <div class="conversation">
+                <div class="q">동시에 같은 데이터를 수정하면 어떤 문제가 생기나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+1. Lost Update (갱신 손실):
+
+시간  Transaction A          Transaction B
+─────────────────────────────────────────────
+t1   READ gold = 1000
+t2                          READ gold = 1000
+t3   gold = 1000 + 100
+     WRITE gold = 1100
+t4                          gold = 1000 - 200
+                            WRITE gold = 800
+
+결과: A의 +100이 사라짐! (금액 오류)
+
+2. Dirty Read (더티 리드):
+
+시간  Transaction A          Transaction B
+─────────────────────────────────────────────
+t1   WRITE gold = 500
+t2                          READ gold = 500
+t3   ROLLBACK (취소!)
+t4                          gold = 500 사용...
+
+결과: B가 존재하지 않는 데이터 사용!
+
+3. Non-Repeatable Read (반복 불가능한 읽기):
+
+시간  Transaction A          Transaction B
+─────────────────────────────────────────────
+t1   READ gold = 1000
+t2                          WRITE gold = 500
+                            COMMIT
+t3   READ gold = 500 ???
+
+결과: 같은 트랜잭션에서 다른 값 읽음!
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 격리 수준 (Isolation Levels)</h2>
+            <div class="conversation">
+                <div class="q">격리 수준이란?</div>
+                <div class="a">
+                    <p>동시성 문제를 얼마나 방지할지 결정하는 설정입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>격리 수준</th>
+                                <th>Dirty Read</th>
+                                <th>Non-Repeatable</th>
+                                <th>Phantom</th>
+                                <th>성능</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>READ UNCOMMITTED</td>
+                                <td>⚠️ 가능</td>
+                                <td>⚠️ 가능</td>
+                                <td>⚠️ 가능</td>
+                                <td>⭐⭐⭐</td>
+                            </tr>
+                            <tr>
+                                <td>READ COMMITTED</td>
+                                <td>✅ 방지</td>
+                                <td>⚠️ 가능</td>
+                                <td>⚠️ 가능</td>
+                                <td>⭐⭐</td>
+                            </tr>
+                            <tr>
+                                <td>REPEATABLE READ</td>
+                                <td>✅ 방지</td>
+                                <td>✅ 방지</td>
+                                <td>⚠️ 가능</td>
+                                <td>⭐</td>
+                            </tr>
+                            <tr>
+                                <td>SERIALIZABLE</td>
+                                <td>✅ 방지</td>
+                                <td>✅ 방지</td>
+                                <td>✅ 방지</td>
+                                <td>느림</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">MySQL InnoDB 기본값: REPEATABLE READ, 대부분의 게임에 적합</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 락(Lock) 전략</h2>
+            <div class="conversation">
+                <div class="q">비관적 락(Pessimistic Lock)이란?</div>
+                <div class="a">
+                    <p>"충돌할 것"이라 가정하고, <strong>먼저 락을 걸고</strong> 작업합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">비관적 락 예시 (FOR UPDATE)</div>
+                        <pre><code>-- 아이템 강화 (동시 강화 방지)
+BEGIN TRANSACTION;
+
+-- 아이템 행 락 획득 (다른 트랜잭션은 대기)
+SELECT * FROM inventory
+WHERE item_id = 12345
+FOR UPDATE;
+
+-- 강화 로직 실행
+-- 강화석 확인, 성공/실패 판정 등...
+
+UPDATE inventory
+SET enchant_level = enchant_level + 1
+WHERE item_id = 12345;
+
+COMMIT;
+
+-- FOR UPDATE: 해당 행을 쓰기 락
+-- FOR SHARE: 해당 행을 읽기 락 (다른 쓰기 차단)</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">낙관적 락(Optimistic Lock)이란?</div>
+                <div class="a">
+                    <p>"충돌은 드물다"고 가정하고, <strong>커밋 시 충돌 감지</strong>합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">낙관적 락 예시 (Version)</div>
+                        <pre><code>-- 테이블에 version 컬럼 필요
+ALTER TABLE characters ADD COLUMN version INT DEFAULT 1;
+
+-- 읽기
+SELECT char_id, gold, version FROM characters
+WHERE char_id = 1;
+-- 결과: gold = 1000, version = 5
+
+-- 업데이트 (version 조건 포함)
+UPDATE characters
+SET gold = 900, version = version + 1
+WHERE char_id = 1 AND version = 5;
+
+-- 영향받은 행 수 확인
+-- 0이면 다른 트랜잭션이 먼저 수정함 → 재시도!
+
+if (affected_rows == 0) {
+    // 충돌 발생! 재시도 또는 에러 처리
+    throw OptimisticLockException();
+}</code></pre>
+                    </div>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>비관적 락</th>
+                                <th>낙관적 락</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>락 시점</td>
+                                <td>읽기 전</td>
+                                <td>쓰기 시</td>
+                            </tr>
+                            <tr>
+                                <td>충돌 시</td>
+                                <td>대기</td>
+                                <td>재시도</td>
+                            </tr>
+                            <tr>
+                                <td>적합</td>
+                                <td>충돌 많을 때</td>
+                                <td>충돌 드물 때</td>
+                            </tr>
+                            <tr>
+                                <td>게임 예시</td>
+                                <td>재화 거래, 강화</td>
+                                <td>캐릭터 정보 수정</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 데드락 방지</h2>
+            <div class="conversation">
+                <div class="q">데드락이 뭔가요?</div>
+                <div class="a">
+                    <p>두 트랜잭션이 <strong>서로의 락을 기다리며 영원히 멈추는</strong> 상황입니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+데드락 시나리오 (A↔B 거래):
+
+Transaction A              Transaction B
+──────────────────────────────────────────
+LOCK 아이템1 (A 소유)     LOCK 아이템2 (B 소유)
+     ✓                         ✓
+LOCK 아이템2 대기...      LOCK 아이템1 대기...
+     ↓                         ↓
+  B가 해제해야 함          A가 해제해야 함
+     ↓                         ↓
+   무한 대기               무한 대기
+           💀 DEADLOCK! 💀
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">데드락을 어떻게 방지하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">데드락 방지: 락 순서 고정</div>
+                        <pre><code>-- BAD: 락 순서가 일정하지 않음
+-- Transaction A: Lock(아이템1) → Lock(아이템2)
+-- Transaction B: Lock(아이템2) → Lock(아이템1)
+
+-- GOOD: 항상 ID 오름차순으로 락
+void TradeItems(int itemA, int itemB) {
+    int first = min(itemA, itemB);
+    int second = max(itemA, itemB);
+
+    BEGIN TRANSACTION;
+
+    SELECT * FROM inventory WHERE item_id = first FOR UPDATE;
+    SELECT * FROM inventory WHERE item_id = second FOR UPDATE;
+
+    // 거래 로직...
+
+    COMMIT;
+}
+
+-- 모든 트랜잭션이 같은 순서로 락 → 데드락 불가!</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">데드락 방지: 타임아웃</div>
+                        <pre><code>-- MySQL: 락 대기 타임아웃 설정
+SET innodb_lock_wait_timeout = 5;  -- 5초
+
+-- 5초 후에도 락 획득 못하면 에러 발생
+-- 에러: Lock wait timeout exceeded
+
+-- 애플리케이션에서 재시도
+try {
+    ExecuteTransaction();
+} catch (LockTimeoutException) {
+    // 잠시 후 재시도
+    sleep(random(100, 500));
+    ExecuteTransaction();
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 게임에서의 실전 패턴</h2>
+            <div class="conversation">
+                <div class="q">재화 차감은 어떻게 안전하게 하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">안전한 재화 차감</div>
+                        <pre><code>-- BAD: Race Condition 가능
+SELECT gold FROM characters WHERE char_id = 1;  -- 1000
+-- 다른 요청이 여기서 끼어들 수 있음!
+UPDATE characters SET gold = 1000 - 500 WHERE char_id = 1;
+
+-- GOOD: 원자적 업데이트 + 조건 체크
+UPDATE characters
+SET gold = gold - 500
+WHERE char_id = 1 AND gold >= 500;
+
+-- affected_rows 확인
+if (affected_rows == 0) {
+    // 골드 부족 또는 존재하지 않는 캐릭터
+    throw InsufficientGoldException();
+}
+
+-- BETTER: 트랜잭션 + 명시적 에러 처리
+BEGIN TRANSACTION;
+
+SELECT gold FROM characters WHERE char_id = 1 FOR UPDATE;
+
+if (gold < 500) {
+    ROLLBACK;
+    throw InsufficientGoldException();
+}
+
+UPDATE characters SET gold = gold - 500 WHERE char_id = 1;
+
+-- 로그 기록
+INSERT INTO gold_log (char_id, change_type, amount, balance_after)
+VALUES (1, 'spend', -500, gold - 500);
+
+COMMIT;</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">선착순 아이템 지급은 어떻게 하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">선착순 100명 아이템 지급</div>
+                        <pre><code>-- 이벤트 참여 테이블
+CREATE TABLE event_participants (
+    event_id INT,
+    char_id BIGINT,
+    participated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (event_id, char_id)
+);
+
+-- 참여 시도 (동시 요청 안전하게 처리)
+BEGIN TRANSACTION;
+
+-- 현재 참여자 수 확인 (락)
+SELECT COUNT(*) as cnt FROM event_participants
+WHERE event_id = 1
+FOR UPDATE;  -- 테이블 레벨 락 주의!
+
+if (cnt >= 100) {
+    ROLLBACK;
+    throw EventFullException();
+}
+
+-- 참여 등록 (중복 시 에러)
+INSERT INTO event_participants (event_id, char_id)
+VALUES (1, @char_id);
+
+-- 아이템 지급
+INSERT INTO inventory (char_id, item_template_id, quantity)
+VALUES (@char_id, 9999, 1);
+
+COMMIT;
+
+-- 더 효율적: INSERT 실패로 중복/수량 체크
+INSERT INTO event_participants (event_id, char_id)
+SELECT 1, @char_id
+WHERE (SELECT COUNT(*) FROM event_participants WHERE event_id = 1) < 100;
+
+-- affected_rows로 성공 여부 확인</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>ACID</strong>: 원자성, 일관성, 격리성, 영속성 - 트랜잭션의 4대 속성</li>
+                <li><strong>Lost Update</strong>: 동시 수정 시 한쪽 변경이 사라짐 → 락으로 방지</li>
+                <li><strong>비관적 락</strong>: FOR UPDATE로 먼저 락, 충돌 많을 때 적합</li>
+                <li><strong>낙관적 락</strong>: version 체크, 충돌 시 재시도, 충돌 드물 때 적합</li>
+                <li><strong>데드락 방지</strong>: 락 순서 고정, 타임아웃 설정</li>
+                <li><strong>안전한 차감</strong>: WHERE 조건에 잔액 체크 포함</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

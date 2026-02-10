@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redis 캐싱 전략 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <a href="../../database.html" class="back-link">← 목록으로</a>
+            <h1>DB가 느린데 어떻게 하지?</h1>
+            <p class="subtitle">Redis를 활용한 게임 서버 캐싱 전략</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 왜 캐싱이 필요한가</h2>
+            <div class="conversation">
+                <div class="q">DB만으로는 부족한가요?</div>
+                <div class="a">
+                    <p>DB 디스크 I/O는 느립니다. 메모리 캐시는 <strong>100배 이상 빠릅니다</strong>.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+응답 시간 비교:
+
+L1 Cache:         ~1ns     ████
+L2 Cache:         ~10ns    ████████
+RAM:              ~100ns   ████████████████████
+Redis (로컬):     ~0.5ms   ██████████████████████████████
+SSD:              ~0.5ms   ██████████████████████████████
+MySQL (인덱스):   ~5-10ms  █████████████████████████████████████████████████
+HDD:              ~10ms    █████████████████████████████████████████████████████
+
+Redis vs MySQL 차이:
+- 단순 조회: Redis 0.1ms, MySQL 5ms → 50배 차이
+- 동시 요청 1000개: Redis 처리 가능, MySQL 병목
+                        </pre>
+                    </div>
+                    <p class="highlight">게임에서 초당 수천 번 조회되는 데이터는 캐시에 넣어야 합니다.</p>
+                </div>
+
+                <div class="q">Redis란 무엇인가요?</div>
+                <div class="a">
+                    <p>Redis는 <strong>인메모리 데이터 스토어</strong>입니다. 키-값 저장소이면서 다양한 자료구조를 지원합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>자료구조</th>
+                                <th>용도</th>
+                                <th>게임 활용 예</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>String</td>
+                                <td>단순 값 저장</td>
+                                <td>세션, 설정, 캐시</td>
+                            </tr>
+                            <tr>
+                                <td>Hash</td>
+                                <td>필드-값 쌍</td>
+                                <td>유저 데이터, 캐릭터 정보</td>
+                            </tr>
+                            <tr>
+                                <td>List</td>
+                                <td>순서 있는 목록</td>
+                                <td>채팅 기록, 최근 활동</td>
+                            </tr>
+                            <tr>
+                                <td>Set</td>
+                                <td>중복 없는 집합</td>
+                                <td>온라인 유저 목록, 태그</td>
+                            </tr>
+                            <tr>
+                                <td>Sorted Set</td>
+                                <td>점수 기반 정렬</td>
+                                <td>랭킹, 리더보드</td>
+                            </tr>
+                            <tr>
+                                <td>Pub/Sub</td>
+                                <td>메시지 발행/구독</td>
+                                <td>실시간 알림, 채팅</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 캐싱 패턴</h2>
+            <div class="conversation">
+                <div class="q">Cache-Aside 패턴이란?</div>
+                <div class="a">
+                    <p>가장 기본적인 패턴입니다. 애플리케이션이 캐시를 직접 관리합니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+Cache-Aside (Lazy Loading) 패턴:
+
+[읽기]
+   App ──1. 캐시 조회──▶ Redis
+        ◀── 2a. HIT ───
+        ◀── 2b. MISS ──
+            │
+            └── 3. DB 조회 ──▶ MySQL
+            ◀── 4. 결과 ────
+            │
+            └── 5. 캐시 저장 ──▶ Redis
+
+[쓰기]
+   App ──1. DB 저장 ───▶ MySQL
+        │
+        └── 2. 캐시 삭제 ──▶ Redis (무효화)
+                        </pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">Cache-Aside 구현</div>
+                        <pre><code>class CharacterCache {
+    Redis redis;
+    MySQL mysql;
+    const int TTL = 3600;  // 1시간
+
+public:
+    Character GetCharacter(int64_t charId) {
+        string key = "char:" + std::to_string(charId);
+
+        // 1. 캐시 확인
+        auto cached = redis.Get(key);
+        if (cached) {
+            return Deserialize<Character>(*cached);  // HIT
+        }
+
+        // 2. DB 조회 (MISS)
+        auto character = mysql.Query<Character>(
+            "SELECT * FROM characters WHERE id = ?", charId);
+
+        if (character) {
+            // 3. 캐시에 저장
+            redis.SetEx(key, Serialize(*character), TTL);
+        }
+
+        return character;
+    }
+
+    void UpdateCharacter(int64_t charId, const Character& data) {
+        // 1. DB 업데이트
+        mysql.Execute(
+            "UPDATE characters SET ... WHERE id = ?", charId);
+
+        // 2. 캐시 무효화 (삭제)
+        string key = "char:" + std::to_string(charId);
+        redis.Del(key);
+
+        // 왜 업데이트가 아니라 삭제?
+        // - 삭제가 더 안전 (DB-캐시 불일치 방지)
+        // - 다음 조회 시 최신 데이터 로드
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">Write-Through와 Write-Behind는 뭔가요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+Write-Through:
+┌─────────────────────────────────────────────┐
+│   App ──▶ Cache ──▶ DB (동기 쓰기)          │
+│                                             │
+│   모든 쓰기가 캐시와 DB 둘 다 즉시 반영       │
+│   + 일관성 보장                              │
+│   - 쓰기 지연 증가                           │
+└─────────────────────────────────────────────┘
+
+Write-Behind (Write-Back):
+┌─────────────────────────────────────────────┐
+│   App ──▶ Cache ──(비동기)──▶ DB            │
+│                                             │
+│   캐시에만 먼저 쓰고, DB는 나중에 배치로     │
+│   + 쓰기 성능 좋음                           │
+│   - 캐시 장애 시 데이터 손실 위험            │
+└─────────────────────────────────────────────┘
+                        </pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">Write-Behind 구현</div>
+                        <pre><code>class WriteBackCache {
+    Redis redis;
+    std::queue<WriteOperation> writeQueue;
+    std::mutex queueMutex;
+
+public:
+    void UpdateCharacterStats(int64_t charId, const Stats& stats) {
+        string key = "char:" + std::to_string(charId);
+
+        // 1. 캐시에 즉시 반영
+        redis.HSet(key, "hp", stats.hp);
+        redis.HSet(key, "mp", stats.mp);
+        redis.HSet(key, "exp", stats.exp);
+
+        // 2. DB 쓰기 큐에 추가
+        {
+            std::lock_guard<std::mutex> lock(queueMutex);
+            writeQueue.push({charId, stats, std::chrono::steady_clock::now()});
+        }
+    }
+
+    // 백그라운드 스레드에서 실행
+    void FlushToDatabase() {
+        std::vector<WriteOperation> batch;
+
+        {
+            std::lock_guard<std::mutex> lock(queueMutex);
+            while (!writeQueue.empty() && batch.size() < BATCH_SIZE) {
+                batch.push_back(writeQueue.front());
+                writeQueue.pop();
+            }
+        }
+
+        if (!batch.empty()) {
+            // 배치로 DB 업데이트
+            mysql.BatchUpdate(batch);
+        }
+    }
+};
+
+// 주의: 서버 크래시 시 큐의 데이터 손실 가능
+// 해결책: Redis 영속화 + 복구 로직</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 게임별 캐싱 전략</h2>
+            <div class="conversation">
+                <div class="q">어떤 데이터를 캐시해야 하나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+캐시 대상 판단:
+
+                    읽기 빈도
+                       ↑
+                  높음 │  ★ 최적 캐시 대상
+                       │    - 캐릭터 기본 정보
+                       │    - 아이템 정의 테이블
+                       │    - 랭킹 상위권
+                       │
+                       │  ▲ 선택적 캐시
+                       │    - 인벤토리
+                       │    - 친구 목록
+                       │
+                  낮음 │  △ 캐시 불필요
+                       │    - 로그 데이터
+                       │    - 결제 기록
+                       └────────────────────────▶
+                          낮음              높음
+                               쓰기 빈도
+
+★ = 높은 읽기, 낮은 쓰기 → 반드시 캐시
+▲ = 읽기/쓰기 모두 높음 → TTL 짧게, 무효화 전략 중요
+△ = 낮은 읽기 → 캐시 효과 없음
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">온라인 상태와 세션은 어떻게 관리하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">세션 및 온라인 상태 관리</div>
+                        <pre><code>class SessionManager {
+    Redis redis;
+
+public:
+    // 로그인 시
+    void OnLogin(int64_t accountId, int64_t charId, string serverId) {
+        // 1. 세션 정보 저장
+        string sessionKey = "session:" + std::to_string(accountId);
+        redis.HSet(sessionKey, {
+            {"char_id", std::to_string(charId)},
+            {"server_id", serverId},
+            {"login_time", std::to_string(time(nullptr))},
+        });
+        redis.Expire(sessionKey, 86400);  // 24시간 TTL
+
+        // 2. 온라인 유저 Set에 추가
+        redis.SAdd("online:" + serverId, std::to_string(charId));
+
+        // 3. 전체 온라인 수 증가
+        redis.Incr("stats:online_count");
+    }
+
+    // 로그아웃/연결 끊김 시
+    void OnLogout(int64_t accountId, int64_t charId, string serverId) {
+        redis.Del("session:" + std::to_string(accountId));
+        redis.SRem("online:" + serverId, std::to_string(charId));
+        redis.Decr("stats:online_count");
+    }
+
+    // 하트비트 (연결 유지 확인)
+    void Heartbeat(int64_t accountId) {
+        string sessionKey = "session:" + std::to_string(accountId);
+        redis.Expire(sessionKey, 86400);  // TTL 갱신
+        redis.HSet(sessionKey, "last_active", std::to_string(time(nullptr)));
+    }
+
+    // 온라인 유저 수 조회
+    int GetOnlineCount() {
+        auto result = redis.Get("stats:online_count");
+        return result ? std::stoi(*result) : 0;
+    }
+
+    // 특정 서버의 온라인 유저 목록
+    std::vector<int64_t> GetOnlineUsers(string serverId) {
+        return redis.SMembers("online:" + serverId);
+    }
+
+    // 중복 로그인 체크
+    bool IsAlreadyLoggedIn(int64_t accountId) {
+        return redis.Exists("session:" + std::to_string(accountId));
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 캐시 무효화 전략</h2>
+            <div class="conversation">
+                <div class="q">캐시 무효화는 왜 어렵나요?</div>
+                <div class="a">
+                    <div class="analogy-box">
+                        <strong>🎯 Phil Karlton의 명언</strong>
+                        <p>"컴퓨터 과학에서 어려운 문제는 두 가지다: 캐시 무효화와 네이밍."</p>
+                        <p>캐시와 DB의 불일치는 심각한 버그를 만듭니다.</p>
+                    </div>
+                    <div class="visual-section">
+                        <pre class="diagram">
+캐시 불일치 문제:
+
+Timeline:
+t=0: Cache: gold=1000, DB: gold=1000 (일치 ✓)
+
+t=1: 서버A가 DB 업데이트 (gold=900)
+     Cache: gold=1000, DB: gold=900 (불일치!)
+
+t=2: 서버B가 캐시 조회 → gold=1000 (잘못된 값!)
+
+해결 방법:
+1. TTL 설정 (시간 지나면 자동 만료)
+2. 업데이트 시 캐시 삭제
+3. 이벤트 기반 무효화 (Pub/Sub)
+                        </pre>
+                    </div>
+                </div>
+
+                <div class="q">분산 환경에서 캐시 무효화는 어떻게 하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">Pub/Sub 기반 캐시 무효화</div>
+                        <pre><code>class DistributedCacheInvalidator {
+    Redis redis;
+
+public:
+    // 데이터 업데이트 시 (모든 서버에 알림)
+    void InvalidateCharacter(int64_t charId) {
+        // 1. 로컬 캐시 삭제
+        redis.Del("char:" + std::to_string(charId));
+
+        // 2. 다른 서버에 알림 (Pub/Sub)
+        redis.Publish("cache:invalidate", "char:" + std::to_string(charId));
+    }
+
+    // 각 서버에서 구독 (시작 시 실행)
+    void SubscribeInvalidation() {
+        redis.Subscribe("cache:invalidate", [this](string key) {
+            // 로컬 메모리 캐시도 삭제
+            localCache.Remove(key);
+            Log("Cache invalidated: " + key);
+        });
+    }
+};
+
+// 더 정교한 방법: Redis Keyspace Notifications
+// Redis 설정에서 활성화 필요
+// 키 변경/삭제 시 자동으로 이벤트 발생
+
+// redis.conf:
+// notify-keyspace-events KEA
+
+class KeyspaceSubscriber {
+public:
+    void Subscribe() {
+        // __keyevent@0__:del → 키 삭제 이벤트
+        // __keyevent@0__:expired → 키 만료 이벤트
+        redis.PSubscribe("__keyevent@0__:*", [](string event, string key) {
+            HandleKeyEvent(event, key);
+        });
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 캐시 관련 문제들</h2>
+            <div class="conversation">
+                <div class="q">Cache Stampede(캐시 스탬피드)란?</div>
+                <div class="a">
+                    <p>캐시가 만료될 때 수많은 요청이 동시에 DB로 몰리는 현상입니다.</p>
+                    <div class="visual-section">
+                        <pre class="diagram">
+Cache Stampede:
+
+캐시 만료 시점:
+    Request 1 ─┬─▶ 캐시 MISS ─▶ DB 쿼리 ─┐
+    Request 2 ─┤─▶ 캐시 MISS ─▶ DB 쿼리 ─┤
+    Request 3 ─┤─▶ 캐시 MISS ─▶ DB 쿼리 ─┼─▶ DB 과부하!
+    Request 4 ─┤─▶ 캐시 MISS ─▶ DB 쿼리 ─┤
+    Request 5 ─┘─▶ 캐시 MISS ─▶ DB 쿼리 ─┘
+
+해결책: Lock 또는 Stale-While-Revalidate
+                        </pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">Stampede 방지: 분산 락</div>
+                        <pre><code>class StampedeProtectedCache {
+    Redis redis;
+
+public:
+    Character GetCharacter(int64_t charId) {
+        string key = "char:" + std::to_string(charId);
+        string lockKey = "lock:" + key;
+
+        // 1. 캐시 확인
+        auto cached = redis.Get(key);
+        if (cached) {
+            return Deserialize<Character>(*cached);
+        }
+
+        // 2. 락 획득 시도 (첫 번째 요청만 성공)
+        bool gotLock = redis.SetNx(lockKey, "1", 5);  // 5초 TTL
+
+        if (gotLock) {
+            // 락 획득 성공 → DB 조회
+            auto character = mysql.Query<Character>(...);
+
+            // 캐시 저장
+            redis.SetEx(key, Serialize(character), TTL);
+
+            // 락 해제
+            redis.Del(lockKey);
+
+            return character;
+        } else {
+            // 락 획득 실패 → 잠시 대기 후 재시도
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            return GetCharacter(charId);  // 재귀 호출
+        }
+    }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">Cache Penetration(캐시 침투)란?</div>
+                <div class="a">
+                    <p>존재하지 않는 데이터를 계속 요청하여 DB를 직접 때리는 공격입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Cache Penetration 방지</div>
+                        <pre><code>class PenetrationProtectedCache {
+public:
+    Character* GetCharacter(int64_t charId) {
+        string key = "char:" + std::to_string(charId);
+
+        auto cached = redis.Get(key);
+        if (cached) {
+            if (*cached == "NULL") {
+                return nullptr;  // 없는 데이터임을 캐시에서 확인
+            }
+            return Deserialize<Character>(*cached);
+        }
+
+        auto character = mysql.Query<Character>(...);
+
+        if (character) {
+            redis.SetEx(key, Serialize(*character), TTL);
+        } else {
+            // 없는 데이터도 캐시! (짧은 TTL)
+            redis.SetEx(key, "NULL", 60);  // 1분만 캐시
+        }
+
+        return character;
+    }
+};
+
+// 추가 방어: Bloom Filter
+// 존재하지 않는 ID를 빠르게 걸러냄
+class BloomFilterCache {
+    BloomFilter existingIds;  // 메모리에 유지
+
+public:
+    Character* GetCharacter(int64_t charId) {
+        // Bloom Filter로 빠른 체크
+        if (!existingIds.MightContain(charId)) {
+            return nullptr;  // 확실히 없음
+        }
+
+        // 이후 일반 캐시 로직...
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: Redis 클러스터와 고가용성</h2>
+            <div class="conversation">
+                <div class="q">Redis가 죽으면 어떻게 되나요?</div>
+                <div class="a">
+                    <div class="visual-section">
+                        <pre class="diagram">
+Redis 고가용성 구성:
+
+1. Replication (복제)
+   ┌─────────┐
+   │ Master  │───복제───▶ Slave 1
+   │ (쓰기)  │───복제───▶ Slave 2
+   └─────────┘
+   - Master 장애 시 Slave가 승격
+
+2. Sentinel (감시)
+   ┌──────────────────────────────────┐
+   │         Sentinel 클러스터         │
+   │    (Master 모니터링, 자동 전환)    │
+   └──────────────────────────────────┘
+            │
+            ▼
+   Master ◀───▶ Slave
+
+3. Cluster (분산)
+   ┌────────┐ ┌────────┐ ┌────────┐
+   │ Node 1 │ │ Node 2 │ │ Node 3 │
+   │ 0-5460 │ │5461-10922│ │10923-16383│
+   └────────┘ └────────┘ └────────┘
+   - 해시 슬롯으로 데이터 분산
+   - 노드 추가로 수평 확장
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Cache-Aside</strong>: 가장 기본적인 패턴, 읽기 시 캐시 먼저 확인</li>
+                <li><strong>Write-Behind</strong>: 쓰기 성능 중요할 때, 데이터 손실 위험 있음</li>
+                <li><strong>TTL 설정</strong>: 모든 캐시 키에 만료 시간 필수</li>
+                <li><strong>무효화 전략</strong>: 업데이트 시 삭제, Pub/Sub으로 분산 환경 동기화</li>
+                <li><strong>Stampede 방지</strong>: 분산 락으로 동시 DB 접근 방지</li>
+                <li><strong>Penetration 방지</strong>: 없는 데이터도 캐시 (NULL 캐싱)</li>
+                <li><strong>고가용성</strong>: Replication + Sentinel 또는 Cluster 구성</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>
