@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOTS / ECS 아키텍처 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+
+        <header class="content-header">
+            <h1>GameObject를 버리면 뭘 얻는가?</h1>
+            <p class="subtitle">DOTS/ECS로 대규모 시뮬레이션 구현하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: OOP의 한계와 DOD의 등장</h2>
+            <div class="conversation">
+                <div class="q">GameObject와 MonoBehaviour로 충분하지 않나요?</div>
+                <div class="a">
+                    <p>수백 개의 오브젝트까지는 문제없습니다. 하지만 수만~수십만 개의 유닛을 시뮬레이션해야 한다면? 전통적인 OOP 방식은 심각한 성능 병목에 부딪힙니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>OOP는 서랍장입니다. 각 서랍(오브젝트)에 양말, 속옷, 연필, 충전기가 뒤섞여 있습니다. "양말만 전부 꺼내"라고 하면 모든 서랍을 뒤져야 합니다.</p>
+                        <p>DOD(Data-Oriented Design)는 칸이 나뉜 수납장입니다. 양말은 양말끼리, 속옷은 속옷끼리 모여 있어서 "양말만 전부" 가져오기가 훨씬 빠릅니다.</p>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th>OOP (GameObject)</th><th>DOD (ECS)</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>메모리 배치</td><td>오브젝트별로 흩어짐</td><td>같은 타입끼리 연속 배치</td></tr>
+                            <tr><td>캐시 효율</td><td>Cache Miss 빈번</td><td>Cache Hit 극대화</td></tr>
+                            <tr><td>오브젝트 수</td><td>수백~수천 개</td><td>수만~수십만 개</td></tr>
+                            <tr><td>멀티스레드</td><td>수동 관리</td><td>자동 병렬화</td></tr>
+                            <tr><td>Burst 호환</td><td>제한적</td><td>완벽 호환</td></tr>
+                        </tbody>
+                    </table>
+
+                    <p class="highlight">DOTS(Data-Oriented Technology Stack)는 ECS + Job System + Burst Compiler를 결합한 Unity의 고성능 프레임워크입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Entity, Component, System</h2>
+            <div class="conversation">
+                <div class="q">ECS의 세 가지 핵심 요소는 무엇인가요?</div>
+                <div class="a">
+                    <ul>
+                        <li><strong>Entity</strong>: 고유 ID에 불과합니다. GameObject처럼 기능이 없고, 단순히 "이 컴포넌트 조합이 존재한다"는 식별자입니다.</li>
+                        <li><strong>Component</strong>: 순수한 데이터만 담은 struct입니다. 로직이 없습니다.</li>
+                        <li><strong>System</strong>: 특정 Component 조합을 가진 Entity들을 처리하는 로직입니다.</li>
+                    </ul>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Component 정의 (순수 데이터)</div>
+                        <pre><code>using Unity.Entities;
+using Unity.Mathematics;
+
+// 위치 데이터
+public struct Position : IComponentData
+{
+    public float3 Value;
+}
+
+// 이동 속도 데이터
+public struct MoveSpeed : IComponentData
+{
+    public float Value;
+}
+
+// 체력 데이터
+public struct Health : IComponentData
+{
+    public int Current;
+    public int Max;
+}
+
+// 태그 컴포넌트 (데이터 없이 "표시"만)
+public struct EnemyTag : IComponentData { }</code></pre>
+                    </div>
+                    <p class="key-point">Component는 struct이고 로직이 없습니다. "이 Entity는 위치가 있고, 이동 속도가 있고, 체력이 있다"는 것을 데이터 조합으로 표현합니다.</p>
+                </div>
+
+                <div class="q">System은 어떻게 작성하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - System 정의</div>
+                        <pre><code>using Unity.Entities;
+using Unity.Transforms;
+using Unity.Burst;
+
+[BurstCompile]
+public partial struct MoveForwardSystem : ISystem
+{
+    [BurstCompile]
+    public void OnUpdate(ref SystemState state)
+    {
+        float dt = SystemAPI.Time.DeltaTime;
+
+        // Position과 MoveSpeed를 가진 모든 Entity를 순회
+        foreach (var (transform, speed)
+            in SystemAPI.Query&lt;RefRW&lt;LocalTransform&gt;,
+                                RefRO&lt;MoveSpeed&gt;&gt;())
+        {
+            transform.ValueRW.Position +=
+                new float3(0, 0, speed.ValueRO.Value * dt);
+        }
+    }
+}
+
+// 적만 처리하는 System
+[BurstCompile]
+public partial struct EnemyDamageSystem : ISystem
+{
+    [BurstCompile]
+    public void OnUpdate(ref SystemState state)
+    {
+        foreach (var (health, entity)
+            in SystemAPI.Query&lt;RefRW&lt;Health&gt;&gt;()
+                        .WithAll&lt;EnemyTag&gt;()
+                        .WithEntityAccess())
+        {
+            if (health.ValueRO.Current &lt;= 0)
+            {
+                state.EntityManager.DestroyEntity(entity);
+            }
+        }
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Archetype과 Chunk — 성능의 비밀</h2>
+            <div class="conversation">
+                <div class="q">ECS가 빠른 진짜 이유는 무엇인가요?</div>
+                <div class="a">
+                    <p>핵심은 <strong>Archetype</strong>과 <strong>Chunk</strong> 기반 메모리 레이아웃입니다.</p>
+
+                    <p class="highlight">Archetype은 동일한 Component 조합을 가진 Entity의 "타입"입니다. 같은 Archetype의 Entity들은 메모리에서 연속으로 배치됩니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Archetype A</div>
+                                <div class="flow-box__items">Position + MoveSpeed + Health</div>
+                            </div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Archetype B</div>
+                                <div class="flow-box__items">Position + MoveSpeed</div>
+                            </div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Archetype C</div>
+                                <div class="flow-box__items">Position + Health + EnemyTag</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Chunk 메모리 레이아웃 (16KB)</div>
+                            <div class="pipeline-bar pb-gbuffer">
+                                <span>Position[0..N]</span><span>MoveSpeed[0..N]</span><span>Health[0..N]</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">캐시 라인 접근</div>
+                            <div class="pipeline-bar pb-light">
+                                <span>연속 읽기 &rarr; Cache Hit!</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p>각 Chunk는 16KB 크기의 메모리 블록으로, 같은 Archetype의 Component 데이터가 배열처럼 연속으로 저장됩니다. CPU 캐시 라인에 딱 맞아서 Cache Miss가 거의 발생하지 않습니다.</p>
+                </div>
+
+                <div class="q">Component를 추가/제거하면 어떻게 되나요?</div>
+                <div class="a">
+                    <p class="warning">주의: Entity에 Component를 추가하거나 제거하면 Archetype이 변경되어 Entity가 다른 Chunk로 이동합니다. 이를 "구조적 변경(Structural Change)"이라 하며, 비용이 큽니다.</p>
+                    <p>런타임에 빈번한 구조적 변경은 피해야 합니다. 대신 Enable/Disable Component나 Shared Component 전환을 고려하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Entity 생성과 관리</h2>
+            <div class="conversation">
+                <div class="q">Entity는 어떻게 생성하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - Entity 생성</div>
+                        <pre><code>public partial struct SpawnSystem : ISystem
+{
+    public void OnUpdate(ref SystemState state)
+    {
+        var ecb = new EntityCommandBuffer(Allocator.Temp);
+
+        // 단일 Entity 생성
+        Entity entity = ecb.CreateEntity();
+        ecb.AddComponent(entity, new Position { Value = float3.zero });
+        ecb.AddComponent(entity, new MoveSpeed { Value = 5f });
+        ecb.AddComponent(entity, new Health { Current = 100, Max = 100 });
+        ecb.AddComponent(entity, new EnemyTag());
+
+        ecb.Playback(state.EntityManager);
+        ecb.Dispose();
+    }
+}
+
+// 대량 생성 (프리팹 기반)
+public partial struct MassSpawnSystem : ISystem
+{
+    public void OnUpdate(ref SystemState state)
+    {
+        // Entity 프리팹에서 1만 개 복제
+        var prefab = SystemAPI.GetSingleton&lt;EnemyPrefab&gt;().Value;
+
+        state.EntityManager.Instantiate(prefab, 10000,
+                                         Allocator.Temp);
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">EntityCommandBuffer(ECB)를 사용하면 구조적 변경을 모아서 한 번에 처리할 수 있어 성능이 좋습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 성능 비교 — GameObject vs ECS</h2>
+            <div class="conversation">
+                <div class="q">실제로 얼마나 차이가 나나요?</div>
+                <div class="a">
+                    <p>1만 개의 오브젝트를 매 프레임 이동시키는 시나리오 비교입니다:</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>지표</th><th>GameObject + MonoBehaviour</th><th>DOTS ECS + Burst</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>오브젝트 수</td><td>10,000</td><td>10,000</td></tr>
+                            <tr><td>프레임 시간</td><td>~33ms (30fps)</td><td>~0.5ms (2000fps+)</td></tr>
+                            <tr><td>메모리</td><td>~400MB</td><td>~20MB</td></tr>
+                            <tr><td>GC 할당</td><td>매 프레임 발생</td><td>0 (Zero GC)</td></tr>
+                            <tr><td>CPU 코어 활용</td><td>1개</td><td>전체 코어</td></tr>
+                        </tbody>
+                    </table>
+
+                    <p class="highlight">DOTS는 단순 이동 같은 작업에서 60~100배 이상 빠를 수 있습니다. 특히 Burst Compiler와 결합하면 SIMD 벡터화까지 적용되어 극한의 성능을 발휘합니다.</p>
+                </div>
+
+                <div class="q">그러면 모든 프로젝트에서 ECS를 써야 하나요?</div>
+                <div class="a">
+                    <p>아닙니다. ECS는 만능이 아닙니다:</p>
+                    <ul>
+                        <li><strong>학습 비용</strong>이 높고, 기존 Unity 워크플로우와 완전히 다릅니다</li>
+                        <li>복잡한 상태 머신, AI 로직은 ECS로 구현하기 <strong>까다롭습니다</strong></li>
+                        <li>UI, 에디터 통합 등 기존 기능과의 <strong>호환성 제한</strong></li>
+                        <li>소규모 프로젝트에서는 <strong>오버엔지니어링</strong></li>
+                    </ul>
+                    <p class="key-point">대규모 시뮬레이션(RTS 유닛, 탄막, 파티클 시뮬레이션)에 ECS를 적용하고, 나머지는 전통적인 방식을 유지하는 하이브리드 접근이 현실적입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 하이브리드 접근 — 공존의 기술</h2>
+            <div class="conversation">
+                <div class="q">기존 GameObject와 ECS를 함께 쓸 수 있나요?</div>
+                <div class="a">
+                    <p>가능합니다. Unity는 GameObject를 ECS Entity로 변환(Baking)하는 워크플로우를 제공합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Baker를 사용한 변환</div>
+                        <pre><code>// MonoBehaviour (에디터용 오서링 컴포넌트)
+public class EnemyAuthoring : MonoBehaviour
+{
+    public float moveSpeed;
+    public int maxHealth;
+}
+
+// Baker (GameObject → Entity 변환)
+public class EnemyBaker : Baker&lt;EnemyAuthoring&gt;
+{
+    public override void Bake(EnemyAuthoring authoring)
+    {
+        var entity = GetEntity(TransformUsageFlags.Dynamic);
+
+        AddComponent(entity, new MoveSpeed
+        {
+            Value = authoring.moveSpeed
+        });
+        AddComponent(entity, new Health
+        {
+            Current = authoring.maxHealth,
+            Max = authoring.maxHealth
+        });
+        AddComponent(entity, new EnemyTag());
+    }
+}</code></pre>
+                    </div>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">에디터</div>
+                                <div class="flow-box__items">GameObject + Authoring</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Baking</div>
+                                <div class="flow-box__items">Baker가 변환</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">런타임</div>
+                                <div class="flow-box__items">Entity + Components</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="key-point">에디터에서는 익숙한 GameObject 워크플로우로 작업하고, 런타임에서는 ECS의 성능을 누리는 것이 하이브리드 접근의 핵심입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>ECS</strong>는 Entity(ID) + Component(데이터) + System(로직) 분리로 캐시 효율을 극대화한다</li>
+                <li><strong>Archetype과 Chunk</strong> 기반 메모리 레이아웃이 압도적 성능의 핵심이다</li>
+                <li>구조적 변경(Component 추가/제거)은 <strong>비용이 크므로</strong> EntityCommandBuffer로 모아서 처리한다</li>
+                <li>모든 프로젝트에 ECS가 필요한 것은 아니다 — <strong>대규모 시뮬레이션</strong>에 집중 적용한다</li>
+                <li><strong>Baker</strong>를 활용한 하이브리드 접근으로 에디터 편의성과 런타임 성능을 모두 잡을 수 있다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>수백만 삼각형에서 광선이 어디에 닿을까?</h1>
             <p class="subtitle">BVH로 레이트레이싱 가속하기</p>
         </header>
@@ -26,19 +28,31 @@
                     <p>레이트레이싱에서 광선-물체 교차 검사를 가속화하는 핵심 자료구조입니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-BVH 구조
-
-레벨 0:  [───────────────────── 전체 씬 ─────────────────────]
-                            │
-레벨 1:      [──── 왼쪽 절반 ────]    [──── 오른쪽 절반 ────]
-                   │                         │
-레벨 2:      [물체A] [물체B]            [물체C] [물체D]
-                         │
-레벨 3:              [삼각형1~100]
-
-광선이 "전체 씬" 바운딩 박스에 안 맞으면 → 모든 하위 검사 스킵!
-                        </pre>
+                        <div class="hierarchy-diagram">
+                            <div class="hierarchy-item hierarchy-item--root">레벨 0: 전체 씬</div>
+                            <div class="hierarchy-children">
+                                <div class="hierarchy-item">
+                                    레벨 1: 왼쪽 절반
+                                    <div class="hierarchy-children">
+                                        <div class="hierarchy-item">물체A</div>
+                                        <div class="hierarchy-item">
+                                            물체B
+                                            <div class="hierarchy-children">
+                                                <div class="hierarchy-item">삼각형 1~100</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="hierarchy-item">
+                                    레벨 1: 오른쪽 절반
+                                    <div class="hierarchy-children">
+                                        <div class="hierarchy-item">물체C</div>
+                                        <div class="hierarchy-item">물체D</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">광선이 "전체 씬" 바운딩 박스에 안 맞으면 &rarr; 모든 하위 검사 스킵!</p>
                     </div>
                 </div>
 
@@ -73,28 +87,22 @@ BVH 구조
                 </div>
 
                 <div class="visual-section">
-                    <pre class="diagram">
-분할 방법 비교
-
-중앙 분할 (Midpoint)         동등 분할 (Equal Counts)
-
-┌─────────┬─────────┐       ┌───────────┬───────┐
-│ ●●      │         │       │ ●●●       │ ●●●   │
-│   ●     │   ●●●   │       │           │       │
-│         │    ●    │       │           │       │
-└─────────┴─────────┘       └───────────┴───────┘
-
-공간 중앙에서 분할            물체 3개씩 분할
-불균형 가능                  균형 트리
-
-SAH (Surface Area Heuristic)
-
-┌────────┬───────────────┐
-│ ●●●    │               │
-│        │   ●●          │  ← 표면적 기반 비용 최소화
-│        │               │
-└────────┴───────────────┘
-                    </pre>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">중앙 분할 (Midpoint)</div>
+                                <div class="flow-box__items">공간 중앙에서 분할<br>불균형 가능</div>
+                            </div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">동등 분할 (Equal Counts)</div>
+                                <div class="flow-box__items">물체 수를 균등하게 분할<br>균형 트리</div>
+                            </div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">SAH (Surface Area Heuristic)</div>
+                                <div class="flow-box__items">표면적 기반 비용 최소화<br>최적 분할점 탐색</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>

@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
 
         <header class="content-header">
             <h1>빛이 벽을 타고 퍼지는 마법</h1>
@@ -46,39 +46,38 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-┌─────────────────────────────────────────────────────────┐
-│                    Lumen 파이프라인                      │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  1. Surface Cache 생성                                  │
-│     ┌─────────────────────────────────────────────┐    │
-│     │ 메시 표면의 Material 정보를 캐시            │    │
-│     │ (Albedo, Normal, Emissive 등)               │    │
-│     └─────────────────────────────────────────────┘    │
-│                         │                               │
-│                         ▼                               │
-│  2. Ray Tracing (광선 추적)                             │
-│     ┌─────────────────────────────────────────────┐    │
-│     │ 화면 픽셀에서 광선 발사                     │    │
-│     │ → SDF / Mesh Card에서 히트 검출             │    │
-│     └─────────────────────────────────────────────┘    │
-│                         │                               │
-│                         ▼                               │
-│  3. Radiance Cache                                      │
-│     ┌─────────────────────────────────────────────┐    │
-│     │ 월드 공간에 프로브 배치                     │    │
-│     │ 주변 조명 정보 저장 및 보간                 │    │
-│     └─────────────────────────────────────────────┘    │
-│                         │                               │
-│                         ▼                               │
-│  4. Final Gather + Denoising                            │
-│     ┌─────────────────────────────────────────────┐    │
-│     │ 최종 결과 합성 및 노이즈 제거               │    │
-│     └─────────────────────────────────────────────┘    │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box">
+                        <div class="flow-box__title">1. Surface Cache 생성</div>
+                        <div class="flow-box__items">
+                            <p>메시 표면의 Material 정보를 캐시</p>
+                            <p>(Albedo, Normal, Emissive 등)</p>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-box">
+                        <div class="flow-box__title">2. Ray Tracing (광선 추적)</div>
+                        <div class="flow-box__items">
+                            <p>화면 픽셀에서 광선 발사</p>
+                            <p>SDF / Mesh Card에서 히트 검출</p>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-box">
+                        <div class="flow-box__title">3. Radiance Cache</div>
+                        <div class="flow-box__items">
+                            <p>월드 공간에 프로브 배치</p>
+                            <p>주변 조명 정보 저장 및 보간</p>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-box flow-box--highlight">
+                        <div class="flow-box__title">4. Final Gather + Denoising</div>
+                        <div class="flow-box__items">
+                            <p>최종 결과 합성 및 노이즈 제거</p>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Lumen의 처리 단계</p>
             </div>
         </section>
@@ -200,22 +199,25 @@ float TraceSDF(Ray ray) {
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-        ┌─────────────────────────────────────┐
-        │        Radiance Cache 구조          │
-        │                                     │
-        │   ●─────●─────●─────●              │
-        │   │     │     │     │              │
-        │   ●─────●─────●─────●    ● = 프로브 │
-        │   │     │     │     │              │
-        │   ●─────●─────●─────●              │
-        │         ↓                          │
-        │   각 프로브에 저장되는 정보:        │
-        │   • 6방향 조명 색상                 │
-        │   • 스카이 가시성                   │
-        │   • 이전 프레임 히스토리            │
-        └─────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box">
+                        <div class="flow-box__title">Radiance Cache 구조</div>
+                        <div class="flow-box__items">
+                            <div style="display:grid; grid-template-columns:repeat(4,40px); gap:8px; justify-content:center; padding:12px 0;">
+                                <span style="text-align:center;">●</span><span style="text-align:center;">●</span><span style="text-align:center;">●</span><span style="text-align:center;">●</span>
+                                <span style="text-align:center;">●</span><span style="text-align:center;">●</span><span style="text-align:center;">●</span><span style="text-align:center;">●</span>
+                                <span style="text-align:center;">●</span><span style="text-align:center;">●</span><span style="text-align:center;">●</span><span style="text-align:center;">●</span>
+                            </div>
+                            <p style="text-align:center; color:#aaa; font-size:0.85em;">● = 프로브 (3D 공간에 균등 배치)</p>
+                            <p><strong>각 프로브에 저장되는 정보:</strong></p>
+                            <ul>
+                                <li>6방향 조명 색상</li>
+                                <li>스카이 가시성</li>
+                                <li>이전 프레임 히스토리</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">3D 공간에 배치된 Radiance Cache 프로브</p>
             </div>
         </section>

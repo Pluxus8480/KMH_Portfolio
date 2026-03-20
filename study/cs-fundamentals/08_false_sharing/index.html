@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"스레드를 늘렸는데 더 느려졌어요"</h1>
             <p class="subtitle">멀티코어의 숨은 적, False Sharing</p>
         </header>
@@ -27,29 +29,26 @@
                     <p>서로 다른 데이터지만 <strong>같은 캐시 라인</strong>에 있어서 발생하는 성능 저하입니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    False Sharing 발생 상황                           │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Cache Line (64 bytes)                                             │
-│   ┌────────────────────────────────────────────────────────────┐   │
-│   │ counter[0] │ counter[1] │ counter[2] │ counter[3] │ ...    │   │
-│   │  (Core 0)  │  (Core 1)  │  (Core 2)  │  (Core 3)  │        │   │
-│   └────────────────────────────────────────────────────────────┘   │
-│         ↓            ↓            ↓            ↓                    │
-│      Core 0       Core 1       Core 2       Core 3                  │
-│                                                                     │
-│   Core 0이 counter[0]을 수정하면:                                   │
-│   → 전체 캐시 라인이 "Invalidate"됨                                 │
-│   → Core 1, 2, 3의 캐시가 무효화됨                                  │
-│   → Core 1이 counter[1]을 읽으려면 메모리에서 다시 로드!            │
-│                                                                     │
-│   실제로는 공유하지 않는 데이터인데                                  │
-│   캐시 라인 단위로 동기화되어 성능 저하 발생!                        │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Cache Line (64 bytes) - 하나의 캐시 라인에 모두 존재</div>
+                                <div class="pipeline-bar pb-shadow"><span>counter[0]<br>(Core 0)</span><span>counter[1]<br>(Core 1)</span><span>counter[2]<br>(Core 2)</span><span>counter[3]<br>(Core 3)</span><span>...</span></div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Core 0이 counter[0] 수정</div>
+                                    <div class="flow-box__items">전체 캐시 라인 "Invalidate"</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box" style="border-color:#e74c3c">
+                                    <div class="flow-box__title">Core 1, 2, 3 캐시 무효화</div>
+                                    <div class="flow-box__items">counter[1]을 읽으려면<br>메모리에서 다시 로드!</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">실제로는 공유하지 않는 데이터인데 캐시 라인 단위로 동기화되어 성능 저하 발생!</p>
                     </div>
 
                     <p class="highlight">True Sharing: 같은 데이터 접근<br>False Sharing: 다른 데이터지만 같은 캐시 라인</p>
@@ -110,35 +109,40 @@ void incrementGood(GoodCounters& c, int idx) {
                     <p><strong>캐시 일관성(Cache Coherence)</strong>을 유지하기 위해서입니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    MESI 프로토콜 상태                                │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Modified (M): 이 캐시만 가지고 있고, 수정됨                        │
-│                 메모리와 다른 값                                     │
-│                                                                     │
-│   Exclusive (E): 이 캐시만 가지고 있고, 깨끗함                      │
-│                  메모리와 같은 값                                    │
-│                                                                     │
-│   Shared (S): 여러 캐시가 가지고 있고, 깨끗함                       │
-│               읽기만 가능                                           │
-│                                                                     │
-│   Invalid (I): 무효 (사용 불가)                                     │
-│                                                                     │
-│   상태 전이 예시 (False Sharing):                                   │
-│                                                                     │
-│   Core 0 (counter[0])         Core 1 (counter[1])                  │
-│   ────────────────────        ────────────────────                  │
-│   1. Read  → S                1. Read  → S                         │
-│   2. Write → M                   (S → I) 무효화!                   │
-│                               3. Read  → 메모리에서 다시 로드       │
-│      (M → S)                     → S                               │
-│   4. Write → M                   (S → I) 무효화!                   │
-│   ...무한 반복...                                                   │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">M (Modified)</div>
+                                    <div class="flow-box__items">이 캐시만 보유, 수정됨<br>메모리와 다른 값</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">E (Exclusive)</div>
+                                    <div class="flow-box__items">이 캐시만 보유, 깨끗함<br>메모리와 같은 값</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">S (Shared)</div>
+                                    <div class="flow-box__items">여러 캐시 보유, 깨끗함<br>읽기만 가능</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">I (Invalid)</div>
+                                    <div class="flow-box__items">무효 (사용 불가)</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Core 0 (counter[0])</div>
+                                    <div class="flow-box__items">1. Read &rarr; S<br>2. Write &rarr; M<br>(M &rarr; S)<br>4. Write &rarr; M<br>...무한 반복</div>
+                                </div>
+                                <div class="flow-arrow">&harr;</div>
+                                <div class="flow-box" style="border-color:#e74c3c">
+                                    <div class="flow-box__title">Core 1 (counter[1])</div>
+                                    <div class="flow-box__items">1. Read &rarr; S<br>(S &rarr; I) 무효화!<br>3. Read &rarr; 메모리에서 재로드 &rarr; S<br>(S &rarr; I) 무효화!<br>...무한 반복</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">False Sharing = 캐시 라인 핑퐁 (Cache Line Ping-Pong)</p>
                     </div>
 
                     <p class="key-point">False Sharing = 캐시 라인 핑퐁 (Cache Line Ping-Pong)</p>

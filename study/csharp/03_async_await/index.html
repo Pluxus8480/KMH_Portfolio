@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>async/await | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>기다리는 동안 딴 짓을 한다?</h1>
+            <p class="subtitle">async/await의 컴파일러 마법과 내부 상태 머신</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 왜 비동기가 필요한가</h2>
+            <div class="conversation">
+                <div class="q">동기 코드로 네트워크 요청을 하면 어떤 문제가 생기나요?</div>
+                <div class="a">
+                    <p>동기 방식은 작업이 끝날 때까지 현재 스레드가 <strong>멈춥니다(블로킹)</strong>. 게임 서버에서 DB 조회를 동기로 하면 그 동안 다른 플레이어의 요청을 처리할 수 없습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>식당에서 주문을 받는 웨이터를 생각해보세요.</p>
+                        <p><strong>동기 방식</strong>: 웨이터가 주문을 주방에 넣고, 요리가 나올 때까지 주방 앞에서 기다립니다. 그 동안 다른 테이블 손님은 방치됩니다.</p>
+                        <p><strong>비동기 방식</strong>: 웨이터가 주문을 주방에 넣고, 다른 테이블 주문을 받으러 갑니다. 요리가 나오면 그때 가져다줍니다.</p>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C# - 동기 vs 비동기</div>
+                        <pre><code>// 동기: 스레드가 3초간 블로킹
+string data = DownloadData(url);    // 3초 멈춤
+ProcessData(data);                   // 3초 후 실행
+
+// 비동기: 스레드가 해방됨
+string data = await DownloadDataAsync(url);  // 기다리는 동안 스레드 해방
+ProcessData(data);                            // 완료되면 이어서 실행</code></pre>
+                    </div>
+                    <p class="highlight">async/await의 핵심: <strong>기다리는 동안 스레드를 놓아준다</strong>. 놓아준 스레드는 다른 일을 할 수 있다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: async/await 기본 문법</h2>
+            <div class="conversation">
+                <div class="q">async와 await는 정확히 어떻게 사용하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// async 메서드: 반환 타입은 Task, Task&lt;T&gt;, 또는 ValueTask
+async Task&lt;PlayerData&gt; LoadPlayerAsync(int playerId)
+{
+    // await: 비동기 작업이 완료될 때까지 "양보"
+    string json = await ReadFileAsync($"player_{playerId}.json");
+
+    // await 이후의 코드는 작업 완료 후 실행됨 (continuation)
+    PlayerData data = JsonSerializer.Deserialize&lt;PlayerData&gt;(json);
+
+    // 여러 await를 순차적으로 사용 가능
+    await ValidateDataAsync(data);
+    await SaveToCacheAsync(data);
+
+    return data; // Task&lt;PlayerData&gt;로 자동 래핑
+}
+
+// 호출 측
+async Task GameStartAsync()
+{
+    PlayerData player = await LoadPlayerAsync(42);
+    InitializeGame(player);
+}</code></pre>
+                    </div>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>반환 타입</th>
+                                <th>용도</th>
+                                <th>비고</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Task</td>
+                                <td>반환값 없는 비동기 작업</td>
+                                <td>void 대신 사용</td>
+                            </tr>
+                            <tr>
+                                <td>Task&lt;T&gt;</td>
+                                <td>T를 반환하는 비동기 작업</td>
+                                <td>가장 일반적</td>
+                            </tr>
+                            <tr>
+                                <td>ValueTask&lt;T&gt;</td>
+                                <td>자주 동기 완료되는 작업</td>
+                                <td>힙 할당 최소화</td>
+                            </tr>
+                            <tr>
+                                <td>async void</td>
+                                <td>이벤트 핸들러 전용</td>
+                                <td>예외 처리 불가 - 지양!</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">async void는 예외가 발생하면 try-catch로 잡을 수 없고 프로세스가 크래시됩니다. 이벤트 핸들러가 아니면 절대 사용하지 마세요!</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 컴파일러의 마법 &mdash; 상태 머신 변환</h2>
+            <div class="conversation">
+                <div class="q">await를 만나면 내부적으로 무슨 일이 일어나나요?</div>
+                <div class="a">
+                    <p>컴파일러는 async 메서드를 <strong>상태 머신(State Machine)</strong> 구조체로 변환합니다. 각 await 지점이 상태 전환 포인트가 됩니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">State -1</div>
+                                <div class="flow-box__items">초기 상태<br>첫 번째 await까지 실행</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">State 0</div>
+                                <div class="flow-box__items">첫 번째 await 대기 중<br>완료 시 continuation 호출</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">State 1</div>
+                                <div class="flow-box__items">두 번째 await 대기 중<br>완료 시 continuation 호출</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">State -2</div>
+                                <div class="flow-box__items">완료 상태<br>결과 반환</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C# - 개발자가 작성한 코드</div>
+                        <pre><code>async Task&lt;int&gt; CalculateAsync()
+{
+    int a = await GetValueAAsync();   // await 1
+    int b = await GetValueBAsync();   // await 2
+    return a + b;
+}</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C# - 컴파일러가 생성하는 상태 머신 (단순화)</div>
+                        <pre><code>struct CalculateAsyncStateMachine : IAsyncStateMachine
+{
+    public int state;
+    public AsyncTaskMethodBuilder&lt;int&gt; builder;
+    private int a, b;
+    private TaskAwaiter&lt;int&gt; awaiter;
+
+    void MoveNext()
+    {
+        switch (state)
+        {
+            case -1: // 초기 상태
+                awaiter = GetValueAAsync().GetAwaiter();
+                if (!awaiter.IsCompleted)
+                {
+                    state = 0;
+                    builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
+                    return; // 스레드 해방!
+                }
+                goto case 0;
+
+            case 0: // 첫 번째 await 완료
+                a = awaiter.GetResult();
+                awaiter = GetValueBAsync().GetAwaiter();
+                if (!awaiter.IsCompleted)
+                {
+                    state = 1;
+                    builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
+                    return;
+                }
+                goto case 1;
+
+            case 1: // 두 번째 await 완료
+                b = awaiter.GetResult();
+                builder.SetResult(a + b);
+                state = -2; // 완료
+                break;
+        }
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">지역 변수 a, b가 상태 머신의 필드로 승격됩니다. await 사이에서 값을 유지해야 하기 때문입니다. 이것이 async 메서드가 힙 할당을 유발하는 원인입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: SynchronizationContext와 ConfigureAwait</h2>
+            <div class="conversation">
+                <div class="q">await 이후의 코드는 어떤 스레드에서 실행되나요?</div>
+                <div class="a">
+                    <p><strong>SynchronizationContext</strong>가 await 이후의 코드(continuation)를 어느 스레드에서 실행할지 결정합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>환경</th>
+                                <th>SynchronizationContext</th>
+                                <th>await 이후 실행 스레드</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Unity</td>
+                                <td>UnitySynchronizationContext</td>
+                                <td>메인 스레드</td>
+                            </tr>
+                            <tr>
+                                <td>WinForms/WPF</td>
+                                <td>WindowsFormsSyncContext</td>
+                                <td>UI 스레드</td>
+                            </tr>
+                            <tr>
+                                <td>ASP.NET Core</td>
+                                <td>없음 (null)</td>
+                                <td>ThreadPool 아무 스레드</td>
+                            </tr>
+                            <tr>
+                                <td>콘솔 앱</td>
+                                <td>없음 (null)</td>
+                                <td>ThreadPool 아무 스레드</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// UI 스레드에서 호출
+async Task LoadDataAsync()
+{
+    // await 이전: UI 스레드
+    var data = await httpClient.GetStringAsync(url);
+    // await 이후: UI 스레드로 복귀! (SyncContext 덕분)
+    label.Text = data; // UI 업데이트 안전
+
+    // ConfigureAwait(false): SyncContext 무시
+    var data2 = await httpClient.GetStringAsync(url2)
+        .ConfigureAwait(false);
+    // await 이후: ThreadPool 스레드! (UI 접근 불가)
+    // label.Text = data2; // 크래시 위험!
+}</code></pre>
+                    </div>
+                    <p class="highlight">라이브러리 코드에서는 <code>ConfigureAwait(false)</code>를 사용하여 불필요한 스레드 전환 비용을 절약합니다. 게임 서버 코드에서도 마찬가지입니다.</p>
+                    <p class="warning">Unity에서는 ConfigureAwait(false) 후 UnityEngine API를 호출하면 크래시가 발생합니다. 메인 스레드에서만 동작하는 API가 대부분이기 때문입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 병렬 실행과 고급 패턴</h2>
+            <div class="conversation">
+                <div class="q">여러 비동기 작업을 동시에 실행하려면?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 순차 실행: 총 6초
+async Task SequentialAsync()
+{
+    var a = await LoadAsync("A");  // 2초
+    var b = await LoadAsync("B");  // 2초
+    var c = await LoadAsync("C");  // 2초
+}
+
+// 병렬 실행: 총 2초 (가장 느린 작업 기준)
+async Task ParallelAsync()
+{
+    // Task를 먼저 시작하고
+    Task&lt;Data&gt; taskA = LoadAsync("A");
+    Task&lt;Data&gt; taskB = LoadAsync("B");
+    Task&lt;Data&gt; taskC = LoadAsync("C");
+
+    // 모두 완료될 때까지 대기
+    await Task.WhenAll(taskA, taskB, taskC);
+
+    // 결과 가져오기
+    var a = taskA.Result;
+    var b = taskB.Result;
+    var c = taskC.Result;
+}
+
+// 하나라도 완료되면 진행
+async Task&lt;Data&gt; FastestAsync()
+{
+    Task&lt;Data&gt; primary = LoadFromDB();
+    Task&lt;Data&gt; fallback = LoadFromCache();
+
+    // 먼저 끝나는 쪽 결과 사용
+    return await await Task.WhenAny(primary, fallback);
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">취소는 어떻게 하나요?</div>
+                <div class="a">
+                    <p><code>CancellationToken</code>으로 진행 중인 비동기 작업을 안전하게 취소할 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - CancellationToken 패턴</div>
+                        <pre><code>class GameLoader
+{
+    private CancellationTokenSource cts;
+
+    async Task LoadLevelAsync(string level)
+    {
+        cts = new CancellationTokenSource();
+
+        try
+        {
+            var data = await DownloadAsync(level, cts.Token);
+            await ParseAsync(data, cts.Token);
+            await InitializeAsync(data, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine("로딩이 취소되었습니다.");
+            // 정리 작업
+        }
+    }
+
+    void OnBackButtonPressed()
+    {
+        cts?.Cancel(); // 진행 중인 로딩 취소
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">게임에서 씬 전환, 매치 나가기, 앱 종료 시 진행 중인 비동기 작업을 CancellationToken으로 정리해야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: ValueTask와 성능 최적화</h2>
+            <div class="conversation">
+                <div class="q">Task 대신 ValueTask를 사용하면 어떤 이점이 있나요?</div>
+                <div class="a">
+                    <p><code>Task</code>는 참조 타입(클래스)이므로 매번 힙에 할당됩니다. 캐시 히트가 잦은 메서드에서는 <code>ValueTask</code>(값 타입)가 할당 비용을 절약합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 캐시에 있으면 동기 반환, 없으면 비동기 로드
+ValueTask&lt;Texture&gt; GetTextureAsync(string name)
+{
+    if (cache.TryGetValue(name, out var texture))
+        return new ValueTask&lt;Texture&gt;(texture); // 힙 할당 없음!
+
+    return new ValueTask&lt;Texture&gt;(LoadTextureFromDisk(name)); // Task 생성
+}</code></pre>
+                    </div>
+                    <p class="warning">ValueTask는 한 번만 await할 수 있고, 여러 번 await하거나 .Result를 호출하면 안 됩니다. 단순한 "한 번 await" 시나리오에서만 사용하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Summary -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>async/await</strong>는 비동기 코드를 동기처럼 읽히게 하는 문법적 설탕이며, 컴파일러가 <strong>상태 머신</strong>으로 변환한다</li>
+                <li>await는 스레드를 <strong>블로킹하지 않고 해방</strong>하여, 그 동안 다른 작업을 처리할 수 있게 한다</li>
+                <li><strong>SynchronizationContext</strong>가 await 이후 어느 스레드에서 재개할지 결정한다</li>
+                <li><code>Task.WhenAll</code>로 병렬 실행, <code>CancellationToken</code>으로 안전한 취소를 구현한다</li>
+                <li><strong>async void는 금지</strong>, 캐시 히트가 잦으면 <strong>ValueTask</strong>를 고려한다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

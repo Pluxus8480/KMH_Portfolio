@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>화면 정보를 효율적으로 담다</h1>
@@ -30,25 +30,33 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Deferred Rendering 흐름:
-
-         Geometry Pass                    Lighting Pass
-┌─────────────────────────┐        ┌─────────────────────────┐
-│                         │        │                         │
-│  모든 오브젝트 렌더링   │   →    │  G-Buffer 읽기          │
-│  G-Buffer에 저장        │        │  + 라이트별 라이팅      │
-│                         │        │                         │
-└─────────────────────────┘        └─────────────────────────┘
-            │                                  │
-            ▼                                  ▼
-┌─────────────────────────┐        ┌─────────────────────────┐
-│      G-Buffer           │        │    Final Image          │
-│  ┌──────┬──────┬──────┐ │        │                         │
-│  │Albedo│Normal│Depth │ │        │    💡 라이팅 적용      │
-│  └──────┴──────┴──────┘ │        │                         │
-└─────────────────────────┘        └─────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-column" style="flex:1;">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">Geometry Pass</div>
+                                <div class="flow-box__items">모든 오브젝트 렌더링<br>G-Buffer에 저장</div>
+                            </div>
+                            <span class="flow-arrow-down">↓</span>
+                            <div class="flow-box">
+                                <div class="flow-box__title">G-Buffer</div>
+                                <div class="flow-box__items">Albedo | Normal | Depth</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-column" style="flex:1;">
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Lighting Pass</div>
+                                <div class="flow-box__items">G-Buffer 읽기<br>+ 라이트별 라이팅</div>
+                            </div>
+                            <span class="flow-arrow-down">↓</span>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Final Image</div>
+                                <div class="flow-box__items">라이팅 적용</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Deferred Rendering 기본 흐름</p>
             </div>
         </section>
@@ -63,36 +71,28 @@ Deferred Rendering 흐름:
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-전형적인 G-Buffer 구성 (총 ~256 bits/pixel):
-
-RT0: R8G8B8A8_UNORM (32 bits)
-┌────────┬────────┬────────┬────────┐
-│   R    │   G    │   B    │   A    │
-│ Albedo │ Albedo │ Albedo │Metallic│
-│   8    │   8    │   8    │   8    │
-└────────┴────────┴────────┴────────┘
-
-RT1: R16G16B16A16_FLOAT (64 bits)
-┌─────────────┬─────────────┬─────────────┬─────────────┐
-│     R       │     G       │     B       │     A       │
-│  Normal.x   │  Normal.y   │  Normal.z   │  Roughness  │
-│     16      │     16      │     16      │     16      │
-└─────────────┴─────────────┴─────────────┴─────────────┘
-
-RT2: R16G16B16A16_FLOAT (64 bits)
-┌─────────────┬─────────────┬─────────────┬─────────────┐
-│     R       │     G       │     B       │     A       │
-│ Emissive.r  │ Emissive.g  │ Emissive.b  │    AO       │
-│     16      │     16      │     16      │     16      │
-└─────────────┴─────────────┴─────────────┴─────────────┘
-
-Depth: D24S8 or D32F (32 bits)
-┌───────────────────────────────────────────────────────┐
-│                     Depth                              │
-│                      24-32                             │
-└───────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-label" style="margin-bottom:8px;font-weight:600;color:var(--text-primary);">전형적인 G-Buffer 구성 (~256 bits/pixel)</div>
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">RT0 (32 bits)</div>
+                            <div class="pipeline-bar pb-gbuffer"><span>R: Albedo (8)</span><span>G: Albedo (8)</span><span>B: Albedo (8)</span><span>A: Metallic (8)</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">RT1 (64 bits)</div>
+                            <div class="pipeline-bar pb-light"><span>R: Normal.x (16)</span><span>G: Normal.y (16)</span><span>B: Normal.z (16)</span><span>A: Roughness (16)</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">RT2 (64 bits)</div>
+                            <div class="pipeline-bar pb-post"><span>R: Emissive.r (16)</span><span>G: Emissive.g (16)</span><span>B: Emissive.b (16)</span><span>A: AO (16)</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Depth (32 bits)</div>
+                            <div class="pipeline-bar pb-shadow"><span>Depth 24-32 bits</span></div>
+                        </div>
+                    </div>
+                    <div class="flow-label">R8G8B8A8_UNORM | R16G16B16A16_FLOAT | D24S8 or D32F</div>
+                </div>
                 <p class="diagram-caption">일반적인 G-Buffer 레이아웃</p>
             </div>
 
@@ -150,25 +150,45 @@ Depth: D24S8 or D32F (32 bits)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-G-Buffer 대역폭 계산 (1920×1080):
-
-픽셀 수: 2,073,600
-
-전형적 G-Buffer (192 bits/pixel):
-- RT0 (32 bits) = 8.3 MB
-- RT1 (64 bits) = 16.6 MB
-- RT2 (64 bits) = 16.6 MB
-- Depth (32 bits) = 8.3 MB
-─────────────────────────
-총: 49.8 MB / frame
-
-60 FPS 기준:
-- Write (Geometry Pass): 49.8 × 60 = 3.0 GB/s
-- Read (Lighting Pass): 49.8 × 60 = 3.0 GB/s
-─────────────────────────
-총 대역폭: ~6 GB/s (G-Buffer만!)
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-label" style="margin-bottom:8px;font-weight:600;color:var(--text-primary);">G-Buffer 대역폭 계산 (1920 x 1080 = 2,073,600 pixels)</div>
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">RT0 (32 bits)</div>
+                            <div class="pipeline-bar pb-gbuffer" style="flex:1;"><span>8.3 MB</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">RT1 (64 bits)</div>
+                            <div class="pipeline-bar pb-light" style="flex:2;"><span>16.6 MB</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">RT2 (64 bits)</div>
+                            <div class="pipeline-bar pb-post" style="flex:2;"><span>16.6 MB</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Depth (32 bits)</div>
+                            <div class="pipeline-bar pb-shadow" style="flex:1;"><span>8.3 MB</span></div>
+                        </div>
+                    </div>
+                    <div class="flow-row" style="margin-top:12px;justify-content:center;gap:12px;">
+                        <div class="flow-box flow-box--small">
+                            <div class="flow-box__title">총</div>
+                            <div class="flow-box__items">49.8 MB / frame</div>
+                        </div>
+                        <div class="flow-box flow-box--small">
+                            <div class="flow-box__title">Write (60fps)</div>
+                            <div class="flow-box__items">3.0 GB/s</div>
+                        </div>
+                        <div class="flow-box flow-box--small">
+                            <div class="flow-box__title">Read (60fps)</div>
+                            <div class="flow-box__items">3.0 GB/s</div>
+                        </div>
+                        <div class="flow-box flow-box--small flow-box--warning">
+                            <div class="flow-box__title">총 대역폭</div>
+                            <div class="flow-box__items">~6 GB/s (G-Buffer만!)</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">G-Buffer 대역폭 분석</p>
             </div>
 
@@ -297,36 +317,31 @@ float3 DecodeNormalOctahedron(float2 enc)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-최적화된 G-Buffer (80 bits/pixel):
-
-RT0: R8G8B8A8_UNORM (32 bits)
-┌────────┬────────┬────────┬────────┐
-│   R    │   G    │   B    │   A    │
-│ Albedo │ Albedo │ Albedo │Specular│
-│ (sRGB) │ (sRGB) │ (sRGB) │ (선택) │
-└────────┴────────┴────────┴────────┘
-
-RT1: R16G16_FLOAT (32 bits)
-┌─────────────────┬─────────────────┐
-│       R         │       G         │
-│   Normal.x      │   Normal.y      │
-│  (Octahedron)   │  (Octahedron)   │
-└─────────────────┴─────────────────┘
-
-RT2: R8G8_UNORM (16 bits) - 또는 RT0/RT1에 패킹
-┌────────┬────────┐
-│   R    │   G    │
-│Metallic│Roughness│
-└────────┴────────┘
-
-Depth: D24S8 (32 bits)
-┌───────────────────────────────────┐
-│            Depth                  │
-└───────────────────────────────────┘
-
-대역폭 절감: 192 bits → 112 bits (42% 감소!)
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-label" style="margin-bottom:8px;font-weight:600;color:var(--text-primary);">최적화된 G-Buffer (80~112 bits/pixel)</div>
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">RT0 (32 bits)</div>
+                            <div class="pipeline-bar pb-gbuffer"><span>R: Albedo sRGB (8)</span><span>G: Albedo sRGB (8)</span><span>B: Albedo sRGB (8)</span><span>A: Specular (8)</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">RT1 (32 bits)</div>
+                            <div class="pipeline-bar pb-light"><span>R: Normal.x Octahedron (16)</span><span>G: Normal.y Octahedron (16)</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">RT2 (16 bits)</div>
+                            <div class="pipeline-bar pb-post"><span>R: Metallic (8)</span><span>G: Roughness (8)</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Depth (32 bits)</div>
+                            <div class="pipeline-bar pb-shadow"><span>D24S8 (32 bits)</span></div>
+                        </div>
+                    </div>
+                    <div class="flow-box flow-box--highlight" style="margin-top:12px;">
+                        <div class="flow-box__title">대역폭 절감</div>
+                        <div class="flow-box__items">192 bits → 112 bits (42% 감소!)</div>
+                    </div>
+                </div>
                 <p class="diagram-caption">최적화된 G-Buffer</p>
             </div>
 

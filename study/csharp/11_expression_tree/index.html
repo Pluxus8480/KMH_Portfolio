@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expression Tree | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>코드가 데이터가 된다면?</h1>
+            <p class="subtitle">Expression Tree로 런타임에 코드를 조립하고 분석하기</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 코드를 데이터로 바라보기</h2>
+            <div class="conversation">
+                <div class="q">람다식은 그냥 함수 아닌가요? 데이터라니 무슨 뜻이죠?</div>
+                <div class="a">
+                    <p>C#에서 람다식은 두 가지 형태로 해석됩니다. <strong>Func&lt;T&gt;</strong>에 대입하면 실행 가능한 델리게이트(코드)가 되지만, <strong>Expression&lt;Func&lt;T&gt;&gt;</strong>에 대입하면 트리 형태의 데이터 구조가 됩니다.</p>
+                    <p class="highlight">Expression Tree는 코드 자체를 데이터로 표현한 것입니다. 실행하는 게 아니라 "분석"하고 "변환"할 수 있는 구조입니다.</p>
+                </div>
+
+                <div class="q">실제로 어떤 차이가 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 델리게이트 vs Expression</div>
+                        <pre><code>// 1) 델리게이트 - 바로 실행 가능한 코드
+Func&lt;int, bool&gt; isEven = x =&gt; x % 2 == 0;
+bool result = isEven(4); // true
+
+// 2) Expression Tree - 코드를 분석 가능한 데이터로 변환
+Expression&lt;Func&lt;int, bool&gt;&gt; expr = x =&gt; x % 2 == 0;
+// expr.Body  =&gt; (x % 2) == 0
+// expr.Parameters[0] =&gt; x
+// 실행하려면 컴파일 필요:
+var compiled = expr.Compile();
+bool result2 = compiled(4); // true</code></pre>
+                    </div>
+                    <p>델리게이트는 IL 코드로 즉시 컴파일되지만, Expression은 트리 노드 객체로 저장됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 트리 구조 들여다보기</h2>
+            <div class="conversation">
+                <div class="q">Expression Tree의 내부 구조는 어떻게 생겼나요?</div>
+                <div class="a">
+                    <p><code>x =&gt; x * 2 + 1</code> 이라는 식을 트리로 표현하면 다음과 같습니다.</p>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">Add (+)</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">Multiply (*)</div>
+                            <div class="hierarchy-children" style="margin-left: 40px;">
+                                <div class="hierarchy-item">Parameter: x</div>
+                                <div class="hierarchy-item">Constant: 2</div>
+                            </div>
+                            <div class="hierarchy-item">Constant: 1</div>
+                        </div>
+                    </div>
+                    <p class="key-point">모든 연산자, 상수, 매개변수가 하나의 노드로 표현되며, 부모-자식 관계로 연결됩니다.</p>
+                </div>
+
+                <div class="q">이 트리 노드들의 타입은 어떻게 되나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>노드 타입</th>
+                                <th>설명</th>
+                                <th>예시</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>BinaryExpression</td>
+                                <td>이항 연산</td>
+                                <td>x + 1, a * b</td>
+                            </tr>
+                            <tr>
+                                <td>ParameterExpression</td>
+                                <td>매개변수</td>
+                                <td>x, y</td>
+                            </tr>
+                            <tr>
+                                <td>ConstantExpression</td>
+                                <td>상수 값</td>
+                                <td>42, "hello"</td>
+                            </tr>
+                            <tr>
+                                <td>MethodCallExpression</td>
+                                <td>메서드 호출</td>
+                                <td>str.Contains("a")</td>
+                            </tr>
+                            <tr>
+                                <td>MemberExpression</td>
+                                <td>프로퍼티/필드 접근</td>
+                                <td>player.Health</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">트리를 직접 순회하며 분석하는 코드를 보여주세요.</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - Expression Tree 방문자</div>
+                        <pre><code>Expression&lt;Func&lt;int, int, int&gt;&gt; expr = (a, b) =&gt; a + b * 2;
+
+void PrintTree(Expression node, int depth = 0)
+{
+    string indent = new string(' ', depth * 2);
+    switch (node)
+    {
+        case BinaryExpression bin:
+            Console.WriteLine($"{indent}{bin.NodeType}");
+            PrintTree(bin.Left, depth + 1);
+            PrintTree(bin.Right, depth + 1);
+            break;
+        case ParameterExpression param:
+            Console.WriteLine($"{indent}Param: {param.Name}");
+            break;
+        case ConstantExpression constant:
+            Console.WriteLine($"{indent}Const: {constant.Value}");
+            break;
+    }
+}
+
+PrintTree(expr.Body);
+// 출력:
+// Add
+//   Param: a
+//   Multiply
+//     Param: b
+//     Const: 2</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 코드를 조립하기 - Expression API</h2>
+            <div class="conversation">
+                <div class="q">람다식 말고 직접 Expression Tree를 만들 수도 있나요?</div>
+                <div class="a">
+                    <p>네, <code>Expression</code> 클래스의 팩토리 메서드를 사용해 런타임에 동적으로 코드를 조립할 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 동적으로 Expression 생성</div>
+                        <pre><code>// 목표: (int x) => x * x + 10 을 동적으로 생성
+
+var param = Expression.Parameter(typeof(int), "x");
+
+// x * x
+var multiply = Expression.Multiply(param, param);
+
+// (x * x) + 10
+var add = Expression.Add(multiply, Expression.Constant(10));
+
+// 람다로 래핑
+var lambda = Expression.Lambda&lt;Func&lt;int, int&gt;&gt;(add, param);
+
+// 컴파일 후 실행
+var func = lambda.Compile();
+Console.WriteLine(func(5));  // 35
+Console.WriteLine(func(3));  // 19</code></pre>
+                    </div>
+                    <p class="highlight">Expression API를 사용하면 런타임에 로직을 조립하고 컴파일할 수 있습니다. 설정 파일이나 사용자 입력에 기반한 동적 로직 생성에 유용합니다.</p>
+                </div>
+
+                <div class="q">게임에서 이걸 어디에 쓸 수 있나요?</div>
+                <div class="a">
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>Expression Tree는 레고 블록과 같습니다. 미리 완성된 장난감(컴파일된 코드)을 사거나, 블록 하나하나를 조립해서(Expression API) 원하는 모양을 만들 수 있습니다.</p>
+                        <p>게임 데미지 공식을 예로 들면, "공격력 * 스킬배율 - 방어력" 같은 공식을 기획자가 텍스트로 입력하면 Expression Tree로 변환하여 실행할 수 있습니다.</p>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C# - 동적 데미지 공식 생성</div>
+                        <pre><code>// 기획 데이터: "ATK * SkillRate - DEF"
+// 이를 Expression Tree로 변환
+static Func&lt;Stats, float&gt; BuildDamageFormula(string formula)
+{
+    var param = Expression.Parameter(typeof(Stats), "s");
+
+    // 파싱 후 트리 구성 (간략화)
+    var atk = Expression.Property(param, "ATK");
+    var rate = Expression.Property(param, "SkillRate");
+    var def = Expression.Property(param, "DEF");
+
+    var mul = Expression.Multiply(atk, rate);
+    var sub = Expression.Subtract(mul, def);
+
+    var lambda = Expression.Lambda&lt;Func&lt;Stats, float&gt;&gt;(sub, param);
+    return lambda.Compile(); // 한 번 컴파일하면 재사용
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: ORM과 LINQ Provider에서의 활용</h2>
+            <div class="conversation">
+                <div class="q">Entity Framework에서 Where절이 SQL로 변환되는 원리가 뭔가요?</div>
+                <div class="a">
+                    <p>LINQ to Entities의 핵심이 바로 Expression Tree입니다. <code>IQueryable</code>의 Where 메서드는 <code>Expression&lt;Func&lt;T, bool&gt;&gt;</code>을 받습니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">C# 람다식</div>
+                                <div class="flow-box__items">x =&gt; x.Level &gt; 10</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Expression Tree</div>
+                                <div class="flow-box__items">트리 구조로 분석</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">SQL 변환</div>
+                                <div class="flow-box__items">WHERE Level &gt; 10</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>LINQ Provider는 Expression Tree를 순회하며 각 노드를 SQL 문법으로 변환합니다. 만약 델리게이트였다면 분석이 불가능해 모든 데이터를 메모리에 올린 뒤 필터링해야 합니다.</p>
+                    <p class="warning">주의: IEnumerable의 Where는 Func&lt;T, bool&gt;을 받습니다. IQueryable의 Where와 혼동하면 전체 테이블을 메모리에 로드하는 성능 재앙이 발생합니다.</p>
+                </div>
+
+                <div class="q">IQueryable과 IEnumerable의 차이를 정리해 주세요.</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>IEnumerable&lt;T&gt;</th>
+                                <th>IQueryable&lt;T&gt;</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Where 매개변수</td>
+                                <td>Func&lt;T, bool&gt;</td>
+                                <td>Expression&lt;Func&lt;T, bool&gt;&gt;</td>
+                            </tr>
+                            <tr>
+                                <td>실행 위치</td>
+                                <td>클라이언트(메모리)</td>
+                                <td>서버(DB 등)</td>
+                            </tr>
+                            <tr>
+                                <td>코드 분석</td>
+                                <td>불가능</td>
+                                <td>Expression Tree로 가능</td>
+                            </tr>
+                            <tr>
+                                <td>용도</td>
+                                <td>인메모리 컬렉션</td>
+                                <td>원격 데이터 소스</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: ExpressionVisitor로 트리 변환하기</h2>
+            <div class="conversation">
+                <div class="q">기존 Expression Tree를 수정할 수 있나요?</div>
+                <div class="a">
+                    <p>Expression Tree는 불변(immutable)입니다. 하지만 <code>ExpressionVisitor</code>를 상속해 트리를 순회하며 새로운 트리를 생성할 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 상수를 파라미터로 교체하는 Visitor</div>
+                        <pre><code>class ConstantReplacer : ExpressionVisitor
+{
+    protected override Expression VisitConstant(ConstantExpression node)
+    {
+        // 정수 상수를 2배로 변환
+        if (node.Type == typeof(int))
+        {
+            return Expression.Constant((int)node.Value * 2);
+        }
+        return base.VisitConstant(node);
+    }
+}
+
+// 사용 예시
+Expression&lt;Func&lt;int, int&gt;&gt; original = x =&gt; x + 5;
+var visitor = new ConstantReplacer();
+var modified = (Expression&lt;Func&lt;int, int&gt;&gt;)visitor.Visit(original);
+// 결과: x => x + 10
+
+var func = modified.Compile();
+Console.WriteLine(func(3)); // 13</code></pre>
+                    </div>
+                    <p class="key-point">ExpressionVisitor 패턴을 사용하면 쿼리 조건 추가, 최적화, 다른 언어로의 변환 등 강력한 기능을 구현할 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: 성능 고려사항과 실전 팁</h2>
+            <div class="conversation">
+                <div class="q">Expression.Compile()은 비용이 큰 작업인가요?</div>
+                <div class="a">
+                    <p>네, Compile()은 IL 코드를 동적으로 생성하고 JIT 컴파일하므로 상대적으로 비용이 큽니다.</p>
+                    <p class="warning">주의: 매 프레임마다 Compile()을 호출하면 심각한 성능 문제가 발생합니다. 반드시 한 번 컴파일한 결과를 캐싱하세요.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 컴파일 결과 캐싱 패턴</div>
+                        <pre><code>class FormulaCache
+{
+    private readonly Dictionary&lt;string, Delegate&gt; _cache = new();
+
+    public Func&lt;float, float&gt; GetOrCompile(
+        string key, Expression&lt;Func&lt;float, float&gt;&gt; expr)
+    {
+        if (!_cache.TryGetValue(key, out var cached))
+        {
+            cached = expr.Compile();
+            _cache[key] = cached;
+        }
+        return (Func&lt;float, float&gt;)cached;
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">FastExpressionCompiler 같은 대안도 있나요?</div>
+                <div class="a">
+                    <p>네, NuGet 패키지인 <strong>FastExpressionCompiler</strong>는 System.Reflection.Emit 대신 경량화된 방식으로 컴파일하여 Compile() 속도를 5~10배 향상시킵니다. IoC 컨테이너나 매퍼 라이브러리에서 많이 사용됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Expression Tree</strong>는 코드를 실행 가능한 트리 구조의 데이터로 표현한 것이다.</li>
+                <li><strong>Expression&lt;Func&lt;T&gt;&gt;</strong>는 분석/변환 가능하지만, <strong>Func&lt;T&gt;</strong>는 블랙박스다.</li>
+                <li>ORM(Entity Framework)은 Expression Tree를 SQL로 변환하여 서버 사이드 실행을 가능하게 한다.</li>
+                <li><strong>ExpressionVisitor</strong>로 트리를 순회하며 새로운 트리로 변환할 수 있다.</li>
+                <li>Compile()은 비용이 크므로 결과를 반드시 캐싱해야 한다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>수천 개의 빛을 효율적으로</h1>
@@ -31,26 +31,24 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-기존 Deferred의 문제:
-
-화면                         라이트들
-┌─────────────────────┐      💡 💡 💡
-│                     │      💡 💡 💡
-│                     │      💡 💡 💡
-│    모든 픽셀이      │        ...
-│    모든 라이트      │      (1000개)
-│    체크해야 함      │
-│                     │
-└─────────────────────┘
-
-픽셀 P에서:
-  for (light in allLights)  // 1000번 반복!
-      if (InRange(light, P))
-          Calculate(light)
-
-→ 대부분의 라이트는 픽셀에 영향 안 줌 (낭비)
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box flow-box--warning">
+                            <div class="flow-box__title">화면 (모든 픽셀)</div>
+                            <div class="flow-box__items">모든 픽셀이 모든 라이트를 체크해야 함</div>
+                        </div>
+                        <span class="flow-arrow">×</span>
+                        <div class="flow-box flow-box--warning">
+                            <div class="flow-box__title">라이트들 (1000개)</div>
+                            <div class="flow-box__items">대부분은 픽셀에 영향 안 줌 (낭비)</div>
+                        </div>
+                        <span class="flow-arrow">=</span>
+                        <div class="flow-box flow-box--warning">
+                            <div class="flow-box__title">O(픽셀 x 라이트)</div>
+                            <div class="flow-box__items">1080p + 1000개 = 20억 번 계산!</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">단순 접근의 비효율</p>
             </div>
         </section>
@@ -65,27 +63,24 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Tiled Deferred 파이프라인:
-
-1. 화면을 타일로 분할 (16×16)
-┌───┬───┬───┬───┬───┬───┐
-│ T │ T │ T │ T │ T │ T │
-├───┼───┼───┼───┼───┼───┤
-│ T │ T │ T │ T │ T │ T │
-├───┼───┼───┼───┼───┼───┤
-│ T │ T │ T │ T │ T │ T │
-└───┴───┴───┴───┴───┴───┘
-
-2. 타일별로 라이트 컬링
-   타일 A: 💡 💡 💡        (3개만 영향)
-   타일 B: 💡               (1개만)
-   타일 C: 💡 💡 💡 💡 💡  (5개)
-
-3. 라이팅 패스
-   각 타일은 자신의 라이트 리스트만 처리
-   → O(픽셀 × 타일당 라이트) << O(픽셀 × 전체 라이트)
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box flow-box--wide">
+                            <div class="flow-box__title">1. 화면을 타일로 분할 (16x16)</div>
+                            <div class="flow-box__items">T T T T T T<br>T T T T T T<br>T T T T T T</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--wide">
+                            <div class="flow-box__title">2. 타일별 라이트 컬링</div>
+                            <div class="flow-box__items">타일 A: 3개만 영향<br>타일 B: 1개만 영향<br>타일 C: 5개 영향</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight flow-box--wide">
+                            <div class="flow-box__title">3. 라이팅 패스</div>
+                            <div class="flow-box__items">각 타일은 자신의 라이트 리스트만 처리<br>O(픽셀 x 타일당 라이트) &lt;&lt; O(픽셀 x 전체 라이트)</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Tiled 접근 방식</p>
             </div>
 
@@ -246,25 +241,27 @@ void CS_TiledLighting(uint3 groupID : SV_GroupID,
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Tiled vs Clustered:
-
-Tiled (2D 분할):                 Clustered (3D 분할):
-
-      카메라                           카메라
-         ╲                                ╲
-          ╲                                ╲
-┌──────────────────┐           ┌─┬─┬─┬─┬─┬─┬─┬─┐
-│    💡           │           │ │ │💡│ │ │ │ │ │ Z0
-│        💡       │           ├─┼─┼─┼─┼─┼─┼─┼─┤
-│           💡    │           │ │ │ │💡│ │ │ │ │ Z1
-│  타일 = 2D      │           ├─┼─┼─┼─┼─┼─┼─┼─┤
-│  깊이 무시      │           │ │ │ │ │💡│ │ │ │ Z2
-└──────────────────┘           └─┴─┴─┴─┴─┴─┴─┴─┘
-
-💡가 화면 전체에 영향?        💡는 특정 클러스터에만
-→ 전체 타일에 포함됨          → 정확한 3D 컬링
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box flow-box--warning">
+                            <div class="flow-box__title">Tiled (2D 분할)</div>
+                            <div class="flow-box__items">
+                                타일 = 2D, 깊이 무시<br>
+                                라이트가 화면 전체에 영향<br>
+                                → 전체 타일에 포함됨
+                            </div>
+                        </div>
+                        <span class="flow-arrow">vs</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Clustered (3D 분할)</div>
+                            <div class="flow-box__items">
+                                X, Y + 깊이(Z) 슬라이스<br>
+                                Z0 / Z1 / Z2 별 분할<br>
+                                → 정확한 3D 컬링
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Tiled vs Clustered 비교</p>
             </div>
 
@@ -411,33 +408,25 @@ void CS_ClusteredCulling(uint3 clusterID : SV_DispatchThreadID)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Forward+ 파이프라인:
-
-1. Depth Pre-Pass
-   ┌─────────────────────────┐
-   │   깊이만 먼저 렌더링    │
-   └─────────────────────────┘
-              │
-              ▼
-2. Light Culling (Compute)
-   ┌─────────────────────────┐
-   │  Tiled/Clustered 컬링   │
-   │  타일별 라이트 리스트   │
-   └─────────────────────────┘
-              │
-              ▼
-3. Forward Shading
-   ┌─────────────────────────┐
-   │  각 픽셀에서:           │
-   │  - 타일 라이트 리스트   │
-   │    접근                 │
-   │  - 해당 라이트만 계산   │
-   │  - 반투명, MSAA 지원!   │
-   └─────────────────────────┘
-
-Forward의 유연성 + Deferred의 라이트 효율
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box flow-box--wide">
+                            <div class="flow-box__title">1. Depth Pre-Pass</div>
+                            <div class="flow-box__items">깊이만 먼저 렌더링</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--wide">
+                            <div class="flow-box__title">2. Light Culling (Compute)</div>
+                            <div class="flow-box__items">Tiled/Clustered 컬링<br>타일별 라이트 리스트 생성</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight flow-box--wide">
+                            <div class="flow-box__title">3. Forward Shading</div>
+                            <div class="flow-box__items">각 픽셀에서 타일 라이트 리스트 접근<br>해당 라이트만 계산<br>반투명, MSAA 지원!</div>
+                        </div>
+                    </div>
+                    <p style="text-align:center; color: var(--accent-primary); margin-top: 8px; font-size: 0.85rem;">Forward의 유연성 + Deferred의 라이트 효율</p>
+                </div>
                 <p class="diagram-caption">Forward+ 파이프라인</p>
             </div>
 

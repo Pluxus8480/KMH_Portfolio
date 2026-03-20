@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
 
         <header class="content-header">
             <h1>입력 시스템의 진화</h1>
@@ -49,31 +49,28 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-┌─────────────────────────────────────────────────────────────┐
-│                   Enhanced Input 구조                        │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌─────────────────┐                                        │
-│  │  Input Action   │  ← "점프한다" "이동한다" (추상적 행동) │
-│  │   (IA_Jump)     │                                        │
-│  └────────┬────────┘                                        │
-│           │                                                  │
-│           ▼                                                  │
-│  ┌─────────────────┐                                        │
-│  │ Input Mapping   │  ← 키보드: Space = 점프                │
-│  │    Context      │    게임패드: A버튼 = 점프              │
-│  │   (IMC_Game)    │                                        │
-│  └────────┬────────┘                                        │
-│           │                                                  │
-│           ▼                                                  │
-│  ┌─────────────────┐                                        │
-│  │   Modifiers &   │  ← 데드존, 감도, 반전 등               │
-│  │    Triggers     │    입력값 가공                         │
-│  └─────────────────┘                                        │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box">
+                        <div class="flow-box__title">Input Action (IA_Jump)</div>
+                        <div class="flow-box__items"><p>"점프한다" "이동한다" (추상적 행동)</p></div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-box">
+                        <div class="flow-box__title">Input Mapping Context (IMC_Game)</div>
+                        <div class="flow-box__items">
+                            <p>키보드: Space = 점프</p>
+                            <p>게임패드: A버튼 = 점프</p>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-box">
+                        <div class="flow-box__title">Modifiers &amp; Triggers</div>
+                        <div class="flow-box__items">
+                            <p>데드존, 감도, 반전 등</p>
+                            <p>입력값 가공</p>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Enhanced Input의 3단 구조</p>
             </div>
 
@@ -201,23 +198,23 @@ void AMyCharacter::ExitVehicle()
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-        IMC 우선순위 스택
-
-        ┌─────────────────┐
-        │  IMC_UIMenu     │ ← Priority 2 (최우선)
-        │  (UI 입력만)    │   Escape, 마우스 클릭
-        ├─────────────────┤
-        │  IMC_Vehicle    │ ← Priority 1
-        │  (차량 조작)    │   WASD = 운전
-        ├─────────────────┤
-        │  IMC_OnFoot     │ ← Priority 0 (기본)
-        │  (도보 이동)    │   WASD = 걷기
-        └─────────────────┘
-
-    높은 우선순위가 입력을 소비하면
-    낮은 우선순위는 해당 입력을 받지 못함
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box flow-box--highlight">
+                        <div class="flow-box__title">IMC_UIMenu (Priority 2 - 최우선)</div>
+                        <div class="flow-box__items"><p>UI 입력만: Escape, 마우스클릭</p></div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-box">
+                        <div class="flow-box__title">IMC_Vehicle (Priority 1)</div>
+                        <div class="flow-box__items"><p>차량 조작: WASD = 운전</p></div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-box">
+                        <div class="flow-box__title">IMC_OnFoot (Priority 0 - 기본)</div>
+                        <div class="flow-box__items"><p>도보 이동: WASD = 걷기</p></div>
+                    </div>
+                    <p style="text-align:center; margin-top:8px; color:#aaa; font-size:0.9em;">높은 우선순위가 입력을 소비하면 낮은 우선순위는 해당 입력을 받지 못함</p>
+                </div>
                 <p class="diagram-caption">IMC 우선순위 스택</p>
             </div>
         </section>

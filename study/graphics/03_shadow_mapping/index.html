@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>그림자를 만드는 기술</h1>
@@ -32,35 +32,25 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Shadow Mapping 2단계:
-
-1단계: Shadow Map 생성 (빛의 시점)
-   ┌─────────────────────────────────┐
-   │  💡 Light                       │
-   │    │                            │
-   │    ▼                            │
-   │  ┌─────┐     ┌─────┐           │
-   │  │ A   │     │ B   │ ← 오브젝트│
-   │  └─────┘     └─────┘           │
-   │                                 │
-   │  Shadow Map (깊이 저장):        │
-   │  [깊이A][깊이A][깊이B][깊이B]   │
-   └─────────────────────────────────┘
-
-2단계: 그림자 테스트 (카메라 시점)
-   ┌─────────────────────────────────┐
-   │  🎥 Camera                      │
-   │    │                            │
-   │    ▼                            │
-   │  ┌─────┐ 그림자 ┌─────┐        │
-   │  │ A   │███████│ B   │        │
-   │  └─────┘       └─────┘         │
-   │                                 │
-   │  픽셀 P의 깊이 > Shadow Map 값  │
-   │  → 그림자 영역!                 │
-   └─────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-col">
+                        <div class="flow-box">
+                            <div class="flow-box__title">1단계: Shadow Map 생성 (빛의 시점)</div>
+                            <div class="flow-box__items">
+                                Light에서 씬을 렌더링하여 깊이 맵 생성<br>
+                                오브젝트 A, B의 깊이 값을 Shadow Map에 저장
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">2단계: 그림자 테스트 (카메라 시점)</div>
+                            <div class="flow-box__items">
+                                Camera에서 렌더링 시 각 픽셀의 깊이를 Shadow Map과 비교<br>
+                                픽셀 P의 깊이 > Shadow Map 값 → 그림자 영역!
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Shadow Mapping의 기본 원리</p>
             </div>
         </section>
@@ -126,22 +116,25 @@ float ShadowTest(float4 worldPos)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Shadow Acne 원인:
-
-       Shadow Map 해상도
-        ▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼
-       ─────────────────── 표면
-       ↑↓↑↓↑↓↑↓↑↓↑↓↑↓↑↓  ← 깊이값 미세 차이
-       │ │ │ │ │ │ │ │
-       S L S L S L S L    S=Shadow, L=Light
-
-해결: Depth Bias 적용
-       ─────────────────── 표면
-       ───────────────────  ← Bias만큼 오프셋
-       │ │ │ │ │ │ │ │
-       L L L L L L L L    모두 밝음
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Shadow Acne 원인</div>
+                            <div class="flow-box__items">
+                                Shadow Map 해상도로 인해 표면에서 깊이값 미세 차이 발생<br>
+                                S(Shadow), L(Light)가 교대로 나타남 → 얼룩 패턴
+                            </div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">해결: Depth Bias 적용</div>
+                            <div class="flow-box__items">
+                                Bias만큼 깊이를 오프셋<br>
+                                모든 픽셀이 Light로 판정 → 얼룩 제거
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Depth Bias로 Shadow Acne 해결</p>
             </div>
 
@@ -235,20 +228,31 @@ float CalculateBias(float3 normal, float3 lightDir)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Cascaded Shadow Maps:
-
-           카메라 →
-
-    Cascade 0   Cascade 1    Cascade 2     Cascade 3
-   ┌─────────┐ ┌─────────┐ ┌─────────────┐ ┌──────────────┐
-   │ 고해상도│ │ 중해상도│ │  저해상도   │ │  최저해상도  │
-   │ 0~10m  │ │ 10~30m  │ │  30~100m    │ │  100~500m    │
-   └─────────┘ └─────────┘ └─────────────┘ └──────────────┘
-
-   각 Cascade는 같은 해상도(예: 2048²)지만
-   커버하는 영역이 다름 → 거리별 품질 조절
-                </pre>
+                <div class="flow-diagram">
+                    <p style="margin-bottom:0.5rem; color: var(--text-secondary);">카메라 →</p>
+                    <div class="flow-row">
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Cascade 0</div>
+                            <div class="flow-box__items">고해상도<br>0~10m</div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Cascade 1</div>
+                            <div class="flow-box__items">중해상도<br>10~30m</div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Cascade 2</div>
+                            <div class="flow-box__items">저해상도<br>30~100m</div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Cascade 3</div>
+                            <div class="flow-box__items">최저해상도<br>100~500m</div>
+                        </div>
+                    </div>
+                    <p style="margin-top:0.5rem; color: var(--text-secondary); font-size:0.85rem;">각 Cascade는 같은 해상도(예: 2048²)지만 커버하는 영역이 다름 → 거리별 품질 조절</p>
+                </div>
                 <p class="diagram-caption">CSM의 거리별 Cascade 분할</p>
             </div>
 

@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"로딩 중에도 게임이 돌아가요"</h1>
             <p class="subtitle">비동기 프로그래밍 패턴과 활용</p>
         </header>
@@ -27,29 +29,50 @@
                     <p>I/O나 긴 작업이 <strong>게임 루프를 블로킹</strong>하면 프레임이 끊깁니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    동기 vs 비동기 로딩                               │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   동기 로딩 (Blocking):                                             │
-│   ┌──────┬─────────────────────────────────────┬──────┬──────┐     │
-│   │Frame │           Loading...                │Frame │Frame │     │
-│   │  1   │     (100ms - 게임 멈춤!)            │  2   │  3   │     │
-│   └──────┴─────────────────────────────────────┴──────┴──────┘     │
-│                                                                     │
-│   비동기 로딩 (Non-blocking):                                        │
-│   ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐       │
-│   │Frame │Frame │Frame │Frame │Frame │Frame │Frame │Frame │       │
-│   │  1   │  2   │  3   │  4   │  5   │  6   │  7   │  8   │       │
-│   └──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘       │
-│       ↓      ↓      ↓      ↓      ↓      ↓                        │
-│   ┌─────────────────────────────────────────────┐                  │
-│   │  Background: Loading texture... (완료!)      │                  │
-│   └─────────────────────────────────────────────┘                  │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <p><strong>동기 vs 비동기 로딩</strong></p>
+                            <div style="margin-bottom: 1rem;">
+                                <p><strong>동기 로딩 (Blocking):</strong></p>
+                                <div class="pipeline">
+                                    <div class="pipeline-stage">
+                                        <div class="pipeline-label">Frame 1</div>
+                                        <div class="pipeline-bar" style="flex: 1;">Frame 1</div>
+                                    </div>
+                                    <div class="pipeline-stage">
+                                        <div class="pipeline-label">Loading</div>
+                                        <div class="pipeline-bar" style="flex: 5; background: var(--warning-bg, #ff6b6b);">Loading... (100ms - 게임 멈춤!)</div>
+                                    </div>
+                                    <div class="pipeline-stage">
+                                        <div class="pipeline-label">Frame 2</div>
+                                        <div class="pipeline-bar" style="flex: 1;">Frame 2</div>
+                                    </div>
+                                    <div class="pipeline-stage">
+                                        <div class="pipeline-label">Frame 3</div>
+                                        <div class="pipeline-bar" style="flex: 1;">Frame 3</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <p><strong>비동기 로딩 (Non-blocking):</strong></p>
+                                <div class="pipeline">
+                                    <div class="pipeline-stage">
+                                        <div class="pipeline-label">메인</div>
+                                        <div class="pipeline-bar" style="flex: 1;">F1</div>
+                                        <div class="pipeline-bar" style="flex: 1;">F2</div>
+                                        <div class="pipeline-bar" style="flex: 1;">F3</div>
+                                        <div class="pipeline-bar" style="flex: 1;">F4</div>
+                                        <div class="pipeline-bar" style="flex: 1;">F5</div>
+                                        <div class="pipeline-bar" style="flex: 1;">F6</div>
+                                        <div class="pipeline-bar" style="flex: 1;">F7</div>
+                                        <div class="pipeline-bar" style="flex: 1;">F8</div>
+                                    </div>
+                                    <div class="pipeline-stage">
+                                        <div class="pipeline-label">백그라운드</div>
+                                        <div class="pipeline-bar" style="flex: 6; background: var(--accent, #64ffda);">Loading texture... (완료!)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -342,29 +365,38 @@ private:
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    LOD 기반 스트리밍                                 │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Player                                                            │
-│     ●                                                               │
-│     │                                                               │
-│     ├── 근거리 (0-50m): 고해상도 텍스처 + 상세 메시                │
-│     │   [우선순위: 높음, 즉시 로드]                                 │
-│     │                                                               │
-│     ├── 중거리 (50-200m): 중해상도 텍스처 + 일반 메시             │
-│     │   [우선순위: 중간, 백그라운드 로드]                          │
-│     │                                                               │
-│     └── 원거리 (200m+): 저해상도 텍스처 + 간단 메시               │
-│         [우선순위: 낮음, 필요 시 로드]                              │
-│                                                                     │
-│   플레이어 이동 시:                                                  │
-│   - 다가가는 방향 에셋 미리 로드 (예측 로딩)                        │
-│   - 멀어지는 에셋 언로드 또는 LOD 낮춤                              │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <p><strong>LOD 기반 스트리밍</strong></p>
+                            <div class="flow-row">
+                                <div class="flow-box--highlight">
+                                    <div class="flow-box__title">Player</div>
+                                </div>
+                            </div>
+                            <div class="flow-row" style="flex-wrap: wrap; gap: 1rem;">
+                                <div class="flow-box" style="border-left: 4px solid #ff6b6b;">
+                                    <div class="flow-box__title">근거리 (0-50m)</div>
+                                    <div class="flow-box__items">
+                                        <p>고해상도 텍스처 + 상세 메시</p>
+                                        <p><strong>[우선순위: 높음, 즉시 로드]</strong></p>
+                                    </div>
+                                </div>
+                                <div class="flow-box" style="border-left: 4px solid #ffd93d;">
+                                    <div class="flow-box__title">중거리 (50-200m)</div>
+                                    <div class="flow-box__items">
+                                        <p>중해상도 텍스처 + 일반 메시</p>
+                                        <p><strong>[우선순위: 중간, 백그라운드 로드]</strong></p>
+                                    </div>
+                                </div>
+                                <div class="flow-box" style="border-left: 4px solid #6bcb77;">
+                                    <div class="flow-box__title">원거리 (200m+)</div>
+                                    <div class="flow-box__items">
+                                        <p>저해상도 텍스처 + 간단 메시</p>
+                                        <p><strong>[우선순위: 낮음, 필요 시 로드]</strong></p>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="key-point">플레이어 이동 시: 다가가는 방향 에셋 미리 로드 (예측 로딩), 멀어지는 에셋 언로드 또는 LOD 낮춤</p>
+                        </div>
                     </div>
                 </div>
             </div>

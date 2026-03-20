@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>현실의 재질을 수학으로</h1>
@@ -46,17 +46,19 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Lo(p, ωo) = Le(p, ωo) + ∫Ω fr(p, ωi, ωo) Li(p, ωi) (n · ωi) dωi
-
-여기서:
-• Lo = 나가는 빛 (우리가 보는 것)
-• Le = 자체 발광
-• fr = BRDF (양방향 반사 분포 함수)
-• Li = 들어오는 빛
-• n · ωi = 코사인 항 (램버트 법칙)
-• Ω = 모든 입사 방향에 대한 적분
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box" style="text-align:center;">
+                        <div class="flow-box__title">Lo(p, ωo) = Le(p, ωo) + ∫Ω fr(p, ωi, ωo) Li(p, ωi) (n · ωi) dωi</div>
+                        <div class="flow-box__items">
+                            Lo = 나가는 빛 (우리가 보는 것)<br>
+                            Le = 자체 발광<br>
+                            fr = BRDF (양방향 반사 분포 함수)<br>
+                            Li = 들어오는 빛<br>
+                            n · ωi = 코사인 항 (램버트 법칙)<br>
+                            Ω = 모든 입사 방향에 대한 적분
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">렌더링 방정식의 핵심</p>
             </div>
 
@@ -79,28 +81,26 @@ Lo(p, ωo) = Le(p, ωo) + ∫Ω fr(p, ωi, ωo) Li(p, ωi) (n · ωi) dωi
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Cook-Torrance BRDF:
-
-fr = kd * fLambert + ks * fCookTorrance
-
-       Diffuse           Specular
-    (난반사 부분)      (정반사 부분)
-
-┌─────────────────────────────────────────────────────┐
-│                                                      │
-│  fLambert = albedo / π                              │
-│                                                      │
-│              D * F * G                              │
-│  fCook-Torrance = ─────────────                     │
-│                   4(ωo·n)(ωi·n)                     │
-│                                                      │
-│  D = Normal Distribution Function (미세면 분포)    │
-│  F = Fresnel Equation (프레넬)                      │
-│  G = Geometry Function (기하 감쇠)                 │
-│                                                      │
-└─────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box" style="text-align:center;">
+                        <div class="flow-box__title">fr = kd × fLambert + ks × fCookTorrance</div>
+                    </div>
+                    <div class="flow-row" style="margin-top:0.75rem;">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Diffuse (난반사)</div>
+                            <div class="flow-box__items">fLambert = albedo / π</div>
+                        </div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Specular (정반사)</div>
+                            <div class="flow-box__items">
+                                fCook-Torrance = D × F × G / 4(ωo·n)(ωi·n)<br><br>
+                                D = Normal Distribution Function (미세면 분포)<br>
+                                F = Fresnel Equation (프레넬)<br>
+                                G = Geometry Function (기하 감쇠)
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Cook-Torrance BRDF 구조</p>
             </div>
         </section>
@@ -268,15 +268,26 @@ float G_Smith(float NdotV, float NdotL, float roughness)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Metallic = 0 (플라스틱)          Metallic = 1 (금)
-┌─────────────────────┐         ┌─────────────────────┐
-│  Diffuse: 색상 있음 │         │  Diffuse: 없음      │
-│  Specular: 흰색    │         │  Specular: 금색     │
-│                     │         │                     │
-│  F0 = 0.04 (4%)    │         │  F0 = albedo        │
-└─────────────────────┘         └─────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Metallic = 0 (플라스틱)</div>
+                            <div class="flow-box__items">
+                                Diffuse: 색상 있음<br>
+                                Specular: 흰색<br>
+                                F0 = 0.04 (4%)
+                            </div>
+                        </div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Metallic = 1 (금)</div>
+                            <div class="flow-box__items">
+                                Diffuse: 없음<br>
+                                Specular: 금색<br>
+                                F0 = albedo
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">금속 vs 비금속의 반사 특성</p>
             </div>
         </section>

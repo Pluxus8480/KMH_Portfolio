@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
 
         <header class="content-header">
             <h1>건물을 산산조각 내는 기술</h1>
@@ -77,38 +77,38 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Geometry Collection 생성 과정:
-
-1. 원본 메시
-   ┌───────────────────┐
-   │                   │
-   │    🏠 건물 메시   │
-   │                   │
-   └───────────────────┘
-              │
-              │ Fracture (분할)
-              ▼
-2. 프랙처된 메시
-   ┌───────────────────┐
-   │ ┌──┬──┬──┬──┬──┐ │
-   │ │  │  │  │  │  │ │
-   │ ├──┼──┼──┼──┼──┤ │
-   │ │  │  │  │  │  │ │
-   │ └──┴──┴──┴──┴──┘ │
-   └───────────────────┘
-              │
-              │ 런타임 충격
-              ▼
-3. 물리 시뮬레이션
-   ┌───────────────────┐
-   │    💥 충격       │
-   │  ┌──┐ ┌──┐       │
-   │    ┌──┐    ┌──┐  │
-   │ 조각들이 물리적으로│
-   │ 분리되어 날아감    │
-   └───────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box">
+                            <div class="flow-box__title">1. 원본 메시</div>
+                            <div class="flow-box__items">건물 메시 (하나의 덩어리)</div>
+                        </div>
+                        <span class="flow-arrow-down">↓ Fracture (분할)</span>
+                        <div class="flow-box flow-box--info">
+                            <div class="flow-box__title">2. 프랙처된 메시</div>
+                            <div class="flow-box__items">
+                                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; max-width: 150px; margin: 4px auto;">
+                                    <div style="background: rgba(59,130,246,0.2); padding: 4px; border-radius: 2px;"></div>
+                                    <div style="background: rgba(59,130,246,0.3); padding: 4px; border-radius: 2px;"></div>
+                                    <div style="background: rgba(59,130,246,0.2); padding: 4px; border-radius: 2px;"></div>
+                                    <div style="background: rgba(59,130,246,0.35); padding: 4px; border-radius: 2px;"></div>
+                                    <div style="background: rgba(59,130,246,0.25); padding: 4px; border-radius: 2px;"></div>
+                                    <div style="background: rgba(59,130,246,0.3); padding: 4px; border-radius: 2px;"></div>
+                                    <div style="background: rgba(59,130,246,0.2); padding: 4px; border-radius: 2px;"></div>
+                                    <div style="background: rgba(59,130,246,0.35); padding: 4px; border-radius: 2px;"></div>
+                                    <div style="background: rgba(59,130,246,0.2); padding: 4px; border-radius: 2px;"></div>
+                                    <div style="background: rgba(59,130,246,0.3); padding: 4px; border-radius: 2px;"></div>
+                                </div>
+                                조각으로 분할된 상태
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓ 런타임 충격</span>
+                        <div class="flow-box flow-box--warning">
+                            <div class="flow-box__title">3. 물리 시뮬레이션</div>
+                            <div class="flow-box__items">충격! 조각들이 물리적으로 분리되어 날아감</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Geometry Collection 동작 흐름</p>
             </div>
 
@@ -141,32 +141,39 @@ Geometry Collection 생성 과정:
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-계층적 프랙처 구조:
-
-Level 0 (전체)
-┌─────────────────────────────┐
-│                             │
-│                             │
-│                             │
-└─────────────────────────────┘
-              │ 약한 충격
-              ▼
-Level 1 (큰 조각)
-┌───────┬───────┬─────────────┐
-│       │       │             │
-│       │       │             │
-└───────┴───────┴─────────────┘
-              │ 강한 충격
-              ▼
-Level 2 (작은 조각)
-┌──┬──┬──┬──┬──┬──┬──┬──┬──┬──┐
-│  │  │  │  │  │  │  │  │  │  │
-└──┴──┴──┴──┴──┴──┴──┴──┴──┴──┘
-
-Damage Threshold가 높은 레벨일수록
-더 강한 충격에 분해됨
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box flow-box--wide" style="width: 100%;">
+                            <div class="flow-box__title">Level 0 (전체)</div>
+                            <div class="flow-box__items">하나의 덩어리</div>
+                        </div>
+                        <span class="flow-arrow-down">↓ 약한 충격</span>
+                        <div class="flow-row" style="justify-content: center;">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">Level 1</div>
+                                <div class="flow-box__items">큰 조각</div>
+                            </div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">Level 1</div>
+                                <div class="flow-box__items">큰 조각</div>
+                            </div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">Level 1</div>
+                                <div class="flow-box__items">큰 조각</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓ 강한 충격</span>
+                        <div class="flow-row" style="justify-content: center; flex-wrap: wrap;">
+                            <div class="flow-box flow-box--warning flow-box--small">Level 2</div>
+                            <div class="flow-box flow-box--warning flow-box--small">Level 2</div>
+                            <div class="flow-box flow-box--warning flow-box--small">Level 2</div>
+                            <div class="flow-box flow-box--warning flow-box--small">Level 2</div>
+                            <div class="flow-box flow-box--warning flow-box--small">Level 2</div>
+                            <div class="flow-box flow-box--warning flow-box--small">Level 2</div>
+                        </div>
+                        <div class="flow-label" style="margin-top: 8px;">Damage Threshold가 높은 레벨일수록 더 강한 충격에 분해됨</div>
+                    </div>
+                </div>
                 <p class="diagram-caption">계층적 파괴 구조</p>
             </div>
 
@@ -337,29 +344,37 @@ Collision:
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Anchor 사용 예시:
-
-충격 전:
-┌───────────────────┐
-│                   │
-│   기둥            │
-│                   │
-├───────────────────┤
-│███ Anchor (고정) ███│
-└───────────────────┘
-
-충격 후:
-       ┌───────┐
-       │ 떨어진 │
-       │ 조각들 │
-       └───────┘
-            │
-            ▼ 낙하
-├───────────────────┤
-│███ 아래는 고정 ███│
-└───────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-side-by-side">
+                        <div class="flow-group">
+                            <div class="flow-group__title">충격 전</div>
+                            <div class="flow-column">
+                                <div class="flow-box" style="width: 100%;">
+                                    <div class="flow-box__title">기둥</div>
+                                    <div class="flow-box__items">상단 부분</div>
+                                </div>
+                                <div class="flow-box flow-box--highlight" style="width: 100%;">
+                                    <div class="flow-box__title">Anchor (고정)</div>
+                                    <div class="flow-box__items">하단 고정 부분</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-group">
+                            <div class="flow-group__title">충격 후</div>
+                            <div class="flow-column">
+                                <div class="flow-box flow-box--warning">
+                                    <div class="flow-box__title">떨어진 조각들</div>
+                                    <div class="flow-box__items">물리 낙하</div>
+                                </div>
+                                <span class="flow-arrow-down">↓ 낙하</span>
+                                <div class="flow-box flow-box--highlight" style="width: 100%;">
+                                    <div class="flow-box__title">아래는 고정</div>
+                                    <div class="flow-box__items">Anchor 유지</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Anchor로 부분 고정</p>
             </div>
 

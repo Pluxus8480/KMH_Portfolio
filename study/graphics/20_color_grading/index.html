@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>색으로 분위기를 만들다</h1>
@@ -30,19 +30,25 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Color Grading 예시:
-
-원본:                    시네마틱:              공포:
-┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐
-│                   │   │                   │   │                   │
-│   자연스러운      │   │   청록+오렌지     │   │   녹색+어둡게     │
-│   색상            │   │   (Teal/Orange)   │   │   채도 낮음       │
-│                   │   │                   │   │                   │
-└───────────────────┘   └───────────────────┘   └───────────────────┘
-
-밝기, 대비, 채도, 색온도, 톤 커브 등을 조절
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">원본</div>
+                            <div class="flow-box__items">자연스러운 색상</div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box flow-box--info">
+                            <div class="flow-box__title">시네마틱</div>
+                            <div class="flow-box__items">청록 + 오렌지<br>(Teal/Orange)</div>
+                        </div>
+                        <span class="flow-arrow">/</span>
+                        <div class="flow-box flow-box--warning">
+                            <div class="flow-box__title">공포</div>
+                            <div class="flow-box__items">녹색 + 어둡게<br>채도 낮음</div>
+                        </div>
+                    </div>
+                    <p style="text-align:center; color: var(--text-muted); font-size: 0.8rem; margin-top: 6px;">밝기, 대비, 채도, 색온도, 톤 커브 등을 조절</p>
+                </div>
                 <p class="diagram-caption">Color Grading 스타일</p>
             </div>
 
@@ -159,26 +165,23 @@ float4 PS_BasicColorGrading(float2 uv : TEXCOORD) : SV_Target
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Lift/Gamma/Gain:
-
-밝기
-  ↑
-  │         ╱ Gain (밝은 영역)
-  │       ╱
-  │     ╱
-  │   ╱  ← Gamma (중간톤)
-  │ ╱
-  │╱ ← Lift (어두운 영역)
-  └──────────────────→ 입력
-
-Lift: 그림자 영역의 색상/밝기
-Gamma: 중간톤 영역의 색상/밝기
-Gain: 하이라이트 영역의 색상/밝기
-
-예: 그림자는 파랗게, 하이라이트는 노랗게
-  → 시네마틱 Teal/Orange 룩
-                </pre>
+                <div class="flow-diagram">
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Lift</div>
+                            <div class="pipeline-bar" style="background: linear-gradient(to right, rgba(59,130,246,0.3), rgba(59,130,246,0.1));"><span>그림자 영역의 색상/밝기</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Gamma</div>
+                            <div class="pipeline-bar" style="background: rgba(0,255,153,0.12);"><span>중간톤 영역의 색상/밝기</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Gain</div>
+                            <div class="pipeline-bar" style="background: linear-gradient(to right, rgba(251,191,36,0.1), rgba(251,191,36,0.3));"><span>하이라이트 영역의 색상/밝기</span></div>
+                        </div>
+                    </div>
+                    <p style="text-align:center; color: var(--text-muted); font-size: 0.8rem; margin-top: 6px;">예: 그림자는 파랗게, 하이라이트는 노랗게 → 시네마틱 Teal/Orange 룩</p>
+                </div>
                 <p class="diagram-caption">3-Way Color Correction</p>
             </div>
 
@@ -235,31 +238,34 @@ float3 ApplyASC_CDL(float3 color, float3 slope, float3 offset, float3 power)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-3D LUT 구조:
-
-입력 RGB → LUT 좌표로 사용 → 출력 RGB
-
-LUT 텍스처 (보통 32³ 또는 64³):
-
-      B (파랑)
-        ↑
-        │   ┌───────────────┐
-        │  ╱               ╱│
-        │ ╱   3D 색 공간  ╱ │
-        │╱               ╱  │
-        ├───────────────┤   │
-        │               │   │
-G (초록)│               │  ╱
-        │               │ ╱ R (빨강)
-        │               │╱
-        └───────────────┘────────→
-
-입력: RGB(128, 64, 192)
-→ LUT 좌표: (128/255, 64/255, 192/255)
-→ 3D 텍스처 샘플링
-→ 변환된 RGB 출력
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">입력 RGB</div>
+                                <div class="flow-box__items">예: (128, 64, 192)</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">LUT 좌표로 변환</div>
+                                <div class="flow-box__items">(128/255, 64/255, 192/255)</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">출력 RGB</div>
+                                <div class="flow-box__items">변환된 색상</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--wide">
+                            <div class="flow-box__title">3D LUT 텍스처 (보통 32x32x32 또는 64x64x64)</div>
+                            <div class="flow-box__items">
+                                R (빨강) / G (초록) / B (파랑) 축으로 구성된 3D 색 공간<br>
+                                3D 텍스처 샘플링 (트리리니어 보간)
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">3D LUT 개념</p>
             </div>
 
@@ -325,41 +331,42 @@ float3 ApplyLUT2D(float3 color, float lutSize)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Post-Processing 순서:
-
-HDR Render (16-bit float)
-        │
-        ▼
-┌───────────────────┐
-│    Bloom, DoF     │  ← HDR 공간에서
-└───────────────────┘
-        │
-        ▼
-┌───────────────────┐
-│  HDR Color Grade  │  ← (선택) HDR에서 색보정
-└───────────────────┘
-        │
-        ▼
-┌───────────────────┐
-│   Tone Mapping    │  ← HDR → LDR 압축
-│   (ACES 등)       │
-└───────────────────┘
-        │
-        ▼
-┌───────────────────┐
-│  LDR Color Grade  │  ← LUT 적용
-└───────────────────┘
-        │
-        ▼
-┌───────────────────┐
-│  Gamma Correction │  ← 모니터 감마 보정
-│  (1/2.2)          │
-└───────────────────┘
-        │
-        ▼
-    Final Output
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box">
+                            <div class="flow-box__title">HDR Render (16-bit float)</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Bloom, DoF</div>
+                            <div class="flow-box__items">HDR 공간에서 처리</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--info">
+                            <div class="flow-box__title">HDR Color Grade</div>
+                            <div class="flow-box__items">(선택) HDR에서 색보정</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Tone Mapping (ACES 등)</div>
+                            <div class="flow-box__items">HDR → LDR 압축</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">LDR Color Grade</div>
+                            <div class="flow-box__items">LUT 적용</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Gamma Correction (1/2.2)</div>
+                            <div class="flow-box__items">모니터 감마 보정</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Final Output</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">색 처리 파이프라인</p>
             </div>
 

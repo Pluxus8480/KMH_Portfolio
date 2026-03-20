@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unity UI System | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+
+        <header class="content-header">
+            <h1>UI 하나가 전체 프레임을 깎는다고?</h1>
+            <p class="subtitle">UGUI와 UI Toolkit — Unity UI 시스템 완벽 비교</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Canvas 리빌드 문제</h2>
+            <div class="conversation">
+                <div class="q">UI가 왜 성능 문제를 일으키나요?</div>
+                <div class="a">
+                    <p>UGUI(Unity의 기본 UI 시스템)는 Canvas 단위로 메시를 생성합니다. Canvas 하위 요소가 하나라도 변경되면 전체 Canvas의 메시를 다시 계산합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>1000피스 퍼즐을 완성했는데, 한 조각을 바꾸려면 전체를 다시 맞춰야 하는 상황입니다.</p>
+                        <p>Canvas 리빌드가 바로 이것입니다. 텍스트 한 글자만 바꿔도 Canvas 전체가 다시 계산됩니다.</p>
+                    </div>
+
+                    <p class="highlight">Canvas 리빌드는 Layout 재계산 + Mesh 재생성 + 배칭 재수행의 3단계로 이루어집니다. 요소가 많을수록 비용이 급증합니다.</p>
+                </div>
+
+                <div class="q">리빌드를 유발하는 원인은 뭔가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>원인</th><th>설명</th><th>빈도</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Text 변경</td><td>점수, 타이머 등 텍스트 업데이트</td><td>매우 높음</td></tr>
+                            <tr><td>Image 변경</td><td>색상, sprite, fillAmount 변경</td><td>높음</td></tr>
+                            <tr><td>SetActive</td><td>요소 활성/비활성</td><td>높음</td></tr>
+                            <tr><td>Transform 변경</td><td>위치, 크기, 회전 변경</td><td>중간</td></tr>
+                            <tr><td>계층구조 변경</td><td>자식 추가/제거, 순서 변경</td><td>낮음 (비용 높음)</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">매 프레임 Text.text를 업데이트하는 것은 매 프레임 Canvas 리빌드를 유발합니다. 값이 실제로 변경될 때만 업데이트하세요.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 불필요한 리빌드 방지</div>
+                        <pre><code>// BAD: 매 프레임 텍스트 갱신
+void Update()
+{
+    scoreText.text = score.ToString();  // 값이 안 바뀌어도 리빌드 발생
+}
+
+// GOOD: 값이 변경될 때만 갱신
+private int _lastScore = -1;
+void Update()
+{
+    if (score != _lastScore)
+    {
+        _lastScore = score;
+        scoreText.text = score.ToString();
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Canvas 분리 전략</h2>
+            <div class="conversation">
+                <div class="q">Canvas 리빌드 비용을 줄이려면 어떻게 해야 하나요?</div>
+                <div class="a">
+                    <p class="key-point">자주 변경되는 요소와 정적인 요소를 별도의 Canvas(또는 Sub-Canvas)로 분리하세요.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Static Canvas</div>
+                                <div class="flow-box__items">배경, 프레임, 아이콘</div>
+                            </div>
+                            <div class="flow-arrow">|</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Dynamic Canvas</div>
+                                <div class="flow-box__items">점수, 타이머, HP바</div>
+                            </div>
+                            <div class="flow-arrow">|</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Popup Canvas</div>
+                                <div class="flow-box__items">팝업, 대화창</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p>Sub-Canvas를 사용하면 부모 Canvas의 리빌드와 독립적으로 동작합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Canvas 분리 구조 예시</div>
+                        <pre><code>// 권장 Canvas 계층 구조
+HUD (Canvas)
+├── StaticLayer (Sub-Canvas)  → 변경 없음
+│   ├── Background
+│   ├── SkillSlotFrames
+│   └── MinimapFrame
+├── DynamicLayer (Sub-Canvas)  → 자주 변경
+│   ├── HPBar
+│   ├── ScoreText
+│   └── Timer
+└── OverlayLayer (Sub-Canvas)  → 가끔 활성화
+    ├── DamageNumbers
+    └── Notifications</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">Canvas를 너무 많이 나누면 안 되나요?</div>
+                <div class="a">
+                    <p>Canvas가 늘어나면 드로우콜이 증가할 수 있습니다. Canvas마다 독립적으로 배칭되므로, 과도한 분리는 오히려 역효과입니다.</p>
+                    <p class="highlight">실무에서는 "정적 / 동적 / 오버레이" 정도의 2~4개 Sub-Canvas로 분리하는 것이 균형점입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: UGUI 배칭 규칙</h2>
+            <div class="conversation">
+                <div class="q">UI 배칭은 어떤 규칙으로 동작하나요?</div>
+                <div class="a">
+                    <p>UGUI는 같은 Canvas 내에서 동일한 머티리얼/텍스처를 사용하는 요소를 하나의 드로우콜로 묶습니다. 하지만 배칭이 깨지는 경우가 많습니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>배칭이 깨지는 경우</th><th>해결 방법</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>서로 다른 텍스처/머티리얼</td><td>Sprite Atlas로 텍스처 통합</td></tr>
+                            <tr><td>UI 요소가 겹칠 때 (Z-order 문제)</td><td>계층 순서 정리, 겹침 최소화</td></tr>
+                            <tr><td>Mask 컴포넌트 사용</td><td>RectMask2D로 대체 (Stencil 불사용)</td></tr>
+                            <tr><td>다른 Canvas 소속</td><td>필요한 경우에만 Canvas 분리</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">Sprite Atlas는 왜 중요한가요?</div>
+                <div class="a">
+                    <p>개별 스프라이트를 각각 로드하면 각각이 별도의 드로우콜을 필요로 합니다. Sprite Atlas로 묶으면 하나의 텍스처로 합쳐져 배칭됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Sprite Atlas 설정</div>
+                        <pre><code>// 1. Assets > Create > 2D > Sprite Atlas
+// 2. Objects for Packing에 스프라이트 폴더 추가
+// 3. Pack Preview로 결과 확인
+
+// 코드에서 Atlas 스프라이트 로드
+using UnityEngine.U2D;
+
+SpriteAtlas atlas = Resources.Load&lt;SpriteAtlas&gt;("UIAtlas");
+Sprite icon = atlas.GetSprite("sword_icon");</code></pre>
+                    </div>
+                    <p class="key-point">같은 화면에 동시에 보이는 UI 스프라이트는 하나의 Atlas에 묶으세요. 서로 다른 화면의 스프라이트를 같은 Atlas에 넣으면 메모리 낭비입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: UI Toolkit 소개</h2>
+            <div class="conversation">
+                <div class="q">UI Toolkit은 UGUI와 뭐가 다른가요?</div>
+                <div class="a">
+                    <p>UI Toolkit은 웹 개발의 HTML/CSS와 유사한 방식으로 UI를 구성합니다. Unity 2021부터 런타임 지원이 본격화되었습니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th>UGUI</th><th>UI Toolkit</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>구조 정의</td><td>GameObject 계층</td><td>UXML (HTML과 유사)</td></tr>
+                            <tr><td>스타일</td><td>컴포넌트 속성</td><td>USS (CSS와 유사)</td></tr>
+                            <tr><td>렌더링</td><td>Canvas 메시 기반</td><td>독자 렌더링 파이프라인</td></tr>
+                            <tr><td>리빌드</td><td>Canvas 전체 리빌드</td><td>변경된 요소만 재계산</td></tr>
+                            <tr><td>에디터 도구</td><td>Inspector</td><td>UI Builder (시각적 편집)</td></tr>
+                            <tr><td>성숙도</td><td>안정적, 에셋 풍부</td><td>발전 중, 에셋 부족</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">UI Toolkit의 코드는 어떻게 생겼나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">UXML - UI 구조 정의</div>
+                        <pre><code>&lt;ui:UXML xmlns:ui="UnityEngine.UIElements"&gt;
+    &lt;ui:VisualElement class="hud-container"&gt;
+        &lt;ui:Label name="score-label" text="Score: 0" class="score" /&gt;
+        &lt;ui:ProgressBar name="hp-bar" value="100" class="hp-bar" /&gt;
+        &lt;ui:Button name="pause-btn" text="Pause" class="btn-pause" /&gt;
+    &lt;/ui:VisualElement&gt;
+&lt;/ui:UXML&gt;</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">USS - UI 스타일 정의</div>
+                        <pre><code>.hud-container {
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 10px;
+}
+
+.score {
+    font-size: 24px;
+    color: white;
+    -unity-font-style: bold;
+}
+
+.hp-bar {
+    width: 200px;
+    height: 20px;
+}
+
+.btn-pause:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - UI Toolkit 이벤트 바인딩</div>
+                        <pre><code>using UnityEngine.UIElements;
+
+public class HUDController : MonoBehaviour
+{
+    private Label _scoreLabel;
+    private ProgressBar _hpBar;
+
+    void OnEnable()
+    {
+        var root = GetComponent&lt;UIDocument&gt;().rootVisualElement;
+
+        _scoreLabel = root.Q&lt;Label&gt;("score-label");
+        _hpBar = root.Q&lt;ProgressBar&gt;("hp-bar");
+
+        var pauseBtn = root.Q&lt;Button&gt;("pause-btn");
+        pauseBtn.RegisterCallback&lt;ClickEvent&gt;(OnPauseClicked);
+    }
+
+    public void UpdateScore(int score)
+    {
+        _scoreLabel.text = $"Score: {score}";
+    }
+
+    private void OnPauseClicked(ClickEvent evt)
+    {
+        Time.timeScale = 0f;
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: UGUI vs UI Toolkit 선택 기준</h2>
+            <div class="conversation">
+                <div class="q">지금 시점에서 어떤 걸 써야 하나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>상황</th><th>권장</th><th>이유</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>상용 프로젝트 (출시 임박)</td><td>UGUI</td><td>안정성, 에셋 호환성</td></tr>
+                            <tr><td>에디터 확장 도구</td><td>UI Toolkit</td><td>Unity 공식 권장, IMGUI 대체</td></tr>
+                            <tr><td>복잡한 UI (인벤토리 등)</td><td>UI Toolkit</td><td>ListView, USS 스타일링 강점</td></tr>
+                            <tr><td>월드 스페이스 UI</td><td>UGUI</td><td>UI Toolkit은 월드 스페이스 미지원(제한적)</td></tr>
+                            <tr><td>신규 장기 프로젝트</td><td>UI Toolkit</td><td>Unity의 미래 방향성</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">Unity는 UI Toolkit을 차세대 UI 시스템으로 밀고 있습니다. 장기적으로는 UI Toolkit을 학습해두는 것이 유리합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: UI 성능 최적화 체크리스트</h2>
+            <div class="conversation">
+                <div class="q">UGUI 최적화 실전 팁을 정리해주세요.</div>
+                <div class="a">
+                    <ul>
+                        <li><strong>Raycast Target 끄기</strong>: 클릭이 필요 없는 Image, Text의 Raycast Target을 해제하세요. 이벤트 시스템이 불필요하게 순회합니다.</li>
+                        <li><strong>Canvas.ForceUpdateCanvases() 금지</strong>: 이 함수는 모든 Canvas를 강제 리빌드합니다.</li>
+                        <li><strong>Layout 컴포넌트 최소화</strong>: LayoutGroup은 편리하지만 매 리빌드마다 재계산됩니다. 위치가 고정된 요소는 수동 배치하세요.</li>
+                        <li><strong>Animator 대신 DOTween</strong>: UI 애니메이션에 Animator를 사용하면 매 프레임 dirty 플래그가 설정됩니다. 트윈 라이브러리를 사용하세요.</li>
+                    </ul>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - UI 오브젝트 풀링</div>
+                        <pre><code>// 데미지 숫자 UI 풀링 예시
+public class DamageNumberPool : MonoBehaviour
+{
+    [SerializeField] private GameObject _prefab;
+    private Queue&lt;GameObject&gt; _pool = new Queue&lt;GameObject&gt;();
+
+    public GameObject Get()
+    {
+        GameObject obj;
+        if (_pool.Count > 0)
+        {
+            obj = _pool.Dequeue();
+            obj.SetActive(true);
+        }
+        else
+        {
+            obj = Instantiate(_prefab, transform);
+        }
+        return obj;
+    }
+
+    public void Return(GameObject obj)
+    {
+        obj.SetActive(false);
+        _pool.Enqueue(obj);
+    }
+}</code></pre>
+                    </div>
+
+                    <p class="warning">SetActive(false/true)도 Canvas 리빌드를 유발합니다. 자주 토글되는 요소는 Canvas Group의 alpha를 0으로 하고 blocksRaycasts를 false로 설정하는 것이 더 가볍습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Canvas 리빌드</strong>: 하나의 요소 변경이 전체 Canvas를 재계산시킨다 — Sub-Canvas로 분리하라</li>
+                <li><strong>배칭 규칙</strong>: Sprite Atlas로 텍스처를 통합하고, Mask 대신 RectMask2D를 사용하라</li>
+                <li><strong>Raycast Target</strong>: 클릭 불필요한 요소는 반드시 해제하라</li>
+                <li><strong>UI Toolkit</strong>: USS/UXML 기반 차세대 시스템 — 리빌드 범위가 좁고 스타일링이 유연하다</li>
+                <li><strong>선택 기준</strong>: 안정적 출시는 UGUI, 장기 프로젝트와 에디터 도구는 UI Toolkit을 고려하라</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

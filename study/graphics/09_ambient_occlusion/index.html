@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>틈새의 어둠을 표현하다</h1>
@@ -30,24 +30,25 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Ambient Occlusion 개념:
-
-AO 없음:                         AO 적용:
-┌──────────────────────┐        ┌──────────────────────┐
-│                      │        │                      │
-│    ┌─────┐           │        │    ┌─────┐           │
-│    │     │           │        │  ▓▓│     │           │
-│    │     │           │        │  ▓▓│     │           │
-│    └─────┘           │        │  ▓▓└─────┘▓▓         │
-│                      │        │    ▓▓▓▓▓▓▓▓          │
-│══════════════════════│        │▓▓══════════════════▓▓│
-└──────────────────────┘        └──────────────────────┘
-
-▓ = 어두운 영역 (빛이 차단됨)
-
-구석, 틈새, 접촉점 = 주변 지오메트리가 빛을 차단
-                </pre>
+                <div class="flow-side-by-side">
+                    <div class="flow-group">
+                        <div class="flow-group__title">AO 없음</div>
+                        <div class="flow-box" style="min-height:120px; position:relative;">
+                            <div style="width:60px;height:60px;border:2px solid var(--border-default);position:absolute;bottom:24px;left:30px;background:var(--bg-secondary);"></div>
+                            <div style="height:2px;background:var(--text-muted);position:absolute;bottom:24px;left:0;right:0;"></div>
+                            <div class="flow-box__items" style="position:absolute;bottom:4px;left:0;right:0;">균일한 밝기</div>
+                        </div>
+                    </div>
+                    <div class="flow-group">
+                        <div class="flow-group__title">AO 적용</div>
+                        <div class="flow-box flow-box--highlight" style="min-height:120px; position:relative;">
+                            <div style="width:60px;height:60px;border:2px solid var(--border-default);position:absolute;bottom:24px;left:30px;background:var(--bg-secondary);box-shadow:-6px 6px 12px rgba(0,0,0,0.6), 0 8px 16px rgba(0,0,0,0.4);"></div>
+                            <div style="height:2px;background:var(--text-muted);position:absolute;bottom:24px;left:0;right:0;"></div>
+                            <div class="flow-box__items" style="position:absolute;bottom:4px;left:0;right:0;">구석/틈새 어두움</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flow-label" style="margin-top:8px;">구석, 틈새, 접촉점 = 주변 지오메트리가 빛을 차단</div>
                 <p class="diagram-caption">AO가 추가하는 현실감</p>
             </div>
 
@@ -68,24 +69,35 @@ AO 없음:                         AO 적용:
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-SSAO 샘플링:
-
-            법선 방향
-               ↑
-               │
-        ●  ●   │   ●  ●
-          ●    │    ●
-        ●      │      ●      ● = 샘플 포인트
-    ───────────●───────────   ● = 현재 픽셀
-          (현재 픽셀)
-
-반구 내 랜덤 샘플 배치
-→ 각 샘플의 깊이 vs 실제 깊이 비교
-→ 샘플이 표면 뒤에 있으면 "차폐됨"
-
-차폐율 = 차폐된 샘플 수 / 전체 샘플 수
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box flow-box--highlight" style="min-width:280px;">
+                            <div class="flow-box__title">SSAO 반구 샘플링</div>
+                            <div class="flow-box__items">
+                                법선 방향(상단)으로 반구를 형성<br>
+                                반구 내 랜덤 샘플 포인트 배치<br>
+                                현재 픽셀 기준 주변 탐색
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">깊이 비교</div>
+                                <div class="flow-box__items">각 샘플의 깊이 vs 실제 깊이</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box">
+                                <div class="flow-box__title">차폐 판정</div>
+                                <div class="flow-box__items">표면 뒤 = "차폐됨"</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">차폐율</div>
+                                <div class="flow-box__items">차폐된 샘플 수 / 전체 샘플 수</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">SSAO 반구 샘플링</p>
             </div>
 
@@ -193,20 +205,30 @@ float BlurSSAO(float2 uv)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-SSAO 파이프라인:
-
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  Depth +     │ → │    SSAO      │ → │   Blur       │
-│  Normal      │    │  (노이즈 有)  │    │ (Edge-Aware) │
-└──────────────┘    └──────────────┘    └──────────────┘
-                                              │
-                                              ▼
-                                   ┌──────────────┐
-                                   │ Final AO     │
-                                   │ (깨끗한 결과) │
-                                   └──────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Depth + Normal</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box">
+                                <div class="flow-box__title">SSAO</div>
+                                <div class="flow-box__items">노이즈 有</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Blur</div>
+                                <div class="flow-box__items">Edge-Aware</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Final AO</div>
+                            <div class="flow-box__items">깨끗한 결과</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">SSAO 처리 단계</p>
             </div>
         </section>
@@ -221,29 +243,29 @@ SSAO 파이프라인:
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-HBAO 원리:
-
-SSAO: 반구 내 랜덤 샘플링
-┌─────────────────────────────┐
-│     ●    ●                  │
-│  ●     ●    ●               │
-│    ●  P  ●                  │  P = 현재 픽셀
-│  ●     ●                    │  불규칙한 샘플 분포
-└─────────────────────────────┘
-
-HBAO: 방사형 방향별 최대 지평선 각도
-┌─────────────────────────────┐
-│         ↑                   │
-│       ↗ │ ↖                 │
-│     ←   P   →               │  각 방향으로 레이 마칭
-│       ↙ │ ↘                 │  가장 높은 지평선 찾기
-│         ↓                   │
-└─────────────────────────────┘
-
-θ = horizon angle (지평선 각도)
-AO = sin(θ) 기반 계산
-                </pre>
+                <div class="flow-side-by-side">
+                    <div class="flow-group">
+                        <div class="flow-group__title">SSAO: 반구 내 랜덤 샘플링</div>
+                        <div class="flow-box">
+                            <div class="flow-box__items">
+                                P = 현재 픽셀<br>
+                                반구 내 불규칙한 샘플 분포<br>
+                                랜덤 방향으로 차폐 검사
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flow-group">
+                        <div class="flow-group__title">HBAO: 방사형 지평선 각도</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__items">
+                                P에서 각 방향으로 레이 마칭<br>
+                                가장 높은 지평선(horizon) 찾기<br>
+                                &theta; = horizon angle
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flow-label" style="margin-top:8px;">AO = sin(&theta;) 기반 계산</div>
                 <p class="diagram-caption">SSAO vs HBAO 접근 방식</p>
             </div>
 
@@ -453,27 +475,27 @@ float3 FinalColor = directLight + indirectLight * ao;</code></pre>
             </table>
 
             <div class="visual-section">
-                <pre class="diagram">
-AO 품질 비교:
-
-              품질
-               ↑
-        GTAO   │     ●
-               │
-        HBAO+  │   ●
-               │
-        HBAO   │  ●
-               │
-        SSAO   │ ●
-               │
-               └────────────→ 성능 비용
-                 낮음      높음
-
-선택 기준:
-- 모바일/저사양: SSAO
-- PC 중간: HBAO
-- PC 고사양: GTAO
-                </pre>
+                <div class="flow-diagram">
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">GTAO</div>
+                            <div class="pipeline-bar pb-gbuffer" style="flex:4;"><span>레이트레이싱급 품질</span><span>PC 고사양</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">HBAO+</div>
+                            <div class="pipeline-bar pb-light" style="flex:3;"><span>GPU 최적화</span><span>NVIDIA 전용</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">HBAO</div>
+                            <div class="pipeline-bar pb-post" style="flex:2.5;"><span>물리 기반</span><span>PC 중간</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">SSAO</div>
+                            <div class="pipeline-bar pb-shadow" style="flex:1.5;"><span>간단, 빠름</span><span>모바일/저사양</span></div>
+                        </div>
+                    </div>
+                    <div class="flow-label">← 낮은 비용 / 높은 비용 →</div>
+                </div>
                 <p class="diagram-caption">AO 기법별 품질/성능</p>
             </div>
         </section>

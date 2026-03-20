@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>카메라에 안 보이는 물체를 왜 그릴까?</h1>
             <p class="subtitle">절두체 컬링으로 불필요한 렌더링 제거하기</p>
         </header>
@@ -26,26 +28,25 @@
                     <p class="highlight">피라미드의 꼭대기를 잘라낸 형태로, 6개의 평면으로 둘러싸여 있습니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-카메라 절두체 (View Frustum)
-
-            Near Plane
-               ┌──┐
-              /    \
-             /      \     Top Plane
-            /        \    ─────────
-           /    👁    \
-          /   Camera   \
-         /              \
-        /                \
-       └──────────────────┘
-            Far Plane
-
-6개 평면:
-• Near (가까운 면)   • Far (먼 면)
-• Left (왼쪽)        • Right (오른쪽)
-• Top (위)          • Bottom (아래)
-                        </pre>
+                        <div class="flow-diagram">
+                            <div style="text-align:center; margin-bottom:12px;">
+                                <div style="display:inline-block; width:80px; border:2px solid #4ecdc4; border-radius:4px; padding:4px; font-size:0.8em;">Near Plane</div>
+                            </div>
+                            <div style="width:0;height:0;border-left:40px solid transparent;border-right:40px solid transparent;border-top:80px solid rgba(78,205,196,0.15);margin:0 auto;position:relative;">
+                                <div style="position:absolute;top:-50px;left:-15px;font-size:0.9em;">Camera</div>
+                            </div>
+                            <div style="text-align:center; margin-top:8px;">
+                                <div style="display:inline-block; width:200px; border:2px solid #6c5ce7; border-radius:4px; padding:4px; font-size:0.8em;">Far Plane</div>
+                            </div>
+                            <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-top:12px; font-size:0.85em;">
+                                <span style="background:rgba(78,205,196,0.2); padding:4px 8px; border-radius:4px;">Near (가까운 면)</span>
+                                <span style="background:rgba(78,205,196,0.2); padding:4px 8px; border-radius:4px;">Far (먼 면)</span>
+                                <span style="background:rgba(78,205,196,0.2); padding:4px 8px; border-radius:4px;">Left (왼쪽)</span>
+                                <span style="background:rgba(78,205,196,0.2); padding:4px 8px; border-radius:4px;">Right (오른쪽)</span>
+                                <span style="background:rgba(78,205,196,0.2); padding:4px 8px; border-radius:4px;">Top (위)</span>
+                                <span style="background:rgba(78,205,196,0.2); padding:4px 8px; border-radius:4px;">Bottom (아래)</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -138,20 +139,22 @@ public:
                     <p>물체의 바운딩 박스(AABB)를 6개 평면과 비교합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-AABB vs 평면 판정
-
-        평면
-          │
-    ●─────┼─────●   모든 점이 평면 앞: Inside
-          │
-          │
-    ●─────┼─────●   일부 점이 평면 뒤: Intersect
-          │    ●
-          │
-          │         모든 점이 평면 뒤: Outside
-    ●─────●─────●
-                        </pre>
+                        <div class="flow-diagram">
+                            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; text-align:center;">
+                                <div style="background:rgba(78,205,196,0.15); border:1px solid rgba(78,205,196,0.4); border-radius:8px; padding:12px;">
+                                    <div style="font-weight:bold; color:#4ecdc4;">Inside</div>
+                                    <div style="font-size:0.85em; margin-top:4px;">모든 점이 평면 앞</div>
+                                </div>
+                                <div style="background:rgba(255,206,86,0.15); border:1px solid rgba(255,206,86,0.4); border-radius:8px; padding:12px;">
+                                    <div style="font-weight:bold; color:#ffce56;">Intersect</div>
+                                    <div style="font-size:0.85em; margin-top:4px;">일부 점이 평면 뒤</div>
+                                </div>
+                                <div style="background:rgba(255,107,107,0.15); border:1px solid rgba(255,107,107,0.4); border-radius:8px; padding:12px;">
+                                    <div style="font-weight:bold; color:#ff6b6b;">Outside</div>
+                                    <div style="font-size:0.85em; margin-top:4px;">모든 점이 평면 뒤</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <p><strong>최적화된 판정 방법:</strong></p>
@@ -290,21 +293,20 @@ bool frustumCullSphere(const Frustum& frustum, const BoundingSphere& sphere) {
                     <p>공간 분할 구조와 결합하여 계층적으로 컬링합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-Octree + Frustum Culling
-
-           [루트]
-          /      \
-      [전체       [전체
-       밖]        안]
-       ↓          ↓
-     스킵!      자식 검사
-                /    \
-           [일부    [일부
-            안]      밖]
-             ↓        ↓
-           더 검사   스킵!
-                        </pre>
+                        <div class="hierarchy-diagram">
+                            <div class="hierarchy-item hierarchy-item--root">루트</div>
+                            <div class="hierarchy-children">
+                                <div class="hierarchy-item" style="border-color: #ff6b6b;">전체 밖 &rarr; 스킵!</div>
+                                <div class="hierarchy-item" style="border-color: #4ecdc4;">
+                                    전체 안 &rarr; 자식 검사
+                                    <div class="hierarchy-children">
+                                        <div class="hierarchy-item" style="border-color: #ffce56;">일부 안 &rarr; 더 검사</div>
+                                        <div class="hierarchy-item" style="border-color: #ff6b6b;">일부 밖 &rarr; 스킵!</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">Octree + Frustum Culling 계층적 컬링</p>
                     </div>
 
                     <div class="code-block">

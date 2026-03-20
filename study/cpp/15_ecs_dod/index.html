@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>10만 개의 적을 어떻게 관리할까?</h1>
             <p class="subtitle">ECS와 Data-Oriented Design으로 성능 극대화</p>
         </header>
@@ -63,19 +65,21 @@ for (auto* obj : objects) {
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-OOP 메모리 레이아웃 (캐시 비효율)
-
-objects 배열:
-[ptr1] [ptr2] [ptr3] [ptr4] ...
-  │      │      │      │
-  ↓      ↓      ↓      ↓
-[힙 어딘가] [다른 위치] [또 다른 곳] [멀리]
-  Enemy     Player     Bullet    Item
-
-→ 캐시 라인에 관련 데이터가 없음!
-→ 매번 메모리 접근 필요 = 느림
-                        </pre>
+                        <p><strong>OOP 메모리 레이아웃 (캐시 비효율)</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">objects 배열</div><div class="flow-box__items">[ptr1] [ptr2] [ptr3] [ptr4]</div></div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram" style="margin-top: 0.5rem;">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">힙 어딘가</div><div class="flow-box__items">Enemy</div></div>
+                                <div class="flow-box"><div class="flow-box__title">다른 위치</div><div class="flow-box__items">Player</div></div>
+                                <div class="flow-box"><div class="flow-box__title">또 다른 곳</div><div class="flow-box__items">Bullet</div></div>
+                                <div class="flow-box"><div class="flow-box__title">멀리</div><div class="flow-box__items">Item</div></div>
+                            </div>
+                        </div>
+                        <p>캐시 라인에 관련 데이터가 없음! 매번 메모리 접근 필요 = 느림</p>
                     </div>
                 </div>
             </div>
@@ -121,19 +125,18 @@ for (size_t i = 0; i < count; i++) {
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-SoA 메모리 레이아웃 (캐시 효율적)
-
-positions 배열:
-[pos0][pos1][pos2][pos3][pos4][pos5]...
-  ↑ 캐시 라인 하나에 여러 position!
-
-velocities 배열:
-[vel0][vel1][vel2][vel3][vel4][vel5]...
-
-→ position 순회 시 관련 데이터만 캐시에!
-→ SIMD 벡터화도 가능 = 매우 빠름
-                        </pre>
+                        <p><strong>SoA 메모리 레이아웃 (캐시 효율적)</strong></p>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">positions</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>pos0</span><span>pos1</span><span>pos2</span><span>pos3</span><span>pos4</span><span>pos5</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">velocities</div>
+                                <div class="pipeline-bar pb-light"><span>vel0</span><span>vel1</span><span>vel2</span><span>vel3</span><span>vel4</span><span>vel5</span></div>
+                            </div>
+                        </div>
+                        <p>캐시 라인 하나에 여러 position! position 순회 시 관련 데이터만 캐시에! SIMD 벡터화도 가능 = 매우 빠름</p>
                     </div>
                 </div>
             </div>
@@ -194,28 +197,38 @@ world.add&lt;Velocity&gt;(bullet, {10, 0, 0});
                 </div>
 
                 <div class="visual-section">
-                    <pre class="diagram">
-ECS 구조
-
-┌─────────────────────────────────────────────┐
-│                    World                     │
-├─────────────────────────────────────────────┤
-│  Entities:  [0, 1, 2, 3, 4, 5, ...]         │
-├─────────────────────────────────────────────┤
-│  Component Storage:                          │
-│  ┌─────────┬───────────────────────────┐    │
-│  │Position │ [pos0][pos1][pos2][pos3]  │    │
-│  ├─────────┼───────────────────────────┤    │
-│  │Velocity │ [vel0][vel1]    [vel3]    │    │
-│  ├─────────┼───────────────────────────┤    │
-│  │Health   │ [hp0]       [hp2]         │    │
-│  ├─────────┼───────────────────────────┤    │
-│  │Sprite   │ [spr0][spr1][spr2]        │    │
-│  └─────────┴───────────────────────────┘    │
-├─────────────────────────────────────────────┤
-│  Systems: [Movement] [Render] [Combat] ...  │
-└─────────────────────────────────────────────┘
-                    </pre>
+                    <p><strong>ECS 구조</strong></p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--highlight"><div class="flow-box__title">World</div></div>
+                        </div>
+                    </div>
+                    <div class="pipeline" style="margin-top: 0.5rem;">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Entities</div>
+                            <div class="pipeline-bar pb-gbuffer"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>...</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Position</div>
+                            <div class="pipeline-bar pb-light"><span>pos0</span><span>pos1</span><span>pos2</span><span>pos3</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Velocity</div>
+                            <div class="pipeline-bar pb-light"><span>vel0</span><span>vel1</span><span></span><span>vel3</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Health</div>
+                            <div class="pipeline-bar pb-shadow"><span>hp0</span><span></span><span>hp2</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Sprite</div>
+                            <div class="pipeline-bar pb-post"><span>spr0</span><span>spr1</span><span>spr2</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Systems</div>
+                            <div class="pipeline-bar pb-gbuffer"><span>Movement</span><span>Render</span><span>Combat</span><span>...</span></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>

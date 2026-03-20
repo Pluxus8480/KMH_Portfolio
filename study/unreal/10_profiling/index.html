@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
 
         <header class="content-header">
             <h1>병목을 찾아 해결하라</h1>
@@ -116,24 +116,43 @@ stat streaming     // 스트리밍 상태</code></pre>
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-stat unit 결과 해석:
-
-Frame: 33.3ms (30 fps)
-├── Game:  5.0ms  ← CPU 게임 로직 (Tick, Physics 등)
-├── Draw: 10.0ms  ← CPU 렌더 스레드 (컬링, 드로우콜)
-└── GPU:  20.0ms  ← GPU 렌더링 시간
-
-이 경우: GPU가 병목! (20ms로 가장 큼)
-
-┌──────────────────────────────────────────────────────┐
-│                    병목 판단                          │
-├──────────────────────────────────────────────────────┤
-│ Game > Draw, GPU     → CPU 게임로직 병목             │
-│ Draw > Game, GPU     → CPU 렌더스레드 병목 (드로우콜)│
-│ GPU > Game, Draw     → GPU 병목 (셰이더, 폴리곤)    │
-└──────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-group">
+                        <div class="flow-group__title">stat unit 결과 해석 - Frame: 33.3ms (30 fps)</div>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Game</div>
+                                <div class="pipeline-bar pb-gbuffer" style="flex: 0.25;"><span>5.0ms</span> <span>CPU 게임 로직 (Tick, Physics 등)</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Draw</div>
+                                <div class="pipeline-bar pb-light" style="flex: 0.5;"><span>10.0ms</span> <span>CPU 렌더 스레드 (컬링, 드로우콜)</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">GPU</div>
+                                <div class="pipeline-bar pb-post" style="flex: 1;"><span>20.0ms</span> <span>GPU 렌더링 시간</span></div>
+                            </div>
+                        </div>
+                        <div class="flow-label" style="margin-top: 8px;">이 경우: GPU가 병목! (20ms로 가장 큼)</div>
+                    </div>
+                    <div class="flow-group" style="margin-top: 16px;">
+                        <div class="flow-group__title">병목 판단</div>
+                        <div class="flow-row--3col">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">Game > Draw, GPU</div>
+                                <div class="flow-box__items">CPU 게임로직 병목</div>
+                            </div>
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">Draw > Game, GPU</div>
+                                <div class="flow-box__items">CPU 렌더스레드 병목 (드로우콜)</div>
+                            </div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">GPU > Game, Draw</div>
+                                <div class="flow-box__items">GPU 병목 (셰이더, 폴리곤)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">stat unit으로 병목 판단하기</p>
             </div>
         </section>
@@ -319,25 +338,37 @@ UnrealInsights.exe [trace파일경로]</code></pre>
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Unreal Insights 분석 화면:
-
-Timeline View
-┌────────────────────────────────────────────────────────┐
-│ GameThread  │████████│  │████│     │████████│         │
-│ RenderThread│    │████████│    │████████│             │
-│ GPU         │        │██████████████│     │███████│   │
-└────────────────────────────────────────────────────────┘
-               0ms     5ms    10ms    15ms    20ms
-
-각 블록을 클릭하면:
-• 함수 이름
-• 실행 시간
-• 호출 스택
-• 자식 함수 시간 분포
-
-핫스팟 찾기: 가장 넓은 블록 → 가장 시간 많이 쓰는 함수
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-group">
+                        <div class="flow-group__title">Unreal Insights 분석 화면 - Timeline View</div>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">GameThread</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>Tick</span> <span>Physics</span> <span>AI</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">RenderThread</div>
+                                <div class="pipeline-bar pb-light"><span>Culling</span> <span>DrawCalls</span> <span>Submit</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">GPU</div>
+                                <div class="pipeline-bar pb-post"><span>BasePass</span> <span>Lighting</span> <span>PostProcess</span></div>
+                            </div>
+                        </div>
+                        <div class="flow-box" style="margin-top: 12px; text-align: left;">
+                            <div class="flow-box__title">각 블록을 클릭하면:</div>
+                            <div class="flow-box__items">
+                                <ul>
+                                    <li>함수 이름</li>
+                                    <li>실행 시간</li>
+                                    <li>호출 스택</li>
+                                    <li>자식 함수 시간 분포</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="flow-label" style="margin-top: 8px;">핫스팟 찾기: 가장 넓은 블록 = 가장 시간 많이 쓰는 함수</div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Insights Timeline 분석</p>
             </div>
         </section>

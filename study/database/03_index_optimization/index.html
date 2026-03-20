@@ -8,9 +8,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../database.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../database.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>왜 이 쿼리가 10초나 걸리지?</h1>
             <p class="subtitle">인덱스 원리와 쿼리 성능 최적화 기법</p>
         </header>
@@ -22,30 +24,24 @@
                 <div class="a">
                     <p>책의 <strong>색인</strong>처럼, 원하는 데이터의 위치를 빠르게 찾습니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-인덱스 없이 검색 (Full Table Scan):
-
-테이블: 100만 행
-┌──────────────────────────────────────┐
-│ Row 1, Row 2, Row 3, ... Row 1000000 │
-│    ▼      ▼      ▼          ▼        │
-│  하나씩 모두 확인 (O(N))               │
-└──────────────────────────────────────┘
-→ 최악의 경우 100만 번 비교
-
-인덱스 있을 때 (B-Tree 검색):
-
-          [500,000]
-         /         \
-    [250,000]    [750,000]
-      /    \        /    \
-   [...]  [...]  [...]  [...]
-                        ↓
-                    찾는 값!
-
-→ 20번 정도 비교로 찾음 (O(log N))
-  100만 행 = log2(1000000) ≈ 20
-                        </pre>
+                        <p><strong>인덱스 없이 검색 (Full Table Scan):</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">테이블: 100만 행</div>
+                                    <div class="flow-box__items">Row 1, Row 2, Row 3, ... Row 1000000<br>하나씩 모두 확인 (O(N))<br>최악의 경우 100만 번 비교</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p><strong>인덱스 있을 때 (B-Tree 검색):</strong></p>
+                        <div class="hierarchy-diagram">
+                            <div class="hierarchy-item hierarchy-item--root">[500,000]</div>
+                            <div class="hierarchy-children">
+                                <div class="hierarchy-item">[250,000]</div>
+                                <div class="hierarchy-item">[750,000]</div>
+                            </div>
+                        </div>
+                        <p>20번 정도 비교로 찾음 (O(log N)) / 100만 행 = log2(1000000) &asymp; 20</p>
                     </div>
                     <p class="highlight">100만 행 테이블: 인덱스 없이 100만 번 vs 인덱스 있으면 20번</p>
                 </div>
@@ -53,30 +49,23 @@
                 <div class="q">B-Tree 인덱스는 어떻게 동작하나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-B-Tree 구조 (MySQL InnoDB):
-
-                    [Root Node]
-                   /     |     \
-          [Branch]   [Branch]   [Branch]
-          /  |  \    /  |  \    /  |  \
-       [Leaf] [Leaf] [Leaf] [Leaf] [Leaf]
-         │      │      │      │      │
-         ▼      ▼      ▼      ▼      ▼
-      [Data] [Data] [Data] [Data] [Data]
-
-Leaf Node 내부:
-┌─────────────────────────────────────────────┐
-│ key1→ptr | key2→ptr | key3→ptr | ... | →next│
-└─────────────────────────────────────────────┘
-                                          │
-                                 다음 Leaf로 연결
-
-범위 검색 시 (WHERE level BETWEEN 10 AND 20):
-1. B-Tree로 level=10인 Leaf 찾기
-2. Leaf에서 다음 Leaf로 순차 스캔
-3. level=20 넘으면 종료
-                        </pre>
+                        <p><strong>B-Tree 구조 (MySQL InnoDB)</strong></p>
+                        <div class="hierarchy-diagram">
+                            <div class="hierarchy-item hierarchy-item--root">Root Node</div>
+                            <div class="hierarchy-children">
+                                <div class="hierarchy-item">Branch</div>
+                                <div class="hierarchy-item">Branch</div>
+                                <div class="hierarchy-item">Branch</div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram" style="margin-top: 0.5rem;">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">Leaf</div><div class="flow-box__items">key1&rarr;ptr | key2&rarr;ptr | key3&rarr;ptr | &rarr;next</div></div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box"><div class="flow-box__title">Leaf</div><div class="flow-box__items">다음 Leaf로 연결 (범위 스캔)</div></div>
+                            </div>
+                        </div>
+                        <p><strong>범위 검색 시</strong> (WHERE level BETWEEN 10 AND 20):<br>1. B-Tree로 level=10인 Leaf 찾기 / 2. Leaf에서 다음 Leaf로 순차 스캔 / 3. level=20 넘으면 종료</p>
                     </div>
                 </div>
             </div>
@@ -144,24 +133,20 @@ CREATE INDEX idx_server_level ON characters(server_id, level);
 */</code></pre>
                     </div>
                     <div class="visual-section">
-                        <pre class="diagram">
-복합 인덱스 (server_id, level) 구조:
-
-server_id=1           server_id=2
-    │                     │
-    ▼                     ▼
-┌─────────────┐     ┌─────────────┐
-│ level: 1    │     │ level: 5    │
-│ level: 10   │     │ level: 15   │
-│ level: 50 ← │     │ level: 60   │
-│ level: 55   │     │ level: 70   │
-│ level: 99   │     │ level: 99   │
-└─────────────┘     └─────────────┘
-
-WHERE server_id = 1 AND level > 50:
-→ server_id=1 블록으로 바로 이동
-→ level > 50 위치부터 순차 스캔
-                        </pre>
+                        <p><strong>복합인덱스 (server_id, level) 구조</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">server_id = 1</div>
+                                    <div class="flow-box__items">level: 1<br>level: 10<br>level: 50 &larr;<br>level: 55<br>level: 99</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">server_id = 2</div>
+                                    <div class="flow-box__items">level: 5<br>level: 15<br>level: 60<br>level: 70<br>level: 99</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p>WHERE server_id = 1 AND level &gt; 50: server_id=1 블록으로 바로 이동 &rarr; level &gt; 50 위치부터 순차 스캔</p>
                     </div>
                 </div>
             </div>
@@ -185,21 +170,34 @@ WHERE server_id = 1 AND level > 50;
 |  1 | SIMPLE      | characters | range | idx_server_level | idx_server_level | 6  | NULL | 1500 | Using where |
 +----+-------------+------------+-------+------------------+-----------+---------+------+------+-------------+
 
-주요 컬럼 해석:
-┌────────────┬─────────────────────────────────────────┐
-│ type       │ 접근 방식 (좋은 순서)                    │
-│            │ const > eq_ref > ref > range > ALL     │
-├────────────┼─────────────────────────────────────────┤
-│ key        │ 실제 사용된 인덱스                       │
-├────────────┼─────────────────────────────────────────┤
-│ rows       │ 예상 검색 행 수 (적을수록 좋음)          │
-├────────────┼─────────────────────────────────────────┤
-│ Extra      │ 추가 정보                               │
-│            │ Using index: 커버링 인덱스 사용 (좋음)  │
-│            │ Using filesort: 정렬 필요 (나쁨)       │
-│            │ Using temporary: 임시 테이블 (나쁨)    │
-└────────────┴─────────────────────────────────────────┘</code></pre>
+주요 컬럼 해석: 아래 표 참고</code></pre>
                     </div>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>컬럼</th>
+                                <th>해석</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>type</td>
+                                <td>접근 방식 (좋은 순서)<br>const &gt; eq_ref &gt; ref &gt; range &gt; ALL</td>
+                            </tr>
+                            <tr>
+                                <td>key</td>
+                                <td>실제 사용된 인덱스</td>
+                            </tr>
+                            <tr>
+                                <td>rows</td>
+                                <td>예상 검색 행 수 (적을수록 좋음)</td>
+                            </tr>
+                            <tr>
+                                <td>Extra</td>
+                                <td>추가 정보<br>Using index: 커버링 인덱스 사용 (좋음)<br>Using filesort: 정렬 필요 (나쁨)<br>Using temporary: 임시 테이블 (나쁨)</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
 
                 <div class="q">type이 ALL이면 문제인가요?</div>
@@ -242,24 +240,20 @@ EXPLAIN SELECT * FROM characters WHERE level = 50;</code></pre>
                 <div class="a">
                     <p>쿼리에 필요한 모든 컬럼이 인덱스에 포함되어, <strong>테이블 접근 없이</strong> 결과를 반환합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-일반 인덱스 vs 커버링 인덱스:
-
-[일반 인덱스]
-Index (level)     →     Table
-    │                      │
-    ▼                      ▼
- level=50  ──ptr──▶  실제 행 데이터
-                    (name, gold, exp...)
-두 번의 I/O!
-
-[커버링 인덱스]
-Index (level, exp)
-    │
-    ▼
- level=50, exp=1000  ← 여기서 바로 반환!
-한 번의 I/O!
-                        </pre>
+                        <p><strong>[일반 인덱스] - 두 번의 I/O</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">Index (level)</div><div class="flow-box__items">level=50</div></div>
+                                <span class="flow-arrow">ptr &rarr;</span>
+                                <div class="flow-box"><div class="flow-box__title">Table</div><div class="flow-box__items">실제 행 데이터<br>(name, gold, exp...)</div></div>
+                            </div>
+                        </div>
+                        <p><strong>[커버링 인덱스] - 한 번의 I/O</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">Index (level, exp)</div><div class="flow-box__items">level=50, exp=1000<br>여기서 바로 반환!</div></div>
+                            </div>
+                        </div>
                     </div>
                     <div class="code-block">
                         <div class="code-header">커버링 인덱스 예시</div>

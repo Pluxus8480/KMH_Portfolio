@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>공기 속을 그리다</h1>
@@ -30,26 +30,43 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-빛의 산란과 흡수:
-
-    태양 ☀️
-         \
-          \  입사광
-           \
-    ─────────────────────  안개/매체
-        ↗ ↑ ↗
-       산란광              👁️ 카메라
-        (여러 방향으로)       ↑
-                            │
-    ═════════════════════   지면
-
-In-Scattering: 다른 방향의 빛이 시선으로 산란
-Out-Scattering: 시선 방향 빛이 다른 곳으로 산란
-Absorption: 빛이 매체에 흡수됨
-
-최종 색상 = 원래 색상 × 투과율 + 산란광
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--small">
+                                <div class="flow-box__title">태양 (입사광)</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">안개/매체</div>
+                                <div class="flow-box__items">산란 + 흡수 발생</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box flow-box--small">
+                                <div class="flow-box__title">카메라</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-row" style="gap: 12px;">
+                            <div class="flow-box flow-box--highlight flow-box--small">
+                                <div class="flow-box__title">In-Scattering</div>
+                                <div class="flow-box__items">다른 방향의 빛이 시선으로 산란</div>
+                            </div>
+                            <div class="flow-box flow-box--warning flow-box--small">
+                                <div class="flow-box__title">Out-Scattering</div>
+                                <div class="flow-box__items">시선 방향 빛이 다른 곳으로 산란</div>
+                            </div>
+                            <div class="flow-box flow-box--warning flow-box--small">
+                                <div class="flow-box__title">Absorption</div>
+                                <div class="flow-box__items">빛이 매체에 흡수됨</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">최종 색상 = 원래 색상 x 투과율 + 산란광</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">대기 산란의 원리</p>
             </div>
         </section>
@@ -133,23 +150,29 @@ float4 ApplyFog(float4 sceneColor, float3 worldPos)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Height Fog 개념:
-
-높이
-  ↑
-  │  ☀️
-  │     맑음
-  │
-  │  ═══════════  fogHeight
-  │  ░░░░░░░░░░  옅은 안개
-  │  ▒▒▒▒▒▒▒▒▒▒  중간
-  │  ▓▓▓▓▓▓▓▓▓▓  짙은 안개
-  ├──────────────────→ 거리
-  지면
-
-밀도 = baseDensity × e^(-높이 × falloff)
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box flow-box--info">
+                            <div class="flow-box__title">높은 곳: 맑음</div>
+                        </div>
+                        <span class="flow-arrow-down">↓ fogHeight</span>
+                        <div class="flow-box" style="opacity:0.5;">
+                            <div class="flow-box__title">옅은 안개</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box" style="opacity:0.7;">
+                            <div class="flow-box__title">중간 안개</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--warning" style="opacity:0.9;">
+                            <div class="flow-box__title">짙은 안개 (지면)</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">밀도 = baseDensity x e^(-높이 x falloff)</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Height Fog 밀도 분포</p>
             </div>
 
@@ -213,25 +236,33 @@ float CalculateHeightFogAnalytic(float3 startPos, float3 endPos)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Volumetric Light 원리:
-
-    태양 ☀️ ─────────────────────
-              \   \   \   \   \
-               \   \   \   \   \   빛줄기
-                \   \   \   \   \
-         ━━━━━━━━━━━━━━━━━━━━━━   그림자 생성 물체
-                    │
-                    │  그림자 영역
-                    │  (빛 없음)
-         ───────────────────────
-                        👁️ 카메라
-
-Ray Marching:
-카메라에서 각 픽셀로 레이를 쏘고
-일정 간격마다 라이트 가시성 체크
-→ 가시적인 빛 누적 = 빛줄기 효과
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--small">
+                                <div class="flow-box__title">태양 (빛줄기)</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">그림자 생성 물체</div>
+                                <div class="flow-box__items">빛 차단 → 그림자 영역 생성</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box flow-box--small">
+                                <div class="flow-box__title">카메라</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight flow-box--wide">
+                            <div class="flow-box__title">Ray Marching</div>
+                            <div class="flow-box__items">
+                                카메라에서 각 픽셀로 레이를 쏘고<br>
+                                일정 간격마다 라이트 가시성 체크<br>
+                                → 가시적인 빛 누적 = 빛줄기(God Rays) 효과
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Volumetric Light 원리</p>
             </div>
 
@@ -310,26 +341,37 @@ float HenyeyGreenstein(float cosTheta, float g)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Froxel 구조:
-
-         카메라
-            ╲
-             ╲
-┌──────────────────────────────┐
-│ ┌───┬───┬───┬───┬───┬───┐   │
-│ │   │   │   │   │   │   │   │  Z0 (가까움)
-│ ├───┼───┼───┼───┼───┼───┤   │
-│ │   │   │   │   │   │   │   │  Z1
-│ ├───┼───┼───┼───┼───┼───┤   │
-│ │   │   │   │   │   │   │   │  Z2
-│ └───┴───┴───┴───┴───┴───┘   │
-│                              │  Z3 (멀리)
-└──────────────────────────────┘
-
-각 Froxel에 미리 Fog 계산 결과 저장
-→ 픽셀 셰이더에서 3D 텍스처 샘플링만
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box flow-box--wide">
+                            <div class="flow-box__title">카메라 → Froxel 구조 (Frustum + Voxel)</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-row" style="gap: 6px;">
+                            <div class="flow-box flow-box--info flow-box--small">
+                                <div class="flow-box__title">Z0</div>
+                                <div class="flow-box__items">가까움</div>
+                            </div>
+                            <div class="flow-box flow-box--info flow-box--small">
+                                <div class="flow-box__title">Z1</div>
+                                <div class="flow-box__items">중간</div>
+                            </div>
+                            <div class="flow-box flow-box--info flow-box--small">
+                                <div class="flow-box__title">Z2</div>
+                                <div class="flow-box__items">중간</div>
+                            </div>
+                            <div class="flow-box flow-box--info flow-box--small">
+                                <div class="flow-box__title">Z3</div>
+                                <div class="flow-box__items">멀리</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight flow-box--wide">
+                            <div class="flow-box__title">각 Froxel에 미리 Fog 계산 결과 저장</div>
+                            <div class="flow-box__items">픽셀 셰이더에서 3D 텍스처 샘플링만 하면 됨</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Froxel 볼륨 분할</p>
             </div>
 

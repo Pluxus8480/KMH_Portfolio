@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
 
         <header class="content-header">
             <h1>캐릭터에 생명을 불어넣다</h1>
@@ -46,35 +46,36 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-┌─────────────────────────────────────────────────────────────┐
-│                  Animation Blueprint 구조                    │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │                 Event Graph                           │  │
-│  │  ┌─────────┐                                         │  │
-│  │  │ Event   │──→ 캐릭터에서 데이터 가져오기           │  │
-│  │  │ Tick    │    (속도, 방향, 상태 등)                │  │
-│  │  └─────────┘                                         │  │
-│  │       ↓                                              │  │
-│  │  변수 업데이트 (Speed, Direction, bIsJumping 등)     │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                            │                                │
-│                            ▼                                │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │                 Anim Graph                            │  │
-│  │                                                       │  │
-│  │  ┌─────────────┐      ┌─────────────┐               │  │
-│  │  │ State       │      │  Blend      │               │  │
-│  │  │ Machine     │──────│  Nodes      │───→ 최종 포즈  │  │
-│  │  │ (상태머신) │      │ (블렌딩)    │               │  │
-│  │  └─────────────┘      └─────────────┘               │  │
-│  │                                                       │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box">
+                        <div class="flow-box__title">Event Graph</div>
+                        <div class="flow-box__items">
+                            <p><strong>Event Tick</strong> → 캐릭터에서 데이터 가져오기 (속도, 방향, 상태 등)</p>
+                            <p>변수 업데이트 (Speed, Direction, bIsJumping 등)</p>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-box">
+                        <div class="flow-box__title">Anim Graph</div>
+                        <div class="flow-box__items">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">State Machine</div>
+                                    <div class="flow-box__items"><p>상태머신</p></div>
+                                </div>
+                                <div class="flow-arrow">→</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Blend Nodes</div>
+                                    <div class="flow-box__items"><p>블렌딩</p></div>
+                                </div>
+                                <div class="flow-arrow">→</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">최종 포즈</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">ABP의 두 그래프 구조</p>
             </div>
 
@@ -111,26 +112,32 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-            ┌────────────────────────────────────────┐
-            │          Locomotion State Machine       │
-            ├────────────────────────────────────────┤
-            │                                         │
-            │    ┌──────┐     Speed > 0    ┌──────┐  │
-            │    │ Idle │ ───────────────→ │ Walk │  │
-            │    │      │ ←─────────────── │      │  │
-            │    └──┬───┘     Speed == 0   └──┬───┘  │
-            │       │                          │      │
-            │       │ Jump                     │      │
-            │       │ Pressed                  │      │
-            │       ▼                          │      │
-            │    ┌──────┐                     │      │
-            │    │ Jump │ ────────────────────┘      │
-            │    │      │     IsInAir == false        │
-            │    └──────┘                             │
-            │                                         │
-            └────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box" style="text-align:center; width:100%;">
+                        <div class="flow-box__title">Locomotion State Machine</div>
+                        <div class="flow-box__items">
+                            <div class="flow-row" style="justify-content:center; align-items:center;">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Idle</div>
+                                </div>
+                                <div class="flow-arrow" style="display:flex; flex-direction:column; font-size:0.85em;">
+                                    <span>Speed &gt; 0 →</span>
+                                    <span>← Speed == 0</span>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Walk</div>
+                                </div>
+                            </div>
+                            <div class="flow-arrow">Jump Pressed ▼</div>
+                            <div class="flow-row" style="justify-content:center; align-items:center;">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Jump</div>
+                                </div>
+                                <div class="flow-arrow">IsInAir == false → Walk</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">간단한 상태 머신 예시</p>
             </div>
 
@@ -161,23 +168,43 @@ Return !bIsInAir && bIsFalling == false;</code></pre>
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-       Blend Space 2D: Locomotion
-       (X = Direction, Y = Speed)
-
-       Speed ↑
-         │     ┌───────┬───────┬───────┐
-      400│     │ BwdRun│ FwdRun│ FwdRun│
-         │     └───────┴───────┴───────┘
-         │     ┌───────┬───────┬───────┐
-      200│     │BwdWalk│FwdWalk│FwdWalk│
-         │     └───────┴───────┴───────┘
-         │     ┌───────┬───────┬───────┐
-        0│     │ Idle  │ Idle  │ Idle  │
-         │     └───────┴───────┴───────┘
-         └─────────────────────────────→ Direction
-              -180     0      180
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box" style="width:100%;">
+                        <div class="flow-box__title">Blend Space 2D: Locomotion (X = Direction, Y = Speed)</div>
+                        <div class="flow-box__items">
+                            <table class="compare-table" style="margin:0;">
+                                <thead>
+                                    <tr>
+                                        <th>Speed \ Dir</th>
+                                        <th>-180</th>
+                                        <th>0</th>
+                                        <th>180</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>400</strong></td>
+                                        <td>BwdRun</td>
+                                        <td>FwdRun</td>
+                                        <td>FwdRun</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>200</strong></td>
+                                        <td>BwdWalk</td>
+                                        <td>FwdWalk</td>
+                                        <td>FwdWalk</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>0</strong></td>
+                                        <td>Idle</td>
+                                        <td>Idle</td>
+                                        <td>Idle</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">2D Blend Space로 8방향 이동 구현</p>
             </div>
 
@@ -280,32 +307,27 @@ void AMyCharacter::OnAttackMontageEnded(
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-┌─────────────────────────────────────────────────────────┐
-│              Layered Animation 구조                      │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│   Base Pose (전신)                                      │
-│   ┌─────────────────────┐                               │
-│   │    Locomotion       │ ← 걷기/뛰기 애니메이션        │
-│   │    (State Machine)  │                               │
-│   └──────────┬──────────┘                               │
-│              │                                           │
-│              ▼                                           │
-│   ┌─────────────────────┐                               │
-│   │  Layered Blend      │                               │
-│   │  per Bone           │                               │
-│   │                     │                               │
-│   │  Spine 기준 분리:   │                               │
-│   │  - 하체: Base Pose  │                               │
-│   │  - 상체: Slot Anim  │ ← 공격 몽타주                 │
-│   └──────────┬──────────┘                               │
-│              │                                           │
-│              ▼                                           │
-│        Final Pose                                        │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box">
+                        <div class="flow-box__title">Base Pose (전신)</div>
+                        <div class="flow-box__items"><p>Locomotion (State Machine) - 걷기/뛰기 애니메이션</p></div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-box">
+                        <div class="flow-box__title">Layered Blend per Bone</div>
+                        <div class="flow-box__items">
+                            <p><strong>Spine 기준 분리:</strong></p>
+                            <ul>
+                                <li>하체: Base Pose</li>
+                                <li>상체: Slot Anim (공격 몽타주)</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-box flow-box--highlight">
+                        <div class="flow-box__title">Final Pose</div>
+                    </div>
+                </div>
                 <p class="diagram-caption">상체/하체 분리 애니메이션</p>
             </div>
 

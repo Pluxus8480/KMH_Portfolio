@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"게임이 갑자기 멈췄어요"</h1>
             <p class="subtitle">데드락의 원인과 해결법</p>
         </header>
@@ -27,36 +29,52 @@
                     <p>두 개 이상의 스레드가 서로의 자원을 기다리며 <strong>영원히 대기</strong>하는 상태입니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    데드락 발생 시나리오                               │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Thread A                         Thread B                        │
-│   ─────────                        ─────────                        │
-│                                                                     │
-│   1. lock(mutexA) ✓                                                │
-│                                    2. lock(mutexB) ✓               │
-│   3. lock(mutexB) ... 대기 ──────▶                                 │
-│                                    4. lock(mutexA) ... 대기 ◀──────│
-│                                                                     │
-│   결과: 양쪽 모두 영원히 대기!                                      │
-│                                                                     │
-│   ┌─────────┐                    ┌─────────┐                       │
-│   │Thread A │ ─── 대기 ─────────▶│ mutexB  │◀─── 보유 ─┐          │
-│   │         │◀─── 보유 ─────────│         │           │          │
-│   └─────────┘                    └─────────┘           │          │
-│        │                              ▲                │          │
-│        │                              │                │          │
-│        ▼                              │                │          │
-│   ┌─────────┐                    ┌────┴────┐           │          │
-│   │ mutexA  │◀─── 대기 ─────────│Thread B │───────────┘          │
-│   └─────────┘                    └─────────┘                       │
-│                                                                     │
-│   순환 대기 (Circular Wait) 발생!                                   │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <p><strong>데드락 발생 시나리오</strong></p>
+                            <table class="compare-table">
+                                <thead>
+                                    <tr><th>순서</th><th>Thread A</th><th>Thread B</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td>1</td><td>lock(mutexA) ✓</td><td></td></tr>
+                                    <tr><td>2</td><td></td><td>lock(mutexB) ✓</td></tr>
+                                    <tr><td>3</td><td>lock(mutexB) ... 대기 →</td><td></td></tr>
+                                    <tr><td>4</td><td></td><td>lock(mutexA) ... 대기 →</td></tr>
+                                </tbody>
+                            </table>
+                            <p class="warning">결과: 양쪽 모두 영원히 대기!</p>
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Thread A</div>
+                                    <div class="flow-box__items">
+                                        <p>mutexA 보유</p>
+                                    </div>
+                                </div>
+                                <span class="flow-arrow">→ 대기 →</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">mutexB</div>
+                                    <div class="flow-box__items">
+                                        <p>Thread B가 보유</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Thread B</div>
+                                    <div class="flow-box__items">
+                                        <p>mutexB 보유</p>
+                                    </div>
+                                </div>
+                                <span class="flow-arrow">→ 대기 →</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">mutexA</div>
+                                    <div class="flow-box__items">
+                                        <p>Thread A가 보유</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="highlight">순환 대기 (Circular Wait) 발생!</p>
+                        </div>
                     </div>
                 </div>
 

@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>초점의 미학</h1>
@@ -30,29 +30,36 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-피사계 심도 (실제 카메라):
-
-      렌즈
-        ◎
-       ╱│╲
-      ╱ │ ╲
-     ╱  │  ╲
-    ╱   │   ╲
-   ╱    │    ╲
-  A     B     C
-  │     │     │
-흐림   선명   흐림
-(Near) (Focus)(Far)
-
-A: Near Blur - 초점 앞 (너무 가까움)
-B: In Focus - 초점 거리 (선명)
-C: Far Blur - 초점 뒤 (너무 멂)
-
-Circle of Confusion (CoC):
-- 초점 맞은 점 → 센서에 점으로 맺힘
-- 초점 안 맞은 점 → 원으로 퍼짐 (Bokeh)
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box">
+                            <div class="flow-box__title">렌즈</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">A: Near Blur</div>
+                                <div class="flow-box__items">초점 앞 (너무 가까움)<br>→ 흐림</div>
+                            </div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">B: In Focus</div>
+                                <div class="flow-box__items">초점 거리<br>→ 선명</div>
+                            </div>
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">C: Far Blur</div>
+                                <div class="flow-box__items">초점 뒤 (너무 멂)<br>→ 흐림</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--info flow-box--wide">
+                            <div class="flow-box__title">Circle of Confusion (CoC)</div>
+                            <div class="flow-box__items">
+                                초점 맞은 점 → 센서에 점으로 맺힘<br>
+                                초점 안 맞은 점 → 원으로 퍼짐 (Bokeh)
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">카메라 DoF 원리</p>
             </div>
 
@@ -125,24 +132,23 @@ float CalculateCoC_Simple(float depth)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-CoC 그래프:
-
-CoC
-(블러)
-  ↑
-  │   Near        Focus          Far
-  │   Blur        Range          Blur
-  │     │           │             │
-  │ ────┼───────────┼─────────────┼────
-  │   ╱ │           │             │ ╲
-  │  ╱  │           │             │  ╲
-  │ ╱   │     ═════════════       │   ╲
-  │╱    │                         │    ╲
-──┼─────┼─────────────────────────┼─────→ Depth
-  │     │                         │
-  │  nearStart    focus       farStart
-                </pre>
+                <div class="flow-diagram">
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Near Blur</div>
+                            <div class="pipeline-bar" style="background: linear-gradient(to right, rgba(239,68,68,0.4), rgba(239,68,68,0.1));"><span>CoC 감소 →</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Focus Range</div>
+                            <div class="pipeline-bar" style="background: rgba(0,255,153,0.15);"><span>CoC = 0 (선명)</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Far Blur</div>
+                            <div class="pipeline-bar" style="background: linear-gradient(to right, rgba(239,68,68,0.1), rgba(239,68,68,0.4));"><span>← CoC 증가</span></div>
+                        </div>
+                    </div>
+                    <p style="text-align:center; color: var(--text-muted); font-size: 0.8rem; margin-top: 6px;">nearStart ← Depth → farStart</p>
+                </div>
                 <p class="diagram-caption">깊이에 따른 CoC 값</p>
             </div>
         </section>
@@ -216,22 +222,27 @@ float4 PS_DoFBlur(float2 uv : TEXCOORD) : SV_Target
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Bokeh 효과:
-
-원본 이미지:              DoF 적용 후:
-┌─────────────────┐      ┌─────────────────┐
-│                 │      │                 │
-│    ★  ★  ★    │      │   ◉   ◉   ◉   │
-│                 │  →   │                 │
-│  (밝은 점들)    │      │  (동그란 원들)  │
-│                 │      │                 │
-└─────────────────┘      └─────────────────┘
-
-조리개 모양에 따라:
-원형 조리개 → ●
-육각형 조리개 → ⬡
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">원본 이미지</div>
+                            <div class="flow-box__items">밝은 점들 (하이라이트)</div>
+                        </div>
+                        <span class="flow-arrow">→ DoF 적용 →</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Bokeh 효과</div>
+                            <div class="flow-box__items">밝은 점 → 동그란 원으로 퍼짐</div>
+                        </div>
+                    </div>
+                    <div class="flow-row" style="margin-top: 8px; gap: 12px;">
+                        <div class="flow-box flow-box--info flow-box--small">
+                            <div class="flow-box__title">원형 조리개</div>
+                        </div>
+                        <div class="flow-box flow-box--info flow-box--small">
+                            <div class="flow-box__title">육각형 조리개</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Bokeh 효과 예시</p>
             </div>
 
@@ -317,31 +328,40 @@ float4 PS_BokehScatter(GS_OUTPUT input) : SV_Target
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Separable DoF 파이프라인:
-
-원본 (Full Res)
-     │
-     ▼
-┌────────────┐
-│ CoC 계산   │
-└────────────┘
-     │
-     ▼
-┌────────────┐    ┌────────────┐    ┌────────────┐
-│ 다운샘플   │ →  │ 가로 블러  │ →  │ 세로 블러  │
-│ (1/2 Res)  │    │            │    │            │
-└────────────┘    └────────────┘    └────────────┘
-                                          │
-                                          ▼
-                                   ┌────────────┐
-                                   │ 업샘플     │
-                                   │ + 합성     │
-                                   └────────────┘
-                                          │
-                                          ▼
-                                      최종 결과
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box">
+                            <div class="flow-box__title">원본 (Full Res)</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">CoC 계산</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">다운샘플</div>
+                                <div class="flow-box__items">1/2 Res</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box">
+                                <div class="flow-box__title">가로 블러</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box">
+                                <div class="flow-box__title">세로 블러</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">업샘플 + 합성</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">최종 결과</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">효율적인 DoF 파이프라인</p>
             </div>
 

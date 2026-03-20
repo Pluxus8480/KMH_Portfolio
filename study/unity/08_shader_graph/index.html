@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shader Graph | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+
+        <header class="content-header">
+            <h1>코드 한 줄 없이 셰이더를 만든다?</h1>
+            <p class="subtitle">Shader Graph와 URP로 비주얼 이펙트 구현하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: URP와 렌더 파이프라인 이해</h2>
+            <div class="conversation">
+                <div class="q">Unity에 렌더 파이프라인이 여러 개 있다는데, 왜 그런 건가요?</div>
+                <div class="a">
+                    <p>Unity는 다양한 플랫폼과 요구사항에 대응하기 위해 <strong>Scriptable Render Pipeline(SRP)</strong> 아키텍처를 도입했습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>파이프라인</th><th>대상</th><th>Shader Graph 지원</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Built-in RP</strong></td>
+                                <td>레거시 프로젝트</td>
+                                <td>제한적</td>
+                            </tr>
+                            <tr>
+                                <td><strong>URP</strong></td>
+                                <td>모바일~콘솔 (범용)</td>
+                                <td>완전 지원</td>
+                            </tr>
+                            <tr>
+                                <td><strong>HDRP</strong></td>
+                                <td>고사양 PC/콘솔</td>
+                                <td>완전 지원</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">Shader Graph는 URP와 HDRP에서만 완전히 지원됩니다. Built-in RP에서는 사용할 수 없으므로 프로젝트 시작 시 파이프라인 선택이 중요합니다.</p>
+                </div>
+
+                <div class="q">URP가 게임 개발에서 가장 많이 선택되는 이유는?</div>
+                <div class="a">
+                    <p>성능과 품질의 균형이 뛰어나기 때문입니다. 모바일부터 콘솔까지 하나의 파이프라인으로 대응할 수 있고, 배칭과 SRP Batcher 덕분에 드로우 콜 최적화도 용이합니다.</p>
+                    <p class="key-point">URP에서 Shader Graph를 사용하려면 프로젝트에 Universal RP 패키지가 설치되어 있어야 하며, Graphics Settings에서 URP Asset이 할당되어야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Shader Graph 기본 노드 이해</h2>
+            <div class="conversation">
+                <div class="q">Shader Graph에서 가장 먼저 알아야 할 노드는 무엇인가요?</div>
+                <div class="a">
+                    <p>Shader Graph는 노드(Node)를 연결하여 셰이더를 만드는 비주얼 도구입니다. 핵심 노드 카테고리를 이해하면 대부분의 이펙트를 구현할 수 있습니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Input 노드</div>
+                                <div class="flow-box__items">텍스처, 색상, UV, 시간</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Math / Utility</div>
+                                <div class="flow-box__items">Add, Multiply, Lerp, Step</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Master Stack</div>
+                                <div class="flow-box__items">Base Color, Normal, Alpha 등</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p>자주 사용하는 핵심 노드들:</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>노드</th><th>역할</th><th>사용 예</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Sample Texture 2D</strong></td><td>텍스처 샘플링</td><td>알베도, 노멀맵 읽기</td></tr>
+                            <tr><td><strong>UV</strong></td><td>UV 좌표 제공</td><td>텍스처 매핑 기준</td></tr>
+                            <tr><td><strong>Time</strong></td><td>시간값 제공</td><td>애니메이션, 스크롤</td></tr>
+                            <tr><td><strong>Lerp</strong></td><td>선형 보간</td><td>두 값 사이 블렌딩</td></tr>
+                            <tr><td><strong>Step / Smoothstep</strong></td><td>임계값 기반 분리</td><td>디졸브, 엣지 감지</td></tr>
+                            <tr><td><strong>Fresnel Effect</strong></td><td>시선 각도 기반 강도</td><td>림 라이트, 홀로그램</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">Master Stack이 뭔가요?</div>
+                <div class="a">
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>Master Stack은 그림의 "최종 캔버스"입니다. 여러 물감(노드)을 혼합하여 최종 결과물을 캔버스에 올리는 것처럼, 모든 노드 계산의 결과가 Master Stack의 각 슬롯에 연결됩니다.</p>
+                    </div>
+                    <p><strong>주요 슬롯</strong>: Base Color(기본 색), Normal(표면 법선), Metallic(금속성), Smoothness(매끄러움), Emission(발광), Alpha(투명도)</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 디졸브 이펙트 구현</h2>
+            <div class="conversation">
+                <div class="q">적이 사라질 때 디졸브(용해) 이펙트를 Shader Graph로 어떻게 만드나요?</div>
+                <div class="a">
+                    <p class="highlight">핵심 원리: 노이즈 텍스처의 값이 특정 임계값(Threshold) 미만이면 픽셀을 투명하게 만든다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Simple Noise</div>
+                                <div class="flow-box__items">노이즈 패턴 생성</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Step (Threshold)</div>
+                                <div class="flow-box__items">임계값 기준 0/1 분리</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Alpha Clip</div>
+                                <div class="flow-box__items">투명 영역 제거</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p>노이즈 값이 임계값보다 작은 픽셀을 버리되, 경계 부분에 발광색을 입히면 타는 듯한 느낌을 줄 수 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 디졸브 제어 스크립트</div>
+                        <pre><code>public class DissolveController : MonoBehaviour
+{
+    [SerializeField] private float dissolveDuration = 2f;
+    private Material material;
+    private static readonly int DissolveAmount = Shader.PropertyToID("_DissolveAmount");
+    private static readonly int EdgeColor = Shader.PropertyToID("_EdgeColor");
+
+    void Start()
+    {
+        // 인스턴스 머티리얼 사용 (원본 변경 방지)
+        material = GetComponent&lt;Renderer&gt;().material;
+    }
+
+    public void StartDissolve()
+    {
+        StartCoroutine(DissolveRoutine());
+    }
+
+    private IEnumerator DissolveRoutine()
+    {
+        float elapsed = 0f;
+        while (elapsed &lt; dissolveDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / dissolveDuration;
+            material.SetFloat(DissolveAmount, t);
+            yield return null;
+        }
+        gameObject.SetActive(false);
+    }
+}</code></pre>
+                    </div>
+                    <p class="warning">Renderer.material은 머티리얼 인스턴스를 생성하므로 메모리 누수에 주의하세요. 오브젝트가 파괴되거나 풀로 반환될 때 명시적으로 Destroy(material)을 호출해야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 홀로그램 이펙트 구현</h2>
+            <div class="conversation">
+                <div class="q">SF 게임에서 자주 보이는 홀로그램 효과는 어떤 원리인가요?</div>
+                <div class="a">
+                    <p>홀로그램은 세 가지 요소의 조합입니다:</p>
+                    <ul>
+                        <li><strong>Fresnel Effect</strong>: 가장자리가 밝게 빛나는 림 라이트</li>
+                        <li><strong>스캔라인</strong>: 위아래로 움직이는 가로줄 패턴</li>
+                        <li><strong>글리치</strong>: 불규칙한 왜곡/깜빡임</li>
+                    </ul>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>Fresnel Effect는 비눗방울을 떠올리세요. 정면으로 보면 투명하지만, 가장자리(비스듬한 각도)에서는 무지개빛이 강하게 보입니다.</p>
+                        <p>셰이더에서도 카메라와 표면의 각도(Normal vs View Direction)가 클수록 값이 강해집니다.</p>
+                    </div>
+
+                    <p class="key-point">Shader Graph에서 Fresnel Effect 노드 하나로 림 라이트를 구현할 수 있으며, Power 값이 클수록 가장자리 발광이 얇아집니다.</p>
+                </div>
+
+                <div class="q">스캔라인은 어떻게 만드나요?</div>
+                <div class="a">
+                    <p>오브젝트의 월드 Y 좌표에 Time을 더한 뒤 Sine/Frac 함수를 적용하면 스캔라인이 됩니다.</p>
+                    <p>노드 연결 흐름:</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Position (World)</div>
+                                <div class="flow-box__items">Y 컴포넌트 추출</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Add (Time)</div>
+                                <div class="flow-box__items">스크롤 애니메이션</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Multiply (Scale)</div>
+                                <div class="flow-box__items">라인 밀도 조절</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Sine &rarr; Remap</div>
+                                <div class="flow-box__items">0~1 범위로 변환</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>결과를 Alpha나 Emission에 곱하면 스캔라인이 지나가는 느낌이 완성됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 커스텀 라이팅과 Toon 셰이더</h2>
+            <div class="conversation">
+                <div class="q">Shader Graph로 카툰 렌더링(Toon Shading)도 가능한가요?</div>
+                <div class="a">
+                    <p>가능합니다. 핵심은 <strong>라이트 방향과 노멀의 내적(Dot Product)</strong>을 구한 뒤, 이를 Smoothstep으로 몇 단계로 끊어서 셀 셰이딩 효과를 만드는 것입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Shader Graph 노드 로직 (의사 코드)</div>
+                        <pre><code>// 1. 조명 방향과 표면 법선의 내적
+float NdotL = dot(Normal, LightDirection);
+
+// 2. 0~1로 정규화
+float halfLambert = NdotL * 0.5 + 0.5;
+
+// 3. Step으로 2단계 명암 분리 (Toon)
+float toon = step(0.5, halfLambert);
+
+// 4. 최종 색상
+float3 finalColor = baseColor * lerp(shadowColor, lightColor, toon);</code></pre>
+                    </div>
+                    <p class="warning">URP Shader Graph에서 메인 라이트 방향을 얻으려면 Custom Function 노드가 필요합니다. 기본 제공 노드만으로는 라이트 정보에 접근할 수 없습니다.</p>
+                </div>
+
+                <div class="q">Custom Function 노드는 어떻게 사용하나요?</div>
+                <div class="a">
+                    <p>HLSL 파일을 작성하고 Custom Function 노드에서 참조합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">HLSL - GetMainLight.hlsl</div>
+                        <pre><code>#ifndef CUSTOM_LIGHTING_INCLUDED
+#define CUSTOM_LIGHTING_INCLUDED
+
+void GetMainLight_float(float3 WorldPos, out float3 Direction,
+                        out float3 Color, out float Attenuation)
+{
+#ifdef SHADERGRAPH_PREVIEW
+    Direction = float3(0.5, 0.5, 0);
+    Color = 1;
+    Attenuation = 1;
+#else
+    Light mainLight = GetMainLight();
+    Direction = mainLight.direction;
+    Color = mainLight.color;
+    Attenuation = mainLight.distanceAttenuation * mainLight.shadowAttenuation;
+#endif
+}
+
+#endif</code></pre>
+                    </div>
+                    <p class="key-point">SHADERGRAPH_PREVIEW 매크로는 Shader Graph 에디터의 미리보기에서 오류를 방지합니다. 프리뷰에서는 라이트 데이터가 없으므로 하드코딩된 값을 사용합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 성능 최적화와 주의사항</h2>
+            <div class="conversation">
+                <div class="q">Shader Graph로 만든 셰이더는 성능이 괜찮나요?</div>
+                <div class="a">
+                    <p>Shader Graph가 생성하는 코드는 범용적이므로, 수작성 셰이더 대비 약간의 오버헤드가 있을 수 있습니다. 하지만 대부분의 경우 차이는 미미합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>항목</th><th>Shader Graph</th><th>수작성 ShaderLab</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>개발 속도</td><td>빠름 (비주얼)</td><td>느림 (코드)</td></tr>
+                            <tr><td>디버깅</td><td>노드별 미리보기</td><td>RenderDoc 필요</td></tr>
+                            <tr><td>성능 미세 최적화</td><td>어려움</td><td>가능</td></tr>
+                            <tr><td>팀 협업</td><td>아티스트 접근 용이</td><td>프로그래머 전용</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">Shader Graph에서 Generated Code를 확인(Inspector &gt; View Generated Shader)하여 불필요한 연산이 없는지 검증하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Shader Graph</strong>는 URP/HDRP에서 코드 없이 셰이더를 만드는 비주얼 도구이다</li>
+                <li>디졸브 이펙트는 <strong>노이즈 + Step + Alpha Clip</strong>으로 구현한다</li>
+                <li>홀로그램은 <strong>Fresnel + 스캔라인(Sine) + 글리치</strong>의 조합이다</li>
+                <li>커스텀 라이팅(Toon)은 <strong>Custom Function 노드</strong>로 라이트 정보를 가져와 구현한다</li>
+                <li>Renderer.material은 인스턴스를 생성하므로 <strong>메모리 관리에 주의</strong>해야 한다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

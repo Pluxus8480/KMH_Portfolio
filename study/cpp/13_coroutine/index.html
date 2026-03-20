@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>함수 실행을 멈췄다가 다시 시작한다고?</h1>
             <p class="subtitle">C++20 코루틴으로 비동기 코드 깔끔하게 작성하기</p>
         </header>
@@ -25,21 +27,45 @@
                     <p class="highlight">코루틴은 실행을 중단(suspend)했다가 나중에 재개(resume)할 수 있는 함수입니다!</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-일반 함수 vs 코루틴
-
-일반 함수:
-caller → function() → 완료 → caller
-         └──────────────────┘
-            한 번에 실행
-
-코루틴:
-caller → coroutine() → 중단 → caller
-                ↓
-         caller → 재개 → 중단 → caller
-                          ↓
-                   caller → 재개 → 완료 → caller
-                        </pre>
+                        <p><strong>일반 함수 vs 코루틴</strong></p>
+                        <p><strong>일반 함수:</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">caller</div></div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box"><div class="flow-box__title">function()</div><div class="flow-box__items">한 번에 실행</div></div>
+                                <div class="flow-arrow">&rarr; 완료 &rarr;</div>
+                                <div class="flow-box"><div class="flow-box__title">caller</div></div>
+                            </div>
+                        </div>
+                        <p><strong>코루틴:</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">caller</div></div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">coroutine()</div></div>
+                                <div class="flow-arrow">&rarr; 중단 &rarr;</div>
+                                <div class="flow-box"><div class="flow-box__title">caller</div></div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">caller</div></div>
+                                <div class="flow-arrow">&rarr; 재개 &rarr;</div>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">coroutine()</div></div>
+                                <div class="flow-arrow">&rarr; 중단 &rarr;</div>
+                                <div class="flow-box"><div class="flow-box__title">caller</div></div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">caller</div></div>
+                                <div class="flow-arrow">&rarr; 재개 &rarr;</div>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">coroutine()</div></div>
+                                <div class="flow-arrow">&rarr; 완료 &rarr;</div>
+                                <div class="flow-box"><div class="flow-box__title">caller</div></div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="code-block">
@@ -133,32 +159,25 @@ public:
                 </div>
 
                 <div class="visual-section">
-                    <pre class="diagram">
-코루틴 구조
-
-┌─────────────────────────────────────┐
-│           Return Object             │
-│  (Generator, Task 등)               │
-├─────────────────────────────────────┤
-│        Coroutine Handle             │
-│  - resume(): 재개                   │
-│  - destroy(): 파괴                  │
-│  - done(): 완료 여부                │
-├─────────────────────────────────────┤
-│          Promise Type               │
-│  - get_return_object()              │
-│  - initial_suspend()                │
-│  - final_suspend()                  │
-│  - yield_value() / return_value()   │
-│  - unhandled_exception()            │
-├─────────────────────────────────────┤
-│        Coroutine Frame              │
-│  (힙에 할당된 상태 저장소)           │
-│  - 지역 변수                        │
-│  - 중단 지점                        │
-│  - Promise 객체                     │
-└─────────────────────────────────────┘
-                    </pre>
+                    <p><strong>코루틴 구조</strong></p>
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Return Object</div>
+                            <div class="pipeline-bar pb-gbuffer"><span>Generator, Task 등</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Coroutine Handle</div>
+                            <div class="pipeline-bar pb-light"><span>resume(): 재개</span><span>destroy(): 파괴</span><span>done(): 완료 여부</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Promise Type</div>
+                            <div class="pipeline-bar pb-post"><span>get_return_object()</span><span>initial_suspend()</span><span>final_suspend()</span><span>yield_value() / return_value()</span><span>unhandled_exception()</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Coroutine Frame</div>
+                            <div class="pipeline-bar pb-shadow"><span>힙에 할당된 상태 저장소</span><span>지역 변수</span><span>중단 지점</span><span>Promise 객체</span></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>

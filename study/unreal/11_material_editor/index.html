@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
 
         <header class="content-header">
             <h1>픽셀의 색을 결정하는 법</h1>
@@ -88,24 +88,45 @@
             </table>
 
             <div class="visual-section">
-                <pre class="diagram">
-Material Input 핀 구조:
-
-┌─────────────────────────────────────────────────┐
-│              Material Result Node                │
-├─────────────────────────────────────────────────┤
-│                                                  │
-│  Base Color ─────────● [RGB 색상]               │
-│  Metallic ───────────● [0-1 값]                 │
-│  Specular ───────────● [0-1 값, 보통 0.5]       │
-│  Roughness ──────────● [0-1 값]                 │
-│  Emissive Color ─────● [RGB, HDR]               │
-│  Normal ─────────────● [탄젠트 공간 노멀]       │
-│  World Position Offset─● [월드 좌표 오프셋]    │
-│  Ambient Occlusion ──● [0-1 값]                 │
-│                                                  │
-└─────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-group">
+                        <div class="flow-group__title">Material Result Node</div>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Base Color</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>RGB 색상</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Metallic</div>
+                                <div class="pipeline-bar pb-light"><span>0-1 값</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Specular</div>
+                                <div class="pipeline-bar pb-light"><span>0-1 값, 보통 0.5</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Roughness</div>
+                                <div class="pipeline-bar pb-light"><span>0-1 값</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Emissive Color</div>
+                                <div class="pipeline-bar pb-post"><span>RGB, HDR</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Normal</div>
+                                <div class="pipeline-bar pb-shadow"><span>탄젠트 공간 노멀</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label" style="font-size:0.7rem;">World Pos Offset</div>
+                                <div class="pipeline-bar pb-shadow"><span>월드 좌표 오프셋</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label" style="font-size:0.7rem;">Ambient Occlusion</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>0-1 값</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Material의 핵심 입력 핀</p>
             </div>
         </section>
@@ -196,31 +217,25 @@ Mask ───────┘ (Alpha)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Material 구조:
-
-      ┌─────────────────────────┐
-      │   M_Character (Parent)  │ ← 베이스 Material
-      │                         │   (셰이더 로직 정의)
-      │   Parameters:           │
-      │   • BaseColor           │
-      │   • RoughnessValue      │
-      │   • NormalIntensity     │
-      └───────────┬─────────────┘
-                  │ 상속
-      ┌───────────┼───────────┐
-      │           │           │
-      ▼           ▼           ▼
-┌──────────┐ ┌──────────┐ ┌──────────┐
-│MI_Char   │ │MI_Char   │ │MI_Char   │
-│ _Red     │ │ _Blue    │ │ _Gold    │
-│          │ │          │ │          │
-│BaseColor:│ │BaseColor:│ │BaseColor:│
-│ (1,0,0)  │ │ (0,0,1)  │ │ (1,0.8,0)│
-└──────────┘ └──────────┘ └──────────┘
-
-Instance는 파라미터만 다름 → 셰이더 공유!
-                </pre>
+                <div class="hierarchy-diagram">
+                    <div class="hierarchy-item hierarchy-item--root">M_Character (Parent Material)<br><span style="font-size:0.7rem; font-weight:normal;">Parameters: BaseColor, RoughnessValue, NormalIntensity</span></div>
+                    <span class="flow-arrow-down">↓ 상속</span>
+                    <div class="hierarchy-children" style="justify-content: center; border-left: none; padding-left: 0; margin-left: 0;">
+                        <div class="flow-box flow-box--warning" style="min-width: 120px;">
+                            <div class="flow-box__title">MI_Char_Red</div>
+                            <div class="flow-box__items">BaseColor: (1, 0, 0)</div>
+                        </div>
+                        <div class="flow-box flow-box--info" style="min-width: 120px;">
+                            <div class="flow-box__title">MI_Char_Blue</div>
+                            <div class="flow-box__items">BaseColor: (0, 0, 1)</div>
+                        </div>
+                        <div class="flow-box flow-box--highlight" style="min-width: 120px;">
+                            <div class="flow-box__title">MI_Char_Gold</div>
+                            <div class="flow-box__items">BaseColor: (1, 0.8, 0)</div>
+                        </div>
+                    </div>
+                    <div class="flow-label" style="margin-top: 12px;">Instance는 파라미터만 다름 → 셰이더 공유!</div>
+                </div>
                 <p class="diagram-caption">Parent Material과 Instance 관계</p>
             </div>
 

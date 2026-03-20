@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../database.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../database.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"우리 게임에는 어떤 DB가 맞을까?"</h1>
             <p class="subtitle">NoSQL vs RDBMS 게임별 선택 전략</p>
         </header>
@@ -27,25 +29,55 @@
                     <p>게임 장르에 따라 <strong>데이터 특성</strong>이 완전히 다릅니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                     게임 장르별 데이터 특성                          │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  MMORPG                           │  캐주얼/소셜 게임               │
-│  ├── 복잡한 관계 (길드, 거래, 퀘스트)  │  ├── 단순한 구조             │
-│  ├── 트랜잭션 중요 (아이템 거래)       │  ├── 읽기 중심               │
-│  ├── 스키마 안정적                    │  ├── 빠른 스키마 변경 필요    │
-│  └── → RDBMS 유리                    │  └── → NoSQL 유리            │
-│                                                                     │
-│  실시간 PvP                         │  분석/로그                     │
-│  ├── 초고속 읽기/쓰기                  │  ├── 대량 쓰기               │
-│  ├── 단순 키-값 접근                   │  ├── 집계 쿼리               │
-│  ├── 일시적 데이터                     │  ├── 스키마리스              │
-│  └── → Redis/메모리 DB               │  └── → Document DB           │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>게임 장르별 데이터 특성</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row--3col">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">MMORPG &rarr; RDBMS 유리</div>
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>복잡한 관계 (길드, 거래, 퀘스트)</li>
+                                            <li>트랜잭션 중요 (아이템 거래)</li>
+                                            <li>스키마 안정적</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="flow-box flow-box--info">
+                                    <div class="flow-box__title">캐주얼/소셜 게임 &rarr; NoSQL 유리</div>
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>단순한 구조</li>
+                                            <li>읽기 중심</li>
+                                            <li>빠른 스키마 변경 필요</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="flow-box flow-box--warning">
+                                    <div class="flow-box__title">실시간 PvP &rarr; Redis/메모리 DB</div>
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>초고속 읽기/쓰기</li>
+                                            <li>단순 키-값 접근</li>
+                                            <li>일시적 데이터</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">분석/로그 &rarr; Document DB</div>
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>대량 쓰기</li>
+                                            <li>집계 쿼리</li>
+                                            <li>스키마리스</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <p class="highlight">은탄환은 없습니다. 데이터 특성을 먼저 분석하세요.</p>
@@ -99,55 +131,57 @@
                 <div class="q">NoSQL도 종류가 많던데, 어떤 것들이 있나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                       NoSQL 유형별 비교                              │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  1. Key-Value Store (Redis, DynamoDB)                               │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  "user:1001" → {"name": "Kim", "level": 50}                  │   │
-│  │                                                              │   │
-│  │  장점: 초고속, 단순함, 확장 용이                              │   │
-│  │  단점: 복잡한 쿼리 불가                                       │   │
-│  │  게임 용도: 세션, 캐시, 실시간 상태                           │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                                                                     │
-│  2. Document Store (MongoDB, CouchDB)                               │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  {                                                           │   │
-│  │    "_id": "char_1001",                                       │   │
-│  │    "name": "Warrior",                                        │   │
-│  │    "inventory": [{"item": "sword", "count": 1}, ...]         │   │
-│  │  }                                                           │   │
-│  │                                                              │   │
-│  │  장점: 유연한 스키마, 중첩 데이터                             │   │
-│  │  단점: JOIN 비효율, 트랜잭션 제한                             │   │
-│  │  게임 용도: 유저 프로필, 게임 설정, 로그                      │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                                                                     │
-│  3. Wide-Column Store (Cassandra, HBase)                            │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  RowKey: "user:1001:2024-01"                                 │   │
-│  │  Columns: {login: 50, playtime: 3600, ...}                   │   │
-│  │                                                              │   │
-│  │  장점: 대규모 쓰기, 시계열 데이터                             │   │
-│  │  단점: 복잡한 모델링, 읽기 패턴 제한                          │   │
-│  │  게임 용도: 로그, 분석, 리플레이 데이터                       │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                                                                     │
-│  4. Graph Database (Neo4j, Amazon Neptune)                          │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  (Player)--[FRIEND_OF]--(Player)                             │   │
-│  │  (Player)--[MEMBER_OF]--(Guild)                              │   │
-│  │                                                              │   │
-│  │  장점: 관계 탐색 최적화                                       │   │
-│  │  단점: 일반 CRUD 비효율                                       │   │
-│  │  게임 용도: 소셜 그래프, 추천 시스템                          │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>NoSQL 유형별 비교</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row--3col">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">1. Key-Value Store</div>
+                                    <div class="flow-box__items">
+                                        Redis, DynamoDB<br><br>
+                                        "user:1001" &rarr; {"name": "Kim", "level": 50}<br><br>
+                                        장점: 초고속, 단순함, 확장 용이<br>
+                                        단점: 복잡한 쿼리 불가<br>
+                                        게임 용도: 세션, 캐시, 실시간 상태
+                                    </div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">2. Document Store</div>
+                                    <div class="flow-box__items">
+                                        MongoDB, CouchDB<br><br>
+                                        {"_id": "char_1001", "name": "Warrior", "inventory": [...]}<br><br>
+                                        장점: 유연한 스키마, 중첩 데이터<br>
+                                        단점: JOIN 비효율, 트랜잭션 제한<br>
+                                        게임 용도: 유저 프로필, 게임 설정, 로그
+                                    </div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">3. Wide-Column Store</div>
+                                    <div class="flow-box__items">
+                                        Cassandra, HBase<br><br>
+                                        RowKey: "user:1001:2024-01"<br>
+                                        Columns: {login: 50, playtime: 3600, ...}<br><br>
+                                        장점: 대규모 쓰기, 시계열 데이터<br>
+                                        단점: 복잡한 모델링, 읽기 패턴 제한<br>
+                                        게임 용도: 로그, 분석, 리플레이 데이터
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">4. Graph Database</div>
+                                    <div class="flow-box__items">
+                                        Neo4j, Amazon Neptune<br><br>
+                                        (Player)--[FRIEND_OF]--(Player)<br>
+                                        (Player)--[MEMBER_OF]--(Guild)<br><br>
+                                        장점: 관계 탐색 최적화<br>
+                                        단점: 일반 CRUD 비효율<br>
+                                        게임 용도: 소셜 그래프, 추천 시스템
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -161,41 +195,44 @@
                     <p>복잡한 관계와 트랜잭션이 많으므로 <strong>RDBMS가 핵심</strong>입니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    MMORPG 데이터 아키텍처                            │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│                     ┌─────────────┐                                 │
-│                     │  Game Server │                                 │
-│                     └──────┬──────┘                                 │
-│                            │                                        │
-│      ┌─────────────────────┼─────────────────────┐                  │
-│      │                     │                     │                  │
-│      ▼                     ▼                     ▼                  │
-│  ┌───────────┐      ┌───────────┐      ┌───────────────┐           │
-│  │   Redis   │      │   MySQL   │      │   MongoDB     │           │
-│  │  (Cache)  │      │  (Core)   │      │   (Logs)      │           │
-│  └───────────┘      └───────────┘      └───────────────┘           │
-│                                                                     │
-│  Redis 담당:                                                        │
-│  - 실시간 유저 상태 (위치, HP, 버프)                                 │
-│  - 세션 정보                                                        │
-│  - 인스턴스 던전 상태                                                │
-│                                                                     │
-│  MySQL 담당:                                                        │
-│  - 캐릭터 정보, 인벤토리                                             │
-│  - 길드, 친구 관계                                                   │
-│  - 거래 내역 (ACID 필수)                                             │
-│  - 결제 정보                                                        │
-│                                                                     │
-│  MongoDB 담당:                                                      │
-│  - 게임 로그 (채팅, 전투, 이동)                                      │
-│  - 퀘스트 진행 상태                                                  │
-│  - A/B 테스트 설정                                                   │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>MMORPG 데이터 아키텍처</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Game Server</div>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">&darr;</span>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--warning">
+                                    <div class="flow-box__title">Redis (Cache)</div>
+                                    <div class="flow-box__items">
+                                        실시간 유저 상태 (위치, HP, 버프)<br>
+                                        세션 정보<br>
+                                        인스턴스 던전 상태
+                                    </div>
+                                </div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">MySQL (Core)</div>
+                                    <div class="flow-box__items">
+                                        캐릭터 정보, 인벤토리<br>
+                                        길드, 친구 관계<br>
+                                        거래 내역 (ACID 필수)<br>
+                                        결제 정보
+                                    </div>
+                                </div>
+                                <div class="flow-box flow-box--info">
+                                    <div class="flow-box__title">MongoDB (Logs)</div>
+                                    <div class="flow-box__items">
+                                        게임 로그 (채팅, 전투, 이동)<br>
+                                        퀘스트 진행 상태<br>
+                                        A/B 테스트 설정
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="code-block">
@@ -286,33 +323,50 @@ db.users.updateOne(
                     <p>매치 중 데이터는 <strong>인메모리</strong>, 결과만 <strong>영구 저장</strong>합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                   배틀로얄 게임 데이터 흐름                          │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   [매치 진행 중]                        [매치 종료 후]               │
-│                                                                     │
-│   ┌─────────────────┐                  ┌─────────────────┐         │
-│   │  Game Server    │                  │   Result API    │         │
-│   │  (In-Memory)    │                  └────────┬────────┘         │
-│   └────────┬────────┘                           │                  │
-│            │                                    │                  │
-│            ▼                                    ▼                  │
-│   ┌─────────────────┐                  ┌─────────────────┐         │
-│   │     Redis       │                  │     MySQL       │         │
-│   │  Match State    │                  │  - 매치 결과    │         │
-│   │  - 플레이어 위치 │ ───────────────▶│  - 통계 업데이트│         │
-│   │  - 체력/킬 수    │    매치 종료 시  │  - 랭킹 반영    │         │
-│   │  - 자기장 상태   │                  │  - 보상 지급    │         │
-│   └─────────────────┘                  └─────────────────┘         │
-│                                                                     │
-│   특징:                                                             │
-│   - 매치 중: 영속성 < 속도 (손실 허용)                              │
-│   - 매치 후: 속도 < 정확성 (ACID 필요)                              │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>배틀로얄 게임 데이터 흐름</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">매치 진행 중</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">매치 종료 후</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Game Server (In-Memory)</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Result API</div>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">&darr;</span>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--warning">
+                                    <div class="flow-box__title">Redis (Match State)</div>
+                                    <div class="flow-box__items">
+                                        플레이어 위치<br>
+                                        체력/킬 수<br>
+                                        자기장 상태
+                                    </div>
+                                </div>
+                                <span class="flow-arrow">매치 종료 시 &rarr;</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">MySQL (영구 저장)</div>
+                                    <div class="flow-box__items">
+                                        매치 결과<br>
+                                        통계 업데이트<br>
+                                        랭킹 반영 / 보상 지급
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p>매치 중: 영속성 &lt; 속도 (손실 허용) / 매치 후: 속도 &lt; 정확성 (ACID 필요)</p>
                     </div>
 
                     <div class="code-block">
@@ -382,34 +436,52 @@ class MatchStateManager {
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                  Polyglot Persistence 아키텍처                       │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   ┌─────────────────────────────────────────────────────────────┐  │
-│   │                      Application Layer                      │  │
-│   │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐        │  │
-│   │  │ Auth    │  │ Game    │  │ Social  │  │Analytics│        │  │
-│   │  │ Service │  │ Service │  │ Service │  │ Service │        │  │
-│   │  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘        │  │
-│   └───────┼────────────┼────────────┼────────────┼──────────────┘  │
-│           │            │            │            │                  │
-│           ▼            ▼            ▼            ▼                  │
-│   ┌─────────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────┐          │
-│   │   MySQL     │ │  Redis  │ │  Neo4j  │ │ ClickHouse  │          │
-│   │  (Account,  │ │ (Cache, │ │(Friends,│ │   (Logs,    │          │
-│   │   Payment)  │ │  State) │ │  Guild) │ │  Analytics) │          │
-│   └─────────────┘ └─────────┘ └─────────┘ └─────────────┘          │
-│                                                                     │
-│   각 서비스가 적합한 DB를 선택:                                      │
-│   - 인증/결제: 트랜잭션 필수 → MySQL                                │
-│   - 게임 상태: 속도 우선 → Redis                                    │
-│   - 소셜 기능: 관계 탐색 → Graph DB                                 │
-│   - 분석: 대량 집계 → Column-Oriented DB                            │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>Polyglot Persistence 아키텍처</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--wide">
+                                    <div class="flow-box__title">Application Layer</div>
+                                    <div class="flow-box__items">
+                                        <div class="flow-row" style="margin-top:4px;">
+                                            <div class="flow-box flow-box--small">
+                                                <div class="flow-box__title">Auth Service</div>
+                                            </div>
+                                            <div class="flow-box flow-box--small">
+                                                <div class="flow-box__title">Game Service</div>
+                                            </div>
+                                            <div class="flow-box flow-box--small">
+                                                <div class="flow-box__title">Social Service</div>
+                                            </div>
+                                            <div class="flow-box flow-box--small">
+                                                <div class="flow-box__title">Analytics Service</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">&darr;</span>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">MySQL</div>
+                                    <div class="flow-box__items">Account, Payment<br>트랜잭션 필수</div>
+                                </div>
+                                <div class="flow-box flow-box--warning">
+                                    <div class="flow-box__title">Redis</div>
+                                    <div class="flow-box__items">Cache, State<br>속도 우선</div>
+                                </div>
+                                <div class="flow-box flow-box--info">
+                                    <div class="flow-box__title">Neo4j</div>
+                                    <div class="flow-box__items">Friends, Guild<br>관계 탐색</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">ClickHouse</div>
+                                    <div class="flow-box__items">Logs, Analytics<br>대량 집계</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">각 서비스가 적합한 DB를 선택하는 Polyglot Persistence 패턴</p>
                     </div>
                 </div>
 
@@ -586,42 +658,71 @@ class SocialSync {
                     <p>하지만 불가피하다면 <strong>점진적 마이그레이션</strong>을 권장합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    점진적 마이그레이션 전략                          │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  Phase 1: 듀얼 라이트                                               │
-│  ┌─────────┐     ┌─────────┐     ┌─────────┐                       │
-│  │   App   │────▶│ Old DB  │     │ New DB  │                       │
-│  │         │────▶│(Primary)│────▶│ (Sync)  │                       │
-│  └─────────┘     └─────────┘     └─────────┘                       │
-│  - 기존 DB가 메인, 신규 DB에 동기화                                  │
-│  - 읽기는 기존 DB에서                                               │
-│                                                                     │
-│  Phase 2: 읽기 전환                                                  │
-│  ┌─────────┐     ┌─────────┐     ┌─────────┐                       │
-│  │   App   │────▶│ Old DB  │────▶│ New DB  │                       │
-│  │         │◀────│ (Write) │◀────│ (Read)  │                       │
-│  └─────────┘     └─────────┘     └─────────┘                       │
-│  - 읽기를 신규 DB로 점진적 전환                                      │
-│  - 문제 발생 시 즉시 롤백 가능                                       │
-│                                                                     │
-│  Phase 3: 쓰기 전환                                                  │
-│  ┌─────────┐     ┌─────────┐     ┌─────────┐                       │
-│  │   App   │────▶│ New DB  │────▶│ Old DB  │                       │
-│  │         │◀────│(Primary)│     │(Backup) │                       │
-│  └─────────┘     └─────────┘     └─────────┘                       │
-│  - 신규 DB가 메인                                                   │
-│  - 기존 DB는 백업용으로 유지                                         │
-│                                                                     │
-│  Phase 4: 완료                                                       │
-│  ┌─────────┐     ┌─────────┐                                       │
-│  │   App   │◀───▶│ New DB  │     기존 DB 제거                       │
-│  └─────────┘     └─────────┘                                       │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>점진적 마이그레이션 전략</strong></p>
+                        <p><strong>Phase 1: 듀얼 라이트</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">App</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Old DB (Primary)</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--info">
+                                    <div class="flow-box__title">New DB (Sync)</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p>기존 DB가 메인, 신규 DB에 동기화. 읽기는 기존 DB에서.</p>
+                        <p><strong>Phase 2: 읽기 전환</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">App</div>
+                                </div>
+                                <span class="flow-arrow">Write &rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Old DB (Write)</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--info">
+                                    <div class="flow-box__title">New DB (Read)</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p>읽기를 신규 DB로 점진적 전환. 문제 발생 시 즉시 롤백 가능.</p>
+                        <p><strong>Phase 3: 쓰기 전환</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">App</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">New DB (Primary)</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Old DB (Backup)</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p>신규 DB가 메인. 기존 DB는 백업용으로 유지.</p>
+                        <p><strong>Phase 4: 완료</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">App</div>
+                                </div>
+                                <span class="flow-arrow">&harr;</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">New DB</div>
+                                    <div class="flow-box__items">기존 DB 제거</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <p class="key-point">전환 중에는 항상 롤백 플랜을 준비하고, 충분한 모니터링을 설정하세요.</p>

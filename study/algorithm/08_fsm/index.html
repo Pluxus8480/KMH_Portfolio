@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>캐릭터 상태를 어떻게 관리할까?</h1>
             <p class="subtitle">FSM(유한 상태 기계) 패턴과 최적화 기법</p>
         </header>
@@ -31,25 +33,29 @@
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-게임 캐릭터 FSM 예시
-
-     ┌──────────────────────────────────┐
-     │                                  │
-     ▼        점프 입력                 │ 착지
-┌─────────┐ ───────────► ┌─────────┐   │
-│  Idle   │              │ Jumping │───┘
-└────┬────┘              └─────────┘
-     │
-     │ 이동 입력
-     ▼
-┌─────────┐   공격 입력   ┌──────────┐
-│ Walking │ ──────────► │ Attacking │
-└────┬────┘              └─────┬────┘
-     │                         │
-     └─────────────────────────┘
-           공격 완료
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Idle</div>
+                                </div>
+                                <span class="flow-arrow">점프 입력 &rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Jumping</div>
+                                    <div class="flow-box__items">착지 &rarr; Idle</div>
+                                </div>
+                            </div>
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Walking</div>
+                                    <div class="flow-box__items">Idle에서 이동 입력</div>
+                                </div>
+                                <span class="flow-arrow">공격 입력 &rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Attacking</div>
+                                    <div class="flow-box__items">공격 완료 &rarr; Walking</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -314,30 +320,34 @@ public:
                     <p class="highlight">HFSM은 상태 안에 하위 상태 기계를 포함합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-계층적 상태 기계 (HFSM)
-
-┌─────────────── Alive ───────────────┐
-│                                     │
-│   ┌─── Grounded ───┐    ┌──────┐   │
-│   │ Idle ⇄ Walking │    │Airborne│  │
-│   │       ↓        │    │ Jump  │   │
-│   │   Attacking    │    │ Fall  │   │
-│   └────────────────┘    └──────┘   │
-│            │                │       │
-│            └───── Jump ─────┘       │
-│                  Land               │
-└─────────────────────────────────────┘
-               │
-           HP = 0
-               ↓
-          ┌──────┐
-          │ Dead │
-          └──────┘
-
-Grounded 상태 내에서 Idle ↔ Walking ↔ Attacking 전이
-전체 Alive 상태에서 Dead로 전이 가능
-                        </pre>
+                        <div class="hierarchy-diagram">
+                            <div class="hierarchy-item hierarchy-item--root">Alive</div>
+                            <div class="hierarchy-children">
+                                <div class="hierarchy-item">
+                                    Grounded
+                                    <div class="hierarchy-children">
+                                        <div class="hierarchy-item">Idle &harr; Walking</div>
+                                        <div class="hierarchy-item">Attacking</div>
+                                    </div>
+                                </div>
+                                <div class="hierarchy-item">
+                                    Airborne
+                                    <div class="hierarchy-children">
+                                        <div class="hierarchy-item">Jump</div>
+                                        <div class="hierarchy-item">Fall</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram" style="margin-top: 12px;">
+                            <div class="flow-col">
+                                <span class="flow-arrow-down">HP = 0 &darr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Dead</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">Grounded 상태 내에서 Idle &harr; Walking &harr; Attacking 전이. 전체 Alive 상태에서 Dead로 전이 가능</p>
                     </div>
 
                     <div class="code-block">

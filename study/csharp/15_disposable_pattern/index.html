@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IDisposable Pattern | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>다 쓴 자원은 누가 치우나?</h1>
+            <p class="subtitle">IDisposable 패턴으로 비관리 리소스 안전하게 해제하기</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: GC가 못 치우는 것들</h2>
+            <div class="conversation">
+                <div class="q">C#에 GC가 있는데 왜 수동으로 자원을 해제해야 하나요?</div>
+                <div class="a">
+                    <p>GC는 관리 메모리(Managed Memory)만 해제합니다. 하지만 프로그램은 메모리 외에도 다양한 시스템 자원을 사용합니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>GC는 호텔의 객실 청소원과 같습니다. 방 안의 침대 정리(관리 메모리)는 해주지만, 투숙객이 빌린 렌터카(파일 핸들), 수영장 라커(네트워크 소켓), 연회장 예약(GPU 리소스)은 직접 반납해야 합니다.</p>
+                    </div>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>자원 유형</th>
+                                <th>GC 해제</th>
+                                <th>수동 해제 필요</th>
+                                <th>게임 예시</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>관리 메모리</td>
+                                <td>O</td>
+                                <td>X</td>
+                                <td>일반 C# 객체</td>
+                            </tr>
+                            <tr>
+                                <td>파일 핸들</td>
+                                <td>X</td>
+                                <td>O</td>
+                                <td>세이브 파일, 로그</td>
+                            </tr>
+                            <tr>
+                                <td>네트워크 소켓</td>
+                                <td>X</td>
+                                <td>O</td>
+                                <td>서버 연결</td>
+                            </tr>
+                            <tr>
+                                <td>GPU 리소스</td>
+                                <td>X</td>
+                                <td>O</td>
+                                <td>텍스처, 셰이더, 버퍼</td>
+                            </tr>
+                            <tr>
+                                <td>네이티브 메모리</td>
+                                <td>X</td>
+                                <td>O</td>
+                                <td>Marshal.AllocHGlobal</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">IDisposable 패턴은 이러한 비관리 리소스(Unmanaged Resource)를 확정적으로 해제하기 위한 .NET의 표준 규약입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: using 문의 마법</h2>
+            <div class="conversation">
+                <div class="q">using 문은 어떻게 자원을 해제하나요?</div>
+                <div class="a">
+                    <p><code>using</code> 문은 블록이 끝나면 자동으로 <code>Dispose()</code>를 호출합니다. 예외가 발생해도 반드시 호출됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - using 문 (try-finally의 문법 설탕)</div>
+                        <pre><code>// using 문
+using (var stream = new FileStream("save.dat", FileMode.Open))
+{
+    // 파일 읽기/쓰기
+    byte[] data = new byte[stream.Length];
+    stream.Read(data, 0, data.Length);
+} // 여기서 자동으로 stream.Dispose() 호출
+
+// 위 코드는 아래와 완전히 동일
+FileStream stream2 = null;
+try
+{
+    stream2 = new FileStream("save.dat", FileMode.Open);
+    byte[] data = new byte[stream2.Length];
+    stream2.Read(data, 0, data.Length);
+}
+finally
+{
+    stream2?.Dispose(); // 예외가 발생해도 반드시 실행
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">C# 8.0의 using 선언은 뭐가 다른가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - using 선언 (C# 8.0+)</div>
+                        <pre><code>void SaveGame(GameState state)
+{
+    // using 선언 - 중괄호 블록 없이 사용
+    using var stream = new FileStream("save.dat", FileMode.Create);
+    using var writer = new BinaryWriter(stream);
+
+    writer.Write(state.PlayerName);
+    writer.Write(state.Level);
+    writer.Write(state.Health);
+
+    // 메서드 끝에서 writer, stream 순서로 자동 Dispose
+    // (선언 역순으로 해제됨)
+}</code></pre>
+                    </div>
+                    <p class="key-point">using 선언은 변수의 스코프가 감싸는 블록(보통 메서드) 끝까지입니다. 중첩을 줄여 코드 가독성을 높여줍니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: Dispose 패턴 정석 구현</h2>
+            <div class="conversation">
+                <div class="q">IDisposable을 제대로 구현하려면 어떻게 해야 하나요?</div>
+                <div class="a">
+                    <p>Microsoft가 권장하는 표준 Dispose 패턴은 다음과 같습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 표준 Dispose 패턴</div>
+                        <pre><code>public class GameResourceManager : IDisposable
+{
+    // 비관리 리소스
+    private IntPtr _nativeHandle;
+    // 관리 리소스 (IDisposable 구현체)
+    private FileStream? _logStream;
+
+    private bool _disposed = false;
+
+    public GameResourceManager()
+    {
+        _nativeHandle = NativeLib.CreateResource();
+        _logStream = new FileStream("game.log", FileMode.Append);
+    }
+
+    // 공개 Dispose - 사용자가 직접 호출
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this); // Finalizer 호출 방지
+    }
+
+    // 실제 해제 로직
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+
+        if (disposing)
+        {
+            // 관리 리소스 해제
+            _logStream?.Dispose();
+            _logStream = null;
+        }
+
+        // 비관리 리소스 해제 (항상 실행)
+        if (_nativeHandle != IntPtr.Zero)
+        {
+            NativeLib.DestroyResource(_nativeHandle);
+            _nativeHandle = IntPtr.Zero;
+        }
+
+        _disposed = true;
+    }
+
+    // 안전장치: Dispose를 호출하지 않았을 때
+    ~GameResourceManager()
+    {
+        Dispose(disposing: false);
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">disposing 매개변수의 역할이 무엇인가요?</div>
+                <div class="a">
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Dispose() 호출</div>
+                                <div class="flow-box__items">disposing = true</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Dispose(true)</div>
+                                <div class="flow-box__items">관리 + 비관리 해제</div>
+                            </div>
+                        </div>
+                        <div class="flow-row" style="margin-top: 12px;">
+                            <div class="flow-box">
+                                <div class="flow-box__title">~Finalizer 호출</div>
+                                <div class="flow-box__items">disposing = false</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Dispose(false)</div>
+                                <div class="flow-box__items">비관리만 해제</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="warning">주의: Finalizer에서는 다른 관리 객체를 참조하면 안 됩니다. GC가 이미 해당 객체를 수거했을 수 있기 때문입니다. 따라서 disposing=false일 때는 비관리 리소스만 해제합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: Finalizer의 비용과 GC 영향</h2>
+            <div class="conversation">
+                <div class="q">Finalizer(소멸자)가 있으면 GC에 어떤 영향을 주나요?</div>
+                <div class="a">
+                    <p>Finalizer가 있는 객체는 GC 과정이 복잡해집니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">1. GC 발견</div>
+                                <div class="flow-box__items">참조 없는 객체 감지</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">2. F-Queue 등록</div>
+                                <div class="flow-box__items">Finalizer 큐에 추가</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">3. Finalizer 실행</div>
+                                <div class="flow-box__items">별도 스레드에서 실행</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">4. 다음 GC</div>
+                                <div class="flow-box__items">이제야 메모리 해제</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="warning">Finalizer가 있는 객체는 최소 2번의 GC 사이클을 거쳐야 메모리가 해제됩니다. 또한 Gen 1 이상으로 승격되어 GC 부담이 커집니다.</p>
+                    <p>그래서 <code>Dispose()</code>에서 <code>GC.SuppressFinalize(this)</code>를 호출하여 Finalizer를 건너뛰게 하는 것이 중요합니다.</p>
+                </div>
+
+                <div class="q">그러면 Finalizer를 아예 안 쓰는 게 나은가요?</div>
+                <div class="a">
+                    <p>가능하면 Finalizer 대신 <strong>SafeHandle</strong>을 사용하는 것이 권장됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - SafeHandle 사용</div>
+                        <pre><code>// SafeHandle을 상속한 커스텀 핸들
+class GameResourceHandle : SafeHandleZeroOrMinusOneIsInvalid
+{
+    public GameResourceHandle() : base(ownsHandle: true) { }
+
+    protected override bool ReleaseHandle()
+    {
+        // 비관리 리소스 해제
+        NativeLib.DestroyResource(handle);
+        return true;
+    }
+}
+
+// SafeHandle을 사용하면 Finalizer가 필요 없음!
+public class GameResource : IDisposable
+{
+    private readonly GameResourceHandle _handle = new();
+
+    public void Dispose()
+    {
+        _handle.Dispose();
+        // GC.SuppressFinalize 불필요 - Finalizer 자체가 없으므로
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">SafeHandle은 CriticalFinalizerObject를 상속하여 Finalizer보다 안정적으로 동작하며, P/Invoke 시 핸들 재활용 공격(handle recycling attack)도 방지합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: IAsyncDisposable과 비동기 해제</h2>
+            <div class="conversation">
+                <div class="q">비동기적으로 리소스를 해제해야 하는 경우가 있나요?</div>
+                <div class="a">
+                    <p>네트워크 연결 종료, DB 커넥션 반환, 비동기 스트림 플러시 등은 비동기 해제가 필요합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - IAsyncDisposable 구현</div>
+                        <pre><code>public class GameNetworkSession : IAsyncDisposable, IDisposable
+{
+    private TcpClient? _client;
+    private NetworkStream? _stream;
+    private bool _disposed;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+
+        if (_stream is not null)
+        {
+            // 남은 데이터를 비동기로 전송
+            await _stream.FlushAsync();
+            await _stream.DisposeAsync();
+        }
+
+        _client?.Dispose();
+        _disposed = true;
+
+        GC.SuppressFinalize(this);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _stream?.Dispose();
+        _client?.Dispose();
+        _disposed = true;
+        GC.SuppressFinalize(this);
+    }
+}
+
+// 사용
+await using var session = new GameNetworkSession();
+await session.SendDataAsync(packet);
+// 스코프 종료 시 DisposeAsync() 자동 호출</code></pre>
+                    </div>
+                    <p class="highlight"><code>await using</code> 구문으로 비동기 해제를 자동화할 수 있습니다. C# 8.0부터 지원됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: 게임 리소스 관리 실전</h2>
+            <div class="conversation">
+                <div class="q">게임에서 Dispose 패턴을 적용한 리소스 매니저 예시를 보여주세요.</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 게임 텍스처 풀 관리</div>
+                        <pre><code>public class TexturePool : IDisposable
+{
+    private readonly Dictionary&lt;string, TextureHandle&gt; _textures = new();
+    private bool _disposed;
+
+    public TextureHandle LoadTexture(string path)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (_textures.TryGetValue(path, out var existing))
+            return existing;
+
+        var handle = GraphicsDevice.CreateTexture(path);
+        _textures[path] = handle;
+        return handle;
+    }
+
+    public void UnloadUnused()
+    {
+        var unused = _textures
+            .Where(kv =&gt; kv.Value.ReferenceCount == 0)
+            .Select(kv =&gt; kv.Key)
+            .ToList();
+
+        foreach (var key in unused)
+        {
+            _textures[key].Dispose();
+            _textures.Remove(key);
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+
+        foreach (var texture in _textures.Values)
+        {
+            texture.Dispose();
+        }
+        _textures.Clear();
+        _disposed = true;
+    }
+}
+
+// 씬 전환 시 리소스 정리
+void OnSceneUnload()
+{
+    _texturePool.Dispose();
+    _audioPool.Dispose();
+    _meshPool.Dispose();
+}</code></pre>
+                    </div>
+                    <p class="key-point">Dispose된 객체에 접근하면 ObjectDisposedException을 던져야 합니다. .NET 7+에서는 ObjectDisposedException.ThrowIf를 사용하면 간결합니다.</p>
+                </div>
+
+                <div class="q">흔히 하는 실수는 뭐가 있나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>실수</th>
+                                <th>결과</th>
+                                <th>해결책</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>using 누락</td>
+                                <td>리소스 누수</td>
+                                <td>CA2000 분석기 활성화</td>
+                            </tr>
+                            <tr>
+                                <td>Dispose 후 사용</td>
+                                <td>ObjectDisposedException</td>
+                                <td>_disposed 플래그 검사</td>
+                            </tr>
+                            <tr>
+                                <td>Dispose 중복 호출</td>
+                                <td>이중 해제 크래시</td>
+                                <td>_disposed 가드 조건</td>
+                            </tr>
+                            <tr>
+                                <td>Finalizer에서 관리 객체 접근</td>
+                                <td>NullReferenceException</td>
+                                <td>disposing 플래그 분기</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>GC는 관리 메모리만 해제한다. 파일, 소켓, GPU 리소스 등 <strong>비관리 리소스</strong>는 IDisposable로 명시적으로 해제해야 한다.</li>
+                <li><strong>using 문/선언</strong>은 Dispose() 호출을 보장하는 문법 설탕이다.</li>
+                <li>표준 Dispose 패턴은 <strong>Dispose(bool disposing)</strong> 오버로드로 관리/비관리 리소스를 분리 해제한다.</li>
+                <li>Finalizer는 GC 비용을 2배로 증가시키므로, 가능하면 <strong>SafeHandle</strong>을 대안으로 사용한다.</li>
+                <li><strong>IAsyncDisposable</strong>과 <code>await using</code>으로 비동기 리소스 해제를 구현할 수 있다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

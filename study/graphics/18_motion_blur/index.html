@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>속도감을 시각화하다</h1>
@@ -30,24 +30,33 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Motion Blur 원리 (실제 카메라):
-
-셔터 열림 ─────────────────── 셔터 닫힘
-    │                              │
-    ▼                              ▼
-┌─────────────────────────────────────────┐
-│                                         │
-│   🚗 ──────────────────→               │
-│                                         │
-│   물체가 이동하는 동안 빛이 누적됨       │
-│   → 이동 경로를 따라 흐릿한 잔상         │
-│                                         │
-└─────────────────────────────────────────┘
-
-게임에서:
-순간 렌더링 → Motion Vector → 블러 방향 결정
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--small">
+                                <div class="flow-box__title">셔터 열림</div>
+                            </div>
+                            <span class="flow-arrow">→ 물체가 이동하는 동안 빛이 누적됨 →</span>
+                            <div class="flow-box flow-box--small">
+                                <div class="flow-box__title">셔터 닫힘</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓ 이동 경로를 따라 흐릿한 잔상</span>
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">순간 렌더링</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Motion Vector</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">블러 방향 결정</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">카메라 Motion Blur</p>
             </div>
         </section>
@@ -161,21 +170,39 @@ float2 PS_MotionVector(VSOutput input) : SV_Target
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Motion Blur 샘플링:
-
-       velocity 방향
-          ←────────────→
-
-    ●  ●  ●  ●  ●  ●  ●  ●
-    │  │  │  │  │  │  │  │
-    └──┴──┴──┴──┴──┴──┴──┘
-              ↓
-          평균 색상
-
-● = 샘플 위치
-현재 픽셀을 중심으로 velocity 방향으로 분포
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--small" style="min-width: 30px;">
+                                <div class="flow-box__items">S1</div>
+                            </div>
+                            <div class="flow-box flow-box--small" style="min-width: 30px;">
+                                <div class="flow-box__items">S2</div>
+                            </div>
+                            <div class="flow-box flow-box--small" style="min-width: 30px;">
+                                <div class="flow-box__items">S3</div>
+                            </div>
+                            <div class="flow-box flow-box--highlight flow-box--small" style="min-width: 30px;">
+                                <div class="flow-box__items">P</div>
+                            </div>
+                            <div class="flow-box flow-box--small" style="min-width: 30px;">
+                                <div class="flow-box__items">S5</div>
+                            </div>
+                            <div class="flow-box flow-box--small" style="min-width: 30px;">
+                                <div class="flow-box__items">S6</div>
+                            </div>
+                            <div class="flow-box flow-box--small" style="min-width: 30px;">
+                                <div class="flow-box__items">S7</div>
+                            </div>
+                        </div>
+                        <p style="text-align:center; color: var(--text-muted); font-size: 0.8rem; margin: 4px 0;">← velocity 방향 →</p>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">평균 색상</div>
+                            <div class="flow-box__items">현재 픽셀(P)을 중심으로 velocity 방향으로 분포된 샘플의 평균</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">선형 샘플링 패턴</p>
             </div>
         </section>
@@ -190,25 +217,24 @@ Motion Blur 샘플링:
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Tile-Based Motion Blur:
-
-1. Tile Max Velocity 계산
-┌───────┬───────┬───────┬───────┐
-│ →0.02 │ →0.03 │ →0.05 │ →0.01 │
-├───────┼───────┼───────┼───────┤
-│ →0.01 │ →0.08 │ →0.06 │ →0.02 │  (타일별 최대 속도)
-├───────┼───────┼───────┼───────┤
-│ →0.02 │ →0.04 │ →0.03 │ →0.01 │
-└───────┴───────┴───────┴───────┘
-
-2. Neighbor Max 확장
-각 타일에 이웃 타일의 velocity도 포함
-→ 빠른 물체의 블러가 이웃 타일로 번짐
-
-3. Blur Pass
-타일의 최대 velocity로 샘플 범위 결정
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box flow-box--wide">
+                            <div class="flow-box__title">1. Tile Max Velocity 계산</div>
+                            <div class="flow-box__items">각 타일에서 최대 속도 추출<br>예: 0.02 / 0.03 / 0.08 / 0.06 ...</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--wide">
+                            <div class="flow-box__title">2. Neighbor Max 확장</div>
+                            <div class="flow-box__items">각 타일에 이웃 타일의 velocity도 포함<br>→ 빠른 물체의 블러가 이웃 타일로 번짐</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight flow-box--wide">
+                            <div class="flow-box__title">3. Blur Pass</div>
+                            <div class="flow-box__items">타일의 최대 velocity로 샘플 범위 결정</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Tile 기반 최적화</p>
             </div>
 

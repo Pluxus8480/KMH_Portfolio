@@ -8,9 +8,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../server.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../server.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>1000명이 접속했는데 왜 999명 정보를 보내나요?</h1>
             <p class="subtitle">Interest Management와 Area of Interest로 대역폭 최적화</p>
         </header>
@@ -22,24 +24,27 @@
                 <div class="a">
                     <p>플레이어 수가 늘어나면 대역폭이 <strong>기하급수적</strong>으로 증가합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-대역폭 문제:
-
-N명의 플레이어, 각자 M bytes의 상태 정보
-
-전체 브로드캐스트 시:
-- 서버 → 각 클라이언트: N * M bytes
-- 전체 대역폭: N * N * M bytes/tick
-
-예시 (1000명, 50 bytes/player, 20 tick/s):
-= 1000 * 1000 * 50 * 20
-= 1,000,000,000 bytes/s
-= 1 GB/s (!!!)
-
-실제로 필요한 정보:
-- 내 주변 100명 정도만 보이면 됨
-- 100 * 50 * 20 = 100 KB/s (1/10000 감소!)
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">전체 브로드캐스트</div>
+                                    <div class="flow-box__items">N명, M bytes/player<br>대역폭: N x N x M bytes/tick</div>
+                                </div>
+                                <span class="flow-arrow">→</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">예시 (1000명, 50B, 20tick/s)</div>
+                                    <div class="flow-box__items">1000 x 1000 x 50 x 20<br>= 1 GB/s (!!!)</div>
+                                </div>
+                            </div>
+                            <div style="text-align:center; margin: 8px 0;"><span class="flow-arrow-down">↓</span></div>
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">AOI 적용 시</div>
+                                    <div class="flow-box__items">내 주변 100명만 전송<br>100 x 50 x 20 = 100 KB/s<br>(1/10000 감소!)</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">전체 브로드캐스트 vs AOI 적용 시 대역폭 비교</p>
                     </div>
                     <p class="highlight">Interest Management는 각 플레이어에게 <strong>관련 있는 정보만</strong> 보내는 기술입니다.</p>
                 </div>
@@ -48,28 +53,21 @@ N명의 플레이어, 각자 M bytes의 상태 정보
                 <div class="a">
                     <p>플레이어가 "관심을 가져야 하는 영역"입니다. 보통 플레이어 주변 일정 거리입니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-Area of Interest 개념:
-
-┌────────────────────────────────────────────────┐
-│                    World                       │
-│                                                │
-│     ○         ○                               │
-│            ┌─────────┐                         │
-│     ○      │ ◉ Player│        ○               │
-│            │   AOI   │                         │
-│      ○     │    ○    │                         │
-│            │      ○  │     ○                   │
-│            └─────────┘                         │
-│                               ○                │
-│        ○                                       │
-│                    ○              ○            │
-└────────────────────────────────────────────────┘
-
-◉ : 플레이어 (자신)
-○ : 다른 플레이어
-AOI 안의 ○만 정보를 받음
-                        </pre>
+                        <div class="flow-diagram" style="position:relative; border:2px solid var(--border-default); border-radius:8px; padding:24px; min-height:200px;">
+                            <div style="text-align:center; color:var(--text-muted); font-size:0.8rem; margin-bottom:12px;">World</div>
+                            <div style="display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:16px;">
+                                <span style="color:var(--text-muted); font-size:0.85rem;">○</span>
+                                <span style="color:var(--text-muted); font-size:0.85rem;">○</span>
+                                <div style="border:2px dashed var(--accent-primary); border-radius:8px; padding:16px 24px; text-align:center;">
+                                    <div style="font-weight:600; color:var(--accent-primary); margin-bottom:4px;">◉ Player (AOI)</div>
+                                    <div style="color:var(--text-secondary); font-size:0.85rem;">○ &nbsp; ○</div>
+                                </div>
+                                <span style="color:var(--text-muted); font-size:0.85rem;">○</span>
+                                <span style="color:var(--text-muted); font-size:0.85rem;">○</span>
+                                <span style="color:var(--text-muted); font-size:0.85rem;">○</span>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">◉ = 플레이어(자신), ○ = 다른 플레이어. AOI 안의 ○만 정보를 받음</p>
                     </div>
                 </div>
             </div>
@@ -327,26 +325,16 @@ public:
                 <div class="a">
                     <p><strong>Hysteresis(이력 현상)</strong>를 적용합니다. 들어올 때와 나갈 때 거리를 다르게 합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-Hysteresis AOI:
-
-              Enter Radius (500)
-           ┌─────────────────────┐
-           │                     │
-           │   Leave Radius(550) │
-           │  ┌───────────────┐  │
-           │  │               │  │
-           │  │      ◉        │  │
-           │  │    Player     │  │
-           │  │               │  │
-           │  └───────────────┘  │
-           │                     │
-           └─────────────────────┘
-
-- Enter: 500 이내로 들어와야 보임
-- Leave: 550 밖으로 나가야 안 보임
-- 500~550 사이에서 왔다 갔다 해도 상태 유지
-                        </pre>
+                        <div class="flow-diagram" style="display:flex; justify-content:center;">
+                            <div style="border:2px solid var(--border-default); border-radius:12px; padding:20px; text-align:center;">
+                                <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">Enter Radius (500)</div>
+                                <div style="border:2px dashed var(--accent-primary); border-radius:8px; padding:16px; display:inline-block;">
+                                    <div style="font-size:0.8rem; color:var(--accent-primary); margin-bottom:8px;">Leave Radius (550)</div>
+                                    <div style="font-weight:600; color:var(--text-primary);">◉ Player</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">Enter: 500 이내로 들어와야 보임 / Leave: 550 밖으로 나가야 안 보임 / 500~550 사이에서는 상태 유지</p>
                     </div>
                     <div class="code-block">
                         <div class="code-header">Hysteresis 구현</div>
@@ -484,20 +472,26 @@ public:
                 <div class="q">업데이트 빈도를 거리에 따라 조절하는 방법은?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-Distance-based Update Rate:
-
-         ◉ Player
-         │
-    ─────┼─────  0-50m:  60 Hz (매 틱)
-         │
-    ─────┼─────  50-100m: 30 Hz (2틱에 1번)
-         │
-    ─────┼─────  100-200m: 10 Hz (6틱에 1번)
-         │
-    ─────┼─────  200-500m:  5 Hz (12틱에 1번)
-         │
-                        </pre>
+                        <div class="pipeline">
+                            <div style="text-align:center; font-weight:600; margin-bottom:12px; color:var(--text-primary);">◉ Player - Distance-based Update Rate</div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">0-50m</div>
+                                <div class="pipeline-bar" style="width:100%;"><span>60 Hz (매 틱)</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">50-100m</div>
+                                <div class="pipeline-bar" style="width:75%;"><span>30 Hz (2틱에 1번)</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">100-200m</div>
+                                <div class="pipeline-bar" style="width:40%;"><span>10 Hz (6틱에 1번)</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">200-500m</div>
+                                <div class="pipeline-bar" style="width:20%;"><span>5 Hz (12틱에 1번)</span></div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">거리에 따른 업데이트 빈도 감소</p>
                     </div>
                     <div class="code-block">
                         <div class="code-header">Distance-based Rate</div>
@@ -548,32 +542,27 @@ public:
                 <div class="a">
                     <p>대규모 MMO는 <strong>Zone(채널) 기반</strong> 시스템을 많이 사용합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-Zone 기반 아키텍처:
-
-┌────────────────────────────────────────────────────────┐
-│                      World                             │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
-│  │  Zone 1  │  │  Zone 2  │  │  Zone 3  │             │
-│  │ Server A │  │ Server B │  │ Server C │             │
-│  │          │  │          │  │          │             │
-│  │  ○ ○ ○   │──│  ○ ○     │──│    ○     │             │
-│  │    ○     │  │  ○ ○ ○   │  │  ○   ○   │             │
-│  └──────────┘  └──────────┘  └──────────┘             │
-│        │              │              │                 │
-│        └──────────────┴──────────────┘                 │
-│                Cross-Zone 통신                         │
-└────────────────────────────────────────────────────────┘
-
-장점:
-- 각 Zone이 독립 서버 → 수평 확장
-- Zone 내에서만 AOI 계산 → 효율적
-- 장애 격리
-
-단점:
-- Zone 경계 처리 복잡
-- Cross-Zone 상호작용 지연
-                        </pre>
+                        <div class="flow-diagram" style="border:2px solid var(--border-default); border-radius:8px; padding:16px;">
+                            <div style="text-align:center; font-weight:600; color:var(--text-primary); margin-bottom:12px;">World</div>
+                            <div class="flow-row" style="justify-content:center; margin-bottom:12px;">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Zone 1 - Server A</div>
+                                    <div class="flow-box__items">○ ○ ○<br>○</div>
+                                </div>
+                                <span class="flow-arrow">⟷</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Zone 2 - Server B</div>
+                                    <div class="flow-box__items">○ ○<br>○ ○ ○</div>
+                                </div>
+                                <span class="flow-arrow">⟷</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Zone 3 - Server C</div>
+                                    <div class="flow-box__items">○<br>○ &nbsp; ○</div>
+                                </div>
+                            </div>
+                            <div style="text-align:center; font-size:0.8rem; color:var(--text-muted); border-top:1px solid var(--border-default); padding-top:8px;">Cross-Zone 통신</div>
+                        </div>
+                        <p class="diagram-caption">장점: 수평 확장, Zone 내 AOI만 계산, 장애 격리 / 단점: Zone 경계 처리 복잡, Cross-Zone 지연</p>
                     </div>
                 </div>
 

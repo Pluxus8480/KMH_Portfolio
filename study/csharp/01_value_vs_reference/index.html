@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>값 타입 vs 참조 타입 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>스택에 살까, 힙에 살까?</h1>
+            <p class="subtitle">값 타입과 참조 타입의 메모리 전략과 Boxing의 함정</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 두 세계의 주민들</h2>
+            <div class="conversation">
+                <div class="q">C#에서 값 타입과 참조 타입은 왜 구분되어 있나요?</div>
+                <div class="a">
+                    <p>C#은 모든 타입을 두 가지 세계로 분류합니다. <strong>값 타입(Value Type)</strong>은 데이터를 직접 들고 다니고, <strong>참조 타입(Reference Type)</strong>은 데이터가 있는 곳의 주소만 들고 다닙니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>값 타입은 <strong>종이에 적은 메모</strong>와 같습니다. 복사하면 새 종이에 내용을 그대로 베끼는 거죠. 원본을 수정해도 복사본에는 영향이 없습니다.</p>
+                        <p>참조 타입은 <strong>도서관 좌석 번호표</strong>와 같습니다. 번호표를 복사해도 가리키는 좌석은 같은 곳입니다. 누가 그 좌석의 책을 바꾸면, 번호표를 가진 모든 사람이 바뀐 책을 보게 됩니다.</p>
+                    </div>
+                    <p class="highlight">값 타입: int, float, bool, struct, enum &mdash; 스택에 직접 저장</p>
+                    <p class="highlight">참조 타입: class, string, array, delegate &mdash; 힙에 저장, 스택에 참조(주소) 보관</p>
+                </div>
+
+                <div class="q">struct와 class는 어떤 차이가 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 값 타입 - struct
+struct Vector3
+{
+    public float X, Y, Z;
+}
+
+// 참조 타입 - class
+class Transform
+{
+    public Vector3 Position;
+    public Vector3 Rotation;
+}
+
+void Example()
+{
+    Vector3 a = new Vector3 { X = 1, Y = 2, Z = 3 };
+    Vector3 b = a;    // 값 복사! a와 b는 완전히 독립
+    b.X = 100;        // a.X는 여전히 1
+
+    Transform t1 = new Transform();
+    Transform t2 = t1; // 참조 복사! t1과 t2는 같은 객체
+    t2.Position.X = 100; // t1.Position.X도 100으로 변경됨
+}</code></pre>
+                    </div>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>struct (값 타입)</th>
+                                <th>class (참조 타입)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>저장 위치</td>
+                                <td>스택 (지역변수일 때)</td>
+                                <td>힙</td>
+                            </tr>
+                            <tr>
+                                <td>대입 시</td>
+                                <td>값 전체 복사</td>
+                                <td>참조(주소)만 복사</td>
+                            </tr>
+                            <tr>
+                                <td>기본값</td>
+                                <td>모든 필드 0/null</td>
+                                <td>null</td>
+                            </tr>
+                            <tr>
+                                <td>상속</td>
+                                <td>불가</td>
+                                <td>가능</td>
+                            </tr>
+                            <tr>
+                                <td>GC 대상</td>
+                                <td>아님 (스택)</td>
+                                <td>대상</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 메모리 레이아웃의 진실</h2>
+            <div class="conversation">
+                <div class="q">스택과 힙은 실제로 어떻게 다른가요?</div>
+                <div class="a">
+                    <p><strong>스택(Stack)</strong>은 함수 호출 시 자동으로 할당되고 반환 시 자동으로 해제됩니다. LIFO(Last In First Out) 구조로 매우 빠릅니다.</p>
+                    <p><strong>힙(Heap)</strong>은 프로그래머가 명시적으로 할당(new)하며, GC가 더 이상 참조되지 않는 객체를 수거합니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">스택 (Stack)</div>
+                                <div class="flow-box__items">빠른 할당/해제<br>크기 제한 (~1MB)<br>지역 변수, 매개변수</div>
+                            </div>
+                            <div class="flow-arrow">&harr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">힙 (Heap)</div>
+                                <div class="flow-box__items">느린 할당, GC 수거<br>크기 유연<br>new로 생성된 객체</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">struct가 class의 필드로 포함되면, struct도 힙에 저장됩니다. 저장 위치는 "타입"이 아니라 "어디에 속해 있느냐"에 따라 달라집니다.</p>
+                </div>
+
+                <div class="q">struct가 항상 스택에 있는 건 아니라고요?</div>
+                <div class="a">
+                    <p>맞습니다. struct가 스택에 저장되는 건 <strong>지역 변수</strong>일 때뿐입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>class Monster
+{
+    // 이 Vector3는 Monster 객체와 함께 힙에 저장됨!
+    public Vector3 Position;
+}
+
+void Update()
+{
+    Vector3 localPos = new Vector3(); // 스택에 저장
+    Monster m = new Monster();        // Monster는 힙, Position도 힙
+}</code></pre>
+                    </div>
+                    <p class="warning">면접에서 "struct는 스택에 저장됩니다"라고 단정하면 감점 요소입니다. 정확히는 "지역 변수로 선언된 struct는 스택에, 참조 타입의 필드인 struct는 힙에 저장됩니다."</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: Boxing과 Unboxing의 함정</h2>
+            <div class="conversation">
+                <div class="q">Boxing이 뭐고 왜 위험한가요?</div>
+                <div class="a">
+                    <p><strong>Boxing</strong>은 값 타입을 참조 타입(object)으로 변환하는 과정입니다. 이때 힙에 새 객체가 할당되고, 값이 복사됩니다.</p>
+                    <p><strong>Unboxing</strong>은 반대로 object에서 값 타입을 꺼내는 과정입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>int score = 100;
+
+// Boxing: int -> object (힙 할당 발생!)
+object boxed = score;
+
+// Unboxing: object -> int (타입 검사 + 값 복사)
+int unboxed = (int)boxed;
+
+// 잘못된 Unboxing -> InvalidCastException!
+// double wrong = (double)boxed;</code></pre>
+                    </div>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">스택: int 100</div>
+                                <div class="flow-box__items">4바이트</div>
+                            </div>
+                            <div class="flow-arrow">Boxing &rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">힙: object</div>
+                                <div class="flow-box__items">타입 헤더 + 동기화 블록 + 값<br>약 20~24바이트</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="warning">Boxing 한 번에 약 20바이트 이상의 힙 할당이 발생합니다. 매 프레임 수천 번 반복되면 GC 압박의 주범이 됩니다.</p>
+                </div>
+
+                <div class="q">게임에서 Boxing이 몰래 발생하는 경우는 어디인가요?</div>
+                <div class="a">
+                    <p>의도치 않은 Boxing은 생각보다 흔합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 숨겨진 Boxing 사례들</div>
+                        <pre><code>// 1. string.Format에서 값 타입 전달
+int hp = 100;
+string text = string.Format("HP: {0}", hp); // hp가 Boxing됨!
+
+// 2. 비제네릭 컬렉션 사용
+ArrayList list = new ArrayList();
+list.Add(42); // Boxing 발생!
+
+// 3. 인터페이스로 캐스팅
+struct Bullet : IUpdatable
+{
+    public void Update() { }
+}
+IUpdatable bullet = new Bullet(); // Boxing!
+
+// 4. Enum.HasFlag (구버전 .NET)
+MyFlags flags = MyFlags.A | MyFlags.B;
+flags.HasFlag(MyFlags.A); // Boxing 발생 (구버전)</code></pre>
+                    </div>
+                    <p class="key-point">해결책: 제네릭(List&lt;int&gt;) 사용, string interpolation 대신 StringBuilder, struct의 인터페이스 캐스팅 회피, where T : struct 제약 조건 활용</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: struct 설계 가이드라인</h2>
+            <div class="conversation">
+                <div class="q">언제 struct를 쓰고 언제 class를 써야 하나요?</div>
+                <div class="a">
+                    <p>Microsoft 공식 가이드라인에 따르면, 다음 조건을 <strong>모두</strong> 만족할 때 struct를 사용합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>조건</th>
+                                <th>struct 적합</th>
+                                <th>class 적합</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>크기</td>
+                                <td>16바이트 이하</td>
+                                <td>16바이트 초과</td>
+                            </tr>
+                            <tr>
+                                <td>불변성</td>
+                                <td>불변(immutable)이 자연스러움</td>
+                                <td>가변(mutable)이 필요</td>
+                            </tr>
+                            <tr>
+                                <td>수명</td>
+                                <td>짧은 수명, 자주 생성/소멸</td>
+                                <td>긴 수명, 상태 유지</td>
+                            </tr>
+                            <tr>
+                                <td>상속</td>
+                                <td>필요 없음</td>
+                                <td>계층 구조 필요</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">struct가 너무 크면 복사 비용이 참조 전달보다 비싸집니다. 64바이트짜리 struct를 매개변수로 넘기면 매번 64바이트가 복사됩니다!</p>
+                </div>
+
+                <div class="q">큰 struct를 전달할 때 복사 비용을 줄이는 방법은?</div>
+                <div class="a">
+                    <p>C# 7.2부터 <code>in</code>, <code>ref</code>, <code>ref readonly</code> 키워드로 값 타입도 참조로 전달할 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>struct LargeData
+{
+    public float A, B, C, D, E, F, G, H; // 32바이트
+}
+
+// in: 읽기 전용 참조 전달 (복사 없음, 수정 불가)
+float Calculate(in LargeData data)
+{
+    return data.A + data.B;
+    // data.A = 10; // 컴파일 에러!
+}
+
+// readonly struct: 구조체 자체를 불변으로 선언
+readonly struct ImmutableVector
+{
+    public readonly float X, Y, Z;
+    public ImmutableVector(float x, float y, float z)
+        => (X, Y, Z) = (x, y, z);
+}</code></pre>
+                    </div>
+                    <p class="key-point">Unity의 NativeArray, Burst 컴파일러에서는 struct 기반 데이터가 SIMD 최적화의 핵심입니다. ECS(Entity Component System) 패턴에서 struct Component가 필수인 이유입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 게임 실전 패턴</h2>
+            <div class="conversation">
+                <div class="q">게임 개발에서 값 타입/참조 타입 선택이 성능에 미치는 실제 영향은?</div>
+                <div class="a">
+                    <p>총알 1000개를 매 프레임 업데이트하는 시나리오를 비교해봅시다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - class 방식 (GC 압박)</div>
+                        <pre><code>class BulletClass
+{
+    public float X, Y, Z;
+    public float VX, VY, VZ;
+    public float Speed;
+}
+
+// 1000개 생성 -> 1000번 힙 할당
+BulletClass[] bullets = new BulletClass[1000];
+for (int i = 0; i < 1000; i++)
+    bullets[i] = new BulletClass(); // 각각 힙 할당
+
+// 메모리: 배열 참조 + 1000개 객체 (각 객체 헤더 포함)
+// 캐시 미스: 객체가 힙 곳곳에 분산</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C# - struct 방식 (캐시 친화적)</div>
+                        <pre><code>struct BulletStruct
+{
+    public float X, Y, Z;
+    public float VX, VY, VZ;
+    public float Speed;
+}
+
+// 1000개 생성 -> 1번 힙 할당 (배열 자체만)
+BulletStruct[] bullets = new BulletStruct[1000];
+// 구조체가 배열 안에 연속 배치!
+
+// 메모리: 배열 하나에 모든 데이터가 연속
+// 캐시 히트: CPU 캐시라인에 여러 총알이 함께 로드</code></pre>
+                    </div>
+                    <p class="highlight">struct 배열은 데이터가 메모리에 연속 배치되어 CPU 캐시 적중률이 높아집니다. 대량의 오브젝트를 처리할 때 2~5배 성능 차이가 날 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Summary -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>값 타입</strong>(struct)은 스택에, <strong>참조 타입</strong>(class)은 힙에 저장 &mdash; 단, struct도 참조 타입의 필드이면 힙에 간다</li>
+                <li><strong>Boxing</strong>은 값 타입을 object로 변환할 때 발생하며, 숨겨진 힙 할당의 주범이다</li>
+                <li>struct는 <strong>16바이트 이하, 불변, 짧은 수명</strong>일 때 사용하고, 큰 struct는 <code>in</code> 키워드로 참조 전달한다</li>
+                <li>대량 오브젝트는 struct 배열로 <strong>캐시 친화적</strong> 메모리 레이아웃을 확보한다</li>
+                <li>제네릭 컬렉션, <code>in</code> 매개변수, <code>readonly struct</code>로 Boxing과 복사 비용을 모두 회피할 수 있다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Source Generator | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>컴파일러가 코드를 대신 써준다?</h1>
+            <p class="subtitle">Source Generator로 보일러플레이트 자동 생성하기</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 보일러플레이트의 고통</h2>
+            <div class="conversation">
+                <div class="q">게임 개발에서 반복적으로 작성하는 코드가 정말 많죠?</div>
+                <div class="a">
+                    <p>네트워크 패킷 직렬화, 에디터 인스펙터, 이벤트 바인딩, Enum 유틸리티 등 매번 비슷한 구조를 반복 작성해야 합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 반복되는 보일러플레이트 예시</div>
+                        <pre><code>// 모든 패킷마다 이런 코드를 반복 작성해야 함
+public class MovePacket : IPacket
+{
+    public float X { get; set; }
+    public float Y { get; set; }
+    public float Z { get; set; }
+
+    public void Serialize(BinaryWriter writer)
+    {
+        writer.Write(X);
+        writer.Write(Y);
+        writer.Write(Z);
+    }
+
+    public void Deserialize(BinaryReader reader)
+    {
+        X = reader.ReadSingle();
+        Y = reader.ReadSingle();
+        Z = reader.ReadSingle();
+    }
+}
+// 패킷이 100개면 이런 코드가 100번...</code></pre>
+                    </div>
+                    <p class="highlight">Source Generator는 컴파일 시점에 소스 코드를 분석하고 새로운 코드를 자동 생성합니다. 리플렉션 없이, 런타임 비용 없이!</p>
+                </div>
+
+                <div class="q">기존 코드 생성 방식과 뭐가 다른가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>방식</th>
+                                <th>시점</th>
+                                <th>장점</th>
+                                <th>단점</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>리플렉션</td>
+                                <td>런타임</td>
+                                <td>유연함</td>
+                                <td>느림, AOT 불가</td>
+                            </tr>
+                            <tr>
+                                <td>T4 템플릿</td>
+                                <td>빌드 전</td>
+                                <td>단순한 생성</td>
+                                <td>IDE 지원 부족</td>
+                            </tr>
+                            <tr>
+                                <td>Source Generator</td>
+                                <td>컴파일 중</td>
+                                <td>빠름, IDE 통합, 타입 안전</td>
+                                <td>학습 곡선</td>
+                            </tr>
+                            <tr>
+                                <td>IL Weaving (Fody)</td>
+                                <td>빌드 후</td>
+                                <td>기존 코드 수정 가능</td>
+                                <td>디버깅 어려움</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>Source Generator는 똑똑한 비서와 같습니다. 당신이 클래스 설계도(어트리뷰트)만 그려주면, 비서가 나머지 서류 작업(직렬화, 유틸리티 메서드 등)을 컴파일 시점에 자동으로 완성해 줍니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: Source Generator 동작 원리</h2>
+            <div class="conversation">
+                <div class="q">컴파일 파이프라인에서 어떤 위치에서 실행되나요?</div>
+                <div class="a">
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">1. 파싱</div>
+                                <div class="flow-box__items">소스 코드 &rarr; Syntax Tree</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">2. Source Generator</div>
+                                <div class="flow-box__items">트리 분석 &rarr; 코드 추가</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">3. 컴파일</div>
+                                <div class="flow-box__items">원본 + 생성 코드 &rarr; IL</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>Source Generator는 Roslyn 컴파일러의 일부로 실행됩니다. 기존 코드의 <strong>Syntax Tree</strong>와 <strong>Semantic Model</strong>을 읽고, 새로운 소스 파일을 추가합니다.</p>
+                    <p class="warning">주의: Source Generator는 기존 코드를 수정할 수 없습니다. 오직 새로운 코드를 추가만 가능합니다. 따라서 partial 클래스를 활용해야 합니다.</p>
+                </div>
+
+                <div class="q">ISourceGenerator와 IIncrementalGenerator의 차이는?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>ISourceGenerator (V1)</th>
+                                <th>IIncrementalGenerator (V2)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>도입 시기</td>
+                                <td>.NET 5</td>
+                                <td>.NET 6</td>
+                            </tr>
+                            <tr>
+                                <td>성능</td>
+                                <td>매번 전체 재생성</td>
+                                <td>변경분만 증분 처리</td>
+                            </tr>
+                            <tr>
+                                <td>IDE 영향</td>
+                                <td>타이핑 시 버벅임</td>
+                                <td>부드러운 편집 경험</td>
+                            </tr>
+                            <tr>
+                                <td>권장 여부</td>
+                                <td>레거시</td>
+                                <td>권장</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">신규 프로젝트에서는 반드시 IIncrementalGenerator를 사용하세요. IDE 성능에 큰 영향을 줍니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 첫 번째 Source Generator 만들기</h2>
+            <div class="conversation">
+                <div class="q">프로젝트 설정은 어떻게 하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">csproj - Source Generator 프로젝트 설정</div>
+                        <pre><code>&lt;Project Sdk="Microsoft.NET.Sdk"&gt;
+  &lt;PropertyGroup&gt;
+    &lt;TargetFramework&gt;netstandard2.0&lt;/TargetFramework&gt;
+    &lt;EnforceExtendedAnalyzerRules&gt;true&lt;/EnforceExtendedAnalyzerRules&gt;
+  &lt;/PropertyGroup&gt;
+  &lt;ItemGroup&gt;
+    &lt;PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4"
+                      PrivateAssets="all" /&gt;
+    &lt;PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0"
+                      PrivateAssets="all" /&gt;
+  &lt;/ItemGroup&gt;
+&lt;/Project&gt;</code></pre>
+                    </div>
+                    <p>Source Generator는 <strong>netstandard2.0</strong>을 타겟으로 해야 하며, Roslyn API 패키지를 참조합니다.</p>
+                </div>
+
+                <div class="q">간단한 예제를 보여주세요.</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - ToString 자동 생성 Generator</div>
+                        <pre><code>[Generator]
+public class ToStringGenerator : IIncrementalGenerator
+{
+    public void Initialize(IncrementalGeneratorInitializationContext context)
+    {
+        // 1단계: [AutoToString] 어트리뷰트가 붙은 클래스 수집
+        var classes = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                "AutoToStringAttribute",
+                predicate: (node, _) =&gt; node is ClassDeclarationSyntax,
+                transform: (ctx, _) =&gt; GetClassInfo(ctx))
+            .Where(info =&gt; info is not null);
+
+        // 2단계: 수집된 정보로 코드 생성
+        context.RegisterSourceOutput(classes, (spc, classInfo) =&gt;
+        {
+            string source = GenerateToString(classInfo!);
+            spc.AddSource($"{classInfo!.ClassName}.g.cs", source);
+        });
+    }
+
+    static string GenerateToString(ClassInfo info)
+    {
+        var props = string.Join(", ",
+            info.Properties.Select(p =&gt; $"{p}: {{{p}}}"));
+
+        return $@"
+// 자동 생성된 코드
+partial class {info.ClassName}
+{{
+    public override string ToString()
+        =&gt; $""{info.ClassName}({props})"";
+}}";
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">사용하는 쪽 코드는 어떻게 되나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 사용 측 코드</div>
+                        <pre><code>// 어트리뷰트만 붙이면 ToString이 자동 생성됨!
+[AutoToString]
+public partial class PlayerData
+{
+    public string Name { get; set; }
+    public int Level { get; set; }
+    public float Health { get; set; }
+}
+
+// 자동 생성된 코드 (PlayerData.g.cs):
+// partial class PlayerData
+// {
+//     public override string ToString()
+//         => $"PlayerData(Name: {Name}, Level: {Level}, Health: {Health})";
+// }
+
+var player = new PlayerData { Name = "Hero", Level = 5, Health = 100 };
+Console.WriteLine(player); // PlayerData(Name: Hero, Level: 5, Health: 100)</code></pre>
+                    </div>
+                    <p class="highlight">핵심은 partial 키워드입니다. 사용자가 작성한 부분과 Generator가 생성한 부분이 합쳐져 하나의 클래스를 구성합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: Syntax와 Semantic 분석</h2>
+            <div class="conversation">
+                <div class="q">Syntax Tree와 Semantic Model의 차이가 뭔가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>Syntax Tree</th>
+                                <th>Semantic Model</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>관점</td>
+                                <td>코드의 구조/문법</td>
+                                <td>코드의 의미/타입 정보</td>
+                            </tr>
+                            <tr>
+                                <td>알 수 있는 것</td>
+                                <td>클래스명, 메서드명, 문법 구조</td>
+                                <td>타입, 상속 관계, 참조 해석</td>
+                            </tr>
+                            <tr>
+                                <td>비용</td>
+                                <td>저렴 (파싱만)</td>
+                                <td>비쌈 (전체 분석 필요)</td>
+                            </tr>
+                            <tr>
+                                <td>활용</td>
+                                <td>빠른 필터링</td>
+                                <td>정확한 정보 추출</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">C# - Syntax vs Semantic 분석 예시</div>
+                        <pre><code>// Syntax: "이 노드가 ClassDeclarationSyntax인가?"
+static bool IsCandidateClass(SyntaxNode node, CancellationToken _)
+    =&gt; node is ClassDeclarationSyntax { AttributeLists.Count: > 0 };
+
+// Semantic: "이 클래스가 IPacket 인터페이스를 구현하는가?"
+static ClassInfo? GetClassInfo(
+    GeneratorAttributeSyntaxContext context)
+{
+    var symbol = context.TargetSymbol as INamedTypeSymbol;
+    if (symbol is null) return null;
+
+    // 타입 정보 분석
+    bool implementsIPacket = symbol.AllInterfaces
+        .Any(i =&gt; i.Name == "IPacket");
+
+    // 프로퍼티 목록 추출
+    var properties = symbol.GetMembers()
+        .OfType&lt;IPropertySymbol&gt;()
+        .Select(p =&gt; (p.Name, p.Type.ToDisplayString()))
+        .ToList();
+
+    return new ClassInfo(symbol.Name, properties);
+}</code></pre>
+                    </div>
+                    <p class="key-point">Incremental Generator에서는 Syntax로 빠르게 후보를 필터링하고, Semantic으로 정확한 정보를 추출하는 2단계 파이프라인이 성능의 핵심입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 게임 개발 실전 활용 사례</h2>
+            <div class="conversation">
+                <div class="q">게임에서 Source Generator를 어디에 활용할 수 있나요?</div>
+                <div class="a">
+                    <p>가장 큰 효과를 보는 분야는 다음과 같습니다:</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 네트워크 패킷 직렬화 자동 생성</div>
+                        <pre><code>// 사용자 코드 - 구조만 정의
+[Packet(OpCode = 0x0010)]
+public partial class MovePacket
+{
+    public float X { get; set; }
+    public float Y { get; set; }
+    public float Z { get; set; }
+    public float Rotation { get; set; }
+}
+
+// Source Generator가 자동 생성하는 코드:
+partial class MovePacket : IPacket
+{
+    public ushort OpCode =&gt; 0x0010;
+
+    public void Serialize(Span&lt;byte&gt; buffer)
+    {
+        BinaryPrimitives.WriteSingleLittleEndian(buffer[0..], X);
+        BinaryPrimitives.WriteSingleLittleEndian(buffer[4..], Y);
+        BinaryPrimitives.WriteSingleLittleEndian(buffer[8..], Z);
+        BinaryPrimitives.WriteSingleLittleEndian(buffer[12..], Rotation);
+    }
+
+    public void Deserialize(ReadOnlySpan&lt;byte&gt; buffer)
+    {
+        X = BinaryPrimitives.ReadSingleLittleEndian(buffer[0..]);
+        Y = BinaryPrimitives.ReadSingleLittleEndian(buffer[4..]);
+        Z = BinaryPrimitives.ReadSingleLittleEndian(buffer[8..]);
+        Rotation = BinaryPrimitives.ReadSingleLittleEndian(buffer[12..]);
+    }
+
+    public int Size =&gt; 16;
+}</code></pre>
+                    </div>
+                    <p>이 외에도 Enum 확장 메서드, DI 등록 코드, 상태머신 전이 코드 등을 자동 생성할 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: 디버깅과 테스트</h2>
+            <div class="conversation">
+                <div class="q">Source Generator를 어떻게 디버깅하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 디버깅 팁</div>
+                        <pre><code>// 1. Debugger.Launch()로 디버거 연결
+public void Initialize(...)
+{
+#if DEBUG
+    if (!Debugger.IsAttached)
+        Debugger.Launch();
+#endif
+}
+
+// 2. 생성된 코드 파일로 출력
+// csproj에 추가:
+// &lt;EmitCompilerGeneratedFiles&gt;true&lt;/EmitCompilerGeneratedFiles&gt;
+// &lt;CompilerGeneratedFilesOutputPath&gt;Generated&lt;/CompilerGeneratedFilesOutputPath&gt;
+
+// 3. Diagnostic으로 경고/에러 출력
+context.RegisterSourceOutput(errors, (spc, error) =&gt;
+{
+    spc.ReportDiagnostic(Diagnostic.Create(
+        new DiagnosticDescriptor(
+            "SG001", "생성 오류", error.Message,
+            "SourceGenerator", DiagnosticSeverity.Error, true),
+        Location.None));
+});</code></pre>
+                    </div>
+                    <p class="key-point">EmitCompilerGeneratedFiles 옵션을 켜면 생성된 .g.cs 파일을 직접 확인할 수 있습니다. 디버깅 시 가장 유용한 방법입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Source Generator</strong>는 컴파일 시점에 Roslyn을 통해 소스 코드를 분석하고 새 코드를 추가한다.</li>
+                <li><strong>IIncrementalGenerator</strong>를 사용해 증분 처리하면 IDE 성능 저하를 방지할 수 있다.</li>
+                <li><strong>partial 클래스</strong>를 통해 사용자 코드와 생성 코드를 결합한다.</li>
+                <li>패킷 직렬화, Enum 유틸리티, DI 등록 등 보일러플레이트를 제거하여 생산성을 높인다.</li>
+                <li>리플렉션을 대체하여 AOT 호환성과 런타임 성능을 동시에 확보할 수 있다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

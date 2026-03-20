@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>new/delete가 느리다고?</h1>
             <p class="subtitle">메모리 풀과 Custom Allocator로 할당 최적화하기</p>
         </header>
@@ -32,21 +34,25 @@
                     </ul>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-힙 단편화 문제
-
-초기:  [████████████████████████]
-        연속된 메모리
-
-할당:  [A][B][C][D][E][F][G][H]
-       다양한 크기 할당
-
-해제:  [A][ ][C][ ][E][ ][G][ ]
-       B, D, F, H 해제
-
-문제:  [A][ ][C][ ][E][ ][G][ ]
-       빈 공간이 있지만, 큰 블록 할당 불가!
-                        </pre>
+                        <p><strong>힙 단편화 문제</strong></p>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">초기</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>연속된 메모리</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">할당</div>
+                                <div class="pipeline-bar pb-light"><span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">해제</div>
+                                <div class="pipeline-bar pb-shadow"><span>A</span><span style="opacity:0.3">_</span><span>C</span><span style="opacity:0.3">_</span><span>E</span><span style="opacity:0.3">_</span><span>G</span><span style="opacity:0.3">_</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">문제</div>
+                                <div class="pipeline-bar pb-post"><span>빈 공간이 있지만, 큰 블록 할당 불가!</span></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -119,20 +125,59 @@ public:
                 </div>
 
                 <div class="visual-section">
-                    <pre class="diagram">
-Fixed-Size Pool 구조
-
-초기 상태:
-freeList → [0] → [1] → [2] → [3] → ... → [N] → null
-
-할당 후:
-freeList → [1] → [2] → [3] → ... → [N] → null
-           [0] 사용 중
-
-해제 후:
-freeList → [0] → [1] → [2] → ... → [N] → null
-           [0] 다시 프리 리스트에
-                    </pre>
+                    <p><strong>Fixed-Size Pool 구조</strong></p>
+                    <p><strong>초기 상태:</strong></p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--highlight"><div class="flow-box__title">freeList</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">[0]</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">[1]</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">[2]</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">...</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">[N]</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">null</div></div>
+                        </div>
+                    </div>
+                    <p><strong>할당 후:</strong> [0] 사용 중</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--highlight"><div class="flow-box__title">freeList</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">[1]</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">[2]</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">...</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">[N]</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">null</div></div>
+                        </div>
+                    </div>
+                    <p><strong>해제 후:</strong> [0] 다시 프리 리스트에</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--highlight"><div class="flow-box__title">freeList</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">[0]</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">[1]</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">[2]</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">...</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">[N]</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box"><div class="flow-box__items">null</div></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>

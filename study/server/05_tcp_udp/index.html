@@ -8,9 +8,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../server.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../server.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>빠른 게 좋을까, 확실한 게 좋을까?</h1>
             <p class="subtitle">게임 장르별 TCP vs UDP 선택 기준</p>
         </header>
@@ -22,43 +24,42 @@
                 <div class="a">
                     <p><strong>신뢰성</strong>과 <strong>속도</strong>의 트레이드오프입니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-TCP (Transmission Control Protocol):
-┌─────────────────────────────────────────────────────────────┐
-│  "확실하게, 순서대로 배달합니다"                               │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Sender                                      Receiver       │
-│    │                                            │           │
-│    │── [1] Hello ─────────────────────────────▶│           │
-│    │◀──────────────────────────────── ACK [1] ──│           │
-│    │                                            │           │
-│    │── [2] World ──────────X (손실)              │           │
-│    │         ...타임아웃...                       │           │
-│    │── [2] World (재전송) ───────────────────▶│           │
-│    │◀──────────────────────────────── ACK [2] ──│           │
-│                                                             │
-│  ✅ 장점: 모든 패킷 도착 보장, 순서 보장                      │
-│  ❌ 단점: 손실 시 대기, Head-of-Line Blocking               │
-└─────────────────────────────────────────────────────────────┘
-
-UDP (User Datagram Protocol):
-┌─────────────────────────────────────────────────────────────┐
-│  "빠르게, 최선을 다해 배달합니다 (보장은 없음)"                 │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Sender                                      Receiver       │
-│    │                                            │           │
-│    │── [1] Position ─────────────────────────▶│  ✓        │
-│    │── [2] Position ──────────X (손실)         │  ✗        │
-│    │── [3] Position ─────────────────────────▶│  ✓        │
-│    │                                            │           │
-│    │  (손실 무시, 그냥 계속 진행)                  │           │
-│                                                             │
-│  ✅ 장점: 빠름, 지연 없음                                    │
-│  ❌ 단점: 손실/순서 미보장, 직접 처리 필요                    │
-└─────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-side-by-side" style="gap: 12px;">
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">TCP - "확실하게, 순서대로 배달"</div>
+                                    <div class="flow-diagram">
+                                        <div class="flow-row" style="justify-content: center;">
+                                            <div class="flow-box flow-box--small"><div class="flow-box__title">Sender</div></div>
+                                            <span class="flow-arrow">&#x2192; [1] Hello</span>
+                                            <div class="flow-box flow-box--small"><div class="flow-box__title">Receiver</div></div>
+                                        </div>
+                                        <div class="flow-label">&#x2190; ACK [1]</div>
+                                        <div class="flow-label" style="color: #f87171;">[2] World &#x2192; X (손실) ... 타임아웃 ... 재전송</div>
+                                        <div class="flow-label">&#x2190; ACK [2]</div>
+                                    </div>
+                                    <div class="flow-box" style="width: 100%; margin-top: 8px;">
+                                        <div class="flow-box__items">장점: 모든 패킷 도착 보장, 순서 보장<br>단점: 손실 시 대기, Head-of-Line Blocking</div>
+                                    </div>
+                                </div>
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">UDP - "빠르게, 최선을 다해 배달 (보장은 없음)"</div>
+                                    <div class="flow-diagram">
+                                        <div class="flow-row" style="justify-content: center;">
+                                            <div class="flow-box flow-box--small"><div class="flow-box__title">Sender</div></div>
+                                            <span class="flow-arrow">&#x2192;</span>
+                                            <div class="flow-box flow-box--small"><div class="flow-box__title">Receiver</div></div>
+                                        </div>
+                                        <div class="flow-label">[1] Position &#x2192; 도착</div>
+                                        <div class="flow-label" style="color: #f87171;">[2] Position &#x2192; X (손실, 무시)</div>
+                                        <div class="flow-label">[3] Position &#x2192; 도착 (계속 진행)</div>
+                                    </div>
+                                    <div class="flow-box" style="width: 100%; margin-top: 8px;">
+                                        <div class="flow-box__items">장점: 빠름, 지연 없음<br>단점: 손실/순서 미보장, 직접 처리 필요</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -66,24 +67,25 @@ UDP (User Datagram Protocol):
                 <div class="a">
                     <p>TCP에서 하나의 패킷이 손실되면, <strong>그 뒤의 모든 패킷이 대기</strong>해야 합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-Head-of-Line Blocking 문제:
-
-시간 →
-패킷:   [1]  [2]  [3]  [4]  [5]
-         ✓    ✗    ✓    ✓    ✓
-              │
-              └── [2] 손실!
-
-수신 버퍼:
-         [1] [?] [3] [4] [5]
-              │
-              └── [2]가 올 때까지 [3][4][5]를 애플리케이션에 전달 못함
-
-결과: 50ms 후 [2] 재전송 도착
-      → [2][3][4][5] 한꺼번에 전달
-      → 실제론 [3][4][5]도 50ms 지연됨!
-                        </pre>
+                        <div class="flow-diagram">
+                            <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">Head-of-Line Blocking 문제:</div>
+                            <div class="flow-row" style="flex-wrap:wrap; gap:6px; justify-content:center;">
+                                <div class="flow-box flow-box--small flow-box--highlight"><div class="flow-box__title">[1]</div><div class="flow-box__items">OK</div></div>
+                                <div class="flow-box flow-box--small" style="border-color:#ef4444;"><div class="flow-box__title" style="color:#ef4444;">[2]</div><div class="flow-box__items">손실!</div></div>
+                                <div class="flow-box flow-box--small"><div class="flow-box__title">[3]</div><div class="flow-box__items">대기</div></div>
+                                <div class="flow-box flow-box--small"><div class="flow-box__title">[4]</div><div class="flow-box__items">대기</div></div>
+                                <div class="flow-box flow-box--small"><div class="flow-box__title">[5]</div><div class="flow-box__items">대기</div></div>
+                            </div>
+                            <div class="flow-col" style="align-items:center; margin:8px 0;">
+                                <span class="flow-arrow-down">&darr;</span>
+                                <div class="flow-label" style="color:#ef4444;">[2]가 올 때까지 [3][4][5]를 애플리케이션에 전달 못함</div>
+                                <span class="flow-arrow-down">&darr;</span>
+                            </div>
+                            <div class="flow-box" style="width:100%;">
+                                <div class="flow-box__title">결과</div>
+                                <div class="flow-box__items">50ms 후 [2] 재전송 도착 &rarr; [2][3][4][5] 한꺼번에 전달<br>실제론 [3][4][5]도 50ms 지연됨!</div>
+                            </div>
+                        </div>
                     </div>
                     <p class="warning">FPS에서 위치 정보가 50ms 지연되면 캐릭터가 순간이동하는 것처럼 보입니다.</p>
                 </div>
@@ -330,26 +332,37 @@ public:
                 <div class="a">
                     <p><strong>UDP</strong>가 압도적으로 유리합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-FPS에서 TCP vs UDP:
-
-[TCP 사용 시]
-t=0ms:   위치 패킷 1 전송
-t=16ms:  위치 패킷 2 전송 (패킷 손실!)
-t=32ms:  위치 패킷 3 전송
-t=48ms:  위치 패킷 4 전송
-         ...
-t=100ms: 패킷 2 재전송 도착
-         → 이제서야 패킷 2,3,4 순서대로 처리
-         → 패킷 4의 실제 지연: 100ms - 48ms = 52ms 추가 지연!
-
-[UDP 사용 시]
-t=0ms:   위치 패킷 1 전송 → 즉시 처리
-t=16ms:  위치 패킷 2 전송 (패킷 손실) → 무시
-t=32ms:  위치 패킷 3 전송 → 즉시 처리 (패킷 2 건너뜀)
-t=48ms:  위치 패킷 4 전송 → 즉시 처리
-         → 패킷 2만 손실, 나머지는 정상 처리!
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-side-by-side" style="gap: 12px;">
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">TCP 사용 시</div>
+                                    <div class="flow-col" style="gap:4px;">
+                                        <div class="flow-label">t=0ms: 위치 패킷 1 전송</div>
+                                        <div class="flow-label" style="color:#ef4444;">t=16ms: 위치 패킷 2 전송 (패킷 손실!)</div>
+                                        <div class="flow-label">t=32ms: 위치 패킷 3 전송</div>
+                                        <div class="flow-label">t=48ms: 위치 패킷 4 전송</div>
+                                        <div class="flow-label">...</div>
+                                        <div class="flow-label">t=100ms: 패킷 2 재전송 도착</div>
+                                    </div>
+                                    <div class="flow-box" style="width:100%; margin-top:8px; border-color:#ef4444;">
+                                        <div class="flow-box__items">이제서야 패킷 2,3,4 순서대로 처리<br>패킷 4의 실제 지연: 52ms 추가!</div>
+                                    </div>
+                                </div>
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">UDP 사용 시</div>
+                                    <div class="flow-col" style="gap:4px;">
+                                        <div class="flow-label">t=0ms: 패킷 1 &rarr; 즉시 처리</div>
+                                        <div class="flow-label" style="color:#ef4444;">t=16ms: 패킷 2 (손실) &rarr; 무시</div>
+                                        <div class="flow-label">t=32ms: 패킷 3 &rarr; 즉시 처리 (2 건너뜀)</div>
+                                        <div class="flow-label">t=48ms: 패킷 4 &rarr; 즉시 처리</div>
+                                    </div>
+                                    <div class="flow-box flow-box--highlight" style="width:100%; margin-top:8px;">
+                                        <div class="flow-box__items">패킷 2만 손실, 나머지는 정상 처리!</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">FPS에서 TCP vs UDP 비교</p>
                     </div>
                     <p class="highlight">FPS에서 오래된 위치 정보는 의미가 없습니다. 최신 정보만 중요합니다.</p>
                 </div>
@@ -567,30 +580,33 @@ public:
                 <div class="a">
                     <p>P2P 연결이 필요할 때 NAT를 통과해야 합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-NAT Traversal 기법:
+                        <div class="flow-diagram">
+                            <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">1. STUN (Simple Traversal of UDP through NATs)</div>
+                            <div class="flow-row" style="justify-content:center;">
+                                <div class="flow-box"><div class="flow-box__title">Client A</div><div class="flow-box__items">(NAT)</div></div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">STUN Server</div><div class="flow-box__items">"너의 공인 IP:Port는<br>1.2.3.4:5000이야"</div></div>
+                                <span class="flow-arrow">&larr;</span>
+                                <div class="flow-box"><div class="flow-box__title">Client B</div><div class="flow-box__items">(NAT)</div></div>
+                            </div>
+                            <div class="flow-label" style="margin-top:8px;">이 정보를 상대에게 전달하여 직접 연결 시도</div>
 
-1. STUN (Simple Traversal of UDP through NATs)
-   ┌─────────┐                          ┌─────────┐
-   │ Client  │──▶ STUN Server ◀─────────│ Client  │
-   │  (NAT)  │      │                   │  (NAT)  │
-   └─────────┘      │                   └─────────┘
-                    ▼
-           "너의 공인 IP:Port는 1.2.3.4:5000이야"
-           → 이 정보를 상대에게 전달
+                            <div style="font-size:0.85rem; color:var(--text-muted); margin:16px 0 8px; font-weight:600;">2. TURN (Traversal Using Relays around NAT)</div>
+                            <div class="flow-row" style="justify-content:center;">
+                                <div class="flow-box"><div class="flow-box__title">Client A</div></div>
+                                <span class="flow-arrow">&harr;</span>
+                                <div class="flow-box" style="border-color:#ef4444;"><div class="flow-box__title">TURN Server</div><div class="flow-box__items">모든 트래픽 경유<br>(느림, 비용&uarr;)</div></div>
+                                <span class="flow-arrow">&harr;</span>
+                                <div class="flow-box"><div class="flow-box__title">Client B</div></div>
+                            </div>
+                            <div class="flow-label" style="margin-top:8px;">STUN 실패 시 중계 서버 사용</div>
 
-2. TURN (Traversal Using Relays around NAT)
-   - STUN 실패 시 중계 서버 사용
-   ┌─────────┐      ┌─────────┐      ┌─────────┐
-   │ Client A│◀────▶│  TURN   │◀────▶│ Client B│
-   └─────────┘      │ Server  │      └─────────┘
-                    └─────────┘
-   - 모든 트래픽이 서버 경유 (느림, 비용↑)
-
-3. UDP Hole Punching
-   - 양쪽이 동시에 상대 NAT에 패킷 전송
-   - 타이밍 맞으면 직접 연결 성공
-                        </pre>
+                            <div style="font-size:0.85rem; color:var(--text-muted); margin:16px 0 8px; font-weight:600;">3. UDP Hole Punching</div>
+                            <div class="flow-box" style="width:100%;">
+                                <div class="flow-box__items">양쪽이 동시에 상대 NAT에 패킷 전송 &rarr; 타이밍 맞으면 직접 연결 성공</div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">NAT Traversal 기법 비교</p>
                     </div>
                     <p class="key-point">게임 서버 연결은 보통 서버가 공인 IP라 NAT 문제 없음. P2P 필요 시에만 STUN/TURN 사용.</p>
                 </div>

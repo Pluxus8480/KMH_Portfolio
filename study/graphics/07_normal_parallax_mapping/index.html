@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>평면에 입체감을 새기다</h1>
@@ -30,23 +30,20 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Normal Mapping 원리:
-
-실제 지오메트리 (평면):
-─────────────────────────────
-    ↑     ↑     ↑     ↑        모든 법선이 위를 향함
-    N     N     N     N        → 평평한 라이팅
-
-Normal Map 적용 후:
-─────────────────────────────
-   ↗    ↑    ↖    ↗    ↑      법선이 다양한 방향
-   N    N    N    N    N       → 울퉁불퉁한 라이팅
-
-실제 표면은 평면이지만,
-라이팅 계산에 사용되는 법선이 다르므로
-입체감 있는 결과를 얻음
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">실제 지오메트리 (평면)</div>
+                            <div class="flow-box__items">모든 법선이 위를 향함 (↑ ↑ ↑ ↑)<br>→ 평평한 라이팅</div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Normal Map 적용 후</div>
+                            <div class="flow-box__items">법선이 다양한 방향 (↗ ↑ ↖ ↗ ↑)<br>→ 울퉁불퉁한 라이팅</div>
+                        </div>
+                    </div>
+                    <p style="margin-top:0.5rem; color: var(--text-secondary); font-size:0.85rem;">실제 표면은 평면이지만, 라이팅 계산에 사용되는 법선이 다르므로 입체감 있는 결과를 얻음</p>
+                </div>
                 <p class="diagram-caption">노말 맵의 기본 원리</p>
             </div>
 
@@ -68,24 +65,31 @@ Normal Map 적용 후:
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Normal Map RGB → XYZ 매핑:
-
-텍스처 값 [0, 1] → 법선 벡터 [-1, 1]
-  변환식: normal = texValue * 2.0 - 1.0
-
-RGB 채널 의미:
-┌─────────────────────────────────────────┐
-│  R (빨강) = X 방향 (좌우)               │
-│  G (초록) = Y 방향 (상하/앞뒤)          │
-│  B (파랑) = Z 방향 (표면에서 수직)      │
-└─────────────────────────────────────────┘
-
-예시:
-(128, 128, 255) → (0, 0, 1)  = 위를 향함 (기본)
-(255, 128, 128) → (1, 0, 0)  = 오른쪽으로 기울어짐
-(0, 128, 128)   → (-1, 0, 0) = 왼쪽으로 기울어짐
-                </pre>
+                <div class="flow-diagram">
+                    <p style="margin-bottom:0.5rem; color: var(--text-secondary);">텍스처 값 [0, 1] → 법선 벡터 [-1, 1] / 변환식: normal = texValue * 2.0 - 1.0</p>
+                    <div class="flow-box flow-box--highlight">
+                        <div class="flow-box__title">RGB 채널 의미</div>
+                        <div class="flow-box__items">
+                            R (빨강) = X 방향 (좌우)<br>
+                            G (초록) = Y 방향 (상하/앞뒤)<br>
+                            B (파랑) = Z 방향 (표면에서 수직)
+                        </div>
+                    </div>
+                    <div class="flow-row" style="margin-top:0.75rem;">
+                        <div class="flow-box">
+                            <div class="flow-box__title">(128,128,255)</div>
+                            <div class="flow-box__items">(0, 0, 1) = 위를 향함 (기본)</div>
+                        </div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">(255,128,128)</div>
+                            <div class="flow-box__items">(1, 0, 0) = 오른쪽으로 기울어짐</div>
+                        </div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">(0,128,128)</div>
+                            <div class="flow-box__items">(-1, 0, 0) = 왼쪽으로 기울어짐</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Normal Map의 색상 인코딩</p>
             </div>
 
@@ -128,27 +132,28 @@ RGB 채널 의미:
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Tangent Space 좌표계:
-
-              N (Normal - 표면에 수직)
-              ↑
-              │
-              │
-              ●───────→ T (Tangent - U 방향)
-             ╱
-            ╱
-           ↓
-          B (Bitangent - V 방향)
-
-TBN 행렬:
-┌               ┐
-│ Tx  Ty  Tz   │
-│ Bx  By  Bz   │   × tangentSpaceNormal
-│ Nx  Ny  Nz   │
-└               ┘
-    = worldSpaceNormal
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Tangent Space 좌표계</div>
+                            <div class="flow-box__items">
+                                N (Normal) — 표면에 수직 ↑<br>
+                                T (Tangent) — U 방향 →<br>
+                                B (Bitangent) — V 방향
+                            </div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">TBN 행렬</div>
+                            <div class="flow-box__items">
+                                [ Tx Ty Tz ]<br>
+                                [ Bx By Bz ] × tangentSpaceNormal<br>
+                                [ Nx Ny Nz ]<br>
+                                = worldSpaceNormal
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">TBN 좌표계</p>
             </div>
 
@@ -243,22 +248,27 @@ float4 PS_NormalMap(VSOutput input) : SV_Target
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Parallax Mapping 원리:
-
-    눈 👁️
-      \
-       \  view direction
-        \
-    ─────●─────────────  실제 표면 (height = 0)
-         │
-         │ offset
-         │
-    ─────◉─────────────  가상 표면 (height map)
-
-원래 UV (●) 대신 오프셋된 UV (◉)에서 텍스처 샘플링
-→ 깊이감 있는 효과
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-col">
+                        <div class="flow-box">
+                            <div class="flow-box__title">시선 (View Direction)</div>
+                            <div class="flow-box__items">눈에서 표면을 향해 바라봄</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">실제 표면 (height = 0)</div>
+                                <div class="flow-box__items">원래 UV 위치 (●)</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">가상 표면 (height map)</div>
+                                <div class="flow-box__items">오프셋된 UV 위치 (◉)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p style="margin-top:0.5rem; color: var(--text-secondary); font-size:0.85rem;">원래 UV 대신 오프셋된 UV에서 텍스처 샘플링 → 깊이감 있는 효과</p>
+                </div>
                 <p class="diagram-caption">Parallax UV Offset</p>
             </div>
 
@@ -304,19 +314,19 @@ float4 PS_Parallax(VSOutput input) : SV_Target
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Steep Parallax vs Simple Parallax:
-
-Simple (1번 샘플링):           Steep (여러 번 샘플링):
-    👁️                              👁️
-      \                               \
-       \                               \  ●───●───●
-        \                               \     ●───●
-         \                               \        ◉
-    ──────●──────                   ──────────────────
-          ↓                         높이 맵 표면을 따라가며
-       오차 발생                     교차점 ◉ 찾음
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Simple (1번 샘플링)</div>
+                            <div class="flow-box__items">한 번만 높이 체크<br>→ 오차 발생</div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Steep (여러 번 샘플링)</div>
+                            <div class="flow-box__items">높이 맵 표면을 따라가며<br>정확한 교차점 ◉ 찾음</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">레이마칭 방식의 정밀도 향상</p>
             </div>
 

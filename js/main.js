@@ -48,7 +48,7 @@ skillBadges.forEach(badge => {
 });
 
 // ===== Typing Effect =====
-const textArray = ['KMH', 'Game Developer', 'Full Stack Developer', 'Problem Solver'];
+const textArray = ['KMH', 'DirectX Engine Developer', 'Game Server Programmer', 'Becoming Full-Stack'];
 let textIndex = 0;
 let charIndex = 0;
 let isDeleting = false;

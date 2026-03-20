@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"코드 순서대로 실행 안 된다고요?"</h1>
             <p class="subtitle">메모리 순서와 배리어의 이해</p>
         </header>
@@ -52,29 +54,39 @@ void consumer() {
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    재정렬이 발생하는 이유                            │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   1. 컴파일러 최적화                                                │
-│      - 의존성 없는 명령어는 순서 변경 가능                          │
-│      - 더 효율적인 명령어 스케줄링                                  │
-│                                                                     │
-│   2. CPU Out-of-Order Execution                                    │
-│      - 대기 중인 명령어를 건너뛰고 다른 명령어 먼저 실행            │
-│      - 파이프라인 효율 최대화                                       │
-│                                                                     │
-│   3. Store Buffer                                                   │
-│      - 쓰기 연산을 버퍼에 저장하고 나중에 반영                      │
-│      - 쓰기 순서가 바뀔 수 있음                                     │
-│                                                                     │
-│   4. CPU 캐시                                                        │
-│      - 캐시 일관성 프로토콜의 지연                                  │
-│      - 다른 코어에서 보는 순서가 다를 수 있음                       │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <p><strong>재정렬이 발생하는 이유</strong></p>
+                            <div class="flow-row" style="flex-wrap: wrap; gap: 1rem;">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">1. 컴파일러 최적화</div>
+                                    <div class="flow-box__items">
+                                        <p>의존성 없는 명령어는 순서 변경 가능</p>
+                                        <p>더 효율적인 명령어 스케줄링</p>
+                                    </div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">2. CPU Out-of-Order Execution</div>
+                                    <div class="flow-box__items">
+                                        <p>대기 중인 명령어를 건너뛰고 다른 명령어 먼저 실행</p>
+                                        <p>파이프라인 효율 최대화</p>
+                                    </div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">3. Store Buffer</div>
+                                    <div class="flow-box__items">
+                                        <p>쓰기 연산을 버퍼에 저장하고 나중에 반영</p>
+                                        <p>쓰기 순서가 바뀔 수 있음</p>
+                                    </div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">4. CPU 캐시</div>
+                                    <div class="flow-box__items">
+                                        <p>캐시 일관성 프로토콜의 지연</p>
+                                        <p>다른 코어에서 보는 순서가 다를 수 있음</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -125,34 +137,32 @@ void consumer() {
                     </table>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                  Acquire / Release 의미                              │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Release (쓰기 측)                                                 │
-│   ─────────────────                                                 │
-│                                                                     │
-│   data = 42;        ──┐                                             │
-│   moreData = 100;   ──┼── 이 쓰기들이                               │
-│   ──── RELEASE ─────  │                                             │
-│   ready = true;     ◀─┘   ready 이전에 완료됨                       │
-│                                                                     │
-│   ─────────────────────────────────────────────────────────────    │
-│                                                                     │
-│   Acquire (읽기 측)                                                 │
-│   ─────────────────                                                 │
-│                                                                     │
-│   if (ready) {      ──┐                                             │
-│   ──── ACQUIRE ─────  │                                             │
-│     use(data);      ◀─┼── 이 읽기들이                               │
-│     use(moreData);  ◀─┘   ready 이후에 실행됨                       │
-│   }                                                                 │
-│                                                                     │
-│   Acquire-Release 쌍으로 동기화 지점 형성                           │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <p><strong>Acquire / Release 의미</strong></p>
+                            <div class="flow-row" style="flex-wrap: wrap; gap: 1rem;">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Release (쓰기 측)</div>
+                                    <div class="flow-box__items">
+                                        <p>data = 42;</p>
+                                        <p>moreData = 100;</p>
+                                        <p style="border-top: 2px dashed var(--accent); padding-top: 0.5rem;">── RELEASE ──</p>
+                                        <p>ready = true;</p>
+                                        <p class="highlight">이 쓰기들이 ready 이전에 완료됨</p>
+                                    </div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Acquire (읽기 측)</div>
+                                    <div class="flow-box__items">
+                                        <p>if (ready) {</p>
+                                        <p style="border-top: 2px dashed var(--accent); padding-top: 0.5rem;">── ACQUIRE ──</p>
+                                        <p>use(data);</p>
+                                        <p>use(moreData);</p>
+                                        <p class="highlight">이 읽기들이 ready 이후에 실행됨</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="key-point">Acquire-Release 쌍으로 동기화 지점 형성</p>
+                        </div>
                     </div>
                 </div>
             </div>

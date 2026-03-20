@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오브젝트 풀링 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+
+        <header class="content-header">
+            <h1>매번 새로 만들면 GC가 울린다</h1>
+            <p class="subtitle">오브젝트 풀링으로 Instantiate/Destroy 지옥 탈출</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 왜 Instantiate/Destroy가 문제인가?</h2>
+            <div class="conversation">
+                <div class="q">총알을 발사할 때마다 Instantiate로 생성하고, 벽에 닿으면 Destroy하면 안 되나요?</div>
+                <div class="a">
+                    <p>기능적으로는 문제없지만, <strong>성능 측면에서 심각한 문제</strong>를 일으킵니다.</p>
+                    <p class="highlight">Instantiate는 메모리 할당, 컴포넌트 초기화, Awake/Start 호출 등 무거운 작업을 수반합니다. Destroy는 오브젝트를 메모리에서 해제하며 GC(Garbage Collector) 부담을 유발합니다.</p>
+                    <p>초당 30발을 발사하는 기관총이 있다면, 매 초 30번의 할당과 30번의 해제가 발생합니다. 이것이 쌓이면 <strong>GC Spike</strong>로 인한 프레임 드랍이 나타납니다.</p>
+                </div>
+
+                <div class="q">GC Spike가 정확히 뭔가요?</div>
+                <div class="a">
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>책상 위에 종이를 계속 쌓다가, 더 이상 공간이 없으면 한꺼번에 정리하는 것과 같습니다.</p>
+                        <p>이 "한꺼번에 정리"하는 순간이 GC Spike이며, 이 동안 게임이 잠깐 멈추는 현상(스터터링)이 발생합니다.</p>
+                    </div>
+                    <p class="warning">모바일 게임에서 GC Spike는 치명적입니다. 60fps 기준 1프레임은 16.6ms인데, GC가 수십 ms를 잡아먹으면 눈에 보이는 끊김이 발생합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 오브젝트 풀링의 기본 원리</h2>
+            <div class="conversation">
+                <div class="q">오브젝트 풀링은 어떤 아이디어인가요?</div>
+                <div class="a">
+                    <p class="key-point">핵심 아이디어: 미리 만들어 두고, 쓰고, 반납하고, 다시 쓴다.</p>
+                    <p>오브젝트를 파괴하는 대신 비활성화(SetActive(false))하여 풀에 반환하고, 필요할 때 다시 활성화하여 재사용합니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">초기화</div>
+                                <div class="flow-box__items">N개 미리 생성</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Get (꺼내기)</div>
+                                <div class="flow-box__items">풀에서 비활성 오브젝트 가져오기</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">사용</div>
+                                <div class="flow-box__items">위치/회전 설정 후 활성화</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Release (반환)</div>
+                                <div class="flow-box__items">비활성화 후 풀로 복귀</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="q">풀에 오브젝트가 부족하면 어떻게 하나요?</div>
+                <div class="a">
+                    <p>두 가지 전략이 있습니다:</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>전략</th><th>동작</th><th>장단점</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>동적 확장</strong></td>
+                                <td>부족하면 새로 생성하여 풀에 추가</td>
+                                <td>유연하지만 런타임 할당 발생 가능</td>
+                            </tr>
+                            <tr>
+                                <td><strong>고정 크기</strong></td>
+                                <td>최대 개수 제한, 초과 시 가장 오래된 것 재활용</td>
+                                <td>메모리 예측 가능, 오브젝트 부족 가능</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Unity 내장 ObjectPool&lt;T&gt;</h2>
+            <div class="conversation">
+                <div class="q">Unity에 이미 풀링 시스템이 내장되어 있나요?</div>
+                <div class="a">
+                    <p>Unity 2021부터 <code>UnityEngine.Pool</code> 네임스페이스에 <strong>ObjectPool&lt;T&gt;</strong>가 내장되었습니다.</p>
+                    <p class="key-point">4개의 콜백으로 오브젝트의 생명주기를 제어합니다: createFunc, actionOnGet, actionOnRelease, actionOnDestroy</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Unity ObjectPool 기본 사용법</div>
+                        <pre><code>using UnityEngine;
+using UnityEngine.Pool;
+
+public class BulletSpawner : MonoBehaviour
+{
+    [SerializeField] private GameObject bulletPrefab;
+    private ObjectPool&lt;GameObject&gt; pool;
+
+    void Awake()
+    {
+        pool = new ObjectPool&lt;GameObject&gt;(
+            createFunc: () =&gt; Instantiate(bulletPrefab),
+            actionOnGet: bullet =&gt; {
+                bullet.SetActive(true);
+                bullet.transform.position = transform.position;
+            },
+            actionOnRelease: bullet =&gt; bullet.SetActive(false),
+            actionOnDestroy: bullet =&gt; Destroy(bullet),
+            collectionCheck: false,
+            defaultCapacity: 20,
+            maxSize: 100
+        );
+    }
+
+    public GameObject GetBullet() =&gt; pool.Get();
+
+    public void ReturnBullet(GameObject bullet) =&gt; pool.Release(bullet);
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">collectionCheck와 maxSize는 무엇인가요?</div>
+                <div class="a">
+                    <p><strong>collectionCheck</strong>: 같은 오브젝트를 두 번 반환하는 실수를 감지합니다. 디버깅 시 true로 설정하되, 릴리즈 빌드에서는 false로 두세요.</p>
+                    <p><strong>maxSize</strong>: 풀의 최대 크기입니다. 이를 초과하면 반환된 오브젝트는 actionOnDestroy를 통해 파괴됩니다.</p>
+                    <p class="warning">maxSize를 너무 작게 잡으면 풀링 효과가 줄어들고, 너무 크게 잡으면 불필요한 메모리를 차지합니다. 프로파일링을 통해 적절한 값을 설정하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 커스텀 오브젝트 풀 구현하기</h2>
+            <div class="conversation">
+                <div class="q">내장 ObjectPool 대신 직접 구현해야 할 때도 있나요?</div>
+                <div class="a">
+                    <p>여러 종류의 프리팹을 하나의 매니저에서 관리하거나, 사전 워밍업(Pre-warm), 씬 전환 시 풀 유지 같은 세밀한 제어가 필요할 때 커스텀 구현이 유리합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 제네릭 커스텀 풀 매니저</div>
+                        <pre><code>using System.Collections.Generic;
+using UnityEngine;
+
+public class GenericPool&lt;T&gt; where T : Component
+{
+    private readonly T prefab;
+    private readonly Transform parent;
+    private readonly Queue&lt;T&gt; available = new Queue&lt;T&gt;();
+
+    public GenericPool(T prefab, Transform parent, int preWarmCount = 10)
+    {
+        this.prefab = prefab;
+        this.parent = parent;
+        PreWarm(preWarmCount);
+    }
+
+    private void PreWarm(int count)
+    {
+        for (int i = 0; i &lt; count; i++)
+        {
+            T obj = Object.Instantiate(prefab, parent);
+            obj.gameObject.SetActive(false);
+            available.Enqueue(obj);
+        }
+    }
+
+    public T Get(Vector3 position, Quaternion rotation)
+    {
+        T obj = available.Count &gt; 0
+            ? available.Dequeue()
+            : Object.Instantiate(prefab, parent);
+
+        obj.transform.SetPositionAndRotation(position, rotation);
+        obj.gameObject.SetActive(true);
+        return obj;
+    }
+
+    public void Release(T obj)
+    {
+        obj.gameObject.SetActive(false);
+        available.Enqueue(obj);
+    }
+
+    public int CountAvailable =&gt; available.Count;
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">IPoolable 인터페이스를 만들면 더 좋지 않나요?</div>
+                <div class="a">
+                    <p>맞습니다. 풀에서 꺼내고 반환할 때 오브젝트가 스스로 초기화/정리할 수 있도록 인터페이스를 정의하면 코드가 깔끔해집니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - IPoolable 인터페이스</div>
+                        <pre><code>public interface IPoolable
+{
+    void OnSpawn();   // 풀에서 꺼낼 때
+    void OnDespawn(); // 풀로 반환할 때
+}
+
+// 총알 클래스에서 구현
+public class Bullet : MonoBehaviour, IPoolable
+{
+    private Rigidbody rb;
+    private TrailRenderer trail;
+
+    void Awake()
+    {
+        rb = GetComponent&lt;Rigidbody&gt;();
+        trail = GetComponent&lt;TrailRenderer&gt;();
+    }
+
+    public void OnSpawn()
+    {
+        rb.linearVelocity = Vector3.zero;
+        trail.Clear();
+    }
+
+    public void OnDespawn()
+    {
+        rb.linearVelocity = Vector3.zero;
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">특히 TrailRenderer.Clear()를 호출하지 않으면, 재활용된 총알이 이전 위치에서 현재 위치까지 잔상을 남기는 버그가 발생합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 총알과 파티클 풀링 실전</h2>
+            <div class="conversation">
+                <div class="q">실제 슈팅 게임에서 총알 풀링은 어떻게 구성하나요?</div>
+                <div class="a">
+                    <p>총알의 라이프사이클 전체를 풀 기반으로 설계해야 합니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">발사 입력</div>
+                                <div class="flow-box__items">Fire 버튼 누름</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Pool.Get()</div>
+                                <div class="flow-box__items">총알 + 머즐플래시</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">충돌 감지</div>
+                                <div class="flow-box__items">OnTriggerEnter</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Pool.Release()</div>
+                                <div class="flow-box__items">총알 반환 + 피격 이펙트 Get</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 풀링 기반 슈팅 시스템</div>
+                        <pre><code>public class Weapon : MonoBehaviour
+{
+    [SerializeField] private Bullet bulletPrefab;
+    [SerializeField] private ParticleSystem hitEffectPrefab;
+
+    private GenericPool&lt;Bullet&gt; bulletPool;
+    private ObjectPool&lt;ParticleSystem&gt; hitEffectPool;
+
+    void Start()
+    {
+        bulletPool = new GenericPool&lt;Bullet&gt;(bulletPrefab, transform, 30);
+
+        hitEffectPool = new ObjectPool&lt;ParticleSystem&gt;(
+            () =&gt; Instantiate(hitEffectPrefab),
+            ps =&gt; { ps.gameObject.SetActive(true); ps.Play(); },
+            ps =&gt; { ps.Stop(); ps.gameObject.SetActive(false); },
+            ps =&gt; Destroy(ps.gameObject),
+            false, 15, 50
+        );
+    }
+
+    public void Fire(Vector3 direction)
+    {
+        var bullet = bulletPool.Get(transform.position, Quaternion.LookRotation(direction));
+        bullet.Init(direction, 30f, OnBulletHit);
+    }
+
+    private void OnBulletHit(Bullet bullet, Vector3 hitPoint)
+    {
+        bulletPool.Release(bullet);
+        var effect = hitEffectPool.Get();
+        effect.transform.position = hitPoint;
+        StartCoroutine(ReturnEffectAfterDelay(effect, 1.5f));
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">파티클 이펙트를 풀링할 때 주의할 점은?</div>
+                <div class="a">
+                    <p>ParticleSystem은 재생 상태를 가지고 있으므로 반환 전 반드시 <code>Stop()</code>과 <code>Clear()</code>를 호출해야 합니다.</p>
+                    <p class="warning">ParticleSystem.main.stopAction을 Destroy로 설정하지 마세요! 풀링과 충돌합니다. 대신 Callback이나 None으로 설정하고, 수동으로 반환 타이밍을 관리하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 풀링 최적화와 모범 사례</h2>
+            <div class="conversation">
+                <div class="q">풀 사이즈는 어떻게 결정하나요?</div>
+                <div class="a">
+                    <p>프로파일링으로 동시 활성 오브젝트 최대치를 측정한 뒤, 그 값에 20~30% 여유를 두세요.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>오브젝트 유형</th><th>추천 풀 크기</th><th>근거</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>권총 총알</td><td>20~30</td><td>발사 속도 낮음, 수명 짧음</td></tr>
+                            <tr><td>기관총 총알</td><td>100~150</td><td>초당 15~30발</td></tr>
+                            <tr><td>피격 이펙트</td><td>15~30</td><td>1~2초 후 자동 반환</td></tr>
+                            <tr><td>적 NPC</td><td>30~50</td><td>웨이브 기반 스폰</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">씬 전환 시 풀은 어떻게 관리하나요?</div>
+                <div class="a">
+                    <p><code>DontDestroyOnLoad</code>로 풀 매니저를 유지하거나, 씬별로 새 풀을 생성하는 방법이 있습니다.</p>
+                    <p class="key-point">Addressables와 함께 사용한다면, 풀 해제 시 Addressables.ReleaseInstance도 호출해야 레퍼런스 카운트가 올바르게 관리됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Instantiate/Destroy 반복은 GC Spike를 유발</strong>하여 프레임 드랍의 주범이 된다</li>
+                <li><strong>오브젝트 풀링</strong>은 미리 생성한 오브젝트를 비활성/활성 전환으로 재사용하는 패턴이다</li>
+                <li>Unity 2021+는 <strong>ObjectPool&lt;T&gt;</strong>를 내장하며, 4개의 콜백으로 생명주기를 제어한다</li>
+                <li>재활용 시 TrailRenderer.Clear(), Rigidbody velocity 초기화 등 <strong>상태 리셋</strong>이 필수다</li>
+                <li>풀 크기는 프로파일링 기반으로 결정하고, <strong>IPoolable 인터페이스</strong>로 초기화 로직을 캡슐화하라</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

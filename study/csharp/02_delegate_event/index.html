@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delegate와 Event | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>누가 나를 불렀는가?</h1>
+            <p class="subtitle">delegate와 event로 만드는 유연한 콜백 시스템</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 함수를 변수에 담는다</h2>
+            <div class="conversation">
+                <div class="q">delegate가 도대체 뭔가요? 왜 함수를 변수처럼 쓰나요?</div>
+                <div class="a">
+                    <p><strong>delegate</strong>는 메서드의 시그니처(반환 타입 + 매개변수)를 정의하는 타입입니다. 해당 시그니처와 일치하는 어떤 메서드든 담아서 나중에 호출할 수 있습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>delegate는 <strong>전화번호부</strong>와 같습니다. "피자 주문"이라는 항목에 어떤 피자집 번호든 등록할 수 있고, 나중에 "피자 주문" 항목을 호출하면 등록된 가게에 전화가 갑니다.</p>
+                        <p>어떤 피자집인지 미리 몰라도 되고, 실행 시점에 바꿀 수도 있습니다. 이것이 <strong>느슨한 결합(Loose Coupling)</strong>의 핵심입니다.</p>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 1. delegate 타입 선언
+delegate float DamageCalculator(float baseDamage, float armor);
+
+// 2. 시그니처가 일치하는 메서드 정의
+float NormalDamage(float baseDamage, float armor)
+    => baseDamage - armor;
+
+float CriticalDamage(float baseDamage, float armor)
+    => (baseDamage * 2f) - armor;
+
+// 3. delegate 변수에 메서드 할당
+DamageCalculator calcDamage = NormalDamage;
+float result = calcDamage(100f, 30f); // 70
+
+// 4. 런타임에 메서드 교체
+calcDamage = CriticalDamage;
+result = calcDamage(100f, 30f); // 170</code></pre>
+                    </div>
+                    <p class="highlight">delegate는 내부적으로 System.MulticastDelegate를 상속하는 클래스로 컴파일됩니다. 참조 타입이므로 힙에 할당됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: Action, Func &mdash; 미리 만들어진 delegate</h2>
+            <div class="conversation">
+                <div class="q">매번 delegate를 선언하는 건 번거롭지 않나요?</div>
+                <div class="a">
+                    <p>그래서 .NET은 범용 delegate인 <code>Action</code>과 <code>Func</code>를 제공합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>Action</th>
+                                <th>Func</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>반환 타입</td>
+                                <td>void (반환 없음)</td>
+                                <td>마지막 제네릭 매개변수</td>
+                            </tr>
+                            <tr>
+                                <td>매개변수</td>
+                                <td>0~16개</td>
+                                <td>0~16개 (+ 반환 1개)</td>
+                            </tr>
+                            <tr>
+                                <td>용도</td>
+                                <td>알림, 명령 실행</td>
+                                <td>계산, 데이터 변환</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// Action: 반환값 없음
+Action onGameStart;                    // 매개변수 없음
+Action&lt;string&gt; onChat;                 // string 매개변수 1개
+Action&lt;int, int&gt; onScoreChanged;       // int 2개
+
+// Func: 마지막 타입이 반환 타입
+Func&lt;int&gt; getRandom;                   // () => int
+Func&lt;float, float, float&gt; calcDamage;  // (float, float) => float
+Func&lt;Monster, bool&gt; isAlive;           // (Monster) => bool
+
+// 람다식과 함께 사용
+Func&lt;int, int, int&gt; add = (a, b) => a + b;
+Action&lt;string&gt; log = msg => Console.WriteLine(msg);
+
+int result = add(3, 5);   // 8
+log("Hello");             // "Hello"</code></pre>
+                    </div>
+                    <p class="key-point">실무에서는 커스텀 delegate 선언보다 Action/Func를 주로 사용합니다. 코드가 간결해지고 호환성도 좋습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 멀티캐스트 &mdash; 한 번에 여러 명 호출</h2>
+            <div class="conversation">
+                <div class="q">delegate 하나에 메서드 여러 개를 등록할 수 있나요?</div>
+                <div class="a">
+                    <p>네! C#의 모든 delegate는 <strong>멀티캐스트(Multicast)</strong>입니다. <code>+=</code> 연산자로 여러 메서드를 체이닝할 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>Action&lt;string&gt; onPlayerDeath = null;
+
+// 여러 핸들러 등록
+onPlayerDeath += PlayDeathAnimation;
+onPlayerDeath += PlayDeathSound;
+onPlayerDeath += ShowGameOverUI;
+onPlayerDeath += SaveDeathLog;
+
+// 한 번 호출하면 등록된 순서대로 모두 실행!
+onPlayerDeath?.Invoke("Player1");
+// PlayDeathAnimation("Player1")
+// PlayDeathSound("Player1")
+// ShowGameOverUI("Player1")
+// SaveDeathLog("Player1")
+
+// 특정 핸들러 제거
+onPlayerDeath -= PlayDeathSound;</code></pre>
+                    </div>
+                    <p class="warning">Func(반환값이 있는 delegate)을 멀티캐스트로 사용하면 <strong>마지막 메서드의 반환값만</strong> 받을 수 있습니다. 이전 메서드들의 반환값은 무시됩니다!</p>
+                    <p class="warning">null인 delegate를 호출하면 NullReferenceException이 발생합니다. 반드시 <code>?.Invoke()</code> 또는 null 체크 후 호출하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: event &mdash; 안전한 delegate 공개</h2>
+            <div class="conversation">
+                <div class="q">delegate를 그냥 public으로 두면 안 되나요? event는 왜 필요한가요?</div>
+                <div class="a">
+                    <p><code>event</code> 키워드는 delegate에 <strong>접근 제한</strong>을 추가합니다. 외부에서 할당(=)이나 직접 호출을 막아 캡슐화를 보장합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>class GameManager
+{
+    // delegate: 외부에서 마음대로 조작 가능 (위험!)
+    public Action OnGameOver_Unsafe;
+
+    // event: 외부에서 += / -= 만 가능 (안전!)
+    public event Action OnGameOver;
+
+    public void EndGame()
+    {
+        OnGameOver?.Invoke(); // 내부에서만 호출 가능
+    }
+}
+
+class UIManager
+{
+    void Start()
+    {
+        var gm = new GameManager();
+
+        // event: 구독만 가능
+        gm.OnGameOver += ShowResult;
+
+        // 아래는 컴파일 에러!
+        // gm.OnGameOver = null;         // 할당 불가
+        // gm.OnGameOver();              // 외부 호출 불가
+        // gm.OnGameOver.Invoke();       // 외부 호출 불가
+
+        // delegate: 위험한 조작이 모두 가능
+        gm.OnGameOver_Unsafe = null;     // 다른 구독자 모두 제거!
+        gm.OnGameOver_Unsafe();          // 아무나 호출 가능!
+    }
+}</code></pre>
+                    </div>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>public delegate</th>
+                                <th>public event</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>외부에서 +=</td>
+                                <td>가능</td>
+                                <td>가능</td>
+                            </tr>
+                            <tr>
+                                <td>외부에서 = null</td>
+                                <td>가능 (위험!)</td>
+                                <td>컴파일 에러</td>
+                            </tr>
+                            <tr>
+                                <td>외부에서 Invoke</td>
+                                <td>가능 (위험!)</td>
+                                <td>컴파일 에러</td>
+                            </tr>
+                            <tr>
+                                <td>소유권</td>
+                                <td>모두에게 열림</td>
+                                <td>선언한 클래스만</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">event는 <strong>발행-구독(Pub-Sub) 패턴</strong>의 C# 구현입니다. 발행자(Publisher)만 이벤트를 발생시킬 수 있고, 구독자(Subscriber)는 듣기만 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 게임 이벤트 시스템 설계</h2>
+            <div class="conversation">
+                <div class="q">실제 게임에서 이벤트 시스템은 어떻게 설계하나요?</div>
+                <div class="a">
+                    <p>글로벌 이벤트 버스 패턴으로 게임 시스템 간 결합도를 낮출 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 타입 안전한 이벤트 버스</div>
+                        <pre><code>// 이벤트 데이터 정의
+public struct DamageEvent
+{
+    public int TargetId;
+    public float Damage;
+    public DamageType Type;
+}
+
+public struct ScoreEvent
+{
+    public int PlayerId;
+    public int Points;
+}
+
+// 이벤트 버스
+public static class EventBus
+{
+    static Dictionary&lt;Type, Delegate&gt; events = new();
+
+    public static void Subscribe&lt;T&gt;(Action&lt;T&gt; handler) where T : struct
+    {
+        Type key = typeof(T);
+        if (events.ContainsKey(key))
+            events[key] = Delegate.Combine(events[key], handler);
+        else
+            events[key] = handler;
+    }
+
+    public static void Unsubscribe&lt;T&gt;(Action&lt;T&gt; handler) where T : struct
+    {
+        Type key = typeof(T);
+        if (events.ContainsKey(key))
+            events[key] = Delegate.Remove(events[key], handler);
+    }
+
+    public static void Publish&lt;T&gt;(T data) where T : struct
+    {
+        if (events.TryGetValue(typeof(T), out var handler))
+            (handler as Action&lt;T&gt;)?.Invoke(data);
+    }
+}
+
+// 사용 예시
+EventBus.Subscribe&lt;DamageEvent&gt;(OnDamage);
+EventBus.Publish(new DamageEvent
+{
+    TargetId = 1, Damage = 50f, Type = DamageType.Fire
+});</code></pre>
+                    </div>
+                    <p class="warning">이벤트 구독 후 반드시 해제(Unsubscribe)해야 합니다! 해제하지 않으면 파괴된 객체에 대한 참조가 남아 메모리 누수와 NullReferenceException이 발생합니다.</p>
+                </div>
+
+                <div class="q">메모리 누수를 방지하는 안전한 패턴은?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 안전한 구독 해제 패턴</div>
+                        <pre><code>class Enemy : MonoBehaviour
+{
+    void OnEnable()
+    {
+        // 활성화 시 구독
+        EventBus.Subscribe&lt;DamageEvent&gt;(OnDamage);
+    }
+
+    void OnDisable()
+    {
+        // 비활성화 시 해제 (파괴 전에도 호출됨)
+        EventBus.Unsubscribe&lt;DamageEvent&gt;(OnDamage);
+    }
+
+    void OnDamage(DamageEvent e)
+    {
+        if (e.TargetId == this.Id)
+            TakeDamage(e.Damage);
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">Unity에서는 OnEnable/OnDisable 쌍으로 구독/해제하는 것이 가장 안전합니다. OnDestroy는 씬 전환 시 호출 순서가 보장되지 않을 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: 성능 고려사항</h2>
+            <div class="conversation">
+                <div class="q">delegate 호출은 직접 호출보다 느린가요?</div>
+                <div class="a">
+                    <p>delegate 호출은 직접 메서드 호출보다 약간 느리지만, 대부분의 경우 무시할 수 있는 수준입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>호출 방식</th>
+                                <th>상대 비용</th>
+                                <th>비고</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>직접 호출</td>
+                                <td>1x</td>
+                                <td>인라인 가능</td>
+                            </tr>
+                            <tr>
+                                <td>delegate 호출</td>
+                                <td>~2-3x</td>
+                                <td>간접 호출</td>
+                            </tr>
+                            <tr>
+                                <td>멀티캐스트 (N개)</td>
+                                <td>~2-3x * N</td>
+                                <td>내부 배열 순회</td>
+                            </tr>
+                            <tr>
+                                <td>람다 (클로저)</td>
+                                <td>~3-5x + 힙 할당</td>
+                                <td>캡처 객체 생성</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">람다가 지역 변수를 캡처하면 컴파일러가 클로저 클래스를 생성합니다. 이는 힙 할당을 유발하므로 매 프레임 새 람다를 생성하는 것은 피해야 합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 람다 캡처 주의</div>
+                        <pre><code>// BAD: 매 프레임 새 람다 + 클로저 객체 생성
+void Update()
+{
+    float threshold = GetThreshold();
+    // 클로저 객체가 매 프레임 힙 할당됨!
+    enemies.RemoveAll(e => e.HP &lt; threshold);
+}
+
+// GOOD: 캡처 없는 정적 메서드 참조
+static bool IsDead(Enemy e) => e.HP &lt;= 0;
+void Update()
+{
+    enemies.RemoveAll(IsDead); // 힙 할당 없음
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Summary -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>delegate</strong>는 메서드를 변수처럼 저장하고 호출하는 타입 안전한 함수 포인터다</li>
+                <li><strong>Action</strong>(void 반환)과 <strong>Func</strong>(값 반환)으로 커스텀 delegate 선언을 대체한다</li>
+                <li><strong>멀티캐스트</strong>로 하나의 delegate에 여러 메서드를 체이닝할 수 있다</li>
+                <li><strong>event</strong> 키워드는 외부에서 할당(=)과 직접 호출을 차단하여 안전한 발행-구독 패턴을 구현한다</li>
+                <li>이벤트 구독 후 <strong>반드시 해제</strong>하고, 람다 클로저의 <strong>힙 할당</strong>에 주의한다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

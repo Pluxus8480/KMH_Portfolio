@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"락 없이도 동시성 처리가 된다고요?"</h1>
             <p class="subtitle">Lock-free 알고리즘과 CAS 연산</p>
         </header>
@@ -78,32 +80,30 @@
                     <p>Lock-free의 핵심 원자적 연산입니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    CAS (Compare-And-Swap) 동작                       │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   CAS(메모리위치, 기대값, 새값)                                      │
-│                                                                     │
-│   if (메모리[위치] == 기대값) {                                      │
-│       메모리[위치] = 새값;                                           │
-│       return true;   // 성공                                        │
-│   } else {                                                          │
-│       return false;  // 실패 (다른 스레드가 먼저 수정)              │
-│   }                                                                 │
-│                                                                     │
-│   ※ 이 전체 과정이 하드웨어 수준에서 원자적으로 실행됨!             │
-│                                                                     │
-│   예시:                                                              │
-│   ┌─────────────┐                                                   │
-│   │  value: 10  │  ← 현재 상태                                     │
-│   └─────────────┘                                                   │
-│                                                                     │
-│   Thread A: CAS(&value, 10, 20)  →  성공! value = 20               │
-│   Thread B: CAS(&value, 10, 30)  →  실패! (기대값 10 ≠ 현재 20)   │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">CAS(메모리위치, 기대값, 새값)</div>
+                                    <div class="flow-box__items">if (메모리[위치] == 기대값) &rarr; 새값 저장, return true<br>else &rarr; return false (다른 스레드가 먼저 수정)<br><strong>전체 과정이 하드웨어 수준에서 원자적!</strong></div>
+                                </div>
+                            </div>
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">현재 상태</div>
+                                    <div class="flow-box__items">value: 10</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Thread A</div>
+                                    <div class="flow-box__items">CAS(&amp;value, 10, 20)<br>성공! value = 20</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Thread B</div>
+                                    <div class="flow-box__items">CAS(&amp;value, 10, 30)<br>실패! (기대값 10 &ne; 현재 20)</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="code-block">
@@ -184,29 +184,36 @@ public:
                 <div class="q">ABA 문제란 무엇인가요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                         ABA 문제                                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   초기: head → [A] → [B] → [C]                                     │
-│                                                                     │
-│   Thread 1:                          Thread 2:                      │
-│   oldHead = A                                                       │
-│   (여기서 스케줄 아웃)              pop() → A 제거                   │
-│                                     pop() → B 제거                   │
-│                                     push(A) → A 재사용              │
-│                                                                     │
-│   현재: head → [A] → [C]   (B는 해제됨)                            │
-│                                                                     │
-│   Thread 1 재개:                                                    │
-│   CAS(head, A, A->next)                                            │
-│   = CAS(head, A, B)  ← 성공! (head가 A니까)                        │
-│                                                                     │
-│   결과: head → [B] → ???  ← B는 이미 해제된 메모리!                │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">초기 상태</div>
+                                    <div class="flow-box__items">head &rarr; [A] &rarr; [B] &rarr; [C]</div>
+                                </div>
+                            </div>
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Thread 1</div>
+                                    <div class="flow-box__items">oldHead = A<br>(스케줄 아웃...)</div>
+                                </div>
+                                <div class="flow-arrow">&nbsp;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Thread 2 (그 사이)</div>
+                                    <div class="flow-box__items">pop() &rarr; A 제거<br>pop() &rarr; B 제거<br>push(A) &rarr; A 재사용<br>현재: head &rarr; [A] &rarr; [C]</div>
+                                </div>
+                            </div>
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Thread 1 재개</div>
+                                    <div class="flow-box__items">CAS(head, A, A-&gt;next) = CAS(head, A, B)<br>성공! (head가 A니까)</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box" style="border-color:#e74c3c">
+                                    <div class="flow-box__title" style="color:#e74c3c">결과 (위험!)</div>
+                                    <div class="flow-box__items">head &rarr; [B] &rarr; ???<br>B는 이미 해제된 메모리!</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="code-block">

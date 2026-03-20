@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netcode for GameObjects | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+
+        <header class="content-header">
+            <h1>멀티플레이어는 왜 이렇게 어려운가?</h1>
+            <p class="subtitle">Netcode for GameObjects로 네트워크 게임 만들기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 네트워크 게임의 근본 문제</h2>
+            <div class="conversation">
+                <div class="q">싱글플레이어 게임에서 멀티플레이어로 전환하면 왜 모든 것이 복잡해지나요?</div>
+                <div class="a">
+                    <p>싱글플레이어에서는 모든 게임 상태가 하나의 컴퓨터에 존재합니다. 멀티플레이어에서는 <strong>여러 컴퓨터에 걸쳐 게임 상태를 동기화</strong>해야 합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>싱글플레이어는 혼자 바둑판을 보는 것입니다. 내가 놓은 돌은 바로 보입니다.</p>
+                        <p>멀티플레이어는 두 사람이 각자의 바둑판을 가지고 전화로 소통하는 것입니다. "나 (3,5)에 놓았어"라고 말하고, 상대방이 듣고 자기 바둑판에 반영해야 합니다. 전화가 느리면 엇갈리고, 동시에 같은 자리에 놓으면 충돌이 발생합니다.</p>
+                    </div>
+
+                    <p class="highlight">네트워크 게임의 3대 난제: 지연시간(Latency), 상태 동기화(State Sync), 권한 관리(Authority)</p>
+                </div>
+
+                <div class="q">Unity에서 네트워크 게임을 만드는 공식 방법은?</div>
+                <div class="a">
+                    <p><strong>Netcode for GameObjects (NGO)</strong>가 Unity의 공식 네트워킹 솔루션입니다. Server-authoritative(서버 권위) 모델을 기본으로 합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>솔루션</th><th>특징</th><th>적합한 게임</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Netcode for GameObjects</strong></td>
+                                <td>공식, 고수준 API, 학습 곡선 낮음</td>
+                                <td>소규모 세션 (2~16명)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Netcode for Entities</strong></td>
+                                <td>DOTS 기반, 고성능</td>
+                                <td>대규모 시뮬레이션</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Mirror (서드파티)</strong></td>
+                                <td>커뮤니티, 안정적</td>
+                                <td>범용, 빠른 프로토타입</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Photon Fusion</strong></td>
+                                <td>클라우드 기반, Tick 기반</td>
+                                <td>PvP, 반응성 중요</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: NetworkManager와 NetworkObject</h2>
+            <div class="conversation">
+                <div class="q">Netcode 프로젝트의 기본 구조는 어떻게 되나요?</div>
+                <div class="a">
+                    <p>모든 NGO 프로젝트는 <strong>NetworkManager</strong>를 중심으로 동작합니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">NetworkManager</div>
+                                <div class="flow-box__items">연결 관리, 세션 제어</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">NetworkObject</div>
+                                <div class="flow-box__items">네트워크 동기화 대상</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">NetworkBehaviour</div>
+                                <div class="flow-box__items">네트워크 로직 구현</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p>네트워크로 동기화할 모든 오브젝트에는 <strong>NetworkObject</strong> 컴포넌트가 필요하며, 네트워크 로직은 <strong>NetworkBehaviour</strong>를 상속하여 구현합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 기본 연결 설정</div>
+                        <pre><code>using Unity.Netcode;
+using UnityEngine;
+
+public class ConnectionManager : MonoBehaviour
+{
+    public void StartHost()
+    {
+        NetworkManager.Singleton.StartHost();  // 호스트 = 서버 + 클라이언트
+    }
+
+    public void StartClient()
+    {
+        NetworkManager.Singleton.StartClient(); // 클라이언트만
+    }
+
+    public void StartServer()
+    {
+        NetworkManager.Singleton.StartServer(); // 전용 서버
+    }
+
+    void Start()
+    {
+        NetworkManager.Singleton.OnClientConnectedCallback += (clientId) =&gt;
+        {
+            Debug.Log($"클라이언트 {clientId} 접속!");
+        };
+
+        NetworkManager.Singleton.OnClientDisconnectCallback += (clientId) =&gt;
+        {
+            Debug.Log($"클라이언트 {clientId} 퇴장!");
+        };
+    }
+}</code></pre>
+                    </div>
+                    <p class="warning">NetworkManager는 씬에 반드시 하나만 존재해야 합니다. 중복되면 예기치 않은 오류가 발생합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: NetworkVariable — 상태 동기화</h2>
+            <div class="conversation">
+                <div class="q">플레이어의 HP를 모든 클라이언트에서 동기화하려면?</div>
+                <div class="a">
+                    <p class="highlight">NetworkVariable&lt;T&gt;는 서버에서 값이 변경되면 자동으로 모든 클라이언트에 전파되는 동기화 변수입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - NetworkVariable 사용법</div>
+                        <pre><code>using Unity.Netcode;
+using UnityEngine;
+
+public class PlayerHealth : NetworkBehaviour
+{
+    // 서버만 쓰기 가능, 모든 클라이언트 읽기 가능 (기본값)
+    public NetworkVariable&lt;int&gt; CurrentHP = new NetworkVariable&lt;int&gt;(
+        100,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    public NetworkVariable&lt;bool&gt; IsAlive = new NetworkVariable&lt;bool&gt;(true);
+
+    public override void OnNetworkSpawn()
+    {
+        // 값이 변경될 때 콜백 등록
+        CurrentHP.OnValueChanged += OnHPChanged;
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        CurrentHP.OnValueChanged -= OnHPChanged;
+    }
+
+    private void OnHPChanged(int previousValue, int newValue)
+    {
+        Debug.Log($"HP 변경: {previousValue} → {newValue}");
+        // UI 업데이트 등
+        UpdateHealthBar(newValue);
+    }
+
+    // 서버에서만 호출
+    public void TakeDamage(int damage)
+    {
+        if (!IsServer) return;
+        CurrentHP.Value = Mathf.Max(0, CurrentHP.Value - damage);
+        if (CurrentHP.Value <= 0)
+        {
+            IsAlive.Value = false;
+        }
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">NetworkVariable에 어떤 타입을 쓸 수 있나요?</div>
+                <div class="a">
+                    <p>기본 값 타입(int, float, bool, Vector3 등)은 바로 사용 가능합니다. 커스텀 구조체는 <strong>INetworkSerializable</strong>을 구현해야 합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 커스텀 네트워크 직렬화</div>
+                        <pre><code>public struct PlayerStats : INetworkSerializable
+{
+    public int Level;
+    public float AttackPower;
+    public float Defense;
+
+    public void NetworkSerialize&lt;T&gt;(BufferSerializer&lt;T&gt; serializer)
+        where T : IReaderWriter
+    {
+        serializer.SerializeValue(ref Level);
+        serializer.SerializeValue(ref AttackPower);
+        serializer.SerializeValue(ref Defense);
+    }
+}
+
+// 사용
+public NetworkVariable&lt;PlayerStats&gt; Stats = new NetworkVariable&lt;PlayerStats&gt;();</code></pre>
+                    </div>
+                    <p class="key-point">NetworkVariable은 값이 변경될 때만 동기화됩니다. 매 프레임 값이 바뀌는 Transform 위치 같은 데이터는 NetworkTransform 컴포넌트를 사용하는 것이 효율적입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: RPC — 원격 프로시저 호출</h2>
+            <div class="conversation">
+                <div class="q">NetworkVariable이 상태 동기화라면, RPC는 어떤 역할인가요?</div>
+                <div class="a">
+                    <p><strong>RPC(Remote Procedure Call)</strong>는 특정 이벤트나 명령을 원격으로 실행하는 메커니즘입니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>종류</th><th>방향</th><th>용도</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>ServerRpc</strong></td>
+                                <td>클라이언트 &rarr; 서버</td>
+                                <td>"서버님, 이거 해주세요" (공격 요청, 아이템 사용)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>ClientRpc</strong></td>
+                                <td>서버 &rarr; 모든 클라이언트</td>
+                                <td>"모두 이 이벤트 보세요" (이펙트 재생, 사운드)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">클라이언트</div>
+                                <div class="flow-box__items">공격 입력 감지</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">ServerRpc</div>
+                                <div class="flow-box__items">AttackServerRpc()</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">서버 처리</div>
+                                <div class="flow-box__items">데미지 계산, HP 감소</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">ClientRpc</div>
+                                <div class="flow-box__items">PlayHitEffectClientRpc()</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="q">실제 코드로 보면 어떤 모양인가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - RPC 기반 공격 시스템</div>
+                        <pre><code>public class PlayerCombat : NetworkBehaviour
+{
+    [SerializeField] private float attackRange = 2f;
+    [SerializeField] private int attackDamage = 25;
+
+    void Update()
+    {
+        // 자신의 캐릭터에서만 입력 처리
+        if (!IsOwner) return;
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            AttackServerRpc();
+        }
+    }
+
+    [ServerRpc]
+    private void AttackServerRpc(ServerRpcParams rpcParams = default)
+    {
+        // 서버에서 유효성 검증
+        ulong attackerId = rpcParams.Receive.SenderClientId;
+
+        // 범위 내 적 탐색
+        Collider[] hits = Physics.OverlapSphere(transform.position, attackRange);
+        foreach (var hit in hits)
+        {
+            if (hit.TryGetComponent&lt;PlayerHealth&gt;(out var health))
+            {
+                if (health.OwnerClientId != attackerId)
+                {
+                    health.TakeDamage(attackDamage);
+                    PlayHitEffectClientRpc(hit.transform.position);
+                }
+            }
+        }
+    }
+
+    [ClientRpc]
+    private void PlayHitEffectClientRpc(Vector3 hitPosition)
+    {
+        // 모든 클라이언트에서 이펙트 재생
+        VFXManager.Instance.PlayHitEffect(hitPosition);
+    }
+}</code></pre>
+                    </div>
+                    <p class="warning">ServerRpc에서 클라이언트가 보낸 데이터를 무조건 신뢰하면 안 됩니다. 반드시 서버 측에서 범위, 쿨다운, 유효성을 검증하세요. 이것이 서버 권위(Server Authority) 모델의 핵심입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 소유권(Ownership)과 권한 관리</h2>
+            <div class="conversation">
+                <div class="q">IsOwner, IsServer, IsClient — 이 조건들이 왜 중요한가요?</div>
+                <div class="a">
+                    <p>네트워크 게임에서 "누가 이 오브젝트를 제어할 수 있는가"를 결정하는 것이 <strong>소유권(Ownership)</strong>입니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>속성</th><th>의미</th><th>대표 사용 사례</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>IsOwner</strong></td>
+                                <td>이 오브젝트의 소유자인가?</td>
+                                <td>입력 처리, 카메라 연결</td>
+                            </tr>
+                            <tr>
+                                <td><strong>IsServer</strong></td>
+                                <td>서버(또는 호스트)에서 실행 중인가?</td>
+                                <td>게임 로직, 데미지 계산</td>
+                            </tr>
+                            <tr>
+                                <td><strong>IsClient</strong></td>
+                                <td>클라이언트에서 실행 중인가?</td>
+                                <td>비주얼 이펙트, UI</td>
+                            </tr>
+                            <tr>
+                                <td><strong>IsHost</strong></td>
+                                <td>호스트(서버+클라이언트)인가?</td>
+                                <td>호스트 전용 로직</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 소유권 기반 분기</div>
+                        <pre><code>public class PlayerController : NetworkBehaviour
+{
+    void Update()
+    {
+        // 내 캐릭터만 조작
+        if (!IsOwner) return;
+        HandleMovementInput();
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        if (IsOwner)
+        {
+            // 내 캐릭터에 카메라 연결
+            Camera.main.GetComponent&lt;CameraFollow&gt;().SetTarget(transform);
+            // 내 캐릭터의 이름표는 숨김
+            nameTag.SetActive(false);
+        }
+        else
+        {
+            // 다른 플레이어의 이름표 표시
+            nameTag.SetActive(true);
+        }
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">플레이어 프리팹의 모든 NetworkBehaviour에서 IsOwner 체크를 빠뜨리면, 다른 플레이어의 입력이 내 캐릭터에도 적용되는 심각한 버그가 발생합니다.</p>
+                </div>
+
+                <div class="q">소유권을 런타임에 변경할 수 있나요?</div>
+                <div class="a">
+                    <p>서버에서 <code>NetworkObject.ChangeOwnership(clientId)</code>를 호출하면 소유권을 이전할 수 있습니다. 차량 탑승, 무기 줍기 등에 활용됩니다.</p>
+                    <p class="highlight">소유권 이전은 서버만 수행할 수 있으며, 클라이언트가 임의로 변경할 수 없습니다. 이는 치트 방지의 기본 원칙입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 네트워크 오브젝트 스폰과 생명주기</h2>
+            <div class="conversation">
+                <div class="q">네트워크에서 오브젝트를 생성하려면 일반 Instantiate와 다른가요?</div>
+                <div class="a">
+                    <p>네. 네트워크 오브젝트는 <strong>반드시 서버에서 스폰</strong>해야 하며, Instantiate 후 <code>NetworkObject.Spawn()</code>을 호출해야 모든 클라이언트에 나타납니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 네트워크 오브젝트 스폰</div>
+                        <pre><code>[ServerRpc(RequireOwnership = false)]
+private void SpawnProjectileServerRpc(Vector3 position, Vector3 direction,
+    ServerRpcParams rpcParams = default)
+{
+    // 서버에서만 실행
+    GameObject projectile = Instantiate(projectilePrefab, position,
+        Quaternion.LookRotation(direction));
+
+    // 발사한 플레이어에게 소유권 부여
+    NetworkObject netObj = projectile.GetComponent&lt;NetworkObject&gt;();
+    netObj.SpawnWithOwnership(rpcParams.Receive.SenderClientId);
+}</code></pre>
+                    </div>
+                    <p class="warning">스폰할 프리팹은 반드시 NetworkManager의 NetworkPrefabs 리스트에 등록해야 합니다. 등록하지 않으면 "NetworkPrefab not found" 오류가 발생합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>멀티플레이어의 핵심 과제는 <strong>지연시간, 상태 동기화, 권한 관리</strong> 세 가지다</li>
+                <li><strong>NetworkVariable</strong>은 상태 동기화(HP, 점수)에, <strong>RPC</strong>는 이벤트 전달(공격, 이펙트)에 사용한다</li>
+                <li><strong>ServerRpc</strong>로 클라이언트가 서버에 요청하고, <strong>ClientRpc</strong>로 서버가 결과를 브로드캐스트한다</li>
+                <li>모든 게임 로직은 <strong>서버 권위 모델</strong>로 서버에서 검증하여 치트를 방지한다</li>
+                <li><strong>IsOwner</strong> 체크를 빠뜨리면 다른 플레이어의 캐릭터까지 조작되는 버그가 발생한다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

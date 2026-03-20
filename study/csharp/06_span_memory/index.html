@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Span&lt;T&gt;와 Memory&lt;T&gt; | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>복사 없이 빌려 쓰는 메모리</h1>
+            <p class="subtitle">Span&lt;T&gt;와 Memory&lt;T&gt;로 달성하는 제로 할당 프로그래밍</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 왜 복사가 문제인가?</h2>
+            <div class="conversation">
+                <div class="q">배열 일부만 사용하고 싶을 때, 매번 새 배열을 만들어야 하나요?</div>
+                <div class="a">
+                    <p>전통적으로 C#에서 배열의 일부를 다른 메소드에 전달하려면 <code>Array.Copy</code>나 LINQ의 <code>Skip/Take</code>를 사용해 새 배열을 할당해야 했습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 기존 방식의 문제</div>
+                        <pre><code>byte[] packet = ReceivePacket(); // 1024바이트 수신
+
+// 헤더 파싱: 매번 새 배열 할당!
+byte[] header = new byte[4];
+Array.Copy(packet, 0, header, 0, 4);
+
+// 바디 파싱: 또 새 배열 할당!
+byte[] body = new byte[packet.Length - 4];
+Array.Copy(packet, 4, body, 0, body.Length);</code></pre>
+                    </div>
+                    <p class="warning">이런 코드가 초당 수천 번 호출되면? 매번 GC가 관리해야 할 임시 배열이 쌓이면서 프레임 드롭이 발생합니다.</p>
+                </div>
+
+                <div class="q">게임 서버에서 이게 얼마나 심각한 문제인가요?</div>
+                <div class="a">
+                    <p>패킷 파싱 하나에 2~3번의 배열 할당이 발생하고, 동시 접속자 1000명이 초당 30개 패킷을 보내면:</p>
+                    <p class="highlight">1000 x 30 x 3 = 초당 90,000개의 임시 배열이 생성됩니다. Gen0 GC가 수시로 발동하며, 최악의 경우 Gen2 GC로 인한 수백ms의 멈춤이 발생합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: Span&lt;T&gt;의 내부 구조</h2>
+            <div class="conversation">
+                <div class="q">Span&lt;T&gt;는 정확히 무엇인가요?</div>
+                <div class="a">
+                    <p>Span&lt;T&gt;는 연속된 메모리 영역에 대한 <strong>타입 안전한 뷰(view)</strong>입니다. 실제 데이터를 복사하지 않고, 기존 메모리를 가리키는 포인터와 길이만 저장합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>비유로 이해하기</strong>
+                        <p>책 전체를 복사하지 않고, "3페이지부터 7페이지까지"라고 포스트잇을 붙이는 것과 같습니다. 원본 데이터는 그대로 두고, 어디부터 어디까지 볼 것인지만 기록하는 거죠.</p>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Span의 내부 구조 (의사 코드)</div>
+                        <pre><code>// Span&lt;T&gt;는 내부적으로 이렇게 생겼습니다
+readonly ref struct Span&lt;T&gt;
+{
+    internal readonly ref T _reference; // 시작 위치 포인터
+    private readonly int _length;       // 길이
+
+    // 크기: 포인터(8바이트) + int(4바이트) = 12바이트만!
+}</code></pre>
+                    </div>
+                    <p class="key-point">Span&lt;T&gt;는 ref struct이므로 스택에만 존재할 수 있습니다. 힙 할당이 불가능하기 때문에 GC 부담이 전혀 없습니다.</p>
+                </div>
+
+                <div class="q">어떻게 사용하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - Span 기본 사용법</div>
+                        <pre><code>byte[] packet = ReceivePacket();
+
+// 복사 없이 슬라이싱!
+Span&lt;byte&gt; header = packet.AsSpan(0, 4);
+Span&lt;byte&gt; body = packet.AsSpan(4);
+
+// 값 읽기/쓰기 가능
+int packetId = BitConverter.ToInt32(header);
+
+// Slice로 추가 분할도 가능
+Span&lt;byte&gt; payload = body.Slice(0, 128);</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: stackalloc과 제로 할당</h2>
+            <div class="conversation">
+                <div class="q">stackalloc이 뭔가요? 힙 말고 스택에 배열을 만든다고요?</div>
+                <div class="a">
+                    <p><code>stackalloc</code>은 스택 메모리에 직접 배열을 할당하는 키워드입니다. 함수가 끝나면 자동으로 해제되므로 GC가 전혀 개입하지 않습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - stackalloc 활용</div>
+                        <pre><code>// 힙 할당 없이 임시 버퍼 생성
+Span&lt;byte&gt; buffer = stackalloc byte[256];
+
+// 패킷 조립
+buffer[0] = 0x01; // 패킷 타입
+BitConverter.TryWriteBytes(buffer.Slice(1, 4), playerId);
+BitConverter.TryWriteBytes(buffer.Slice(5, 4), positionX);
+
+// 전송
+socket.Send(buffer.Slice(0, 9));</code></pre>
+                    </div>
+
+                    <p class="warning">stackalloc으로 너무 큰 메모리를 할당하면 StackOverflowException이 발생합니다. 일반적으로 1KB 이하로 제한하는 것이 안전합니다.</p>
+                </div>
+
+                <div class="q">실전에서 안전하게 쓰는 패턴이 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 크기에 따른 분기 패턴</div>
+                        <pre><code>const int StackAllocThreshold = 512;
+
+void ProcessData(int size)
+{
+    // 작으면 스택, 크면 ArrayPool에서 빌림
+    Span&lt;byte&gt; buffer = size &lt;= StackAllocThreshold
+        ? stackalloc byte[size]
+        : ArrayPool&lt;byte&gt;.Shared.Rent(size);
+
+    try
+    {
+        DoWork(buffer.Slice(0, size));
+    }
+    finally
+    {
+        // ArrayPool에서 빌렸으면 반환
+        if (size > StackAllocThreshold)
+        {
+            // buffer의 원본 배열을 반환
+            // (실제로는 별도 변수로 관리)
+        }
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: ReadOnlySpan과 문자열 최적화</h2>
+            <div class="conversation">
+                <div class="q">문자열 파싱에도 Span을 쓸 수 있나요?</div>
+                <div class="a">
+                    <p>네! <code>ReadOnlySpan&lt;char&gt;</code>는 문자열 파싱의 핵심 도구입니다. <code>string.Substring()</code>은 매번 새 문자열을 힙에 할당하지만, Span은 원본 문자열의 뷰만 생성합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 문자열 파싱 비교</div>
+                        <pre><code>string csv = "Player1,100,Warrior,Level50";
+
+// 기존 방식: Substring마다 힙 할당
+string name = csv.Substring(0, 7);        // 힙 할당!
+string score = csv.Substring(8, 3);       // 힙 할당!
+
+// Span 방식: 제로 할당
+ReadOnlySpan&lt;char&gt; span = csv.AsSpan();
+ReadOnlySpan&lt;char&gt; nameSpan = span.Slice(0, 7);   // 할당 없음
+ReadOnlySpan&lt;char&gt; scoreSpan = span.Slice(8, 3);  // 할당 없음
+
+// int 파싱도 직접 가능
+int scoreValue = int.Parse(scoreSpan);</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">CSV나 JSON 파싱에서 성능 차이가 얼마나 나나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>방식</th>
+                                <th>10만 줄 CSV 파싱</th>
+                                <th>GC 할당량</th>
+                                <th>Gen0 수집 횟수</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>string.Split()</td>
+                                <td>~85ms</td>
+                                <td>~48MB</td>
+                                <td>12회</td>
+                            </tr>
+                            <tr>
+                                <td>Span 기반 파싱</td>
+                                <td>~22ms</td>
+                                <td>~0.1MB</td>
+                                <td>0회</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">Span 기반 파싱은 약 4배 빠르고, GC 할당을 99% 이상 줄입니다. 게임 데이터 테이블 로딩 시 로딩 시간 단축에 큰 효과가 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: Memory&lt;T&gt; - 비동기 세계의 Span</h2>
+            <div class="conversation">
+                <div class="q">Span은 async 메소드에서 쓸 수 없다면서요?</div>
+                <div class="a">
+                    <p>맞습니다. Span&lt;T&gt;는 <code>ref struct</code>이므로 스택에만 존재합니다. async 메소드는 내부적으로 상태 머신 클래스를 생성하므로, 스택 전용인 Span을 필드로 저장할 수 없습니다.</p>
+                    <p>이 문제를 해결하기 위해 <code>Memory&lt;T&gt;</code>가 존재합니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Span&lt;T&gt;</div>
+                                <div class="flow-box__items">ref struct<br>스택 전용<br>동기 메소드만</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Memory&lt;T&gt;</div>
+                                <div class="flow-box__items">일반 struct<br>힙 저장 가능<br>async 메소드 OK</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="q">Memory&lt;T&gt;는 어떻게 사용하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - Memory&lt;T&gt; 비동기 활용</div>
+                        <pre><code>async Task ProcessPacketAsync(Memory&lt;byte&gt; data)
+{
+    // Memory에서 Span을 꺼내 동기 작업 수행
+    int packetId = BitConverter.ToInt32(data.Span.Slice(0, 4));
+
+    // 비동기 I/O에 Memory 직접 전달
+    await stream.WriteAsync(data);
+
+    // 슬라이싱도 가능 (할당 없음)
+    Memory&lt;byte&gt; payload = data.Slice(4);
+    await HandlePayloadAsync(payload);
+}
+
+// 호출
+byte[] buffer = ArrayPool&lt;byte&gt;.Shared.Rent(1024);
+int bytesRead = await stream.ReadAsync(buffer.AsMemory());
+await ProcessPacketAsync(buffer.AsMemory(0, bytesRead));</code></pre>
+                    </div>
+                    <p class="key-point">핵심 원칙: 동기 코드에서는 Span&lt;T&gt;, 비동기 코드에서는 Memory&lt;T&gt;를 사용합니다. Memory&lt;T&gt;의 .Span 프로퍼티로 언제든 Span을 꺼낼 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: 게임 서버 실전 패턴</h2>
+            <div class="conversation">
+                <div class="q">실제 게임 서버에서 이 기술들을 조합하면 어떤 모습인가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 제로 할당 패킷 처리 파이프라인</div>
+                        <pre><code>class PacketProcessor
+{
+    private readonly ArrayPool&lt;byte&gt; _pool = ArrayPool&lt;byte&gt;.Shared;
+
+    async Task OnReceiveAsync(Socket socket)
+    {
+        byte[] rentedBuffer = _pool.Rent(4096);
+        try
+        {
+            int received = await socket.ReceiveAsync(
+                rentedBuffer.AsMemory());
+
+            // 동기 파싱: Span 사용
+            ParsePacket(rentedBuffer.AsSpan(0, received));
+        }
+        finally
+        {
+            _pool.Return(rentedBuffer, clearArray: true);
+        }
+    }
+
+    void ParsePacket(ReadOnlySpan&lt;byte&gt; data)
+    {
+        // 헤더 파싱 - 할당 없음
+        ushort packetId = BinaryPrimitives.ReadUInt16LittleEndian(
+            data.Slice(0, 2));
+        ushort length = BinaryPrimitives.ReadUInt16LittleEndian(
+            data.Slice(2, 2));
+
+        // 바디 파싱 - 할당 없음
+        ReadOnlySpan&lt;byte&gt; body = data.Slice(4, length);
+        DispatchPacket(packetId, body);
+    }
+}</code></pre>
+                    </div>
+                    <p class="highlight">이 패턴을 적용하면 패킷 수신부터 파싱까지 단 한 번의 힙 할당도 발생하지 않습니다. ArrayPool에서 빌린 버퍼를 재활용하므로 GC 부담이 사실상 제로입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 요약 -->
+        <section class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Span&lt;T&gt;</strong>는 연속 메모리의 뷰(view)로, 복사 없이 슬라이싱이 가능하며 GC 할당이 없다</li>
+                <li><strong>stackalloc</strong>으로 스택에 직접 배열을 할당하면 힙 사용을 완전히 회피할 수 있다 (1KB 이하 권장)</li>
+                <li><strong>ReadOnlySpan&lt;char&gt;</strong>를 활용한 문자열 파싱은 Substring 대비 4배 이상 빠르다</li>
+                <li><strong>Memory&lt;T&gt;</strong>는 async 메소드에서 Span을 대체하며, .Span으로 언제든 동기 접근이 가능하다</li>
+                <li><strong>ArrayPool + Span</strong> 조합은 게임 서버의 패킷 처리에서 제로 할당을 달성하는 핵심 패턴이다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

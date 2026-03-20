@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pattern Matching | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>if-else 지옥에서 탈출하기</h1>
+            <p class="subtitle">C# 패턴 매칭으로 우아하게 조건 분기하기</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 패턴 매칭이란?</h2>
+            <div class="conversation">
+                <div class="q">기존 if-else나 switch의 어떤 점이 문제인가요?</div>
+                <div class="a">
+                    <p>게임 개발에서 자주 마주치는 상황을 봅시다. 아이템 타입에 따라 다른 처리를 해야 할 때:</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 전통적인 방식 (if-else 지옥)</div>
+                        <pre><code>void UseItem(Item item)
+{
+    if (item is WeaponItem)
+    {
+        var weapon = (WeaponItem)item;
+        if (weapon.Durability > 0)
+        {
+            if (weapon.Type == WeaponType.Melee)
+                MeleeAttack(weapon);
+            else if (weapon.Type == WeaponType.Ranged)
+                RangedAttack(weapon);
+        }
+        else
+        {
+            ShowBrokenMessage();
+        }
+    }
+    else if (item is PotionItem)
+    {
+        var potion = (PotionItem)item;
+        if (potion.Quantity > 0)
+            DrinkPotion(potion);
+    }
+    // ... 더 많은 분기가 계속 중첩됨
+}</code></pre>
+                    </div>
+                    <p class="highlight">패턴 매칭은 타입 검사, 캐스팅, 조건 판단을 하나의 표현식으로 결합하여 가독성을 극적으로 개선합니다.</p>
+                </div>
+
+                <div class="q">C#에서 패턴 매칭은 어떤 버전부터 지원되나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>C# 버전</th>
+                                <th>추가된 패턴</th>
+                                <th>예시</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>C# 7.0</td>
+                                <td>타입 패턴, const 패턴</td>
+                                <td>case int x:</td>
+                            </tr>
+                            <tr>
+                                <td>C# 8.0</td>
+                                <td>switch 표현식, 속성 패턴, 튜플 패턴</td>
+                                <td>{ Length: > 0 }</td>
+                            </tr>
+                            <tr>
+                                <td>C# 9.0</td>
+                                <td>관계/논리 패턴, not/and/or</td>
+                                <td>> 0 and &lt; 100</td>
+                            </tr>
+                            <tr>
+                                <td>C# 10.0</td>
+                                <td>확장 속성 패턴</td>
+                                <td>{ Inner.Value: 42 }</td>
+                            </tr>
+                            <tr>
+                                <td>C# 11.0</td>
+                                <td>리스트 패턴</td>
+                                <td>[1, 2, .., 9]</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 타입 패턴과 switch 표현식</h2>
+            <div class="conversation">
+                <div class="q">위의 if-else 코드를 패턴 매칭으로 바꾸면 어떻게 되나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - switch 표현식으로 리팩토링</div>
+                        <pre><code>void UseItem(Item item)
+{
+    var action = item switch
+    {
+        WeaponItem { Durability: > 0, Type: WeaponType.Melee } w
+            =&gt; () =&gt; MeleeAttack(w),
+
+        WeaponItem { Durability: > 0, Type: WeaponType.Ranged } w
+            =&gt; () =&gt; RangedAttack(w),
+
+        WeaponItem { Durability: &lt;= 0 }
+            =&gt; () =&gt; ShowBrokenMessage(),
+
+        PotionItem { Quantity: > 0 } p
+            =&gt; () =&gt; DrinkPotion(p),
+
+        _ =&gt; () =&gt; ShowInvalidMessage()
+    };
+
+    action();
+}</code></pre>
+                    </div>
+                    <p>하나의 switch 표현식 안에서 타입 검사, 속성 조건, 변수 바인딩이 모두 이루어집니다.</p>
+                    <p class="key-point">switch 표현식은 모든 경우를 빠짐없이 처리하도록 컴파일러가 강제합니다. _ (discard) 패턴은 기본 케이스입니다.</p>
+                </div>
+
+                <div class="q">is 패턴은 어떻게 사용하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - is 패턴 활용</div>
+                        <pre><code>// 타입 패턴 + 변수 바인딩
+if (gameObject is Enemy { IsAlive: true } enemy)
+{
+    enemy.TakeDamage(10);
+}
+
+// 부정 패턴
+if (target is not null and not Boss)
+{
+    ApplyNormalDamage(target);
+}
+
+// 관계형 패턴
+if (player.Health is > 0 and &lt;= 25)
+{
+    ShowLowHealthWarning();
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 속성 패턴과 위치 패턴</h2>
+            <div class="conversation">
+                <div class="q">속성 패턴을 더 자세히 설명해 주세요.</div>
+                <div class="a">
+                    <p>속성 패턴은 객체의 프로퍼티 값을 중괄호 안에서 직접 검사합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 속성 패턴 응용</div>
+                        <pre><code>// 게임 캐릭터 상태 판별
+string GetCharacterState(Character c) =&gt; c switch
+{
+    { Health: 0 }
+        =&gt; "사망",
+    { Health: &lt;= 25, IsShielded: false }
+        =&gt; "위험",
+    { Health: &lt;= 25, IsShielded: true }
+        =&gt; "보호 중",
+    { Mana: 0, Health: > 25 }
+        =&gt; "마나 고갈",
+    { IsBuff: true, BuffDuration: > 0 }
+        =&gt; "버프 활성",
+    _
+        =&gt; "정상"
+};
+
+// 중첩 속성 패턴 (C# 10)
+string DescribeWeapon(Weapon w) =&gt; w switch
+{
+    { Stats.CritRate: >= 50.0 } =&gt; "치명타 특화",
+    { Stats.AttackSpeed: >= 2.0 } =&gt; "속공형",
+    { Enchantment.Element: Element.Fire } =&gt; "화염 부여",
+    _ =&gt; "일반 무기"
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">위치 패턴(Positional Pattern)은 무엇인가요?</div>
+                <div class="a">
+                    <p><code>Deconstruct</code> 메서드가 정의된 타입에 대해 튜플 형식으로 분해하여 매칭할 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 위치 패턴</div>
+                        <pre><code>record struct GridPos(int X, int Y);
+
+string GetQuadrant(GridPos pos) =&gt; pos switch
+{
+    (0, 0) =&gt; "원점",
+    ( > 0,  > 0) =&gt; "1사분면",
+    ( &lt; 0,  > 0) =&gt; "2사분면",
+    ( &lt; 0,  &lt; 0) =&gt; "3사분면",
+    ( > 0,  &lt; 0) =&gt; "4사분면",
+    (0, _) =&gt; "Y축 위",
+    (_, 0) =&gt; "X축 위"
+};
+
+// 튜플 패턴으로 여러 변수를 동시에 매칭
+string GetInteraction(bool hasKey, bool doorLocked) =&gt;
+    (hasKey, doorLocked) switch
+{
+    (true, true) =&gt; "문을 열었습니다!",
+    (false, true) =&gt; "잠겨 있습니다. 열쇠가 필요합니다.",
+    (_, false) =&gt; "문이 이미 열려 있습니다."
+};</code></pre>
+                    </div>
+                    <p class="highlight">위치 패턴은 record 타입과 궁합이 좋습니다. record는 자동으로 Deconstruct를 생성하기 때문입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 관계형/논리 패턴</h2>
+            <div class="conversation">
+                <div class="q">숫자 범위를 매칭할 수 있나요?</div>
+                <div class="a">
+                    <p>C# 9.0부터 <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code> 관계 연산과 <code>and</code>, <code>or</code>, <code>not</code> 논리 조합이 가능합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 관계/논리 패턴 게임 활용</div>
+                        <pre><code>// 데미지 등급 판별
+string GetDamageRank(float damage) =&gt; damage switch
+{
+    &lt;= 0 =&gt; "MISS",
+    > 0 and &lt;= 50 =&gt; "약함",
+    > 50 and &lt;= 150 =&gt; "보통",
+    > 150 and &lt;= 500 =&gt; "강함",
+    > 500 and &lt;= 999 =&gt; "치명적",
+    >= 1000 =&gt; "즉사급"
+};
+
+// 레벨에 따른 콘텐츠 해금
+bool CanAccessContent(Player player, Content content) =&gt;
+    (player.Level, content.RequiredLevel, content.IsPremium) switch
+    {
+        (_, _, true) when !player.IsPremiumUser =&gt; false,
+        (var lv, var req, _) when lv >= req =&gt; true,
+        _ =&gt; false
+    };</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">when 절은 언제 사용하나요?</div>
+                <div class="a">
+                    <p><code>when</code> 절은 패턴 매칭만으로 표현하기 어려운 복잡한 조건을 추가할 때 사용합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - when 가드 절</div>
+                        <pre><code>string EvaluateHit(Attack attack, Defense defense) =&gt;
+    (attack, defense) switch
+{
+    var (a, d) when a.Element == d.WeakElement
+        =&gt; $"효과 발군! {a.Damage * 2} 데미지",
+
+    var (a, d) when a.Element == d.ResistElement
+        =&gt; $"효과 미비... {a.Damage / 2} 데미지",
+
+    var (a, d) when a.IsCritical &amp;&amp; d.Shield &lt;= 0
+        =&gt; $"크리티컬! {a.Damage * 1.5} 데미지",
+
+    var (a, _)
+        =&gt; $"{a.Damage} 데미지"
+};</code></pre>
+                    </div>
+                    <p class="warning">주의: when 절은 컴파일러가 완전성(exhaustiveness)을 검증하지 못합니다. 항상 기본 케이스(_)를 마지막에 추가하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 리스트 패턴 (C# 11)</h2>
+            <div class="conversation">
+                <div class="q">리스트 패턴은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>C# 11부터 배열이나 리스트의 요소를 패턴으로 매칭할 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 리스트 패턴</div>
+                        <pre><code>// 기본 리스트 패턴
+int[] scores = { 100, 85, 92 };
+
+string result = scores switch
+{
+    [] =&gt; "점수 없음",
+    [100] =&gt; "만점 1과목",
+    [100, 100, 100] =&gt; "올 만점!",
+    [>= 90, >= 90, >= 90] =&gt; "전과목 A",
+    [_, _, &lt; 60] =&gt; "마지막 과목 과락",
+    [var first, .., var last] =&gt; $"첫 점수: {first}, 마지막: {last}"
+};
+
+// 커맨드 입력 패턴 매칭
+string ParseCommand(string[] tokens) =&gt; tokens switch
+{
+    ["attack", var target] =&gt; $"{target} 공격!",
+    ["use", var item, "on", var target] =&gt; $"{target}에게 {item} 사용",
+    ["move", var dir] when dir is "north" or "south" or "east" or "west"
+        =&gt; $"{dir} 방향으로 이동",
+    [var cmd, ..] =&gt; $"알 수 없는 명령: {cmd}",
+    [] =&gt; "명령어를 입력하세요"
+};</code></pre>
+                    </div>
+                    <p class="key-point"><code>..</code>은 슬라이스 패턴으로, 0개 이상의 요소를 건너뛸 수 있습니다. 리스트의 시작과 끝만 검사할 때 유용합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: 게임 상태 관리 실전 예제</h2>
+            <div class="conversation">
+                <div class="q">패턴 매칭을 게임 FSM에 적용하면 어떻게 될까요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 패턴 매칭 기반 게임 상태 전이</div>
+                        <pre><code>record GameEvent;
+record DamageEvent(float Amount) : GameEvent;
+record HealEvent(float Amount) : GameEvent;
+record InputEvent(string Key) : GameEvent;
+
+enum PlayerState { Idle, Running, Attacking, Stunned, Dead }
+
+PlayerState Transition(PlayerState current, GameEvent evt) =&gt;
+    (current, evt) switch
+{
+    (PlayerState.Dead, _)
+        =&gt; PlayerState.Dead, // 사망 상태는 변경 불가
+
+    (_, DamageEvent { Amount: >= 100 })
+        =&gt; PlayerState.Stunned,
+
+    (_, DamageEvent d) when GetHealth() - d.Amount &lt;= 0
+        =&gt; PlayerState.Dead,
+
+    (PlayerState.Idle, InputEvent { Key: "Space" })
+        =&gt; PlayerState.Attacking,
+
+    (PlayerState.Idle, InputEvent { Key: "W" or "A" or "S" or "D" })
+        =&gt; PlayerState.Running,
+
+    (PlayerState.Running, InputEvent { Key: "Space" })
+        =&gt; PlayerState.Attacking,
+
+    (PlayerState.Stunned, _) when StunTimer &lt;= 0
+        =&gt; PlayerState.Idle,
+
+    _ =&gt; current // 상태 유지
+};</code></pre>
+                    </div>
+                    <p>패턴 매칭을 사용한 FSM은 상태 전이 규칙이 한눈에 보이며, 새로운 상태나 이벤트를 추가할 때 컴파일러가 누락된 케이스를 잡아줍니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>switch 표현식</strong>은 값을 반환하며, 모든 케이스의 완전성을 컴파일러가 검증한다.</li>
+                <li><strong>속성 패턴</strong>은 객체의 프로퍼티를 중괄호 안에서 직접 매칭한다.</li>
+                <li><strong>위치 패턴</strong>은 Deconstruct를 지원하는 타입을 튜플처럼 분해하여 매칭한다.</li>
+                <li><strong>관계/논리 패턴</strong>(and, or, not, &gt;, &lt;)으로 복합 조건을 간결하게 표현할 수 있다.</li>
+                <li>게임 FSM, 커맨드 파싱, 상태 분류 등에서 if-else보다 훨씬 읽기 쉬운 코드를 작성할 수 있다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

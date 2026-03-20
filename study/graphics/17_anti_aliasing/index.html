@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>계단 현상과의 전쟁</h1>
@@ -30,23 +30,22 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-앨리어싱 발생 원리:
-
-이상적인 대각선:          픽셀 샘플링 결과:
-     ╲                    ┌─┬─┬─┬─┐
-      ╲                   │ │ │ │█│
-       ╲                  ├─┼─┼─┼─┤
-        ╲                 │ │ │█│ │
-         ╲                ├─┼─┼─┼─┤
-          ╲               │ │█│ │ │
-                          ├─┼─┼─┼─┤
-                          │█│ │ │ │
-                          └─┴─┴─┴─┘
-
-픽셀 중심이 선 안에 있으면 채움,
-없으면 비움 → 계단 현상!
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">이상적인 대각선</div>
+                            <div class="flow-box__items">부드러운 연속적 선</div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box flow-box--warning">
+                            <div class="flow-box__title">픽셀 샘플링 결과</div>
+                            <div class="flow-box__items">
+                                픽셀 중심이 선 안에 있으면 채움,<br>
+                                없으면 비움 → 계단 현상!
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">앨리어싱 발생 원리</p>
             </div>
 
@@ -67,35 +66,19 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-SSAA 4x:
-
-1. 4배 해상도로 렌더링
-┌───────┬───────┬───────┬───────┐
-│   │   │   │   │   │   │███│███│
-│───┼───│───┼───│───┼───│███│███│
-├───────┼───────┼───────┼───────┤
-│   │   │   │   │███│███│   │   │
-│───┼───│───┼───│███│███│───┼───│
-├───────┼───────┼───────┼───────┤
-│   │   │███│███│   │   │   │   │
-│───┼───│███│███│───┼───│───┼───│
-├───────┼───────┼───────┼───────┤
-│███│███│   │   │   │   │   │   │
-│███│███│───┼───│───┼───│───┼───│
-└───────┴───────┴───────┴───────┘
-
-2. 4픽셀 평균 → 1픽셀
-┌───┬───┬───┬───┐
-│   │░░░│███│███│  ← 부드러운 그라데이션
-├───┼───┼───┼───┤
-│   │███│██░│░░░│
-├───┼───┼───┼───┤
-│░░░│███│░░░│   │
-├───┼───┼───┼───┤
-│███│░░░│   │   │
-└───┴───┴───┴───┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box flow-box--wide">
+                            <div class="flow-box__title">1. 4배 해상도로 렌더링</div>
+                            <div class="flow-box__items">각 픽셀을 2x2 서브픽셀로 분리하여 렌더링</div>
+                        </div>
+                        <span class="flow-arrow-down">↓ 4픽셀 평균 → 1픽셀</span>
+                        <div class="flow-box flow-box--highlight flow-box--wide">
+                            <div class="flow-box__title">2. 다운샘플링</div>
+                            <div class="flow-box__items">부드러운 그라데이션 생성<br>완벽하지만 비용 4배 이상</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">SSAA의 원리</p>
             </div>
         </section>
@@ -110,29 +93,33 @@ SSAA 4x:
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-MSAA 4x 동작:
-
-하나의 픽셀 (4개 서브샘플):
-┌─────────────────┐
-│  ●           ●  │  ● = 샘플 포인트
-│                 │
-│        ◉        │  ◉ = 셰이딩 위치 (픽셀 중심)
-│                 │
-│  ●           ●  │
-└─────────────────┘
-
-삼각형 경계가 지나갈 때:
-┌─────────────────┐
-│  ●───────────█  │  ● = 커버되지 않음 (0)
-│   ╲          │  │  █ = 커버됨 (1)
-│    ╲   ◉     │  │
-│     ╲        │  │  커버리지: 2/4 = 50%
-│  ●───╲───────█  │
-└─────────────────┘
-
-결과: 셰이딩 색상 × 50% = 부분적으로 채워진 픽셀
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box flow-box--wide">
+                            <div class="flow-box__title">하나의 픽셀 (4개 서브 샘플)</div>
+                            <div class="flow-box__items">
+                                4개 샘플 포인트 배치<br>
+                                셰이딩은 픽셀 중심에서 1회만
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓ 삼각형 경계가 지나갈 때</span>
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--highlight flow-box--small">
+                                <div class="flow-box__title">커버됨</div>
+                                <div class="flow-box__items">2개 샘플 (1)</div>
+                            </div>
+                            <div class="flow-box flow-box--warning flow-box--small">
+                                <div class="flow-box__title">커버 안 됨</div>
+                                <div class="flow-box__items">2개 샘플 (0)</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight flow-box--wide">
+                            <div class="flow-box__title">커버리지: 2/4 = 50%</div>
+                            <div class="flow-box__items">셰이딩 색상 x 50% = 부분적으로 채워진 픽셀</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">MSAA 커버리지 테스트</p>
             </div>
 
@@ -203,30 +190,24 @@ context->ResolveSubresource(
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-FXAA 동작:
-
-1. 휘도 차이로 경계 감지
-┌───┬───┬───┬───┬───┐
-│ 0 │ 0 │ 0 │ 1 │ 1 │  휘도 값
-├───┼───┼───┼───┼───┤
-│ 0 │ 0 │ 1▼│ 1 │ 1 │  ▼ = 경계 감지!
-├───┼───┼───┼───┼───┤
-│ 0 │ 1▼│ 1 │ 1 │ 1 │
-└───┴───┴───┴───┴───┘
-
-2. 경계 방향 판단
-┌───┬───┬───┐
-│ 0 │ 0 │ 1 │  수직 기울기 > 수평 기울기
-├───┼───┼───┤  → 수평 경계
-│ 0 │ ● │ 1 │
-├───┼───┼───┤
-│ 0 │ 1 │ 1 │
-└───┴───┴───┘
-
-3. 경계선 따라 블렌딩
-   원래 색상과 이웃 픽셀 혼합
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box flow-box--wide">
+                            <div class="flow-box__title">1. 휘도 차이로 경계 감지</div>
+                            <div class="flow-box__items">주변 픽셀의 휘도 값 비교<br>급격한 차이 = 경계 감지!</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--wide">
+                            <div class="flow-box__title">2. 경계 방향 판단</div>
+                            <div class="flow-box__items">수직 기울기 vs 수평 기울기 비교<br>→ 수평 경계 또는 수직 경계 결정</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight flow-box--wide">
+                            <div class="flow-box__title">3. 경계선 따라 블렌딩</div>
+                            <div class="flow-box__items">원래 색상과 이웃 픽셀 혼합</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">FXAA 경계 감지</p>
             </div>
 
@@ -289,24 +270,34 @@ float GetLuma(float3 color)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-TAA 원리:
-
-Frame 1 (지터 A):      Frame 2 (지터 B):      Frame 3 (지터 C):
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│                 │    │                 │    │                 │
-│  ●              │    │    ●            │    │      ●          │
-│                 │    │                 │    │                 │
-│                 │    │                 │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-
-매 프레임 다른 위치에서 샘플링
-↓
-시간에 걸쳐 누적 → 사실상 슈퍼샘플링 효과!
-
-Temporal Accumulation:
-currentFrame × 0.1 + previousResult × 0.9
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--small">
+                                <div class="flow-box__title">Frame 1</div>
+                                <div class="flow-box__items">지터 A 위치에서 샘플링</div>
+                            </div>
+                            <span class="flow-arrow">+</span>
+                            <div class="flow-box flow-box--small">
+                                <div class="flow-box__title">Frame 2</div>
+                                <div class="flow-box__items">지터 B 위치에서 샘플링</div>
+                            </div>
+                            <span class="flow-arrow">+</span>
+                            <div class="flow-box flow-box--small">
+                                <div class="flow-box__title">Frame 3</div>
+                                <div class="flow-box__items">지터 C 위치에서 샘플링</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓ 시간에 걸쳐 누적</span>
+                        <div class="flow-box flow-box--highlight flow-box--wide">
+                            <div class="flow-box__title">Temporal Accumulation</div>
+                            <div class="flow-box__items">
+                                currentFrame x 0.1 + previousResult x 0.9<br>
+                                → 사실상 슈퍼샘플링 효과!
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">TAA 시간 누적</p>
             </div>
 

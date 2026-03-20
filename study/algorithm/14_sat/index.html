@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>모든 그림자가 겹쳐야 충돌이다?</h1>
             <p class="subtitle">분리축 정리(SAT) 완전 정복 - 2D부터 3D까지</p>
         </header>
@@ -26,19 +28,35 @@
                     <p>역으로, 모든 가능한 축에서 투영이 겹친다면 충돌!</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-SAT의 핵심 원리
-
-    축에 투영했을 때:
-
-    분리됨 (충돌 X)              겹침 (충돌 ?)
-    ─────────────              ─────────────
-    [A]     [B]                [A  [B]  ]
-       ↑ 갭                       ↑ 겹침
-
-    하나의 축에서라도 분리 → 충돌 아님!
-    모든 축에서 겹침 → 충돌!
-                        </pre>
+                        <div class="flow-diagram" style="flex-direction: column; gap: 1.2em;">
+                            <div style="font-weight: bold; text-align: center;">SAT의 핵심 원리 — 축에 투영했을 때:</div>
+                            <div class="flow-row" style="justify-content: center; gap: 3em;">
+                                <div class="flow-box" style="min-width: 200px;">
+                                    <div class="flow-box__title">분리됨 (충돌 X)</div>
+                                    <div class="flow-box__items">
+                                        <div style="display: flex; align-items: center; justify-content: center; gap: 1.5em; font-weight: bold; font-size: 1.1em;">
+                                            <span style="background: #3b82f6; color: #fff; padding: 0.2em 0.8em; border-radius: 4px;">[A]</span>
+                                            <span style="color: #f87171;">↑ 갭</span>
+                                            <span style="background: #f59e0b; color: #fff; padding: 0.2em 0.8em; border-radius: 4px;">[B]</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flow-box" style="min-width: 200px;">
+                                    <div class="flow-box__title">겹침 (충돌 ?)</div>
+                                    <div class="flow-box__items">
+                                        <div style="display: flex; align-items: center; justify-content: center; gap: 0; font-weight: bold; font-size: 1.1em;">
+                                            <span style="background: #3b82f6; color: #fff; padding: 0.2em 0.8em 0.2em 0.8em; border-radius: 4px 0 0 4px;">[A</span>
+                                            <span style="background: linear-gradient(90deg, #3b82f6 50%, #f59e0b 50%); color: #fff; padding: 0.2em 0.3em;">↑ 겹침</span>
+                                            <span style="background: #f59e0b; color: #fff; padding: 0.2em 0.8em 0.2em 0.3em; border-radius: 0 4px 4px 0;">B]</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="text-align: center; font-size: 0.95em; line-height: 1.8;">
+                                <div>하나의 축에서라도 분리 <span class="flow-arrow">→</span> <strong>충돌 아님!</strong></div>
+                                <div>모든 축에서 겹침 <span class="flow-arrow">→</span> <strong>충돌!</strong></div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="analogy-box">
@@ -364,19 +382,26 @@ bool testOBBvsOBB3D(const OBB3D& a, const OBB3D& b) {
                     <p class="highlight">MTV는 두 물체를 분리하기 위한 최소 이동 벡터입니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-MTV (Minimum Translation Vector)
-
-    충돌 상태              분리 후
-    ┌─────┐              ┌─────┐
-    │  A  │──MTV──→     │  A  │
-    │ ┌───┼───┐          └─────┘
-    └─┼───┘   │              ┌───┐
-      │   B   │              │ B │
-      └───────┘              └───┘
-
-MTV = 침투 깊이가 가장 작은 축 × 겹침량
-                        </pre>
+                        <div class="flow-diagram" style="flex-direction: column; gap: 1.2em;">
+                            <div style="font-weight: bold; text-align: center;">MTV (Minimum Translation Vector)</div>
+                            <div class="flow-row" style="justify-content: center; align-items: center; gap: 2em;">
+                                <div style="position: relative; width: 120px; height: 120px;">
+                                    <div class="flow-box" style="position: absolute; top: 0; left: 0; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; font-weight: bold; background: rgba(59,130,246,0.15); border-color: #3b82f6;">A</div>
+                                    <div class="flow-box" style="position: absolute; bottom: 0; right: 0; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; font-weight: bold; background: rgba(245,158,11,0.15); border-color: #f59e0b;">B</div>
+                                    <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; font-size: 0.75em; color: #888; text-align: center; padding-top: 50px;">충돌 상태</div>
+                                </div>
+                                <div style="display: flex; flex-direction: column; align-items: center; gap: 0.3em;">
+                                    <span class="flow-arrow" style="font-size: 1.5em;">→</span>
+                                    <span style="font-size: 0.8em; font-weight: bold;">MTV</span>
+                                </div>
+                                <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5em;">
+                                    <div class="flow-box" style="width: 80px; height: 50px; display: flex; align-items: center; justify-content: center; font-weight: bold; background: rgba(59,130,246,0.15); border-color: #3b82f6;">A</div>
+                                    <div class="flow-box" style="width: 60px; height: 50px; display: flex; align-items: center; justify-content: center; font-weight: bold; background: rgba(245,158,11,0.15); border-color: #f59e0b;">B</div>
+                                    <div style="font-size: 0.75em; color: #888;">분리 후</div>
+                                </div>
+                            </div>
+                            <div style="text-align: center; font-size: 0.9em;">MTV = 침투 깊이가 가장 작은 축 × 겹침량</div>
+                        </div>
                     </div>
 
                     <div class="code-block">

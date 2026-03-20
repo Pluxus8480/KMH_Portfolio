@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Addressable Asset System | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+
+        <header class="content-header">
+            <h1>Resources.Load는 이제 그만!</h1>
+            <p class="subtitle">Addressables로 에셋을 스마트하게 관리하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Resources 폴더의 문제점</h2>
+            <div class="conversation">
+                <div class="q">Resources.Load가 편한데 왜 쓰면 안 되나요?</div>
+                <div class="a">
+                    <p>Resources 폴더는 Unity 초기부터 있던 에셋 로딩 방식이지만, 심각한 문제들이 있습니다:</p>
+                    <ul>
+                        <li>Resources 폴더의 <strong>모든 에셋</strong>이 빌드에 포함됨 (사용 여부와 무관)</li>
+                        <li>앱 시작 시 인덱싱으로 <strong>로딩 시간 증가</strong></li>
+                        <li>세밀한 <strong>메모리 관리 불가</strong> — 언로드 타이밍 제어 어려움</li>
+                        <li><strong>패치/DLC</strong> 대응 불가 — 에셋 변경 시 전체 빌드 필요</li>
+                    </ul>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>Resources.Load는 이사할 때 짐을 전부 트럭에 싣는 것과 같습니다. 여름옷, 겨울옷, 요리 도구, 운동 기구... 당장 필요 없어도 전부 싣습니다.</p>
+                        <p>Addressables는 필요한 짐만 택배로 받는 것입니다. 여름이면 여름옷만, 겨울이면 겨울옷만 배송받죠.</p>
+                    </div>
+
+                    <p class="highlight">Unity 공식 문서에서도 Resources 폴더 사용을 권장하지 않습니다. 프로토타입이나 아주 작은 프로젝트가 아니라면 Addressables를 사용하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Addressables 핵심 개념</h2>
+            <div class="conversation">
+                <div class="q">Addressables는 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>에셋에 "주소(Address)"를 부여하고, 그 주소로 비동기 로딩하는 시스템입니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">에셋 마킹</div>
+                                <div class="flow-box__items">Inspector에서 Addressable 체크</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">그룹 분류</div>
+                                <div class="flow-box__items">번들 단위로 묶기</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">빌드</div>
+                                <div class="flow-box__items">AssetBundle 생성</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">런타임 로드</div>
+                                <div class="flow-box__items">주소로 비동기 로딩</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th>Resources</th><th>Addressables</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>로딩 방식</td><td>동기 (블로킹)</td><td>비동기 (논블로킹)</td></tr>
+                            <tr><td>빌드 포함</td><td>전부 포함</td><td>필요한 것만</td></tr>
+                            <tr><td>원격 로딩</td><td>불가</td><td>CDN에서 다운로드 가능</td></tr>
+                            <tr><td>메모리 관리</td><td>수동 UnloadUnusedAssets</td><td>참조 카운팅 자동 관리</td></tr>
+                            <tr><td>의존성 관리</td><td>수동</td><td>자동 (종속 에셋 함께 로드)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 비동기 로딩 실전</h2>
+            <div class="conversation">
+                <div class="q">코드에서 어떻게 에셋을 로드하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 기본 비동기 로딩</div>
+                        <pre><code>using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+
+public class AssetLoader : MonoBehaviour
+{
+    [SerializeField] private AssetReference weaponRef;
+
+    private GameObject loadedWeapon;
+
+    // 방법 1: 콜백
+    public void LoadWeaponCallback()
+    {
+        weaponRef.InstantiateAsync().Completed += (handle) =&gt;
+        {
+            if (handle.Status == AsyncOperationStatus.Succeeded)
+            {
+                loadedWeapon = handle.Result;
+                Debug.Log("무기 로드 완료!");
+            }
+            else
+            {
+                Debug.LogError("무기 로드 실패!");
+            }
+        };
+    }
+
+    // 방법 2: async/await
+    public async void LoadWeaponAsync()
+    {
+        var handle = weaponRef.InstantiateAsync();
+        await handle.Task;
+
+        if (handle.Status == AsyncOperationStatus.Succeeded)
+        {
+            loadedWeapon = handle.Result;
+        }
+    }
+
+    // 방법 3: 코루틴
+    public IEnumerator LoadWeaponCoroutine()
+    {
+        var handle = weaponRef.InstantiateAsync();
+        yield return handle;
+
+        if (handle.Status == AsyncOperationStatus.Succeeded)
+        {
+            loadedWeapon = handle.Result;
+        }
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">AssetReference는 Inspector에서 에셋을 드래그 앤 드롭으로 할당합니다. 문자열 주소보다 안전하고 리팩토링에 강합니다.</p>
+                </div>
+
+                <div class="q">문자열 주소로도 로드할 수 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 주소/라벨 기반 로딩</div>
+                        <pre><code>// 주소로 로드
+Addressables.LoadAssetAsync&lt;GameObject&gt;("Prefabs/Enemy_Goblin")
+    .Completed += OnEnemyLoaded;
+
+// 라벨로 여러 에셋 로드
+Addressables.LoadAssetsAsync&lt;GameObject&gt;("level1_assets",
+    (asset) =&gt; {
+        // 각 에셋 로드 완료 시 호출
+        Debug.Log($"로드됨: {asset.name}");
+    }
+);</code></pre>
+                    </div>
+                    <p class="warning">주의: 문자열 주소는 오타에 취약합니다. 가능하면 AssetReference나 상수 클래스를 사용하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 메모리 관리 — 해제의 중요성</h2>
+            <div class="conversation">
+                <div class="q">로드한 에셋은 언제 해제해야 하나요?</div>
+                <div class="a">
+                    <p>Addressables는 참조 카운팅 방식으로 메모리를 관리합니다. 로드할 때마다 참조 카운트가 올라가고, Release할 때 내려갑니다. 카운트가 0이 되면 메모리에서 해제됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 올바른 메모리 관리</div>
+                        <pre><code>public class PropManager : MonoBehaviour
+{
+    private AsyncOperationHandle&lt;GameObject&gt; handle;
+    private GameObject spawnedObject;
+
+    public async void SpawnProp(AssetReference propRef)
+    {
+        // 로드 (참조 카운트 +1)
+        handle = propRef.InstantiateAsync();
+        spawnedObject = await handle.Task;
+    }
+
+    void OnDestroy()
+    {
+        // 해제 (참조 카운트 -1)
+        if (spawnedObject != null)
+        {
+            Addressables.ReleaseInstance(spawnedObject);
+            // 또는
+            // Addressables.Release(handle);
+        }
+    }
+}
+
+// ❌ 흔한 실수
+void BadExample()
+{
+    // handle을 저장하지 않으면 Release할 수 없음!
+    someRef.InstantiateAsync(); // 메모리 누수!
+}</code></pre>
+                    </div>
+
+                    <p class="warning">주의: Addressables로 Instantiate한 오브젝트를 Destroy()로 파괴하면 참조 카운트가 줄지 않아 메모리 누수가 발생합니다. 반드시 Addressables.ReleaseInstance()를 사용하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 원격 번들과 패치</h2>
+            <div class="conversation">
+                <div class="q">서버에서 에셋을 다운로드하려면 어떻게 하나요?</div>
+                <div class="a">
+                    <p>Addressables의 핵심 강점 중 하나가 <strong>원격 번들</strong>입니다. 에셋을 CDN 서버에 올려두고 런타임에 다운로드할 수 있습니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">빌드 시</div>
+                                <div class="flow-box__items">Remote 그룹을 CDN에 업로드</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">앱 실행</div>
+                                <div class="flow-box__items">카탈로그 체크 &rarr; 다운로드</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">캐시</div>
+                                <div class="flow-box__items">로컬에 저장, 재사용</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 다운로드 크기 확인 및 진행</div>
+                        <pre><code>public async void CheckAndDownload(string label)
+{
+    // 다운로드 크기 확인
+    var sizeHandle = Addressables.GetDownloadSizeAsync(label);
+    long size = await sizeHandle.Task;
+
+    if (size &gt; 0)
+    {
+        Debug.Log($"다운로드 필요: {size / 1024 / 1024}MB");
+
+        // 다운로드 시작
+        var downloadHandle = Addressables.DownloadDependenciesAsync(label);
+
+        while (!downloadHandle.IsDone)
+        {
+            float progress = downloadHandle.PercentComplete;
+            progressBar.value = progress;
+            await Task.Yield();
+        }
+
+        Addressables.Release(downloadHandle);
+        Debug.Log("다운로드 완료!");
+    }
+    else
+    {
+        Debug.Log("이미 캐시됨, 다운로드 불필요");
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">카탈로그를 업데이트하면 클라이언트 빌드 없이 에셋 패치가 가능합니다. 이벤트 콘텐츠, 시즌 업데이트에 필수적입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 프로파일링과 최적화</h2>
+            <div class="conversation">
+                <div class="q">Addressables의 메모리 사용을 어떻게 확인하나요?</div>
+                <div class="a">
+                    <p>Window &rarr; Asset Management &rarr; <strong>Addressables Event Viewer</strong>를 사용합니다.</p>
+                    <ul>
+                        <li><strong>참조 카운트</strong>가 0이 되지 않는 에셋 &rarr; 메모리 누수 후보</li>
+                        <li><strong>번들 로드/언로드 타이밍</strong> 확인 &rarr; 불필요한 로드 감지</li>
+                        <li><strong>중복 에셋</strong> 검출 &rarr; 여러 번들에 같은 텍스처가 포함되는 경우</li>
+                    </ul>
+
+                    <p>최적화 팁:</p>
+                    <ul>
+                        <li>자주 함께 사용되는 에셋을 <strong>같은 그룹</strong>으로 묶기</li>
+                        <li>씬 전환 시 <strong>이전 씬 에셋 Release</strong> 확실히 하기</li>
+                        <li>프리로드가 필요한 에셋은 <strong>로딩 화면</strong>에서 미리 로드</li>
+                        <li>텍스처, 오디오 등 큰 에셋은 <strong>별도 번들</strong>로 분리</li>
+                    </ul>
+
+                    <p class="highlight">Addressables Analyze 도구를 사용하면 번들 간 중복 에셋을 자동으로 검출하고, 최적의 그룹 구성을 제안받을 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Resources 폴더</strong>는 모든 에셋을 빌드에 포함시키므로 프로덕션에서는 사용하지 않는다</li>
+                <li>Addressables는 <strong>비동기 로딩</strong>과 <strong>참조 카운팅</strong>으로 메모리를 효율적으로 관리한다</li>
+                <li><strong>AssetReference</strong>를 사용하면 Inspector에서 안전하게 에셋을 참조할 수 있다</li>
+                <li>Addressables.ReleaseInstance로 <strong>반드시 해제</strong>해야 메모리 누수를 방지한다</li>
+                <li><strong>원격 번들</strong>을 활용하면 클라이언트 빌드 없이 에셋 패치가 가능하다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

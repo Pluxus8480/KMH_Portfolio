@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>제네릭 공변성과 반공변성 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>고양이는 동물인데, List&lt;고양이&gt;는 List&lt;동물&gt;인가?</h1>
+            <p class="subtitle">제네릭 공변성과 반공변성의 타입 안전성</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 문제의 시작 - 직관과 현실의 충돌</h2>
+            <div class="conversation">
+                <div class="q">Cat이 Animal을 상속하면, List&lt;Cat&gt;도 List&lt;Animal&gt;로 쓸 수 있어야 하지 않나요?</div>
+                <div class="a">
+                    <p>직관적으로는 그래야 할 것 같지만, 이렇게 허용하면 <strong>타입 안전성이 깨집니다.</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 만약 List에 공변성이 허용된다면?</div>
+                        <pre><code>List&lt;Cat&gt; cats = new List&lt;Cat&gt;();
+List&lt;Animal&gt; animals = cats; // 만약 이게 된다면?
+
+animals.Add(new Dog()); // Dog도 Animal이니까 추가 가능!
+// 하지만 cats 리스트에 Dog가 들어간 셈...
+
+Cat cat = cats[0]; // Dog를 Cat으로? 런타임 폭발!</code></pre>
+                    </div>
+                    <p class="warning">이것이 바로 C#이 List&lt;T&gt;의 공변성을 허용하지 않는 이유입니다. 읽기와 쓰기가 모두 가능한 컬렉션에서는 타입 안전성을 보장할 수 없습니다.</p>
+                </div>
+
+                <div class="q">그럼 제네릭에서 상속 관계를 활용할 방법이 아예 없나요?</div>
+                <div class="a">
+                    <p>있습니다! 바로 <strong>공변성(Covariance)</strong>과 <strong>반공변성(Contravariance)</strong>입니다. 핵심은 "읽기 전용이면 공변, 쓰기 전용이면 반공변"이라는 원칙입니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>비유로 이해하기</strong>
+                        <p><strong>공변성</strong>: 과일 상자에서 과일을 꺼내기만 한다면, 사과 상자도 과일 상자로 취급할 수 있습니다. (꺼낸 사과는 확실히 과일이니까)</p>
+                        <p><strong>반공변성</strong>: 동물 사료를 먹이는 사람이라면, 고양이에게도 먹일 수 있습니다. (고양이도 동물이니까)</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 공변성(out) - 출력 위치의 타입 유연성</h2>
+            <div class="conversation">
+                <div class="q">out 키워드가 공변성을 뜻한다고요?</div>
+                <div class="a">
+                    <p>네. 제네릭 타입 매개변수에 <code>out</code> 키워드를 붙이면 "이 타입은 출력(반환)에만 사용됩니다"라고 선언하는 것입니다. 그러면 하위 타입에서 상위 타입으로의 변환이 허용됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - IEnumerable은 공변적</div>
+                        <pre><code>// IEnumerable&lt;out T&gt;: T를 반환만 하므로 공변
+IEnumerable&lt;Cat&gt; cats = new List&lt;Cat&gt;
+{
+    new Cat("나비"), new Cat("야옹이")
+};
+
+// Cat은 Animal의 하위 타입이므로 OK!
+IEnumerable&lt;Animal&gt; animals = cats;
+
+foreach (Animal a in animals)
+{
+    a.Eat(); // 안전! 꺼낸 것은 반드시 Animal
+}
+
+// 하지만 추가는 불가능 (IEnumerable은 읽기 전용)
+// animals.Add(new Dog()); // 컴파일 에러!</code></pre>
+                    </div>
+                    <p class="highlight">IEnumerable&lt;out T&gt;는 T를 "꺼내기만" 하므로, Cat을 Animal로 읽는 것은 항상 안전합니다. 이것이 공변성의 핵심입니다.</p>
+                </div>
+
+                <div class="q">직접 공변 인터페이스를 만들 수도 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 게임에서의 공변 인터페이스</div>
+                        <pre><code>// 아이템 생성기: 아이템을 "꺼내기만" 함
+public interface IItemFactory&lt;out T&gt; where T : Item
+{
+    T Create();              // OK: T가 반환 위치
+    IEnumerable&lt;T&gt; GetAll(); // OK: T가 반환 위치
+    // void Process(T item); // 컴파일 에러! T가 입력 위치
+}
+
+// 무기 팩토리는 아이템 팩토리로 사용 가능
+IItemFactory&lt;Weapon&gt; weaponFactory = new WeaponFactory();
+IItemFactory&lt;Item&gt; itemFactory = weaponFactory; // 공변성!
+
+Item item = itemFactory.Create(); // Weapon을 Item으로 받음</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 반공변성(in) - 입력 위치의 타입 유연성</h2>
+            <div class="conversation">
+                <div class="q">반공변성은 반대 방향인가요?</div>
+                <div class="a">
+                    <p>맞습니다. <code>in</code> 키워드는 "이 타입은 입력(매개변수)에만 사용됩니다"라고 선언합니다. 이 경우 상위 타입에서 하위 타입으로의 변환이 허용됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Action은 반공변적</div>
+                        <pre><code>// Action&lt;in T&gt;: T를 입력으로만 받으므로 반공변
+Action&lt;Animal&gt; feedAnimal = (animal) => animal.Eat();
+
+// Animal을 처리할 수 있으면 Cat도 처리 가능!
+Action&lt;Cat&gt; feedCat = feedAnimal; // 반공변성!
+
+feedCat(new Cat("나비")); // Cat은 Animal이므로 안전</code></pre>
+                    </div>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">공변성 (out)</div>
+                                <div class="flow-box__items">Cat &rarr; Animal 방향<br>IEnumerable&lt;Cat&gt;<br>&rarr; IEnumerable&lt;Animal&gt;</div>
+                            </div>
+                            <div class="flow-arrow">vs</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">반공변성 (in)</div>
+                                <div class="flow-box__items">Animal &rarr; Cat 방향<br>Action&lt;Animal&gt;<br>&rarr; Action&lt;Cat&gt;</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="q">게임 개발에서 반공변성은 언제 유용한가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 데미지 처리 시스템</div>
+                        <pre><code>// 데미지 처리기 인터페이스
+public interface IDamageHandler&lt;in T&gt; where T : Unit
+{
+    void ApplyDamage(T target, float amount);
+}
+
+// 모든 유닛에 적용 가능한 범용 처리기
+class GenericDamageHandler : IDamageHandler&lt;Unit&gt;
+{
+    public void ApplyDamage(Unit target, float amount)
+        => target.Hp -= amount * (1 - target.Defense);
+}
+
+// Unit 처리기는 Player에도 사용 가능 (반공변)
+IDamageHandler&lt;Unit&gt; unitHandler = new GenericDamageHandler();
+IDamageHandler&lt;Player&gt; playerHandler = unitHandler;
+
+playerHandler.ApplyDamage(player, 50f);</code></pre>
+                    </div>
+                    <p class="key-point">반공변성 덕분에 "상위 타입을 처리할 수 있는 핸들러"를 "하위 타입 전용 핸들러"로 재사용할 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 제네릭 제약 조건 (where)</h2>
+            <div class="conversation">
+                <div class="q">where 키워드로 제네릭 타입을 제한할 수 있다면서요?</div>
+                <div class="a">
+                    <p>네. 제약 조건(constraints)을 사용하면 제네릭 매개변수로 사용할 수 있는 타입을 제한하여, 더 안전하고 유용한 코드를 작성할 수 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 주요 제약 조건</div>
+                        <pre><code>// 값 타입만 허용 (GC 할당 방지)
+public struct Pool&lt;T&gt; where T : struct
+{
+    private T[] _items;
+}
+
+// 특정 인터페이스 구현 필수
+public class Spawner&lt;T&gt; where T : IPoolable, new()
+{
+    public T Spawn()
+    {
+        T obj = new T(); // new() 제약 덕분에 가능
+        obj.OnSpawn();   // IPoolable 제약 덕분에 가능
+        return obj;
+    }
+}
+
+// 복수 제약 조건 조합
+public class Repository&lt;T&gt;
+    where T : class, IEntity, ISerializable, new()
+{
+    // T는 참조 타입이고, IEntity와 ISerializable을 구현하며,
+    // 매개변수 없는 생성자가 있어야 함
+}</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>제약 조건</th>
+                                <th>의미</th>
+                                <th>활용 예</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>where T : struct</code></td>
+                                <td>값 타입만 허용</td>
+                                <td>GC-free 자료구조</td>
+                            </tr>
+                            <tr>
+                                <td><code>where T : class</code></td>
+                                <td>참조 타입만 허용</td>
+                                <td>null 체크가 필요할 때</td>
+                            </tr>
+                            <tr>
+                                <td><code>where T : new()</code></td>
+                                <td>기본 생성자 필수</td>
+                                <td>팩토리/오브젝트 풀</td>
+                            </tr>
+                            <tr>
+                                <td><code>where T : BaseClass</code></td>
+                                <td>특정 클래스 상속</td>
+                                <td>타입 계층 제한</td>
+                            </tr>
+                            <tr>
+                                <td><code>where T : unmanaged</code></td>
+                                <td>비관리 타입</td>
+                                <td>포인터/네이티브 연동</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">unmanaged 제약은 언제 쓰나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - unmanaged 제약과 네이티브 연동</div>
+                        <pre><code>// 네이티브 메모리에 직접 쓰기 위한 제약
+public unsafe void WriteToBuffer&lt;T&gt;(T* dest, T value)
+    where T : unmanaged
+{
+    *dest = value;
+}
+
+// int, float, Vector3 같은 비관리 타입만 허용
+// string, class 등 참조를 포함하는 타입은 컴파일 에러</code></pre>
+                    </div>
+                    <p class="highlight">unmanaged 제약은 네이티브 플러그인과의 연동이나 GPU 버퍼 전송 등에서 타입 안전하게 포인터 연산을 수행할 때 필수적입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 실전에서 만나는 함정들</h2>
+            <div class="conversation">
+                <div class="q">배열은 공변적이라면서요? 안전한가요?</div>
+                <div class="a">
+                    <p>C#의 배열 공변성은 Java와의 호환성을 위해 도입된 <strong>역사적 실수</strong>로 널리 알려져 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 배열의 위험한 공변성</div>
+                        <pre><code>Cat[] cats = new Cat[3];
+Animal[] animals = cats; // 컴파일 OK! (배열은 공변적)
+
+// 런타임에서야 에러 발생
+animals[0] = new Dog(); // ArrayTypeMismatchException!
+
+// 이 런타임 체크 때문에 모든 배열 쓰기에 오버헤드 존재</code></pre>
+                    </div>
+                    <p class="warning">배열의 공변성은 컴파일러가 잡아주지 않는 런타임 에러를 유발합니다. 가능하면 IReadOnlyList&lt;T&gt;를 사용하세요.</p>
+                </div>
+
+                <div class="q">클래스에는 공변/반공변을 적용할 수 없나요?</div>
+                <div class="a">
+                    <p>맞습니다. <strong>인터페이스와 델리게이트</strong>에만 in/out 키워드를 사용할 수 있습니다. 클래스는 불가능합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 변성 적용 가능 범위</div>
+                        <pre><code>// OK: 인터페이스에 적용
+interface IProducer&lt;out T&gt; { T Produce(); }
+interface IConsumer&lt;in T&gt;  { void Consume(T item); }
+
+// OK: 델리게이트에 적용
+delegate TResult Func&lt;in T, out TResult&gt;(T arg);
+
+// 불가: 클래스에는 적용 불가
+// class Box&lt;out T&gt; { } // 컴파일 에러!</code></pre>
+                    </div>
+                    <p class="key-point">기억법: out = 출력(반환) 전용 = 공변 (하위 &rarr; 상위), in = 입력(매개변수) 전용 = 반공변 (상위 &rarr; 하위)</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 요약 -->
+        <section class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>공변성(out)</strong>: T를 반환에만 사용 &rarr; IEnumerable&lt;Cat&gt;을 IEnumerable&lt;Animal&gt;로 변환 가능</li>
+                <li><strong>반공변성(in)</strong>: T를 매개변수에만 사용 &rarr; Action&lt;Animal&gt;을 Action&lt;Cat&gt;으로 변환 가능</li>
+                <li>List&lt;T&gt;는 읽기/쓰기 모두 가능하므로 <strong>불변(invariant)</strong>이며 변환 불가</li>
+                <li>제약 조건(where)으로 struct, class, new(), 인터페이스, unmanaged 등을 제한하여 타입 안전성을 강화</li>
+                <li>배열의 공변성은 역사적 실수이며, <strong>IReadOnlyList&lt;T&gt;</strong> 등 안전한 대안을 사용하는 것이 좋다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

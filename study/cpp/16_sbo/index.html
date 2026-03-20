@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>작은 문자열은 힙에 안 간다고?</h1>
             <p class="subtitle">Small Buffer Optimization으로 할당 비용 제거하기</p>
         </header>
@@ -102,24 +104,22 @@ public:
                 </div>
 
                 <div class="visual-section">
-                    <pre class="diagram">
-SBO 메모리 레이아웃
-
-작은 데이터 (버퍼 사용):
-┌─────────────────────────────────┐
-│ [H][e][l][l][o][\0][  ][  ]... │  ← 인라인 버퍼
-│ size=5  isHeap=false            │
-└─────────────────────────────────┘
-  스택/객체 내부에 저장, 힙 할당 없음
-
-큰 데이터 (힙 사용):
-┌─────────────────────────────────┐
-│ ptr ──────────────────────────┐ │
-│ size=100  isHeap=true         │ │
-└───────────────────────────────│─┘
-                                ↓
-                    힙: [Very long string...]
-                    </pre>
+                    <p><strong>SBO 메모리 레이아웃</strong></p>
+                    <p><strong>작은 데이터 (버퍼 사용):</strong></p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--highlight"><div class="flow-box__title">객체 내부 (인라인 버퍼)</div><div class="flow-box__items">[H][e][l][l][o][\0][][]...<br>size=5, isHeap=false</div></div>
+                        </div>
+                    </div>
+                    <p>스택/객체 내부에 저장, 힙 할당 없음</p>
+                    <p><strong>큰 데이터 (힙 사용):</strong></p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box"><div class="flow-box__title">객체</div><div class="flow-box__items">ptr<br>size=100, isHeap=true</div></div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight"><div class="flow-box__title">힙</div><div class="flow-box__items">[Very long string...]</div></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>

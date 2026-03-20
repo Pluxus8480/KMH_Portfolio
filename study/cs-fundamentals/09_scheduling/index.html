@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"CPU가 4개인데 프로세스가 100개?"</h1>
             <p class="subtitle">OS 스케줄링과 게임 스레드 관리</p>
         </header>
@@ -27,39 +29,35 @@
                     <p>여러 프로세스/스레드 중 <strong>누가 CPU를 사용할지</strong> 결정합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                      스케줄링 상태 전이                              │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│                    ┌─────────────────┐                              │
-│       create ────▶ │     Ready       │ ◀─────────────┐              │
-│                    │   (실행 대기)    │              │              │
-│                    └────────┬────────┘              │              │
-│                             │                       │              │
-│                    dispatch │ (스케줄러 선택)        │ I/O 완료     │
-│                             ▼                       │              │
-│                    ┌─────────────────┐              │              │
-│                    │    Running      │              │              │
-│                    │   (CPU 실행)    │              │              │
-│                    └────────┬────────┘              │              │
-│                      │      │      │                │              │
-│           time out   │      │      │ I/O 요청      │              │
-│           (선점)     │      │      │               │              │
-│                      ▼      │      ▼               │              │
-│                  ┌───┐      │   ┌─────────────────┐│              │
-│                  │   │──────┘   │    Blocked      ││              │
-│                  │   │          │  (I/O 대기)      │┘              │
-│                  │   │          └─────────────────┘               │
-│                  │   │               │                             │
-│                  │   │ exit         │                             │
-│                  │   ▼              │                             │
-│                  │ ┌────────────┐   │                             │
-│                  └─│ Terminated │◀──┘ (비정상 종료)               │
-│                    └────────────┘                                  │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Create</div>
+                                    <div class="flow-box__items">프로세스 생성</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Ready (실행 대기)</div>
+                                    <div class="flow-box__items">&larr; time out (선점)<br>&larr; I/O 완료</div>
+                                </div>
+                                <div class="flow-arrow">dispatch &rarr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Running (CPU 실행)</div>
+                                    <div class="flow-box__items">&rarr; time out: Ready로<br>&rarr; I/O 요청: Blocked로<br>&rarr; exit: Terminated로</div>
+                                </div>
+                            </div>
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Blocked (I/O 대기)</div>
+                                    <div class="flow-box__items">I/O 완료 시 Ready로</div>
+                                </div>
+                                <div class="flow-arrow">&nbsp;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Terminated</div>
+                                    <div class="flow-box__items">프로세스 종료</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -106,35 +104,35 @@
                 <div class="q">컨텍스트 스위칭은 얼마나 비용이 드나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    컨텍스트 스위칭 과정                              │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Thread A 실행 중                                                  │
-│   ──────────────────────────────────────                           │
-│                                                                     │
-│   1. 인터럽트 발생 (타이머 or 시스템콜)                             │
-│      │                                                              │
-│   2. 현재 상태 저장 ───────────────┐                               │
-│      - 레지스터 (EAX, EBX, ...)    │                               │
-│      - 프로그램 카운터 (PC)        │──▶ Thread A의 TCB             │
-│      - 스택 포인터 (SP)            │    (Thread Control Block)     │
-│      - 플래그 레지스터             │                               │
-│      │                             │                               │
-│   3. 스케줄러 실행 (다음 스레드 선택)                               │
-│      │                                                              │
-│   4. 새 상태 복원 ◀────────────────┐                               │
-│      - Thread B의 레지스터        │                               │
-│      - Thread B의 PC              │──── Thread B의 TCB            │
-│      - Thread B의 SP              │                               │
-│      │                                                              │
-│   5. Thread B 실행 재개                                             │
-│                                                                     │
-│   비용: 직접적 ~1-10μs + 간접적 (캐시 미스) ~10-100μs              │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">1. 인터럽트 발생</div>
+                                    <div class="flow-box__items">타이머 or 시스템콜</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">2. Thread A 상태 저장</div>
+                                    <div class="flow-box__items">레지스터 (EAX, EBX...)<br>프로그램 카운터 (PC)<br>스택 포인터 (SP)<br>플래그 레지스터<br>&rarr; Thread A의 TCB</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">3. 스케줄러 실행</div>
+                                    <div class="flow-box__items">다음 스레드 선택</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">4. Thread B 상태 복원</div>
+                                    <div class="flow-box__items">Thread B의 TCB에서<br>레지스터, PC, SP 복원</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">5. Thread B 실행 재개</div>
+                                    <div class="flow-box__items">&nbsp;</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">비용: 직접적 ~1-10&micro;s + 간접적 (캐시 미스) ~10-100&micro;s</p>
                     </div>
 
                     <p class="warning">캐시 오염이 더 큰 문제! 스위칭 후 캐시 미스 급증</p>
@@ -148,33 +146,44 @@
                 <div class="q">게임에서는 어떤 스레드들이 있나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    게임 엔진 스레드 구조                             │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Core 0              Core 1              Core 2        Core 3     │
-│   ┌─────────────┐     ┌─────────────┐     ┌────────┐   ┌────────┐ │
-│   │Main/Render  │     │   Physics   │     │ Worker │   │ Worker │ │
-│   │   Thread    │     │   Thread    │     │ Thread │   │ Thread │ │
-│   └─────────────┘     └─────────────┘     └────────┘   └────────┘ │
-│         │                   │                 │             │      │
-│         │                   │                 └──────┬──────┘      │
-│         │                   │                        │             │
-│         ▼                   ▼                        ▼             │
-│   ┌───────────────────────────────────────────────────────────┐   │
-│   │                      Job Queue                             │   │
-│   │  [AI Task] [Audio] [Anim] [Network] [Loading] [Script]    │   │
-│   └───────────────────────────────────────────────────────────┘   │
-│                                                                     │
-│   별도:                                                             │
-│   ┌─────────────┐     ┌─────────────┐                              │
-│   │Audio Thread │     │  I/O Thread │     (높은 우선순위)          │
-│   │(Real-Time)  │     │ (비동기)    │                              │
-│   └─────────────┘     └─────────────┘                              │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Core 0</div>
+                                    <div class="flow-box__items">Main/Render Thread</div>
+                                </div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Core 1</div>
+                                    <div class="flow-box__items">Physics Thread</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Core 2</div>
+                                    <div class="flow-box__items">Worker Thread</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Core 3</div>
+                                    <div class="flow-box__items">Worker Thread</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Job Queue</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>AI Task</span><span>Audio</span><span>Anim</span><span>Network</span><span>Loading</span><span>Script</span></div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Audio Thread (Real-Time)</div>
+                                    <div class="flow-box__items">높은 우선순위</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">I/O Thread (비동기)</div>
+                                    <div class="flow-box__items">높은 우선순위</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -352,32 +361,21 @@ private:
                 <div class="q">멀티스레드 게임 루프는 어떻게 구성하나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│              프레임 병렬 파이프라인 (Frame N, N+1 동시)              │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Frame N        │ Frame N+1      │ Frame N+2                       │
-│   ───────────────┼────────────────┼───────────                      │
-│                                                                     │
-│   [Simulate N]   │                │                                 │
-│        │         │                │                                 │
-│        ▼         │                │                                 │
-│   [Render N] ───▶│ [Simulate N+1]│                                 │
-│        │         │      │         │                                 │
-│        │         │      ▼         │                                 │
-│   [Present N]    │ [Render N+1]──▶│ [Simulate N+2]                 │
-│                  │      │         │      │                          │
-│                  │ [Present N+1]  │      ▼                          │
-│                  │                │ [Render N+2]                    │
-│                                                                     │
-│   동기 포인트:                                                       │
-│   - Simulate 완료 후 Render 시작                                    │
-│   - Render 완료 후 Present                                          │
-│   - Present은 VSync에 동기화                                        │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Frame N</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>Simulate N</span><span>Render N</span><span>Present N</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Frame N+1</div>
+                                <div class="pipeline-bar pb-light"><span>&nbsp;</span><span>Simulate N+1</span><span>Render N+1</span><span>Present N+1</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Frame N+2</div>
+                                <div class="pipeline-bar pb-post"><span>&nbsp;</span><span>&nbsp;</span><span>Simulate N+2</span><span>Render N+2</span><span>...</span></div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">동기 포인트: Simulate 완료 후 Render 시작 / Render 완료 후 Present / Present은 VSync에 동기화</p>
                     </div>
 
                     <div class="code-block">

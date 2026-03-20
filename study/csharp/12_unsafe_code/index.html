@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unsafe Code | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>안전벨트를 풀고 달리기</h1>
+            <p class="subtitle">unsafe 코드와 포인터로 C# 성능의 한계 돌파</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 왜 unsafe가 필요한가?</h2>
+            <div class="conversation">
+                <div class="q">C#은 안전한 언어인데 왜 unsafe 코드가 존재하나요?</div>
+                <div class="a">
+                    <p>C#의 안전성은 GC, 경계 검사, 타입 검사 등에서 옵니다. 하지만 이 안전장치들은 성능 비용이 있습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>안전벨트를 매고 운전하면 안전하지만, F1 레이싱에서는 무게를 줄이고 극한 성능을 뽑아야 합니다. unsafe는 "나는 이 구간에서 뭘 하는지 정확히 안다"라고 컴파일러에게 선언하는 것입니다.</p>
+                    </div>
+                    <p class="highlight">unsafe 코드는 GC의 관리를 벗어나 메모리를 직접 조작할 수 있게 해줍니다. 성능 크리티컬한 게임 엔진, 이미지 처리, 네트워크 버퍼 처리에서 사용됩니다.</p>
+                </div>
+
+                <div class="q">unsafe를 사용하려면 어떤 설정이 필요한가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">csproj 설정</div>
+                        <pre><code>&lt;PropertyGroup&gt;
+    &lt;AllowUnsafeBlocks&gt;true&lt;/AllowUnsafeBlocks&gt;
+&lt;/PropertyGroup&gt;</code></pre>
+                    </div>
+                    <p>프로젝트 설정에서 AllowUnsafeBlocks를 활성화해야 합니다. 메서드, 클래스, 또는 블록 단위로 unsafe를 지정할 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 포인터 기초</h2>
+            <div class="conversation">
+                <div class="q">C#에서 포인터는 어떻게 사용하나요?</div>
+                <div class="a">
+                    <p>C/C++과 거의 동일한 문법을 사용합니다. 단, <strong>비관리 타입</strong>(int, float, struct 등 참조를 포함하지 않는 타입)에만 포인터를 사용할 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 포인터 기본 문법</div>
+                        <pre><code>unsafe
+{
+    int value = 42;
+    int* ptr = &amp;value;        // 주소 얻기
+
+    Console.WriteLine(*ptr);   // 역참조: 42
+    Console.WriteLine((long)ptr); // 주소 출력
+
+    *ptr = 100;                // 포인터를 통한 값 변경
+    Console.WriteLine(value);  // 100
+}
+
+// 포인터 연산
+unsafe
+{
+    int* arr = stackalloc int[5];
+    for (int i = 0; i &lt; 5; i++)
+    {
+        *(arr + i) = i * 10;  // 포인터 산술 연산
+    }
+    // arr[0]=0, arr[1]=10, arr[2]=20, ...
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">구조체 포인터는 어떻게 다루나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 구조체 포인터</div>
+                        <pre><code>struct Vector3
+{
+    public float X, Y, Z;
+}
+
+unsafe
+{
+    Vector3 pos = new Vector3 { X = 1, Y = 2, Z = 3 };
+    Vector3* pPos = &amp;pos;
+
+    // 화살표 연산자로 멤버 접근
+    pPos-&gt;X = 10.0f;
+    pPos-&gt;Y = 20.0f;
+
+    Console.WriteLine(pos.X); // 10
+}</code></pre>
+                    </div>
+                    <p class="key-point">포인터를 통한 접근은 경계 검사가 없으므로 배열 접근보다 빠르지만, 잘못된 주소 접근 시 AccessViolation 크래시가 발생합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: fixed 문 - GC로부터 객체 고정</h2>
+            <div class="conversation">
+                <div class="q">관리 객체에 포인터를 쓸 수 없는 이유가 뭔가요?</div>
+                <div class="a">
+                    <p>GC가 메모리 압축(Compaction) 과정에서 객체를 이동시킬 수 있기 때문입니다. 포인터가 가리키는 주소의 객체가 이동하면 댕글링 포인터가 됩니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">GC 전</div>
+                                <div class="flow-box__items">ptr &rarr; 0x1000 (배열)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">GC 압축</div>
+                                <div class="flow-box__items">배열이 0x0800으로 이동</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">GC 후</div>
+                                <div class="flow-box__items">ptr &rarr; 0x1000 (쓰레기 메모리!)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p><code>fixed</code> 문은 GC에게 "이 객체를 움직이지 마"라고 요청합니다.</p>
+                </div>
+
+                <div class="q">fixed 문은 어떻게 사용하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - fixed 문 사용</div>
+                        <pre><code>unsafe
+{
+    byte[] buffer = new byte[1024];
+
+    fixed (byte* ptr = buffer) // buffer를 메모리에 고정
+    {
+        // 이 블록 안에서만 ptr이 유효
+        for (int i = 0; i &lt; 1024; i++)
+        {
+            *(ptr + i) = (byte)(i % 256);
+        }
+
+        // 네이티브 함수에 전달 가능
+        // NativeLib.ProcessBuffer(ptr, 1024);
+    }
+    // 여기서 고정 해제 - GC가 다시 이동 가능
+}
+
+// 문자열에도 사용 가능
+unsafe
+{
+    string text = "Hello";
+    fixed (char* pText = text)
+    {
+        for (int i = 0; i &lt; text.Length; i++)
+        {
+            Console.Write(*(pText + i));
+        }
+    }
+}</code></pre>
+                    </div>
+                    <p class="warning">주의: fixed 블록 밖에서 포인터를 사용하면 안 됩니다. GC가 객체를 이동시킬 수 있어 메모리 손상이 발생합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: stackalloc - 스택에 배열 할당</h2>
+            <div class="conversation">
+                <div class="q">stackalloc은 무엇이고 왜 빠른가요?</div>
+                <div class="a">
+                    <p><code>stackalloc</code>은 힙이 아닌 스택에 메모리를 할당합니다. GC 대상이 아니므로 할당/해제가 거의 무비용입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>new (힙 할당)</th>
+                                <th>stackalloc (스택 할당)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>할당 속도</td>
+                                <td>상대적으로 느림</td>
+                                <td>매우 빠름 (SP 이동)</td>
+                            </tr>
+                            <tr>
+                                <td>해제</td>
+                                <td>GC가 처리</td>
+                                <td>함수 종료 시 자동</td>
+                            </tr>
+                            <tr>
+                                <td>GC 압박</td>
+                                <td>있음</td>
+                                <td>없음</td>
+                            </tr>
+                            <tr>
+                                <td>크기 제한</td>
+                                <td>힙 크기까지</td>
+                                <td>스택 크기 (보통 1MB)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">Span&lt;T&gt;와 함께 사용하면 unsafe 없이도 가능한가요?</div>
+                <div class="a">
+                    <p>C# 7.2부터 stackalloc의 결과를 <code>Span&lt;T&gt;</code>에 대입할 수 있어 unsafe 없이도 사용 가능합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - stackalloc + Span</div>
+                        <pre><code>// unsafe 필요 없음!
+Span&lt;int&gt; numbers = stackalloc int[128];
+
+for (int i = 0; i &lt; numbers.Length; i++)
+{
+    numbers[i] = i * i;
+}
+
+// 경계 검사도 포함됨 - 안전한 사용
+int sum = 0;
+foreach (var n in numbers)
+{
+    sum += n;
+}
+
+// 게임에서의 활용: 임시 버퍼
+void ProcessDamage(ReadOnlySpan&lt;Enemy&gt; enemies)
+{
+    Span&lt;float&gt; distances = stackalloc float[enemies.Length];
+
+    for (int i = 0; i &lt; enemies.Length; i++)
+    {
+        distances[i] = CalculateDistance(enemies[i]);
+    }
+
+    // distances는 함수 종료 시 자동 해제 - GC 부담 0
+}</code></pre>
+                    </div>
+                    <p class="highlight">Span&lt;T&gt; + stackalloc 조합은 unsafe 없이도 스택 할당의 성능 이점을 누릴 수 있는 모던 C#의 베스트 프랙티스입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 네이티브 메모리와 상호운용</h2>
+            <div class="conversation">
+                <div class="q">C/C++ 라이브러리와 메모리를 공유할 때는 어떻게 하나요?</div>
+                <div class="a">
+                    <p>P/Invoke나 COM Interop에서 네이티브 코드와 메모리를 주고받을 때 unsafe와 <code>Marshal</code> 클래스를 활용합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 네이티브 메모리 할당</div>
+                        <pre><code>using System.Runtime.InteropServices;
+
+// Marshal로 비관리 메모리 할당
+IntPtr nativeBuffer = Marshal.AllocHGlobal(1024);
+try
+{
+    unsafe
+    {
+        byte* ptr = (byte*)nativeBuffer;
+        for (int i = 0; i &lt; 1024; i++)
+        {
+            ptr[i] = 0; // 메모리 초기화
+        }
+    }
+
+    // 네이티브 함수에 전달
+    [DllImport("gamelib.dll")]
+    static extern void ProcessData(IntPtr data, int size);
+
+    ProcessData(nativeBuffer, 1024);
+}
+finally
+{
+    Marshal.FreeHGlobal(nativeBuffer); // 반드시 해제!
+}
+
+// .NET 6+: NativeMemory 사용
+unsafe
+{
+    void* mem = NativeMemory.Alloc(1024);
+    try
+    {
+        // 사용...
+    }
+    finally
+    {
+        NativeMemory.Free(mem);
+    }
+}</code></pre>
+                    </div>
+                    <p class="warning">주의: 네이티브 메모리는 GC가 관리하지 않으므로 반드시 수동 해제해야 합니다. 해제하지 않으면 메모리 누수가 발생합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: 실전 활용 - 이미지 픽셀 처리</h2>
+            <div class="conversation">
+                <div class="q">unsafe가 실제로 빛을 발하는 대표적인 사례는 무엇인가요?</div>
+                <div class="a">
+                    <p>이미지 픽셀 처리는 unsafe의 대표적 활용 사례입니다. 배열 인덱서를 통한 접근 대비 포인터 접근이 훨씬 빠릅니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 텍스처 픽셀 조작 (안전 vs unsafe)</div>
+                        <pre><code>// 안전한 방식 - 경계 검사 비용 발생
+void GrayscaleSafe(byte[] pixels, int width, int height)
+{
+    for (int i = 0; i &lt; width * height; i++)
+    {
+        int idx = i * 4;
+        byte gray = (byte)(pixels[idx] * 0.3f
+                         + pixels[idx + 1] * 0.59f
+                         + pixels[idx + 2] * 0.11f);
+        pixels[idx] = pixels[idx + 1] = pixels[idx + 2] = gray;
+    }
+}
+
+// unsafe 방식 - 경계 검사 없이 직접 접근
+unsafe void GrayscaleUnsafe(byte[] pixels, int width, int height)
+{
+    fixed (byte* pPixels = pixels)
+    {
+        byte* p = pPixels;
+        int count = width * height;
+        for (int i = 0; i &lt; count; i++, p += 4)
+        {
+            byte gray = (byte)(*p * 0.3f
+                             + *(p + 1) * 0.59f
+                             + *(p + 2) * 0.11f);
+            *p = *(p + 1) = *(p + 2) = gray;
+        }
+    }
+}
+// 1920x1080 텍스처 기준 약 2~3배 속도 향상</code></pre>
+                    </div>
+                    <p class="key-point">unsafe 코드는 성능이 극도로 중요한 병목 구간에서만 사용하고, 가능하면 Span&lt;T&gt;와 같은 안전한 대안을 우선 고려하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>unsafe</strong>는 GC와 경계 검사를 우회하여 포인터로 메모리를 직접 조작할 수 있게 해준다.</li>
+                <li><strong>fixed</strong> 문은 GC의 메모리 압축 시 관리 객체가 이동하지 않도록 고정한다.</li>
+                <li><strong>stackalloc</strong>은 스택에 메모리를 할당하여 GC 부담 없이 임시 버퍼를 생성한다.</li>
+                <li>Span&lt;T&gt; + stackalloc 조합은 unsafe 없이도 스택 할당의 이점을 활용하는 모던 패턴이다.</li>
+                <li>네이티브 상호운용 시 Marshal이나 NativeMemory로 비관리 메모리를 관리하며, 반드시 수동 해제해야 한다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

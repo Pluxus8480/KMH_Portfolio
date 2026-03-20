@@ -284,6 +284,88 @@
     margin-bottom: 24px;
 }
 
+/* ===== Flow Diagram (HTML/CSS 기반) ===== */
+.flow-diagram { margin: 16px 0; overflow-x: auto; }
+.flow-row { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.flow-box {
+    background: var(--bg-secondary); border: 1px solid var(--border-default);
+    border-radius: var(--radius-xs); padding: 10px 14px; text-align: center; min-width: 100px; flex-shrink: 0;
+}
+.flow-box__title { font-size: 0.8rem; font-weight: 600; color: var(--accent-primary); margin-bottom: 4px; }
+.flow-box__items { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; }
+.flow-arrow { color: var(--accent-primary); font-size: 1.2rem; flex-shrink: 0; }
+.flow-arrow-down { color: var(--accent-primary); font-size: 1.2rem; text-align: center; padding: 4px 0; display: block; }
+.flow-box--highlight { border-color: var(--accent-primary); background: rgba(0,255,153,0.05); }
+.flow-box--warning { border-color: #f87171; background: rgba(239,68,68,0.08); }
+.flow-box--info { border-color: #60a5fa; background: rgba(59,130,246,0.08); }
+.flow-row--wrap { flex-wrap: wrap; justify-content: center; }
+.flow-row--3col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; align-items: start; }
+.flow-column { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.flow-label { font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 2px 0; }
+.flow-group { border: 1px dashed var(--border-default); border-radius: var(--radius-xs); padding: 12px; }
+.flow-group__title { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; text-align: center; }
+.flow-side-by-side { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; }
+.flow-side-by-side > .flow-group { flex: 1; min-width: 250px; }
+.flow-box--small { min-width: 70px; padding: 6px 10px; }
+.flow-box--wide { min-width: 200px; }
+.flow-box__items ul { list-style: none; padding: 0; margin: 0; }
+.flow-box__items ul li { padding: 1px 0; }
+
+/* Pipeline Diagram */
+.pipeline { margin: 16px 0; }
+.pipeline-stage { display: flex; align-items: stretch; gap: 0; margin-bottom: 2px; }
+.pipeline-label {
+    min-width: 120px; padding: 8px 12px; font-size: 0.8rem; font-weight: 600;
+    color: var(--text-primary); display: flex; align-items: center;
+}
+.pipeline-bar {
+    flex: 1; display: flex; align-items: center; gap: 4px; padding: 6px 8px;
+    border-radius: 4px; font-size: 0.75rem; flex-wrap: wrap;
+}
+.pipeline-bar span {
+    background: rgba(255,255,255,0.1); padding: 3px 8px; border-radius: 3px;
+    color: var(--text-secondary); white-space: nowrap;
+}
+.pb-gbuffer { background: rgba(59,130,246,0.15); }
+.pb-light { background: rgba(0,255,153,0.1); }
+.pb-post { background: rgba(139,92,246,0.15); }
+.pb-shadow { background: rgba(250,204,21,0.1); }
+
+/* Hierarchy Diagram */
+.hierarchy-diagram { margin: 16px 0; }
+.hierarchy-item {
+    background: var(--bg-secondary); border: 1px solid var(--border-default);
+    border-radius: var(--radius-xs); padding: 8px 14px; font-size: 0.8rem;
+    color: var(--text-primary); text-align: center; display: inline-block;
+}
+.hierarchy-item--root {
+    border-color: var(--accent-primary); color: var(--accent-primary);
+    font-weight: 600; display: block; margin-bottom: 8px;
+}
+.hierarchy-children {
+    display: flex; gap: 8px; flex-wrap: wrap; padding-left: 24px;
+    border-left: 2px solid var(--border-default); margin-left: 16px;
+}
+
+/* Collapsible Code Block */
+.code-toggle { margin: 12px 0; }
+.code-toggle summary {
+    cursor: pointer; padding: 8px 14px; background: #252542; border-radius: var(--radius-xs);
+    font-family: var(--font-mono); font-size: var(--fs-small); color: var(--text-muted);
+    display: flex; align-items: center; gap: 8px; user-select: none; list-style: none;
+}
+.code-toggle summary::-webkit-details-marker { display: none; }
+.code-toggle summary::before { content: '\25B6'; font-size: 0.7em; color: var(--accent-primary); transition: transform 0.2s; }
+.code-toggle[open] summary::before { transform: rotate(90deg); }
+.code-toggle summary .code-lang { margin-left: auto; color: var(--accent-primary); font-size: var(--fs-caption); }
+.code-toggle pre {
+    background: #1a1a2e; padding: 14px; margin: 0; overflow-x: auto;
+    border-radius: 0 0 var(--radius-xs) var(--radius-xs);
+}
+.code-toggle code {
+    font-family: var(--font-mono); font-size: 0.82rem; color: #e2e8f0; line-height: 1.5; tab-size: 4;
+}
+
 /* ===== Responsive ===== */
 @media screen and (max-width: 768px) {
     .content-container {

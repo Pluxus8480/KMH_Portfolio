@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LINQ | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>데이터를 요리하는 레시피</h1>
+            <p class="subtitle">LINQ의 지연 평가 전략과 성능 함정 피하기</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: LINQ란 무엇인가</h2>
+            <div class="conversation">
+                <div class="q">LINQ가 뭐고 왜 쓰나요? for 루프면 다 되지 않나요?</div>
+                <div class="a">
+                    <p><strong>LINQ(Language Integrated Query)</strong>는 컬렉션 데이터를 SQL처럼 질의할 수 있는 C# 문법입니다. 코드의 의도를 명확하게 표현할 수 있습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>LINQ는 <strong>요리 레시피</strong>와 같습니다. "재료를 씻고, 자르고, 볶고, 간을 하라"는 레시피를 적어두면, 실제 요리(실행)는 손님이 주문할 때(열거할 때) 시작됩니다.</p>
+                        <p>레시피를 적는 것 자체는 요리가 아닙니다. 이것이 <strong>지연 평가(Lazy Evaluation)</strong>의 핵심입니다.</p>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C# - for 루프 vs LINQ</div>
+                        <pre><code>List&lt;Monster&gt; monsters = GetAllMonsters();
+
+// for 루프: "어떻게" 하는지 직접 서술
+List&lt;Monster&gt; result = new List&lt;Monster&gt;();
+for (int i = 0; i &lt; monsters.Count; i++)
+{
+    if (monsters[i].HP &gt; 0 &amp;&amp; monsters[i].Level &gt;= 10)
+    {
+        result.Add(monsters[i]);
+    }
+}
+result.Sort((a, b) => b.Level.CompareTo(a.Level));
+var top5 = result.Take(5).ToList();
+
+// LINQ: "무엇을" 원하는지 선언
+var top5 = monsters
+    .Where(m => m.HP > 0 && m.Level >= 10)
+    .OrderByDescending(m => m.Level)
+    .Take(5)
+    .ToList();</code></pre>
+                    </div>
+                    <p class="highlight">LINQ는 "어떻게(How)" 대신 "무엇을(What)" 표현합니다. 코드 리뷰 시 의도 파악이 훨씬 빠릅니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 지연 평가의 비밀</h2>
+            <div class="conversation">
+                <div class="q">지연 평가(Lazy Evaluation)가 정확히 뭔가요?</div>
+                <div class="a">
+                    <p>LINQ 쿼리를 작성하는 것은 <strong>파이프라인을 설계</strong>하는 것이지, 즉시 실행하는 것이 아닙니다. 실제 데이터가 필요한 순간(열거, ToList, Count 등)에 비로소 실행됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 지연 평가 확인</div>
+                        <pre><code>List&lt;int&gt; numbers = new List&lt;int&gt; { 1, 2, 3, 4, 5 };
+
+// 쿼리 정의 (아직 실행 안 됨!)
+var query = numbers.Where(n =>
+{
+    Console.WriteLine($"필터링: {n}");
+    return n > 3;
+});
+
+Console.WriteLine("=== 쿼리 정의 완료 ===");
+
+// 이 시점에서 실행됨!
+foreach (var n in query)
+{
+    Console.WriteLine($"결과: {n}");
+}
+
+// 출력:
+// === 쿼리 정의 완료 ===
+// 필터링: 1
+// 필터링: 2
+// 필터링: 3
+// 필터링: 4
+// 결과: 4
+// 필터링: 5
+// 결과: 5</code></pre>
+                    </div>
+                    <p class="key-point">주목: "쿼리 정의 완료"가 먼저 출력됩니다. Where는 쿼리를 정의만 할 뿐, foreach가 호출될 때 하나씩 평가됩니다.</p>
+                </div>
+
+                <div class="q">지연 평가가 아닌 즉시 실행되는 연산은 뭔가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>지연 평가 (쿼리 구성)</th>
+                                <th>즉시 실행 (결과 생성)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Where, Select, Take, Skip</td>
+                                <td>ToList, ToArray, ToDictionary</td>
+                            </tr>
+                            <tr>
+                                <td>OrderBy, ThenBy</td>
+                                <td>Count, Sum, Average, Min, Max</td>
+                            </tr>
+                            <tr>
+                                <td>GroupBy, Join</td>
+                                <td>First, Last, Single, Any, All</td>
+                            </tr>
+                            <tr>
+                                <td>SelectMany, Distinct</td>
+                                <td>foreach, ElementAt</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">같은 지연 쿼리를 두 번 열거하면 두 번 실행됩니다! 결과를 재사용할 거라면 ToList()로 물질화(materialize)하세요.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 다중 열거 함정</div>
+                        <pre><code>// BAD: 쿼리가 두 번 실행됨
+var expensive = monsters.Where(m => HeavyCalculation(m));
+int count = expensive.Count();           // 1번째 실행
+var first = expensive.FirstOrDefault();  // 2번째 실행
+
+// GOOD: 한 번만 실행
+var cached = monsters.Where(m => HeavyCalculation(m)).ToList();
+int count = cached.Count;
+var first = cached.FirstOrDefault();</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: LINQ의 내부 동작 원리</h2>
+            <div class="conversation">
+                <div class="q">Where나 Select는 내부적으로 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>LINQ 메서드들은 <code>IEnumerable&lt;T&gt;</code>을 받아서 새로운 <code>IEnumerable&lt;T&gt;</code>을 반환하는 확장 메서드입니다. 내부적으로 <strong>yield return</strong>을 사용한 이터레이터 패턴으로 구현됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - Where의 단순화된 내부 구현</div>
+                        <pre><code>public static IEnumerable&lt;T&gt; MyWhere&lt;T&gt;(
+    this IEnumerable&lt;T&gt; source,
+    Func&lt;T, bool&gt; predicate)
+{
+    foreach (var item in source)
+    {
+        if (predicate(item))
+            yield return item; // 조건 만족 시 하나씩 반환
+    }
+}
+
+public static IEnumerable&lt;TResult&gt; MySelect&lt;T, TResult&gt;(
+    this IEnumerable&lt;T&gt; source,
+    Func&lt;T, TResult&gt; selector)
+{
+    foreach (var item in source)
+    {
+        yield return selector(item); // 변환된 값을 하나씩 반환
+    }
+}</code></pre>
+                    </div>
+                    <p class="highlight">yield return은 값을 하나 반환하고 현재 위치를 기억한 채 "일시 정지"합니다. 다음 요소가 요청될 때 이어서 실행됩니다. async/await처럼 상태 머신으로 변환됩니다.</p>
+                </div>
+
+                <div class="q">LINQ 체이닝은 어떻게 파이프라인이 되나요?</div>
+                <div class="a">
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">소스 데이터</div>
+                                <div class="flow-box__items">[1, 2, 3, 4, 5, 6, 7, 8]</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Where(n > 3)</div>
+                                <div class="flow-box__items">필터: [4, 5, 6, 7, 8]</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Select(n * 2)</div>
+                                <div class="flow-box__items">변환: [8, 10, 12, 14, 16]</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Take(3)</div>
+                                <div class="flow-box__items">제한: [8, 10, 12]</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">중요: 중간 배열이 생성되지 않습니다! 요소가 하나씩 파이프라인을 통과합니다. Take(3)이 3개를 받으면 나머지 요소는 아예 처리하지 않습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 게임에서의 LINQ 성능 함정</h2>
+            <div class="conversation">
+                <div class="q">게임에서 LINQ를 쓰면 안 된다는 말을 들었는데, 사실인가요?</div>
+                <div class="a">
+                    <p>"LINQ를 절대 쓰지 마라"는 과장이지만, <strong>매 프레임 호출되는 핫 패스(Hot Path)</strong>에서는 주의가 필요합니다. LINQ의 주요 성능 비용을 분석해봅시다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - LINQ의 숨겨진 할당들</div>
+                        <pre><code>// 1. 이터레이터 객체 할당
+var query = list.Where(x => x > 0); // WhereListIterator 객체 힙 할당
+
+// 2. 람다 클로저 할당
+int threshold = 50;
+var result = list.Where(x => x > threshold); // 클로저 객체 힙 할당
+
+// 3. ToList/ToArray의 내부 버퍼 확장
+var array = query.ToArray(); // 크기를 모르므로 버퍼 확장 발생
+
+// 4. OrderBy의 임시 배열
+var sorted = list.OrderBy(x => x.Score); // 정렬용 임시 버퍼 할당
+
+// 5. 매 프레임 반복 시 누적 할당
+void Update() // 60fps = 초당 60회
+{
+    // 매 프레임 이터레이터 + 람다 할당!
+    var nearest = enemies
+        .Where(e => e.IsAlive)           // 할당 1
+        .OrderBy(e => e.Distance)         // 할당 2
+        .FirstOrDefault();                // 열거 시작
+}</code></pre>
+                    </div>
+                    <p class="warning">60fps 게임에서 매 프레임 LINQ를 사용하면 초당 수백 개의 작은 객체가 힙에 할당되어 GC 스파이크를 유발합니다.</p>
+                </div>
+
+                <div class="q">그러면 게임에서는 LINQ를 어떻게 써야 하나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>상황</th>
+                                <th>LINQ 사용</th>
+                                <th>대안</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>초기화, 로딩</td>
+                                <td>OK</td>
+                                <td>-</td>
+                            </tr>
+                            <tr>
+                                <td>에디터 도구</td>
+                                <td>OK</td>
+                                <td>-</td>
+                            </tr>
+                            <tr>
+                                <td>이벤트 핸들러 (비빈번)</td>
+                                <td>OK</td>
+                                <td>-</td>
+                            </tr>
+                            <tr>
+                                <td>Update (매 프레임)</td>
+                                <td>지양</td>
+                                <td>for 루프, 캐싱</td>
+                            </tr>
+                            <tr>
+                                <td>대량 데이터 처리</td>
+                                <td>지양</td>
+                                <td>Span, 수동 루프</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">C# - 게임 최적화 패턴</div>
+                        <pre><code>// BAD: 매 프레임 LINQ
+void Update()
+{
+    var target = enemies.Where(e => e.IsAlive)
+                        .OrderBy(e => Distance(e))
+                        .FirstOrDefault();
+}
+
+// GOOD: for 루프 + 미리 할당된 변수
+private Monster nearestTarget;
+void Update()
+{
+    float minDist = float.MaxValue;
+    nearestTarget = null;
+
+    for (int i = 0; i &lt; enemies.Count; i++)
+    {
+        if (!enemies[i].IsAlive) continue;
+        float dist = Distance(enemies[i]);
+        if (dist &lt; minDist)
+        {
+            minDist = dist;
+            nearestTarget = enemies[i];
+        }
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 유용한 LINQ 패턴 모음</h2>
+            <div class="conversation">
+                <div class="q">게임 개발에서 자주 쓰이는 LINQ 패턴은 어떤 것들이 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 실전 LINQ 패턴</div>
+                        <pre><code>// 1. 그룹화: 몬스터를 타입별로 분류
+var grouped = monsters.GroupBy(m => m.Type)
+    .ToDictionary(g => g.Key, g => g.ToList());
+
+// 2. SelectMany: 중첩 컬렉션 평탄화
+var allItems = players.SelectMany(p => p.Inventory).ToList();
+
+// 3. Aggregate: 총 데미지 계산
+float totalDmg = hits.Aggregate(0f, (sum, h) => sum + h.Damage);
+
+// 4. Zip: 두 리스트 병합
+var pairs = names.Zip(scores, (name, score) => new { name, score });
+
+// 5. Distinct + 커스텀 비교
+var uniqueTypes = items.Select(i => i.Type).Distinct();
+
+// 6. Chunk (.NET 6+): 배치 처리
+foreach (var batch in allPlayers.Chunk(100))
+{
+    await SaveBatchAsync(batch);
+}</code></pre>
+                    </div>
+                    <p class="key-point">초기화나 도구 코드에서는 LINQ의 표현력을 적극 활용하고, 런타임 핫 패스에서만 for 루프로 대체하는 것이 실용적인 전략입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: IEnumerable vs IQueryable</h2>
+            <div class="conversation">
+                <div class="q">IEnumerable과 IQueryable은 어떻게 다른가요?</div>
+                <div class="a">
+                    <p>둘 다 LINQ를 지원하지만, 실행 위치가 다릅니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>IEnumerable&lt;T&gt;</th>
+                                <th>IQueryable&lt;T&gt;</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>실행 위치</td>
+                                <td>메모리 (C# 코드)</td>
+                                <td>외부 (DB, API 등)</td>
+                            </tr>
+                            <tr>
+                                <td>LINQ 변환</td>
+                                <td>delegate 실행</td>
+                                <td>Expression Tree로 변환</td>
+                            </tr>
+                            <tr>
+                                <td>필터링</td>
+                                <td>전체 로드 후 필터</td>
+                                <td>쿼리 자체에 조건 포함</td>
+                            </tr>
+                            <tr>
+                                <td>게임 서버 용도</td>
+                                <td>인메모리 데이터</td>
+                                <td>Entity Framework, DB 쿼리</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">C# - 게임 서버 DB 쿼리 예시</div>
+                        <pre><code>// IQueryable: WHERE 조건이 SQL로 변환됨
+var topPlayers = dbContext.Players          // IQueryable
+    .Where(p => p.Level >= 50)              // SQL: WHERE Level >= 50
+    .OrderByDescending(p => p.Score)        // SQL: ORDER BY Score DESC
+    .Take(10)                               // SQL: TOP 10
+    .ToListAsync();                         // 이 시점에 SQL 실행
+
+// IEnumerable: 모든 데이터를 먼저 로드 (비효율!)
+var topPlayers = dbContext.Players
+    .AsEnumerable()                         // 여기서 전체 로드!
+    .Where(p => p.Level >= 50)              // C#에서 필터
+    .OrderByDescending(p => p.Score)
+    .Take(10)
+    .ToList();</code></pre>
+                    </div>
+                    <p class="warning">게임 서버에서 DB 쿼리를 IEnumerable로 처리하면 수만 건의 데이터를 메모리에 다 올린 후 필터링합니다. 반드시 IQueryable 상태에서 조건을 걸어야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Summary -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>LINQ</strong>는 데이터 질의를 선언적으로 표현하며, "어떻게" 대신 "무엇을" 코드로 드러낸다</li>
+                <li><strong>지연 평가</strong>: Where, Select 등은 쿼리를 정의만 하고, ToList/foreach 시 실행된다</li>
+                <li>같은 쿼리를 <strong>두 번 열거하면 두 번 실행</strong>되므로, 재사용 시 ToList()로 캐싱한다</li>
+                <li>매 프레임 LINQ는 <strong>이터레이터/클로저 힙 할당</strong>으로 GC 압박 &mdash; for 루프로 대체한다</li>
+                <li>DB 쿼리는 반드시 <strong>IQueryable</strong> 상태에서 조건을 걸어 서버 사이드 필터링을 활용한다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

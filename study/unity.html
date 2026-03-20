@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unity Study | KMH Portfolio</title>
+    <meta name="description" content="Unity 학습 기록">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+</head>
+<body>
+    <header class="header" id="header">
+        <nav class="nav container">
+            <a href="../index.html" class="nav__logo"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></a>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item"><a href="../index.html#about" class="nav__link">About</a></li>
+                <li class="nav__item"><a href="../index.html#projects" class="nav__link">Projects</a></li>
+                <li class="nav__item"><a href="../index.html#skills" class="nav__link">Skills</a></li>
+                <li class="nav__item"><a href="../study.html" class="nav__link active">Study</a></li>
+                <li class="nav__item"><a href="../index.html#contact" class="nav__link">Contact</a></li>
+            </ul>
+            <button class="nav__toggle" id="nav-toggle"><span></span><span></span><span></span></button>
+        </nav>
+    </header>
+    <main class="main">
+        <section class="study-detail section">
+            <div class="container">
+                <nav class="breadcrumb"><a href="../study.html">Study</a><span>/</span><span>Unity</span></nav>
+                <div class="study-detail__header">
+                    <span class="study-detail__icon">🎮</span>
+                    <h1 class="study-detail__title">Unity</h1>
+                </div>
+                <p class="study-detail__desc">Unity 엔진 심화 학습 기록</p>
+                <div class="study-detail__content">
+                    <div class="study-topics">
+                        <h2 class="study-topics__title">학습 주제 목록</h2>
+                        <ul class="study-topics__list">
+                            <li class="study-topic">
+                                <a href="unity/01_monobehaviour_lifecycle/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">01</span>
+                                    <span class="study-topic__name">MonoBehaviour 생명주기 완벽 정리</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/02_scriptable_object/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">02</span>
+                                    <span class="study-topic__name">ScriptableObject 활용 패턴</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/03_job_system/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">03</span>
+                                    <span class="study-topic__name">Job System과 Burst Compiler</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/04_addressables/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">04</span>
+                                    <span class="study-topic__name">Addressables 에셋 관리 시스템</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/05_dots_ecs/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">05</span>
+                                    <span class="study-topic__name">DOTS / ECS 아키텍처</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/06_custom_editor/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">06</span>
+                                    <span class="study-topic__name">커스텀 에디터와 Inspector 도구</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/07_object_pooling/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">07</span>
+                                    <span class="study-topic__name">오브젝트 풀링 패턴</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/08_shader_graph/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">08</span>
+                                    <span class="study-topic__name">Shader Graph / URP 심화</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/09_navmesh_ai/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">09</span>
+                                    <span class="study-topic__name">NavMesh와 AI 네비게이션</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/10_netcode/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">10</span>
+                                    <span class="study-topic__name">Netcode for GameObjects</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/11_coroutine_unitask/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">11</span>
+                                    <span class="study-topic__name">Coroutine vs UniTask</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/12_profiling/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">12</span>
+                                    <span class="study-topic__name">프로파일링과 최적화 기법</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/13_animation_system/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">13</span>
+                                    <span class="study-topic__name">Animation System 심화 (Playables)</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/14_physics_optimization/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">14</span>
+                                    <span class="study-topic__name">Physics 최적화 전략</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/15_ui_system/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">15</span>
+                                    <span class="study-topic__name">UI Toolkit vs UGUI</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="unity/16_testing/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">16</span>
+                                    <span class="study-topic__name">Unity Test Framework</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <footer class="footer"><div class="container"><div class="footer__content"><p class="footer__name"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></p><p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p></div></div></footer>
+    <script src="../js/study.js"></script>
+</body>
+</html>

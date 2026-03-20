@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Garbage Collector | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>보이지 않는 청소부의 비밀</h1>
+            <p class="subtitle">Garbage Collector의 세대별 수집과 게임 최적화</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 왜 GC가 필요한가</h2>
+            <div class="conversation">
+                <div class="q">C++은 직접 메모리를 관리하는데, C#은 왜 GC를 쓰나요?</div>
+                <div class="a">
+                    <p>C/C++에서 <code>malloc/free</code>나 <code>new/delete</code>를 잘못 사용하면 <strong>메모리 누수</strong>(해제 안 함), <strong>댕글링 포인터</strong>(이미 해제된 메모리 접근), <strong>이중 해제</strong>(같은 메모리를 두 번 해제) 같은 치명적 버그가 발생합니다.</p>
+                    <p>GC는 이 모든 문제를 자동으로 해결합니다. 대신 <strong>언제 청소할지를 프로그래머가 직접 제어할 수 없다</strong>는 트레이드오프가 있습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>C++의 메모리 관리는 <strong>자취방 청소</strong>와 같습니다. 직접 쓰레기를 분류하고 내다 버려야 합니다. 깜빡하면 방이 쓰레기장이 되고, 잘못 버리면 필요한 것도 날아갑니다.</p>
+                        <p>C#의 GC는 <strong>청소 아줌마</strong>와 같습니다. 알아서 정리해주지만, 청소 시간은 아줌마가 정합니다. 중요한 회의(게임 플레이) 중에 청소기를 돌리면... 프레임이 뚝뚝 끊깁니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 세대별 GC(Generational GC)</h2>
+            <div class="conversation">
+                <div class="q">.NET의 GC는 어떤 전략으로 동작하나요?</div>
+                <div class="a">
+                    <p>.NET GC는 <strong>"대부분의 객체는 금방 죽는다"</strong>는 세대별 가설(Generational Hypothesis)에 기반합니다. 객체를 3개 세대로 분류합니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Gen 0 (새내기)</div>
+                                <div class="flow-box__items">갓 생성된 객체<br>수집 빈도: 매우 잦음<br>크기: ~256KB</div>
+                            </div>
+                            <div class="flow-arrow">생존 &rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Gen 1 (버퍼)</div>
+                                <div class="flow-box__items">Gen 0에서 살아남은 객체<br>수집 빈도: 중간<br>Gen 0과 Gen 2 사이 완충</div>
+                            </div>
+                            <div class="flow-arrow">생존 &rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Gen 2 (장수)</div>
+                                <div class="flow-box__items">오래 살아남은 객체<br>수집 빈도: 드묾 (Full GC)<br>static, 캐시 등</div>
+                            </div>
+                        </div>
+                    </div>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>세대</th>
+                                <th>수집 범위</th>
+                                <th>소요 시간</th>
+                                <th>게임 영향</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Gen 0</td>
+                                <td>Gen 0만</td>
+                                <td>&lt; 1ms</td>
+                                <td>거의 없음</td>
+                            </tr>
+                            <tr>
+                                <td>Gen 1</td>
+                                <td>Gen 0 + Gen 1</td>
+                                <td>수 ms</td>
+                                <td>약간</td>
+                            </tr>
+                            <tr>
+                                <td>Gen 2 (Full GC)</td>
+                                <td>전체 힙</td>
+                                <td>10~100ms+</td>
+                                <td>프레임 드롭!</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">Gen 2 Full GC가 발생하면 16ms(60fps) 프레임 버짓을 훌쩍 넘기는 정지(STW, Stop The World)가 발생합니다. 게임에서 GC 최적화의 핵심은 Gen 2 수집을 최소화하는 것입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: Mark-Sweep-Compact 알고리즘</h2>
+            <div class="conversation">
+                <div class="q">GC는 어떤 객체를 살리고 어떤 객체를 죽이나요?</div>
+                <div class="a">
+                    <p>.NET GC는 3단계로 동작합니다.</p>
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">1단계: Mark</div>
+                            <div class="pipeline-bar pb-gbuffer">
+                                <span>루트(스택, static, CPU 레지스터)에서 시작</span>
+                                <span>참조 그래프를 따라 도달 가능한 객체를 표시</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">2단계: Sweep</div>
+                            <div class="pipeline-bar pb-shadow">
+                                <span>표시되지 않은 객체 = 쓰레기</span>
+                                <span>해당 메모리 영역을 해제 가능으로 표시</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">3단계: Compact</div>
+                            <div class="pipeline-bar pb-light">
+                                <span>살아남은 객체를 메모리 앞쪽으로 밀착</span>
+                                <span>단편화 제거, 연속 메모리 확보</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C# - GC 루트의 종류</div>
+                        <pre><code>class GameWorld
+{
+    // 1. static 필드 -> GC 루트
+    static GameManager instance;
+
+    void Process()
+    {
+        // 2. 스택의 지역 변수 -> GC 루트
+        Monster target = FindTarget();
+
+        // 3. CPU 레지스터에 로드된 참조 -> GC 루트
+
+        // target에서 참조하는 모든 객체도 "도달 가능"
+        // target.Weapon -> target.Weapon.Effect -> ...
+
+        // 아무도 참조하지 않는 객체 = 수거 대상
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">GC는 "참조 카운팅"이 아닌 "도달 가능성(Reachability)"으로 생사를 판단합니다. 순환 참조가 있어도 루트에서 도달 불가능하면 모두 수거됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: LOH(Large Object Heap)의 특별한 규칙</h2>
+            <div class="conversation">
+                <div class="q">큰 객체는 GC에서 다르게 취급되나요?</div>
+                <div class="a">
+                    <p><strong>85,000바이트 이상</strong>의 객체는 일반 힙이 아닌 <strong>LOH(Large Object Heap)</strong>에 할당됩니다. LOH는 특별한 규칙을 따릅니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>SOH (Small Object Heap)</th>
+                                <th>LOH (Large Object Heap)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>객체 크기</td>
+                                <td>&lt; 85,000 바이트</td>
+                                <td>&gt;= 85,000 바이트</td>
+                            </tr>
+                            <tr>
+                                <td>Compact</td>
+                                <td>자동 압축</td>
+                                <td>기본적으로 압축 안 함</td>
+                            </tr>
+                            <tr>
+                                <td>수집 시점</td>
+                                <td>Gen 0/1/2</td>
+                                <td>Gen 2 Full GC 시에만</td>
+                            </tr>
+                            <tr>
+                                <td>단편화</td>
+                                <td>압축으로 해소</td>
+                                <td>심각한 단편화 가능</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">C# - LOH에 할당되는 흔한 경우</div>
+                        <pre><code>// 85,000 바이트 = 약 21,250개의 int (4바이트 * 21,250)
+int[] largeArray = new int[21250]; // LOH 할당!
+
+// 큰 문자열
+string bigLog = new string('A', 85000); // LOH 할당!
+
+// 큰 byte 버퍼
+byte[] buffer = new byte[100000]; // LOH 할당!
+
+// 게임에서 흔한 LOH 할당
+Texture2D bigTexture;    // 픽셀 데이터가 큰 경우
+Mesh largeMesh;          // 버텍스 배열이 큰 경우</code></pre>
+                    </div>
+                    <p class="warning">LOH는 압축이 되지 않아 메모리 단편화가 누적됩니다. 큰 배열을 자주 할당/해제하면 사용 가능한 메모리가 있는데도 OutOfMemoryException이 발생할 수 있습니다.</p>
+                    <p class="key-point">해결책: 큰 배열은 <strong>ArrayPool&lt;T&gt;.Shared</strong>로 풀링하여 재사용합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - ArrayPool로 LOH 할당 회피</div>
+                        <pre><code>using System.Buffers;
+
+// BAD: 매번 새 배열 할당 (LOH)
+byte[] buffer = new byte[100000];
+// ... 사용 ...
+// GC가 수거할 때까지 대기
+
+// GOOD: 풀에서 빌려쓰고 반납
+byte[] buffer = ArrayPool&lt;byte&gt;.Shared.Rent(100000);
+try
+{
+    // ... 사용 ...
+}
+finally
+{
+    ArrayPool&lt;byte&gt;.Shared.Return(buffer); // 풀에 반납
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 게임에서 GC 회피 전략</h2>
+            <div class="conversation">
+                <div class="q">게임 개발에서 GC 부담을 줄이는 실전 기법은?</div>
+                <div class="a">
+                    <p>핵심 원칙은 단순합니다: <strong>힙 할당을 줄이면 GC가 일할 필요가 없다.</strong></p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 1. 오브젝트 풀링</div>
+                        <pre><code>public class ObjectPool&lt;T&gt; where T : class, new()
+{
+    private readonly Stack&lt;T&gt; pool = new();
+
+    public T Rent()
+    {
+        return pool.Count > 0 ? pool.Pop() : new T();
+    }
+
+    public void Return(T obj)
+    {
+        pool.Push(obj); // GC 대신 풀에 반납
+    }
+}
+
+// 총알 풀링
+ObjectPool&lt;Bullet&gt; bulletPool = new();
+
+void Fire()
+{
+    Bullet b = bulletPool.Rent();  // new 대신 풀에서 가져옴
+    b.Initialize(position, direction);
+}
+
+void OnBulletHit(Bullet b)
+{
+    b.Deactivate();
+    bulletPool.Return(b);  // 파괴 대신 풀에 반납
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 2. StringBuilder로 문자열 할당 제거</div>
+                        <pre><code>// BAD: 매 프레임 문자열 연결 -> 매번 새 string 할당
+void UpdateUI()
+{
+    string text = "HP: " + hp + " / " + maxHp; // 3번 할당!
+    label.text = text;
+}
+
+// GOOD: StringBuilder 재사용
+private StringBuilder sb = new StringBuilder(64);
+void UpdateUI()
+{
+    sb.Clear();
+    sb.Append("HP: ").Append(hp).Append(" / ").Append(maxHp);
+    label.text = sb.ToString(); // 1번 할당
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 3. struct와 Span으로 힙 할당 제거</div>
+                        <pre><code>// BAD: class로 임시 데이터 -> 힙 할당
+class DamageInfo { public int Damage; public int Type; }
+DamageInfo CalcDamage() => new DamageInfo { Damage = 50, Type = 1 };
+
+// GOOD: struct로 임시 데이터 -> 스택 할당
+struct DamageInfo { public int Damage; public int Type; }
+DamageInfo CalcDamage() => new DamageInfo { Damage = 50, Type = 1 };
+
+// GOOD: Span으로 배열 슬라이싱 (할당 없음)
+void ProcessBuffer(byte[] data)
+{
+    Span&lt;byte&gt; header = data.AsSpan(0, 4);   // 복사 없음!
+    Span&lt;byte&gt; payload = data.AsSpan(4);      // 복사 없음!
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 4. 클로저/람다 캡처 회피</div>
+                        <pre><code>// BAD: 지역 변수 캡처 -> 클로저 클래스 힙 할당
+void Update()
+{
+    float range = attackRange;
+    var targets = enemies.FindAll(e => e.Dist &lt; range); // 클로저 할당!
+}
+
+// GOOD: 캡처 없는 정적 메서드 또는 for 루프
+private List&lt;Enemy&gt; tempTargets = new();
+void Update()
+{
+    tempTargets.Clear();
+    for (int i = 0; i &lt; enemies.Count; i++)
+    {
+        if (enemies[i].Dist &lt; attackRange)
+            tempTargets.Add(enemies[i]);
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: GC.Collect와 프로파일링</h2>
+            <div class="conversation">
+                <div class="q">GC.Collect()를 직접 호출해도 되나요?</div>
+                <div class="a">
+                    <p>일반적으로는 <strong>호출하지 않는 것이 좋습니다</strong>. GC가 자체적으로 최적의 타이밍을 판단하기 때문입니다. 하지만 게임에서는 전략적으로 사용하는 경우가 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 전략적 GC.Collect 사용</div>
+                        <pre><code>// 씬 전환 시 (로딩 화면 중)
+async Task LoadSceneAsync(string sceneName)
+{
+    ShowLoadingScreen();
+
+    // 이전 씬 리소스 해제
+    UnloadCurrentScene();
+
+    // 로딩 화면 중 GC 수행 (플레이어가 기다리는 중이라 OK)
+    GC.Collect();
+    GC.WaitForPendingFinalizers();
+    GC.Collect(); // Finalizer 후 2차 수집
+
+    // 새 씬 로드
+    await LoadAssetsAsync(sceneName);
+
+    HideLoadingScreen();
+    // 이후 플레이 중에는 GC가 덜 발생함
+}</code></pre>
+                    </div>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>GC.Collect() 적절한 시점</th>
+                                <th>절대 금지 시점</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>로딩 화면 중</td>
+                                <td>게임플레이 중</td>
+                            </tr>
+                            <tr>
+                                <td>씬 전환 시</td>
+                                <td>전투 중</td>
+                            </tr>
+                            <tr>
+                                <td>메뉴/로비 진입 시</td>
+                                <td>애니메이션 재생 중</td>
+                            </tr>
+                            <tr>
+                                <td>매치 시작 전 대기 중</td>
+                                <td>물리 시뮬레이션 중</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">GC 문제를 어떻게 찾아내나요?</div>
+                <div class="a">
+                    <p>프로파일링 도구로 힙 할당량과 GC 빈도를 모니터링합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - GC 모니터링 코드</div>
+                        <pre><code>// 간단한 GC 모니터
+void LogGCStats()
+{
+    Console.WriteLine($"Gen 0 수집 횟수: {GC.CollectionCount(0)}");
+    Console.WriteLine($"Gen 1 수집 횟수: {GC.CollectionCount(1)}");
+    Console.WriteLine($"Gen 2 수집 횟수: {GC.CollectionCount(2)}");
+    Console.WriteLine($"총 힙 메모리: {GC.GetTotalMemory(false) / 1024}KB");
+    Console.WriteLine($"GC 지연 모드: {GCSettings.LatencyMode}");
+}
+
+// Unity에서는 Profiler 사용
+// Window > Analysis > Profiler > CPU Usage > GC Alloc 컬럼 확인
+
+// .NET에서 GC 이벤트 구독
+GC.RegisterForFullGCNotification(10, 10);
+// ETW / dotnet-counters / dotnet-trace 도구 활용</code></pre>
+                    </div>
+                    <p class="key-point">Unity Profiler에서 "GC Alloc" 컬럼이 0이 아닌 함수를 찾아서 할당을 제거하세요. Deep Profile 모드를 사용하면 모든 함수의 할당량을 볼 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Summary -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>.NET GC는 <strong>세대별 수집</strong>(Gen 0/1/2)으로 동작하며, Gen 2 Full GC가 가장 비용이 크다</li>
+                <li><strong>Mark-Sweep-Compact</strong> 알고리즘으로 도달 불가능한 객체를 식별하고 메모리를 정리한다</li>
+                <li>85KB 이상 객체는 <strong>LOH</strong>에 할당되며, 압축이 안 되어 단편화가 누적된다</li>
+                <li>게임 GC 최적화 핵심: <strong>오브젝트 풀링</strong>, struct 사용, StringBuilder, <strong>클로저 회피</strong>, ArrayPool</li>
+                <li><code>GC.Collect()</code>는 로딩/씬 전환 시에만 전략적으로 사용하고, 게임플레이 중에는 절대 호출하지 않는다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

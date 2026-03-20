@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
 
         <header class="content-header">
             <h1>스킬 시스템의 정석을 찾아서</h1>
@@ -41,27 +41,33 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-┌─────────────────────────────────────────────────────────┐
-│                 Ability System Component                │
-│                    (능력 관리자)                        │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │   Gameplay   │  │   Gameplay   │  │   Gameplay   │  │
-│  │   Ability    │  │   Effect     │  │   Attribute  │  │
-│  │  (실행 로직) │  │   (효과)     │  │   (스탯)     │  │
-│  └──────────────┘  └──────────────┘  └──────────────┘  │
-│           │                │                │          │
-│           └────────────────┼────────────────┘          │
-│                            ▼                           │
-│                   ┌──────────────┐                     │
-│                   │  Gameplay    │                     │
-│                   │    Cue       │                     │
-│                   │ (시각효과)   │                     │
-│                   └──────────────┘                     │
-└─────────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box flow-box--highlight" style="width:100%; text-align:center;">
+                        <div class="flow-box__title">Ability System Component</div>
+                        <div class="flow-box__items">
+                            <p>능력 관리자</p>
+                        </div>
+                        <div class="flow-row" style="margin-top:12px;">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Gameplay Ability</div>
+                                <div class="flow-box__items"><p>실행 로직</p></div>
+                            </div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Gameplay Effect</div>
+                                <div class="flow-box__items"><p>효과</p></div>
+                            </div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Gameplay Attribute</div>
+                                <div class="flow-box__items"><p>스탯</p></div>
+                            </div>
+                        </div>
+                        <div class="flow-arrow">▼</div>
+                        <div class="flow-box" style="margin:0 auto; max-width:200px;">
+                            <div class="flow-box__title">Gameplay Cue</div>
+                            <div class="flow-box__items"><p>시각효과</p></div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">GAS의 4가지 핵심 구성요소</p>
             </div>
 

@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"RAM 8GB인데 16GB 게임이 돌아가요?"</h1>
             <p class="subtitle">가상 메모리와 운영체제의 마법</p>
         </header>
@@ -28,30 +30,38 @@
                     <p class="highlight">물리 메모리와 가상 메모리는 별개입니다. OS가 둘을 매핑해줍니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                      가상 메모리 개념                                │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Process A (가상)         Process B (가상)         Physical RAM    │
-│   ┌─────────────┐         ┌─────────────┐         ┌─────────────┐  │
-│   │ 0x00000000  │─────┐   │ 0x00000000  │──────┐  │ 0x00001000  │  │
-│   │    Code     │     │   │    Code     │      │  ├─────────────┤  │
-│   ├─────────────┤     └──▶│─────────────┤──────┼─▶│ Process A   │  │
-│   │ 0x00400000  │         │ 0x00400000  │      │  ├─────────────┤  │
-│   │    Data     │─────────┼─────────────┼──────┼─▶│ Process B   │  │
-│   ├─────────────┤         ├─────────────┤      │  ├─────────────┤  │
-│   │ 0x7FFFFFFF  │         │ 0x7FFFFFFF  │      └─▶│ Process B   │  │
-│   │   Stack     │         │   Stack     │         ├─────────────┤  │
-│   └─────────────┘         └─────────────┘         │   (Free)    │  │
-│                                                   └─────────────┘  │
-│                                                                     │
-│   - 각 프로세스는 동일한 가상 주소 체계 사용                        │
-│   - MMU(Memory Management Unit)가 실시간 변환                       │
-│   - 프로세스 간 메모리 격리 (보안)                                  │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Process A (가상)</div>
+                                    <div class="flow-box__items">
+                                        0x00000000 - Code<br>
+                                        0x00400000 - Data<br>
+                                        0x7FFFFFFF - Stack
+                                    </div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Physical RAM</div>
+                                    <div class="flow-box__items">
+                                        0x00001000<br>
+                                        Process A 영역<br>
+                                        Process B 영역<br>
+                                        (Free)
+                                    </div>
+                                </div>
+                                <div class="flow-arrow">&larr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Process B (가상)</div>
+                                    <div class="flow-box__items">
+                                        0x00000000 - Code<br>
+                                        0x00400000 - Data<br>
+                                        0x7FFFFFFF - Stack
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">각 프로세스는 동일한 가상 주소 체계 사용 / MMU가 실시간 변환 / 프로세스 간 메모리 격리 (보안)</p>
                     </div>
                 </div>
 
@@ -100,32 +110,45 @@
                     <p><strong>페이지 테이블</strong>을 통해 변환됩니다. 보통 4KB 단위입니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                      주소 변환 과정 (4KB 페이지)                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   가상 주소 (64비트 예시: 0x00007FFF12345ABC)                        │
-│   ┌──────────────────────────────────────────────────────────────┐ │
-│   │ 사용 안 함 │  PML4  │  PDPT  │   PD   │   PT   │  Offset  │ │
-│   │   16bit   │  9bit  │  9bit  │  9bit  │  9bit  │   12bit  │ │
-│   └──────────────────────────────────────────────────────────────┘ │
-│                   │         │        │        │         │          │
-│                   ▼         ▼        ▼        ▼         ▼          │
-│               ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐              │
-│   CR3 ───────▶│ PML4  │─▶│ PDPT  │─▶│  PD   │─▶│  PT   │──┐        │
-│               │ Table │ │ Table │ │ Table │ │ Table │  │        │
-│               └───────┘ └───────┘ └───────┘ └───────┘  │        │
-│                                                        │        │
-│                                     Physical Frame ◀───┘        │
-│                                     Number (PFN)                │
-│                                           │                     │
-│                                           ▼                     │
-│   물리 주소 = (PFN × 4096) + Offset                              │
-│            = 0x0000000087654ABC                                  │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">가상 주소 (64비트: 0x00007FFF12345ABC)</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>사용 안 함 (16bit)</span><span>PML4 (9bit)</span><span>PDPT (9bit)</span><span>PD (9bit)</span><span>PT (9bit)</span><span>Offset (12bit)</span></div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">CR3</div>
+                                    <div class="flow-box__items">시작 레지스터</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">PML4 Table</div>
+                                    <div class="flow-box__items">9bit 인덱스</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">PDPT Table</div>
+                                    <div class="flow-box__items">9bit 인덱스</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">PD Table</div>
+                                    <div class="flow-box__items">9bit 인덱스</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">PT Table</div>
+                                    <div class="flow-box__items">9bit 인덱스</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Physical Frame (PFN)</div>
+                                    <div class="flow-box__items">물리 주소 = (PFN &times; 4096) + Offset<br>= 0x0000000087654ABC</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="code-block">
@@ -195,40 +218,45 @@ uint64_t physicalAddress = (physicalFrameNumber << PAGE_SHIFT) | offset;
                     <p><strong>스와핑(Swapping)</strong>: 당장 안 쓰는 메모리를 디스크에 저장합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                      페이지 폴트 처리 과정                           │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   1. CPU가 가상 주소 접근                                           │
-│      ┌─────────────┐                                               │
-│      │   CPU       │───▶ 가상 주소 0x12345000                      │
-│      └─────────────┘                                               │
-│             │                                                       │
-│             ▼                                                       │
-│   2. MMU가 페이지 테이블 조회                                       │
-│      ┌─────────────┐                                               │
-│      │ Page Table  │  Present bit = 0 (메모리에 없음!)             │
-│      │  Entry      │───────────────────────────────────────┐       │
-│      └─────────────┘                                       │       │
-│                                                            │       │
-│   3. Page Fault 예외 발생! ◀────────────────────────────────┘       │
-│      ┌─────────────┐                                               │
-│      │   OS        │                                               │
-│      │ Handler     │                                               │
-│      └─────────────┘                                               │
-│             │                                                       │
-│             ▼                                                       │
-│   4. 디스크에서 페이지 로드                                         │
-│      ┌─────────────┐     ┌─────────────┐     ┌─────────────┐      │
-│      │   Disk      │────▶│    RAM      │────▶│ Page Table  │      │
-│      │ (Swap)      │     │ (Free Frame)│     │ Update      │      │
-│      └─────────────┘     └─────────────┘     └─────────────┘      │
-│                                                                     │
-│   5. 명령어 재실행                                                  │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">1. CPU</div>
+                                    <div class="flow-box__items">가상 주소 0x12345000 접근</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">2. Page Table Entry</div>
+                                    <div class="flow-box__items">Present bit = 0<br>(메모리에 없음!)</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">3. Page Fault 예외!</div>
+                                    <div class="flow-box__items">OS Handler 호출</div>
+                                </div>
+                            </div>
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">4. Disk (Swap)</div>
+                                    <div class="flow-box__items">페이지 로드</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">RAM (Free Frame)</div>
+                                    <div class="flow-box__items">페이지 적재</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Page Table Update</div>
+                                    <div class="flow-box__items">매핑 갱신</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">5. 명령어 재실행</div>
+                                    <div class="flow-box__items">정상 접근 완료</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <p class="warning">페이지 폴트는 매우 느립니다! RAM 접근: ~100ns, 디스크: ~10ms (10만배 차이)</p>
@@ -296,36 +324,25 @@ munmap(buffer, size);</code></pre>
                     <p>시스템 콜(brk/mmap)을 직접 호출하지 않고 <strong>힙 관리자</strong>를 통합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                      메모리 할당 계층                                │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Application                                                       │
-│        │                                                            │
-│        │ new / malloc                                               │
-│        ▼                                                            │
-│   ┌─────────────────────────────────────────────┐                  │
-│   │            Heap Allocator                    │                  │
-│   │  (ptmalloc, jemalloc, tcmalloc, mimalloc)   │                  │
-│   │                                              │                  │
-│   │  ┌─────────────────────────────────────┐    │                  │
-│   │  │    Free Lists (크기별 빈 블록 관리)   │    │                  │
-│   │  │  ┌────┬────┬────┬────┬────┐         │    │                  │
-│   │  │  │16B │32B │64B │128B│256B│ ...     │    │                  │
-│   │  │  └────┴────┴────┴────┴────┘         │    │                  │
-│   │  └─────────────────────────────────────┘    │                  │
-│   └─────────────────────────────────────────────┘                  │
-│        │                                                            │
-│        │ 부족하면 시스템 콜                                          │
-│        ▼                                                            │
-│   ┌─────────────────────────────────────────────┐                  │
-│   │              OS Kernel                       │                  │
-│   │    brk() - 힙 확장    mmap() - 대용량 할당   │                  │
-│   └─────────────────────────────────────────────┘                  │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Application</div>
+                                    <div class="flow-box__items">new / malloc</div>
+                                </div>
+                                <div class="flow-arrow">&darr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Heap Allocator</div>
+                                    <div class="flow-box__items">ptmalloc / jemalloc / tcmalloc / mimalloc<br>Free Lists: 16B, 32B, 64B, 128B, 256B ...</div>
+                                </div>
+                                <div class="flow-arrow">&darr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">OS Kernel</div>
+                                    <div class="flow-box__items">brk() - 힙 확장<br>mmap() - 대용량 할당</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">부족하면 시스템 콜을 통해 OS에 메모리 요청</p>
                     </div>
                 </div>
 
@@ -446,30 +463,17 @@ void GameLoop() {
                     <p><strong>메모리 단편화</strong> 때문입니다. 총 여유 공간은 있지만 연속되지 않습니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                      메모리 단편화                                   │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   초기 상태:                                                        │
-│   ┌──────────────────────────────────────────────────────────────┐ │
-│   │                    전체 사용 가능                             │ │
-│   └──────────────────────────────────────────────────────────────┘ │
-│                                                                     │
-│   시간 경과 후 (할당/해제 반복):                                    │
-│   ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐ │
-│   │ A │   │ B │   │ C │   │ D │   │ E │   │ F │   │ G │   │ H │ │
-│   └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘ │
-│       ↑       ↑       ↑       ↑       ↑       ↑       ↑           │
-│      Free    Free    Free    Free    Free    Free    Free         │
-│                                                                     │
-│   문제: 100KB 연속 공간 필요한데, 각 빈 공간은 50KB씩...           │
-│                                                                     │
-│   외부 단편화: 빈 공간이 조각나서 큰 할당 불가                      │
-│   내부 단편화: 할당 단위보다 작은 요청 시 낭비                      │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">초기 상태</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>전체 사용 가능</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">시간 경과 후 (할당/해제 반복)</div>
+                                <div class="pipeline-bar pb-light"><span>A</span><span style="opacity:0.3">Free</span><span>B</span><span style="opacity:0.3">Free</span><span>C</span><span style="opacity:0.3">Free</span><span>D</span><span style="opacity:0.3">Free</span><span>E</span><span style="opacity:0.3">Free</span><span>F</span><span style="opacity:0.3">Free</span><span>G</span><span style="opacity:0.3">Free</span><span>H</span></div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">문제: 100KB 연속 공간 필요한데, 각 빈 공간은 50KB씩...<br>외부 단편화: 빈 공간이 조각나서 큰 할당 불가 / 내부 단편화: 할당 단위보다 작은 요청 시 낭비</p>
                     </div>
                 </div>
 

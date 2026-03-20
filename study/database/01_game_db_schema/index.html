@@ -8,9 +8,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../database.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../database.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>캐릭터 데이터를 어떻게 저장할까?</h1>
             <p class="subtitle">게임 데이터베이스 스키마 설계 패턴과 Best Practice</p>
         </header>
@@ -22,55 +24,38 @@
                 <div class="a">
                     <p>게임 DB는 <strong>높은 동시성, 빈번한 업데이트, 복잡한 관계</strong>가 특징입니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-게임 DB의 특징:
-
-┌─────────────────────────────────────────────────────────────┐
-│                      게임 데이터 특성                         │
-├──────────────────┬──────────────────────────────────────────┤
-│ 동시성 높음       │ 수천 명이 동시에 데이터 읽기/쓰기         │
-├──────────────────┼──────────────────────────────────────────┤
-│ 쓰기 빈번        │ 위치, HP, 경험치 등 초당 수십 회 업데이트 │
-├──────────────────┼──────────────────────────────────────────┤
-│ 실시간 응답 필요  │ 100ms 이상 지연되면 플레이어 체감         │
-├──────────────────┼──────────────────────────────────────────┤
-│ 데이터 무결성    │ 아이템 복사, 재화 음수 등 버그 치명적     │
-├──────────────────┼──────────────────────────────────────────┤
-│ 스키마 유연성    │ 패치마다 새 필드 추가, 아이템 속성 변경   │
-└──────────────────┴──────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>게임 데이터 특성</strong></p>
+                        <table class="compare-table">
+                            <thead>
+                                <tr><th>특성</th><th>설명</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>동시성 높음</td><td>수천 명이 동시에 데이터 읽기/쓰기</td></tr>
+                                <tr><td>쓰기 빈번</td><td>위치, HP, 경험치 등 초당 수십 회 업데이트</td></tr>
+                                <tr><td>실시간 응답 필요</td><td>100ms 이상 지연되면 플레이어 체감</td></tr>
+                                <tr><td>데이터 무결성</td><td>아이템 복사, 재화 음수 등 버그 치명적</td></tr>
+                                <tr><td>스키마 유연성</td><td>패치마다 새 필드 추가, 아이템 속성 변경</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
                 <div class="q">어떤 데이터를 저장해야 하나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-게임 데이터 분류:
-
-┌─────────────────────────────────────────────────────────────┐
-│                    정적 데이터 (Game Data)                   │
-│  읽기 전용, 서버 시작 시 로드, 클라이언트에도 동일 데이터     │
-├─────────────────────────────────────────────────────────────┤
-│  - 아이템 정의 (ItemTable)                                  │
-│  - 스킬 정보 (SkillTable)                                   │
-│  - 몬스터 스탯 (MonsterTable)                               │
-│  - 퀘스트 정보 (QuestTable)                                 │
-│  - 레벨업 테이블 (LevelTable)                               │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│                    동적 데이터 (User Data)                   │
-│  읽기/쓰기, 실시간 업데이트, DB에 영구 저장                  │
-├─────────────────────────────────────────────────────────────┤
-│  - 캐릭터 정보 (Character)                                  │
-│  - 인벤토리 (Inventory)                                     │
-│  - 퀘스트 진행 (QuestProgress)                              │
-│  - 친구/길드 (Social)                                       │
-│  - 업적 (Achievement)                                       │
-│  - 우편함 (Mail)                                            │
-└─────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>게임 데이터 분류</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">정적 데이터 (Game Data)</div>
+                                    <div class="flow-box__items">읽기 전용, 서버 시작 시 로드<br>ItemTable, SkillTable, MonsterTable<br>QuestTable, LevelTable</div>
+                                </div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">동적 데이터 (User Data)</div>
+                                    <div class="flow-box__items">읽기/쓰기, 실시간 업데이트, DB 영구 저장<br>Character, Inventory, QuestProgress<br>Social, Achievement, Mail</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -439,29 +424,25 @@ CREATE TABLE item_log (
                 <div class="a">
                     <p><strong>파티셔닝</strong>과 <strong>아카이빙</strong>으로 관리합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-로그 데이터 생명주기:
-
-┌───────────────────────────────────────────────────────────┐
-│                  Hot Data (최근 1주)                       │
-│                     Primary DB, SSD                        │
-│   빠른 조회 필요 (CS 대응, 실시간 분석)                     │
-└───────────────────────────────────────────────────────────┘
-                        │
-                        ▼ (1주 경과)
-┌───────────────────────────────────────────────────────────┐
-│                  Warm Data (최근 3개월)                    │
-│                   Secondary DB, HDD                        │
-│   가끔 조회 (분석, 조사)                                    │
-└───────────────────────────────────────────────────────────┘
-                        │
-                        ▼ (3개월 경과)
-┌───────────────────────────────────────────────────────────┐
-│                  Cold Data (이전 데이터)                   │
-│              압축 파일 (S3, 장기 보관소)                    │
-│   거의 안 봄 (법적 보관 의무용)                             │
-└───────────────────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>로그 데이터 생명주기</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-col">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Hot Data (최근 1주)</div>
+                                    <div class="flow-box__items">Primary DB, SSD<br>빠른 조회 필요 (CS 대응, 실시간 분석)</div>
+                                </div>
+                                <span class="flow-arrow-down">&#8595; 1주 경과</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Warm Data (최근 3개월)</div>
+                                    <div class="flow-box__items">Secondary DB, HDD<br>가끔 조회 (분석, 조사)</div>
+                                </div>
+                                <span class="flow-arrow-down">&#8595; 3개월 경과</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Cold Data (이전 데이터)</div>
+                                    <div class="flow-box__items">압축 파일 (S3, 장기 보관소)<br>거의 안 봄 (법적 보관 의무용)</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

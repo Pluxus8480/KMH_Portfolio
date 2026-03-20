@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
 
         <header class="content-header">
             <h1>폴리곤 수십억 개를 어떻게 렌더링할까?</h1>
@@ -47,32 +47,44 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-원본 메시 (수백만 폴리곤)
-        │
-        ▼
-┌───────────────────────────────────────┐
-│          클러스터 분할                │
-│  ┌──┐ ┌──┐ ┌──┐ ┌──┐ ┌──┐ ┌──┐      │
-│  │C1│ │C2│ │C3│ │C4│ │C5│ │C6│ ...  │
-│  └──┘ └──┘ └──┘ └──┘ └──┘ └──┘      │
-│    (각 클러스터 ~128 삼각형)         │
-└───────────────────────────────────────┘
-        │
-        ▼
-┌───────────────────────────────────────┐
-│           LOD 계층 생성               │
-│                                       │
-│   LOD 0: ████████████ (원본)         │
-│   LOD 1: ████████                    │
-│   LOD 2: ████                        │
-│   LOD 3: ██                          │
-│                                       │
-└───────────────────────────────────────┘
-        │
-        ▼
-    GPU 컬링 + 렌더링
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box">
+                        <div class="flow-box__title">원본 메시</div>
+                        <div class="flow-box__items"><p>수백만 폴리곤</p></div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-box">
+                        <div class="flow-box__title">클러스터 분할</div>
+                        <div class="flow-box__items">
+                            <div class="flow-row">
+                                <span class="flow-box" style="padding:4px 8px;">C1</span>
+                                <span class="flow-box" style="padding:4px 8px;">C2</span>
+                                <span class="flow-box" style="padding:4px 8px;">C3</span>
+                                <span class="flow-box" style="padding:4px 8px;">C4</span>
+                                <span class="flow-box" style="padding:4px 8px;">C5</span>
+                                <span class="flow-box" style="padding:4px 8px;">C6</span>
+                                <span>...</span>
+                            </div>
+                            <p>각 클러스터 ~128 삼각형</p>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-box">
+                        <div class="flow-box__title">LOD 계층 생성</div>
+                        <div class="flow-box__items">
+                            <div class="pipeline">
+                                <div class="pipeline-stage"><span class="pipeline-label">LOD 0</span><div class="pipeline-bar pb-gbuffer" style="width:100%;">원본</div></div>
+                                <div class="pipeline-stage"><span class="pipeline-label">LOD 1</span><div class="pipeline-bar pb-gbuffer" style="width:70%;"></div></div>
+                                <div class="pipeline-stage"><span class="pipeline-label">LOD 2</span><div class="pipeline-bar pb-gbuffer" style="width:40%;"></div></div>
+                                <div class="pipeline-stage"><span class="pipeline-label">LOD 3</span><div class="pipeline-bar pb-gbuffer" style="width:20%;"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-box flow-box--highlight">
+                        <div class="flow-box__title">GPU 컬링 + 렌더링</div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Nanite의 처리 파이프라인</p>
             </div>
         </section>

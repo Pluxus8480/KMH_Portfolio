@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>커스텀 에디터 도구 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+
+        <header class="content-header">
+            <h1>에디터를 내 입맛대로 바꾸기</h1>
+            <p class="subtitle">커스텀 에디터 도구로 워크플로우 혁신하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 왜 커스텀 에디터가 필요한가</h2>
+            <div class="conversation">
+                <div class="q">기본 Inspector로 충분하지 않나요?</div>
+                <div class="a">
+                    <p>프로그래머 혼자 작업한다면 충분할 수도 있습니다. 하지만 기획자, 아티스트, 레벨 디자이너가 함께 작업하는 팀에서는 이야기가 다릅니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>기본 Inspector는 만능 리모컨과 같습니다. 모든 버튼이 있지만, TV를 켜려고 30개 버튼 중 하나를 찾아야 합니다.</p>
+                        <p>커스텀 에디터는 "TV 켜기", "볼륨 조절" 같은 라벨이 붙은 전용 리모컨입니다. 필요한 기능만 직관적으로 노출합니다.</p>
+                    </div>
+
+                    <p class="highlight">좋은 커스텀 에디터는 팀 전체의 생산성을 올립니다. "이 값이 뭐예요?"라는 질문이 사라지고, 실수로 잘못된 값을 넣는 것을 방지합니다.</p>
+                </div>
+
+                <div class="q">어떤 종류의 커스텀 도구를 만들 수 있나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>도구</th><th>용도</th><th>위치</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>CustomEditor</strong></td><td>특정 컴포넌트의 Inspector 변경</td><td>Inspector 패널</td></tr>
+                            <tr><td><strong>PropertyDrawer</strong></td><td>특정 타입/어트리뷰트의 드로잉</td><td>Inspector 내 필드</td></tr>
+                            <tr><td><strong>EditorWindow</strong></td><td>독립 창 도구</td><td>별도 윈도우</td></tr>
+                            <tr><td><strong>Gizmos</strong></td><td>씬 뷰 시각화</td><td>Scene 뷰</td></tr>
+                            <tr><td><strong>Handles</strong></td><td>씬 뷰 상호작용 도구</td><td>Scene 뷰</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: CustomEditor — Inspector 재정의</h2>
+            <div class="conversation">
+                <div class="q">Inspector를 완전히 바꿀 수 있나요?</div>
+                <div class="a">
+                    <p>CustomEditor 어트리뷰트를 사용하면 특정 MonoBehaviour의 Inspector를 완전히 재정의할 수 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 대상 스크립트</div>
+                        <pre><code>public class EnemySpawner : MonoBehaviour
+{
+    public GameObject enemyPrefab;
+    public int spawnCount = 10;
+    public float spawnRadius = 5f;
+    public float spawnInterval = 2f;
+    public bool showGizmos = true;
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - CustomEditor (Editor 폴더에 위치)</div>
+                        <pre><code>using UnityEditor;
+using UnityEngine;
+
+[CustomEditor(typeof(EnemySpawner))]
+public class EnemySpawnerEditor : Editor
+{
+    SerializedProperty prefabProp;
+    SerializedProperty countProp;
+    SerializedProperty radiusProp;
+    SerializedProperty intervalProp;
+
+    void OnEnable()
+    {
+        prefabProp = serializedObject.FindProperty("enemyPrefab");
+        countProp = serializedObject.FindProperty("spawnCount");
+        radiusProp = serializedObject.FindProperty("spawnRadius");
+        intervalProp = serializedObject.FindProperty("spawnInterval");
+    }
+
+    public override void OnInspectorGUI()
+    {
+        serializedObject.Update();
+
+        // 헤더
+        EditorGUILayout.LabelField("적 스포너 설정",
+            EditorStyles.boldLabel);
+        EditorGUILayout.Space();
+
+        // 프리팹
+        EditorGUILayout.PropertyField(prefabProp,
+            new GUIContent("적 프리팹"));
+
+        // 스폰 설정
+        EditorGUILayout.LabelField("스폰 설정",
+            EditorStyles.miniBoldLabel);
+        EditorGUILayout.IntSlider(countProp, 1, 100,
+            new GUIContent("스폰 수"));
+        EditorGUILayout.Slider(radiusProp, 1f, 50f,
+            new GUIContent("스폰 반경"));
+        EditorGUILayout.Slider(intervalProp, 0.1f, 10f,
+            new GUIContent("스폰 간격(초)"));
+
+        // 경고 표시
+        if (countProp.intValue > 50)
+        {
+            EditorGUILayout.HelpBox(
+                "50개 이상 스폰 시 성능에 영향을 줄 수 있습니다.",
+                MessageType.Warning);
+        }
+
+        // 테스트 버튼
+        EditorGUILayout.Space();
+        if (GUILayout.Button("테스트 스폰", GUILayout.Height(30)))
+        {
+            var spawner = (EnemySpawner)target;
+            Debug.Log($"{spawner.spawnCount}개 스폰 테스트!");
+        }
+
+        serializedObject.ApplyModifiedProperties();
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">SerializedProperty를 사용해야 Undo/Redo, 멀티 오브젝트 편집, 프리팹 오버라이드가 정상 동작합니다. target을 직접 수정하면 이 기능들이 깨집니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: PropertyDrawer — 재사용 가능한 드로어</h2>
+            <div class="conversation">
+                <div class="q">특정 타입이 사용될 때마다 같은 방식으로 그리고 싶으면요?</div>
+                <div class="a">
+                    <p>PropertyDrawer를 사용하면 특정 타입이나 어트리뷰트에 대한 드로잉 방식을 한 번만 정의하고 어디서든 재사용할 수 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 범위 제한 어트리뷰트</div>
+                        <pre><code>// 어트리뷰트 정의
+public class MinMaxRangeAttribute : PropertyAttribute
+{
+    public float Min;
+    public float Max;
+
+    public MinMaxRangeAttribute(float min, float max)
+    {
+        Min = min;
+        Max = max;
+    }
+}
+
+// 사용할 데이터 타입
+[System.Serializable]
+public struct RangeFloat
+{
+    public float minValue;
+    public float maxValue;
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - PropertyDrawer 구현</div>
+                        <pre><code>[CustomPropertyDrawer(typeof(MinMaxRangeAttribute))]
+public class MinMaxRangeDrawer : PropertyDrawer
+{
+    public override void OnGUI(Rect position, SerializedProperty property,
+                                GUIContent label)
+    {
+        var range = attribute as MinMaxRangeAttribute;
+        var minProp = property.FindPropertyRelative("minValue");
+        var maxProp = property.FindPropertyRelative("maxValue");
+
+        float minVal = minProp.floatValue;
+        float maxVal = maxProp.floatValue;
+
+        // 라벨
+        position = EditorGUI.PrefixLabel(position, label);
+
+        // 최소값 필드
+        var minRect = new Rect(position.x, position.y,
+                               50, position.height);
+        // 슬라이더
+        var sliderRect = new Rect(position.x + 55, position.y,
+                                   position.width - 110, position.height);
+        // 최대값 필드
+        var maxRect = new Rect(position.xMax - 50, position.y,
+                               50, position.height);
+
+        minVal = EditorGUI.FloatField(minRect, minVal);
+        EditorGUI.MinMaxSlider(sliderRect, ref minVal, ref maxVal,
+                               range.Min, range.Max);
+        maxVal = EditorGUI.FloatField(maxRect, maxVal);
+
+        minProp.floatValue = minVal;
+        maxProp.floatValue = maxVal;
+    }
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 사용 예시</div>
+                        <pre><code>public class EnemyConfig : MonoBehaviour
+{
+    [MinMaxRange(0f, 100f)]
+    public RangeFloat damageRange;
+
+    [MinMaxRange(1f, 20f)]
+    public RangeFloat spawnInterval;
+}</code></pre>
+                    </div>
+                    <p class="highlight">PropertyDrawer를 한 번 만들어두면 프로젝트 전체에서 해당 어트리뷰트를 사용할 때마다 자동 적용됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: EditorWindow — 독립 도구 창</h2>
+            <div class="conversation">
+                <div class="q">Inspector 밖에서 동작하는 도구를 만들 수 있나요?</div>
+                <div class="a">
+                    <p>EditorWindow를 상속하면 독립적인 윈도우 도구를 만들 수 있습니다. 레벨 에디터, 퀘스트 편집기, 데이터 브라우저 등에 활용됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 아이템 데이터베이스 에디터</div>
+                        <pre><code>public class ItemDatabaseEditor : EditorWindow
+{
+    private Vector2 scrollPos;
+    private List&lt;ItemData&gt; items;
+    private ItemData selectedItem;
+    private string searchFilter = "";
+
+    [MenuItem("Tools/Item Database Editor")]
+    public static void ShowWindow()
+    {
+        GetWindow&lt;ItemDatabaseEditor&gt;("아이템 DB");
+    }
+
+    void OnGUI()
+    {
+        EditorGUILayout.BeginHorizontal();
+
+        // 좌측 패널: 아이템 목록
+        EditorGUILayout.BeginVertical(GUILayout.Width(200));
+        DrawItemList();
+        EditorGUILayout.EndVertical();
+
+        // 우측 패널: 아이템 상세
+        EditorGUILayout.BeginVertical();
+        if (selectedItem != null)
+            DrawItemDetail();
+        else
+            EditorGUILayout.HelpBox("아이템을 선택하세요.",
+                MessageType.Info);
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.EndHorizontal();
+    }
+
+    void DrawItemList()
+    {
+        searchFilter = EditorGUILayout.TextField("검색", searchFilter);
+
+        if (GUILayout.Button("+ 새 아이템"))
+            CreateNewItem();
+
+        scrollPos = EditorGUILayout.BeginScrollView(scrollPos);
+        foreach (var item in items)
+        {
+            if (!string.IsNullOrEmpty(searchFilter) &amp;&amp;
+                !item.name.Contains(searchFilter,
+                    System.StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            bool isSelected = item == selectedItem;
+            var style = isSelected
+                ? EditorStyles.selectionRect
+                : EditorStyles.label;
+
+            if (GUILayout.Button(item.itemName, style))
+                selectedItem = item;
+        }
+        EditorGUILayout.EndScrollView();
+    }
+
+    void DrawItemDetail()
+    {
+        var so = new SerializedObject(selectedItem);
+        so.Update();
+
+        EditorGUILayout.LabelField(selectedItem.itemName,
+            EditorStyles.boldLabel);
+        EditorGUILayout.Space();
+
+        // 모든 프로퍼티를 자동으로 그리기
+        var iterator = so.GetIterator();
+        iterator.NextVisible(true); // m_Script 건너뛰기
+        while (iterator.NextVisible(false))
+        {
+            EditorGUILayout.PropertyField(iterator, true);
+        }
+
+        so.ApplyModifiedProperties();
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Gizmos와 Handles — 씬 뷰 시각화</h2>
+            <div class="conversation">
+                <div class="q">씬 뷰에서 게임 로직을 시각적으로 확인하려면요?</div>
+                <div class="a">
+                    <p>Gizmos는 씬 뷰에 디버그 정보를 그려주는 도구이고, Handles는 상호작용 가능한 도구입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Gizmos로 범위 시각화</div>
+                        <pre><code>public class EnemySpawner : MonoBehaviour
+{
+    public float spawnRadius = 5f;
+    public float detectionRange = 15f;
+    public Transform[] patrolPoints;
+
+    void OnDrawGizmosSelected()
+    {
+        // 스폰 반경 (초록색 원)
+        Gizmos.color = new Color(0, 1, 0, 0.3f);
+        Gizmos.DrawSphere(transform.position, spawnRadius);
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(transform.position, spawnRadius);
+
+        // 감지 범위 (빨간색 원)
+        Gizmos.color = new Color(1, 0, 0, 0.1f);
+        Gizmos.DrawSphere(transform.position, detectionRange);
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, detectionRange);
+
+        // 순찰 경로 (노란색 선)
+        if (patrolPoints != null &amp;&amp; patrolPoints.Length > 1)
+        {
+            Gizmos.color = Color.yellow;
+            for (int i = 0; i &lt; patrolPoints.Length - 1; i++)
+            {
+                if (patrolPoints[i] != null &amp;&amp;
+                    patrolPoints[i + 1] != null)
+                {
+                    Gizmos.DrawLine(patrolPoints[i].position,
+                                    patrolPoints[i + 1].position);
+                }
+            }
+        }
+    }
+}</code></pre>
+                    </div>
+
+                    <p class="key-point">OnDrawGizmos는 항상 그려지고, OnDrawGizmosSelected는 오브젝트가 선택되었을 때만 그려집니다. 성능을 위해 가능하면 Selected 버전을 사용하세요.</p>
+                </div>
+
+                <div class="q">씬 뷰에서 직접 값을 조작하는 핸들은 어떻게 만드나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - Handles로 반경 조절 도구</div>
+                        <pre><code>[CustomEditor(typeof(EnemySpawner))]
+public class EnemySpawnerHandles : Editor
+{
+    void OnSceneGUI()
+    {
+        var spawner = (EnemySpawner)target;
+
+        // 씬 뷰에서 드래그로 반경 조절
+        EditorGUI.BeginChangeCheck();
+
+        float newRadius = Handles.RadiusHandle(
+            Quaternion.identity,
+            spawner.transform.position,
+            spawner.spawnRadius
+        );
+
+        if (EditorGUI.EndChangeCheck())
+        {
+            Undo.RecordObject(spawner, "Change Spawn Radius");
+            spawner.spawnRadius = newRadius;
+        }
+
+        // 라벨 표시
+        Handles.Label(
+            spawner.transform.position + Vector3.up * 2f,
+            $"반경: {spawner.spawnRadius:F1}m"
+        );
+    }
+}</code></pre>
+                    </div>
+                    <p class="warning">주의: Handles 코드에서 값을 변경할 때는 반드시 Undo.RecordObject를 호출하세요. 그래야 Ctrl+Z로 되돌릴 수 있고, 씬이 "Dirty" 상태로 마킹되어 저장됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 팁과 주의사항</h2>
+            <div class="conversation">
+                <div class="q">커스텀 에디터 개발 시 주의할 점은 무엇인가요?</div>
+                <div class="a">
+                    <ul>
+                        <li><strong>Editor 폴더에 배치</strong>: 에디터 코드는 반드시 Editor 폴더 안에 있어야 빌드에서 제외됩니다</li>
+                        <li><strong>SerializedProperty 사용</strong>: target을 직접 수정하면 Undo, 멀티 편집, 프리팹 오버라이드가 깨집니다</li>
+                        <li><strong>null 체크</strong>: OnInspectorGUI는 예상치 못한 타이밍에 호출될 수 있으므로 방어적으로 코딩하세요</li>
+                        <li><strong>Repaint 호출</strong>: 데이터가 외부에서 변경될 때 Repaint()를 호출해야 UI가 갱신됩니다</li>
+                    </ul>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">에디터 코드 위치</div>
+                                <div class="flow-box__items">Assets/Editor/ 또는 Assets/Scripts/Editor/</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">빌드 시</div>
+                                <div class="flow-box__items">자동으로 제외됨</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="highlight">에디터 확장은 "투자 대비 효과"가 큰 영역입니다. 반복 작업 30초를 아끼는 도구를 만들면, 팀원 5명이 하루 100번 사용할 때 매일 4시간을 절약합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>CustomEditor</strong>로 특정 컴포넌트의 Inspector를 완전히 재설계할 수 있다</li>
+                <li><strong>PropertyDrawer</strong>는 재사용 가능한 타입/어트리뷰트 드로어로, 프로젝트 전체에 적용된다</li>
+                <li><strong>EditorWindow</strong>로 독립적인 도구 창(레벨 에디터, 데이터 브라우저 등)을 만든다</li>
+                <li><strong>Gizmos/Handles</strong>로 씬 뷰에서 디버그 정보를 시각화하고 직접 조작한다</li>
+                <li>에디터 코드는 반드시 <strong>Editor 폴더</strong>에, 값 변경 시 <strong>SerializedProperty</strong>와 <strong>Undo</strong>를 사용한다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

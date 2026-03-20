@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>무한한 공간에서 물체를 어떻게 빨리 찾을까?</h1>
             <p class="subtitle">해시 테이블로 공간 분할하기 - Spatial Hashing</p>
         </header>
@@ -63,26 +65,29 @@
                     <p class="key-point">좌표를 셀 ID로 변환하고, 해시 테이블에 저장합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-Spatial Hashing 원리
-
-1. 공간을 가상의 그리드로 나눔
-   ┌───┬───┬───┬───┐
-   │0,2│1,2│2,2│3,2│
-   ├───┼───┼───┼───┤
-   │0,1│1,1│2,1│3,1│  ← 각 셀에 ID 부여
-   ├───┼───┼───┼───┤
-   │0,0│1,0│2,0│3,0│
-   └───┴───┴───┴───┘
-
-2. 물체 좌표 → 셀 ID → 해시값
-   물체 (3.5, 2.7) → 셀 (1, 1) → hash(1, 1) = 5
-
-3. 해시 테이블에 저장
-   Bucket[5] = [물체A, 물체B, ...]
-
-4. 주변 셀 조회로 인근 물체 검색
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-col">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">1. 공간을 가상의 그리드로 나눔</div>
+                                    <div class="flow-box__items">각 셀에 ID 부여 (0,0), (1,0), (2,0)...</div>
+                                </div>
+                                <span class="flow-arrow-down">&darr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">2. 물체 좌표 &rarr; 셀 ID &rarr; 해시값</div>
+                                    <div class="flow-box__items">물체(3.5, 2.7) &rarr; 셀(1,1) &rarr; hash(1,1) = 5</div>
+                                </div>
+                                <span class="flow-arrow-down">&darr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">3. 해시 테이블에 저장</div>
+                                    <div class="flow-box__items">Bucket[5] = [물체A, 물체B, ...]</div>
+                                </div>
+                                <span class="flow-arrow-down">&darr;</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">4. 주변 셀 조회</div>
+                                    <div class="flow-box__items">인근 물체 검색</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -475,20 +480,43 @@ void checkDistances4(const Vec2& center, float radius,
                     </ul>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-성능 비교 (10,000개 동적 물체)
-
-                Brute Force    Quadtree    Spatial Hash
-삽입/삭제         O(1)          O(log n)      O(1)
-질의              O(n)          O(log n)      O(1)*
-재구축         불필요          O(n log n)    불필요
-메모리          O(n)          O(n log n)     O(n)
-
-* 평균 케이스, 해시 충돌에 따라 다름
-
-Spatial Hashing은 동적 물체가 많고
-공간이 균일하게 분포할 때 최적!
-                        </pre>
+                        <table class="compare-table">
+                            <thead>
+                                <tr>
+                                    <th>연산 (10,000개)</th>
+                                    <th>Brute Force</th>
+                                    <th>Quadtree</th>
+                                    <th>Spatial Hash</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>삽입/삭제</td>
+                                    <td>O(1)</td>
+                                    <td>O(log n)</td>
+                                    <td><strong>O(1)</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>질의</td>
+                                    <td>O(n)</td>
+                                    <td>O(log n)</td>
+                                    <td><strong>O(1)*</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>재구축</td>
+                                    <td>불필요</td>
+                                    <td>O(n log n)</td>
+                                    <td><strong>불필요</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>메모리</td>
+                                    <td>O(n)</td>
+                                    <td>O(n log n)</td>
+                                    <td>O(n)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p class="diagram-caption">* 평균 케이스, 해시 충돌에 따라 다름. Spatial Hashing은 동적 물체가 많고 공간이 균일하게 분포할 때 최적!</p>
                     </div>
 
                     <p class="highlight">Spatial Hashing은 단순하면서도 매우 효율적인 공간 분할 기법입니다!</p>

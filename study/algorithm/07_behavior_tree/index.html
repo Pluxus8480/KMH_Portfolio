@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>게임 AI는 어떻게 스스로 판단할까?</h1>
             <p class="subtitle">Behavior Tree로 복잡한 AI 행동 설계하기</p>
         </header>
@@ -25,25 +27,27 @@
                     <p class="warning">상태가 많아지면 전이(Transition)가 기하급수적으로 증가합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-FSM의 문제: 스파게티 전이
-
-    ┌─────┐      ┌─────┐
-    │Idle │◄────►│Patrol│
-    └──┬──┘      └──┬──┘
-       │    ╲  ╱    │
-       │     ╲╱     │
-       │     ╱╲     │
-       ▼    ╱  ╲    ▼
-    ┌──┴──┐      ┌──┴──┐
-    │Chase│◄────►│Attack│
-    └──┬──┘      └──┬──┘
-       │            │
-       └────────────┘
-
-상태 5개 → 최대 20개 전이
-상태 10개 → 최대 90개 전이!
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Idle</div>
+                                </div>
+                                <span class="flow-arrow">&harr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Patrol</div>
+                                </div>
+                            </div>
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Chase</div>
+                                </div>
+                                <span class="flow-arrow">&harr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Attack</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">FSM의 문제: 상태 5개 &rarr; 최대 20개 전이 / 상태 10개 &rarr; 최대 90개 전이!</p>
                     </div>
 
                     <p class="highlight">Behavior Tree는 행동을 트리 구조로 조직화하여 이 문제를 해결합니다.</p>
@@ -108,25 +112,33 @@ FSM의 문제: 스파게티 전이
                 </div>
 
                 <div class="visual-section">
-                    <pre class="diagram">
-Behavior Tree 기본 구조
-
-            [Root]
-               │
-          [Selector]  ← "하나라도 성공하면 성공"
-          /    |    \
-         /     |     \
-    [Seq1]  [Seq2]  [Idle]
-      │       │
-   [Cond]  [Cond]   ← Condition 노드
-      │       │
-   [Act1]  [Act2]   ← Action 노드
-      │
-   [Act3]
-
-Selector: 왼쪽부터 시도, 하나 성공하면 종료
-Sequence: 왼쪽부터 실행, 하나 실패하면 종료
-                    </pre>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">Root</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">
+                                Selector ("하나라도 성공하면 성공")
+                                <div class="hierarchy-children">
+                                    <div class="hierarchy-item">
+                                        Seq1
+                                        <div class="hierarchy-children">
+                                            <div class="hierarchy-item">Cond (Condition)</div>
+                                            <div class="hierarchy-item">Act1 (Action)</div>
+                                            <div class="hierarchy-item">Act3 (Action)</div>
+                                        </div>
+                                    </div>
+                                    <div class="hierarchy-item">
+                                        Seq2
+                                        <div class="hierarchy-children">
+                                            <div class="hierarchy-item">Cond (Condition)</div>
+                                            <div class="hierarchy-item">Act2 (Action)</div>
+                                        </div>
+                                    </div>
+                                    <div class="hierarchy-item">Idle</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="diagram-caption">Selector: 왼쪽부터 시도, 하나 성공하면 종료 / Sequence: 왼쪽부터 실행, 하나 실패하면 종료</p>
                 </div>
             </div>
         </section>
@@ -471,26 +483,44 @@ public:
                 <div class="q">실제 게임 AI는 어떻게 구성하나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-적 AI Behavior Tree 예시
-
-                    [Root Selector]
-                    /      |       \
-                   /       |        \
-           [Combat]   [Investigate]  [Patrol]
-               │           │            │
-          [Selector]  [Sequence]   [Sequence]
-          /    \           │            │
-         /      \     [HasTarget]  [GetNextPoint]
-   [Attack]  [Chase]      │            │
-       │        │    [MoveTo       [MoveTo
-       │        │     Target]       Point]
-  [Sequence] [Sequence]
-      │         │
-  [InRange]  [SeeEnemy]
-      │         │
-  [DoAttack] [MoveToEnemy]
-                        </pre>
+                        <div class="hierarchy-diagram">
+                            <div class="hierarchy-item hierarchy-item--root">Root Selector</div>
+                            <div class="hierarchy-children">
+                                <div class="hierarchy-item">
+                                    Combat (Selector)
+                                    <div class="hierarchy-children">
+                                        <div class="hierarchy-item">
+                                            Attack (Sequence)
+                                            <div class="hierarchy-children">
+                                                <div class="hierarchy-item">InRange</div>
+                                                <div class="hierarchy-item">DoAttack</div>
+                                            </div>
+                                        </div>
+                                        <div class="hierarchy-item">
+                                            Chase (Sequence)
+                                            <div class="hierarchy-children">
+                                                <div class="hierarchy-item">SeeEnemy</div>
+                                                <div class="hierarchy-item">MoveToEnemy</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="hierarchy-item">
+                                    Investigate (Sequence)
+                                    <div class="hierarchy-children">
+                                        <div class="hierarchy-item">HasTarget</div>
+                                        <div class="hierarchy-item">MoveTo Target</div>
+                                    </div>
+                                </div>
+                                <div class="hierarchy-item">
+                                    Patrol (Sequence)
+                                    <div class="hierarchy-children">
+                                        <div class="hierarchy-item">GetNextPoint</div>
+                                        <div class="hierarchy-item">MoveTo Point</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="code-block">

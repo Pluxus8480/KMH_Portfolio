@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>함수를 변수처럼 다루고 싶다면?</h1>
             <p class="subtitle">람다 표현식의 캡처부터 제네릭까지</p>
         </header>
@@ -46,18 +48,33 @@ auto add = __lambda_1{};</code></pre>
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-람다 문법 구조
-
-[캡처절](매개변수) mutable noexcept -> 반환타입 { 본문 }
-   │       │        │       │          │         │
-   │       │        │       │          │         └─ 실행할 코드
-   │       │        │       │          └─ 반환 타입 (생략 가능)
-   │       │        │       └─ 예외 명세 (생략 가능)
-   │       │        └─ 값 캡처 수정 허용 (생략 가능)
-   │       └─ 함수 매개변수
-   └─ 외부 변수 캡처 방식
-                        </pre>
+                        <p><strong>람다 문법 구조</strong></p>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">[캡처절]</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>외부 변수 캡처 방식</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">(매개변수)</div>
+                                <div class="pipeline-bar pb-light"><span>함수 매개변수</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">mutable</div>
+                                <div class="pipeline-bar pb-shadow"><span>값 캡처 수정 허용 (생략 가능)</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">noexcept</div>
+                                <div class="pipeline-bar pb-shadow"><span>예외 명세 (생략 가능)</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">-&gt; 반환타입</div>
+                                <div class="pipeline-bar pb-post"><span>반환 타입 (생략 가능)</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">{ 본문 }</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>실행할 코드</span></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

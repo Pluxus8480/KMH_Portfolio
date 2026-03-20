@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>뼈대로 캐릭터를 움직이다</h1>
@@ -30,24 +30,41 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-스켈레탈 애니메이션 구조:
-
-1. 뼈대 (Skeleton)        2. 스킨 가중치        3. 결과
-
-       ●  머리                  메시             변형된 메시
-       │                     ┌─────┐
-       ●  가슴               │∧∧∧∧∧│           ┌─────┐
-      ╱│╲                    │     │           │∧∧∧∧∧│
-     ●─●─●  팔              │ 가중│           │  ╲  │
-       │                     │ 치  │           │   ╲ │
-       ●  허리               │     │           │    ╲│
-      ╱ ╲                    │     │           │     │
-     ●   ●  다리            └─────┘           └─────┘
-
-각 정점이 근처 뼈의 영향을 받음
-정점 P = Σ(Weight[i] × BoneMatrix[i] × BindPose × P)
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row--3col">
+                        <div class="flow-group">
+                            <div class="flow-group__title">1. 뼈대 (Skeleton)</div>
+                            <div class="flow-box">
+                                <div class="flow-box__items">
+                                    머리 → 가슴 → 팔(좌/우)<br>
+                                    허리 → 다리(좌/우)<br>
+                                    계층적 트리 구조
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-group">
+                            <div class="flow-group__title">2. 스킨 가중치</div>
+                            <div class="flow-box">
+                                <div class="flow-box__items">
+                                    메시의 각 정점이<br>
+                                    근처 뼈에 가중치로<br>
+                                    연결됨
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-group">
+                            <div class="flow-group__title">3. 결과</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__items">
+                                    뼈가 움직이면<br>
+                                    메시가 자연스럽게<br>
+                                    변형됨
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flow-label" style="margin-top:12px;">정점 P = &Sigma;(Weight[i] &times; BoneMatrix[i] &times; BindPose &times; P)</div>
+                </div>
                 <p class="diagram-caption">스켈레탈 애니메이션의 구성 요소</p>
             </div>
 
@@ -68,28 +85,44 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-뼈대 계층 구조 (Bone Hierarchy):
-
-                    Root (골반)
-                       │
-         ┌─────────────┼─────────────┐
-         │             │             │
-      Spine1        L_Thigh       R_Thigh
-         │             │             │
-      Spine2        L_Calf        R_Calf
-         │             │             │
-    ┌────┼────┐     L_Foot       R_Foot
-    │    │    │
- L_Arm Neck R_Arm
-    │    │    │
-L_Fore Head R_Fore
-    │         │
-L_Hand     R_Hand
-
-부모 변환이 자식에게 전파됨:
-WorldMatrix = Parent.WorldMatrix × Local.Transform
-                </pre>
+                <div class="hierarchy-diagram">
+                    <div class="hierarchy-item--root">Root (골반)</div>
+                    <div class="hierarchy-children">
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            <div class="hierarchy-item" style="border-color:#60a5fa;">Spine1</div>
+                            <div style="padding-left:16px;border-left:2px solid var(--border-default);display:flex;flex-direction:column;gap:6px;">
+                                <div class="hierarchy-item">Spine2</div>
+                                <div style="padding-left:16px;border-left:2px solid var(--border-default);display:flex;flex-wrap:wrap;gap:6px;">
+                                    <div style="display:flex;flex-direction:column;gap:4px;">
+                                        <div class="hierarchy-item">L_Arm</div>
+                                        <div class="hierarchy-item" style="margin-left:12px;">L_Fore</div>
+                                        <div class="hierarchy-item" style="margin-left:24px;">L_Hand</div>
+                                    </div>
+                                    <div style="display:flex;flex-direction:column;gap:4px;">
+                                        <div class="hierarchy-item">Neck</div>
+                                        <div class="hierarchy-item" style="margin-left:12px;">Head</div>
+                                    </div>
+                                    <div style="display:flex;flex-direction:column;gap:4px;">
+                                        <div class="hierarchy-item">R_Arm</div>
+                                        <div class="hierarchy-item" style="margin-left:12px;">R_Fore</div>
+                                        <div class="hierarchy-item" style="margin-left:24px;">R_Hand</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:4px;">
+                            <div class="hierarchy-item" style="border-color:#4ade80;">L_Thigh</div>
+                            <div class="hierarchy-item" style="margin-left:12px;">L_Calf</div>
+                            <div class="hierarchy-item" style="margin-left:24px;">L_Foot</div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:4px;">
+                            <div class="hierarchy-item" style="border-color:#4ade80;">R_Thigh</div>
+                            <div class="hierarchy-item" style="margin-left:12px;">R_Calf</div>
+                            <div class="hierarchy-item" style="margin-left:24px;">R_Foot</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flow-label" style="margin-top:12px;">WorldMatrix = Parent.WorldMatrix &times; Local.Transform</div>
                 <p class="diagram-caption">휴머노이드 뼈대 트리</p>
             </div>
 
@@ -229,21 +262,29 @@ VSOutput VS_Skinned(VSInput input)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-애니메이션 키프레임:
-
-시간 →  0.0s    0.5s    1.0s    1.5s    2.0s
-         │       │       │       │       │
-Bone 0:  ●───────●───────●───────●───────●
-         │       │       │       │       │
-Bone 1:  ●───────●───────●───────●───────●
-         │               │               │
-Bone 2:  ●───────────────●───────────────●  (키 적음)
-
-● = 키프레임 (Position, Rotation, Scale)
-
-키프레임 사이 → 보간 (Linear/Slerp)
-                </pre>
+                <div class="flow-diagram">
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Bone 0</div>
+                            <div class="pipeline-bar pb-gbuffer" style="flex:1;justify-content:space-between;">
+                                <span>0.0s</span><span>0.5s</span><span>1.0s</span><span>1.5s</span><span>2.0s</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Bone 1</div>
+                            <div class="pipeline-bar pb-light" style="flex:1;justify-content:space-between;">
+                                <span>0.0s</span><span>0.5s</span><span>1.0s</span><span>1.5s</span><span>2.0s</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">Bone 2</div>
+                            <div class="pipeline-bar pb-post" style="flex:1;justify-content:space-between;">
+                                <span>0.0s</span><span style="opacity:0.4;">...</span><span>1.0s</span><span style="opacity:0.4;">...</span><span>2.0s</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flow-label" style="margin-top:8px;">각 점 = 키프레임 (Position, Rotation, Scale) / 키프레임 사이 → 보간 (Linear/Slerp)</div>
+                </div>
                 <p class="diagram-caption">키프레임 기반 애니메이션</p>
             </div>
 

@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"두 스레드가 같은 변수를 건드리면?"</h1>
             <p class="subtitle">멀티스레딩 동기화의 모든 것</p>
         </header>
@@ -27,29 +29,23 @@
                     <p><strong>비결정적 버그</strong>를 만듭니다. 실행할 때마다 결과가 달라질 수 있습니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Race Condition 예시                               │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   공유 변수: int count = 0;                                         │
-│   연산: count++ (실제로는 3단계!)                                   │
-│                                                                     │
-│   Thread A                    Thread B                              │
-│   ─────────────               ─────────────                         │
-│   1. READ count (0)                                                 │
-│   2. ADD 1 (→ 1)             1. READ count (0)  ← 아직 0!           │
-│   3. WRITE count (1)         2. ADD 1 (→ 1)                         │
-│                              3. WRITE count (1)  ← 덮어씀!          │
-│                                                                     │
-│   기대 결과: 2                                                       │
-│   실제 결과: 1  ← 1이 손실됨!                                       │
-│                                                                     │
-│   ※ count++는 원자적(atomic)이 아님!                                │
-│     READ-MODIFY-WRITE 3단계 연산                                    │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Thread A</div>
+                                    <div class="flow-box__items">1. READ count (0)<br>2. ADD 1 (&rarr; 1)<br>3. WRITE count (1)</div>
+                                </div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">공유 변수: count = 0</div>
+                                    <div class="flow-box__items">count++ = READ-MODIFY-WRITE 3단계<br>원자적(atomic)이 아님!</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Thread B</div>
+                                    <div class="flow-box__items">1. READ count (0) &larr; 아직 0!<br>2. ADD 1 (&rarr; 1)<br>3. WRITE count (1) &larr; 덮어씀!</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">기대 결과: 2 / 실제 결과: 1 &larr; 1이 손실됨!</p>
                     </div>
 
                     <div class="code-block">
@@ -86,29 +82,24 @@ int main() {
                     <p><strong>한 번에 하나의 스레드만</strong> 임계 영역에 진입할 수 있게 합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                      Mutex 동작 원리                                 │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Thread A                    Mutex                Thread B         │
-│   ─────────                   ─────                ─────────        │
-│                                                                     │
-│   lock() ─────────────────▶  [획득]                                 │
-│   ┌─────────────────────┐      │                                   │
-│   │ Critical Section    │      │                  lock() ───────┐  │
-│   │ (데이터 수정 중)     │      │  locked           (대기...)    │  │
-│   └─────────────────────┘      │                       │         │  │
-│   unlock() ───────────────▶  [해제] ◀──────────────────┘         │  │
-│                                │                                    │
-│                              [획득] ─────▶ ┌─────────────────────┐ │
-│                                │           │ Critical Section    │ │
-│                                │           │ (Thread B 진입)     │ │
-│                                │           └─────────────────────┘ │
-│                              [해제] ◀───── unlock()                │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Thread A</div>
+                                    <div class="flow-box__items">lock() &rarr; 획득<br>Critical Section<br>(데이터 수정 중)<br>unlock() &rarr; 해제</div>
+                                </div>
+                                <div class="flow-arrow">&harr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Mutex</div>
+                                    <div class="flow-box__items">한 번에 하나의 스레드만<br>임계 영역 진입 허용<br>locked &rarr; 해제 &rarr; locked</div>
+                                </div>
+                                <div class="flow-arrow">&harr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Thread B</div>
+                                    <div class="flow-box__items">lock() &rarr; 대기...<br>A 해제 후 획득<br>Critical Section<br>unlock() &rarr; 해제</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="code-block">
@@ -320,27 +311,24 @@ void complexAtomic() {
                     <p><strong>조건 변수</strong>를 사용합니다. Producer-Consumer 패턴에 필수입니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                   Producer-Consumer 패턴                             │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Producer                 Queue              Consumer              │
-│   ─────────               ─────               ─────────             │
-│                                                                     │
-│   produce()               [empty]             wait() ───────┐       │
-│      │                                                      │       │
-│   lock()                                                    │ 대기  │
-│   queue.push(item)       [item1]                            │       │
-│   notify_one() ─────────────────────────────────────────────┘       │
-│   unlock()                                     │                    │
-│                                               lock()                │
-│                          [empty]  ◀─────── queue.pop()              │
-│                                               unlock()              │
-│                                               process(item)         │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Producer</div>
+                                    <div class="flow-box__items">produce()<br>lock()<br>queue.push(item)<br>notify_one()<br>unlock()</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Queue</div>
+                                    <div class="flow-box__items">[empty] &rarr; [item1] &rarr; [empty]</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Consumer</div>
+                                    <div class="flow-box__items">wait() (대기...)<br>notify로 깨어남<br>lock()<br>queue.pop()<br>unlock()<br>process(item)</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="code-block">

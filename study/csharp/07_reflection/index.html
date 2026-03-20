@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reflection과 Attribute | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>런타임에 거울을 들여다보면?</h1>
+            <p class="subtitle">Reflection과 Attribute로 메타데이터 활용하기</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: Reflection이란 무엇인가?</h2>
+            <div class="conversation">
+                <div class="q">Reflection이 뭔가요? 왜 "거울"이라는 비유를 쓰나요?</div>
+                <div class="a">
+                    <p>Reflection은 프로그램이 <strong>실행 중에 자기 자신의 구조를 검사하고 조작</strong>할 수 있는 기능입니다. 마치 거울을 보며 자신의 모습을 확인하듯, 코드가 자기 자신의 타입, 메소드, 프로퍼티를 들여다볼 수 있습니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>비유로 이해하기</strong>
+                        <p>레고 블록을 조립한 후, 완성된 모형을 분해하지 않고도 "이 블록은 몇 개의 부품으로 되어 있지?", "빨간 블록은 어디에 있지?" 하고 검사할 수 있는 능력입니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">typeof와 GetType()의 차이가 뭔가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 타입 정보 얻기</div>
+                        <pre><code>// 컴파일 타임에 타입을 알 때
+Type t1 = typeof(PlayerController);
+
+// 런타임에 인스턴스에서 타입을 얻을 때
+object obj = GetComponent();
+Type t2 = obj.GetType();
+
+// 문자열로 타입을 찾을 때
+Type t3 = Type.GetType("MyGame.PlayerController");</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>방식</th>
+                                <th>시점</th>
+                                <th>사용 상황</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>typeof(T)</code></td>
+                                <td>컴파일 타임</td>
+                                <td>타입을 이미 알고 있을 때</td>
+                            </tr>
+                            <tr>
+                                <td><code>obj.GetType()</code></td>
+                                <td>런타임</td>
+                                <td>인스턴스의 실제 타입을 확인할 때</td>
+                            </tr>
+                            <tr>
+                                <td><code>Type.GetType()</code></td>
+                                <td>런타임</td>
+                                <td>문자열 기반으로 타입을 찾을 때</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 타입 탐색과 멤버 접근</h2>
+            <div class="conversation">
+                <div class="q">클래스의 모든 메소드나 프로퍼티를 조회할 수 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 멤버 탐색</div>
+                        <pre><code>Type playerType = typeof(Player);
+
+// 모든 public 메소드 조회
+MethodInfo[] methods = playerType.GetMethods();
+foreach (var method in methods)
+    Console.WriteLine($"{method.ReturnType} {method.Name}");
+
+// 특정 메소드 가져오기
+MethodInfo attack = playerType.GetMethod("Attack");
+
+// private 필드도 접근 가능!
+FieldInfo hpField = playerType.GetField("_hp",
+    BindingFlags.NonPublic | BindingFlags.Instance);
+
+// 프로퍼티 조회
+PropertyInfo[] props = playerType.GetProperties();
+foreach (var prop in props)
+    Console.WriteLine($"{prop.PropertyType.Name} {prop.Name}");</code></pre>
+                    </div>
+                    <p class="warning">BindingFlags를 지정하지 않으면 public 인스턴스 멤버만 반환됩니다. private이나 static 멤버를 찾으려면 반드시 BindingFlags를 명시해야 합니다.</p>
+                </div>
+
+                <div class="q">리플렉션으로 메소드를 호출하거나 값을 바꿀 수도 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 동적 호출과 값 변경</div>
+                        <pre><code>Player player = new Player();
+
+// 메소드 동적 호출
+MethodInfo attackMethod = typeof(Player).GetMethod("Attack");
+attackMethod.Invoke(player, new object[] { targetEnemy });
+
+// private 필드 값 변경 (디버그/치트 감지 등)
+FieldInfo hpField = typeof(Player).GetField("_hp",
+    BindingFlags.NonPublic | BindingFlags.Instance);
+hpField.SetValue(player, 9999);
+
+// 동적 인스턴스 생성
+object newPlayer = Activator.CreateInstance(typeof(Player));</code></pre>
+                    </div>
+                    <p class="key-point">Reflection은 강력하지만 타입 안전성을 포기합니다. 컴파일러가 오류를 잡아주지 않으므로 런타임 에러에 특히 주의해야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 커스텀 Attribute 만들기</h2>
+            <div class="conversation">
+                <div class="q">Attribute가 정확히 뭔가요?</div>
+                <div class="a">
+                    <p>Attribute는 코드에 <strong>메타데이터를 부착</strong>하는 방법입니다. 코드의 동작을 바꾸지 않지만, 리플렉션으로 읽어서 특별한 처리를 할 수 있습니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>비유로 이해하기</strong>
+                        <p>택배 상자에 붙이는 스티커와 같습니다. "취급주의", "냉장보관", "위험물" 같은 스티커가 상자 내용물을 바꾸진 않지만, 배송 직원이 스티커를 보고 적절히 처리합니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">게임 개발에서 유용한 커스텀 Attribute 예시를 보여주세요.</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 패킷 핸들러 자동 등록 시스템</div>
+                        <pre><code>// 1. 커스텀 Attribute 정의
+[AttributeUsage(AttributeTargets.Method)]
+public class PacketHandlerAttribute : Attribute
+{
+    public ushort PacketId { get; }
+    public PacketHandlerAttribute(ushort packetId)
+    {
+        PacketId = packetId;
+    }
+}
+
+// 2. Attribute 사용
+public class GameSession
+{
+    [PacketHandler(0x0001)]
+    public void HandleLogin(ReadOnlySpan&lt;byte&gt; data)
+    { /* 로그인 처리 */ }
+
+    [PacketHandler(0x0002)]
+    public void HandleMove(ReadOnlySpan&lt;byte&gt; data)
+    { /* 이동 처리 */ }
+
+    [PacketHandler(0x0010)]
+    public void HandleChat(ReadOnlySpan&lt;byte&gt; data)
+    { /* 채팅 처리 */ }
+}
+
+// 3. 리플렉션으로 자동 수집
+Dictionary&lt;ushort, MethodInfo&gt; handlers = new();
+
+var methods = typeof(GameSession).GetMethods()
+    .Where(m => m.GetCustomAttribute&lt;PacketHandlerAttribute&gt;() != null);
+
+foreach (var method in methods)
+{
+    var attr = method.GetCustomAttribute&lt;PacketHandlerAttribute&gt;();
+    handlers[attr.PacketId] = method;
+}
+// 결과: { 0x0001: HandleLogin, 0x0002: HandleMove, ... }</code></pre>
+                    </div>
+                    <p class="highlight">이 패턴을 사용하면 새로운 패킷을 추가할 때 Attribute만 붙이면 자동으로 등록됩니다. switch문을 수정할 필요가 없어 유지보수가 매우 편합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: Reflection의 성능 비용</h2>
+            <div class="conversation">
+                <div class="q">Reflection이 느리다고 하는데, 얼마나 느린가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>작업</th>
+                                <th>직접 호출</th>
+                                <th>Reflection</th>
+                                <th>차이</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>메소드 호출</td>
+                                <td>~2ns</td>
+                                <td>~200ns</td>
+                                <td>100배</td>
+                            </tr>
+                            <tr>
+                                <td>프로퍼티 Get</td>
+                                <td>~1ns</td>
+                                <td>~150ns</td>
+                                <td>150배</td>
+                            </tr>
+                            <tr>
+                                <td>인스턴스 생성</td>
+                                <td>~5ns</td>
+                                <td>~500ns</td>
+                                <td>100배</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">프레임당 호출되는 핫 패스(hot path)에서 Reflection을 사용하면 심각한 성능 저하가 발생합니다. 매 프레임 GetMethod를 호출하는 코드는 반드시 피해야 합니다.</p>
+                </div>
+
+                <div class="q">성능 문제를 해결하는 방법이 있나요?</div>
+                <div class="a">
+                    <p>핵심은 <strong>캐싱</strong>입니다. 리플렉션 탐색은 초기화 시 한 번만 하고, 결과를 캐싱해서 재사용합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - Delegate 캐싱으로 성능 회복</div>
+                        <pre><code>// 느린 방식: 매번 리플렉션
+void SlowUpdate(object component)
+{
+    var method = component.GetType().GetMethod("OnUpdate");
+    method.Invoke(component, null); // 매 프레임 200ns
+}
+
+// 빠른 방식: 델리게이트로 캐싱
+private static readonly Dictionary&lt;Type, Action&lt;object&gt;&gt; _cache = new();
+
+void FastUpdate(object component)
+{
+    Type type = component.GetType();
+    if (!_cache.TryGetValue(type, out var action))
+    {
+        var method = type.GetMethod("OnUpdate");
+        action = (Action&lt;object&gt;)Delegate.CreateDelegate(
+            typeof(Action&lt;object&gt;), method);
+        _cache[type] = action;
+    }
+    action(component); // 캐싱 후 ~5ns (직접 호출에 근접)
+}</code></pre>
+                    </div>
+                    <p class="key-point">Delegate.CreateDelegate로 만든 델리게이트는 직접 호출과 거의 동일한 성능을 보여줍니다. 초기 비용만 지불하면 이후는 사실상 무료입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 게임에서의 Reflection 활용 사례</h2>
+            <div class="conversation">
+                <div class="q">실제 게임 프로젝트에서 Reflection을 어디에 쓰나요?</div>
+                <div class="a">
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">초기화 단계</div>
+                                <div class="flow-box__items">패킷 핸들러 수집<br>커맨드 등록<br>직렬화 맵 구축</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">캐싱</div>
+                                <div class="flow-box__items">Delegate 생성<br>Dictionary 저장<br>Expression 컴파일</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">런타임 사용</div>
+                                <div class="flow-box__items">캐시된 Delegate 호출<br>Reflection 미사용<br>네이티브 성능</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - GM 커맨드 자동 등록 시스템</div>
+                        <pre><code>[AttributeUsage(AttributeTargets.Method)]
+public class GMCommandAttribute : Attribute
+{
+    public string Command { get; }
+    public string Description { get; }
+    public GMCommandAttribute(string cmd, string desc)
+    {
+        Command = cmd;
+        Description = desc;
+    }
+}
+
+public class GMCommandSystem
+{
+    [GMCommand("/gold", "골드 지급")]
+    static void AddGold(Player p, int amount)
+        => p.Gold += amount;
+
+    [GMCommand("/level", "레벨 설정")]
+    static void SetLevel(Player p, int level)
+        => p.Level = level;
+
+    [GMCommand("/spawn", "몬스터 스폰")]
+    static void SpawnMonster(Player p, string monsterId)
+        => MonsterManager.Spawn(monsterId, p.Position);
+}</code></pre>
+                    </div>
+                    <p class="highlight">새 GM 커맨드 추가 시 메소드와 Attribute만 작성하면 됩니다. 커맨드 파서나 등록 코드를 수정할 필요가 전혀 없습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 요약 -->
+        <section class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Reflection</strong>은 런타임에 타입 정보를 검사하고 동적으로 멤버를 호출할 수 있는 강력한 기능이다</li>
+                <li><strong>typeof</strong>는 컴파일 타임, <strong>GetType()</strong>은 런타임에 타입 정보를 얻으며, BindingFlags로 접근 범위를 지정한다</li>
+                <li><strong>커스텀 Attribute</strong>를 활용하면 패킷 핸들러, GM 커맨드 등을 자동으로 수집/등록할 수 있다</li>
+                <li>Reflection은 직접 호출 대비 <strong>100배 이상 느리므로</strong>, 반드시 초기화 시 캐싱하고 핫 패스에서는 사용하지 않는다</li>
+                <li><strong>Delegate.CreateDelegate</strong>로 캐싱하면 직접 호출에 근접한 성능을 달성할 수 있다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

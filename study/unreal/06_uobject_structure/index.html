@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
 
         <header class="content-header">
             <h1>언리얼 세계의 시민권</h1>
@@ -51,22 +51,55 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-                        UObject (최상위)
-                            │
-            ┌───────────────┼───────────────┐
-            │               │               │
-        AActor         UActorComponent    USubsystem
-            │               │
-    ┌───────┴───────┐   ┌───┴───┐
-    │               │   │       │
-  APawn         AInfo  UScene  UMovement
-    │                  Component Component
-    │
-ACharacter
-    │
-APlayerCharacter
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box flow-box--highlight" style="margin:0 auto; max-width:200px;">
+                        <div class="flow-box__title">UObject (최상위)</div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-row">
+                        <div class="flow-diagram" style="flex:1;">
+                            <div class="flow-box">
+                                <div class="flow-box__title">AActor</div>
+                            </div>
+                            <div class="flow-arrow">▼</div>
+                            <div class="flow-row">
+                                <div class="flow-diagram" style="flex:1;">
+                                    <div class="flow-box">
+                                        <div class="flow-box__title">APawn</div>
+                                    </div>
+                                    <div class="flow-arrow">▼</div>
+                                    <div class="flow-box">
+                                        <div class="flow-box__title">ACharacter</div>
+                                    </div>
+                                    <div class="flow-arrow">▼</div>
+                                    <div class="flow-box">
+                                        <div class="flow-box__title">APlayerCharacter</div>
+                                    </div>
+                                </div>
+                                <div class="flow-box" style="align-self:flex-start;">
+                                    <div class="flow-box__title">AInfo</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram" style="flex:1;">
+                            <div class="flow-box">
+                                <div class="flow-box__title">UActorComponent</div>
+                            </div>
+                            <div class="flow-arrow">▼</div>
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">USceneComponent</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">UMovementComponent</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-box" style="align-self:flex-start;">
+                            <div class="flow-box__title">USubsystem</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">언리얼 주요 클래스 계층</p>
             </div>
 
@@ -307,32 +340,71 @@ public:
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-            월드에 배치되나요?
-                    │
-        ┌───────────┴───────────┐
-        │ YES                   │ NO
-        ▼                       ▼
-    Transform이           데이터/설정만
-    필요한가요?           저장하나요?
-        │                       │
-    ┌───┴───┐               ┌───┴───┐
-    │ YES   │ NO            │ YES   │ NO
-    ▼       ▼               ▼       ▼
-  AActor  AActor          UObject  일반
- (대부분) (AInfo류)       (UData   C++
-                          Asset)  클래스
-        │
-        ▼
-    캐릭터처럼
-    이동하나요?
-        │
-    ┌───┴───┐
-    │ YES   │ NO
-    ▼       ▼
-APawn/    AActor
-ACharacter
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box flow-box--highlight">
+                        <div class="flow-box__title">월드에 배치되나요?</div>
+                    </div>
+                    <div class="flow-row">
+                        <div class="flow-diagram" style="flex:1;">
+                            <div class="flow-arrow">YES ▼</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Transform이 필요한가요?</div>
+                            </div>
+                            <div class="flow-row">
+                                <div class="flow-diagram" style="flex:1;">
+                                    <div class="flow-arrow">YES ▼</div>
+                                    <div class="flow-box">
+                                        <div class="flow-box__title">AActor (대부분)</div>
+                                    </div>
+                                    <div class="flow-arrow">▼</div>
+                                    <div class="flow-box">
+                                        <div class="flow-box__title">캐릭터처럼 이동하나요?</div>
+                                    </div>
+                                    <div class="flow-row">
+                                        <div class="flow-diagram" style="flex:1;">
+                                            <div class="flow-arrow">YES ▼</div>
+                                            <div class="flow-box flow-box--highlight">
+                                                <div class="flow-box__title">APawn / ACharacter</div>
+                                            </div>
+                                        </div>
+                                        <div class="flow-diagram" style="flex:1;">
+                                            <div class="flow-arrow">NO ▼</div>
+                                            <div class="flow-box">
+                                                <div class="flow-box__title">AActor</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flow-diagram" style="flex:1;">
+                                    <div class="flow-arrow">NO ▼</div>
+                                    <div class="flow-box">
+                                        <div class="flow-box__title">AActor (AInfo류)</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram" style="flex:1;">
+                            <div class="flow-arrow">NO ▼</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">데이터/설정만 저장하나요?</div>
+                            </div>
+                            <div class="flow-row">
+                                <div class="flow-diagram" style="flex:1;">
+                                    <div class="flow-arrow">YES ▼</div>
+                                    <div class="flow-box">
+                                        <div class="flow-box__title">UObject (UDataAsset)</div>
+                                    </div>
+                                </div>
+                                <div class="flow-diagram" style="flex:1;">
+                                    <div class="flow-arrow">NO ▼</div>
+                                    <div class="flow-box">
+                                        <div class="flow-box__title">일반 C++ 클래스</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">클래스 선택 가이드</p>
             </div>
 

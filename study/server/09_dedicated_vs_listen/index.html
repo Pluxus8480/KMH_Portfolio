@@ -8,9 +8,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../server.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../server.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>서버를 누가 돌리지?</h1>
             <p class="subtitle">Dedicated Server vs Listen Server vs P2P 아키텍처 비교</p>
         </header>
@@ -22,27 +24,38 @@
                 <div class="a">
                     <p>크게 세 가지 방식이 있습니다:</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────┐
-│                     서버 호스팅 방식                              │
-├─────────────────────┬─────────────────────┬─────────────────────┤
-│   Dedicated Server  │    Listen Server    │        P2P          │
-├─────────────────────┼─────────────────────┼─────────────────────┤
-│  ┌───────────┐      │  ┌───────────┐      │                     │
-│  │  Server   │      │  │Host+Client│      │  ┌───┐   ┌───┐     │
-│  │(전용 서버)│      │  │ (플레이어)│      │  │ A │◀─▶│ B │     │
-│  └─────┬─────┘      │  └─────┬─────┘      │  └─┬─┘   └─┬─┘     │
-│        │            │        │            │    │       │        │
-│    ┌───┼───┐        │    ┌───┼───┐        │    └───┬───┘        │
-│    ▼   ▼   ▼        │    ▼   ▼   ▼        │        ▼            │
-│   A    B    C       │   A    B    C       │   ┌───────┐         │
-│   (클라이언트)       │   (클라이언트)       │   │   C   │         │
-│                     │                     │   └───────┘         │
-├─────────────────────┼─────────────────────┼─────────────────────┤
-│ 서버 비용 있음       │ 호스트가 서버 역할   │ 서버 없음 (메쉬)     │
-│ 공정함              │ 호스트 유리          │ 완전 대칭            │
-└─────────────────────┴─────────────────────┴─────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row" style="justify-content:center; align-items:stretch;">
+                                <div class="flow-box" style="flex:1; text-align:center;">
+                                    <div class="flow-box__title">Dedicated Server</div>
+                                    <div class="flow-box__items" style="margin-bottom:8px;">
+                                        <strong>Server (전용 서버)</strong><br>
+                                        ↓ &nbsp; ↓ &nbsp; ↓<br>
+                                        A &nbsp; B &nbsp; C (클라이언트)
+                                    </div>
+                                    <div class="flow-box__items" style="border-top:1px solid var(--border-default); padding-top:6px;">서버 비용 있음 / 공정함</div>
+                                </div>
+                                <div class="flow-box" style="flex:1; text-align:center;">
+                                    <div class="flow-box__title">Listen Server</div>
+                                    <div class="flow-box__items" style="margin-bottom:8px;">
+                                        <strong>Host + Client (플레이어)</strong><br>
+                                        ↓ &nbsp; ↓ &nbsp; ↓<br>
+                                        A &nbsp; B &nbsp; C (클라이언트)
+                                    </div>
+                                    <div class="flow-box__items" style="border-top:1px solid var(--border-default); padding-top:6px;">호스트가 서버 역할 / 호스트 유리</div>
+                                </div>
+                                <div class="flow-box" style="flex:1; text-align:center;">
+                                    <div class="flow-box__title">P2P</div>
+                                    <div class="flow-box__items" style="margin-bottom:8px;">
+                                        <strong>A ⟷ B</strong><br>
+                                        ↕ &nbsp;&nbsp;&nbsp; ↕<br>
+                                        &nbsp;&nbsp;<strong>C</strong>
+                                    </div>
+                                    <div class="flow-box__items" style="border-top:1px solid var(--border-default); padding-top:6px;">서버 없음 (메쉬) / 완전 대칭</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">세 가지 서버 호스팅 방식 비교</p>
                     </div>
                 </div>
 
@@ -180,27 +193,26 @@ public:
                 <div class="q">Dedicated Server의 비용은 얼마나 드나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-Dedicated Server 비용 예시:
-
-FPS 게임 (64명, 60틱):
-├─ CPU: ~0.5 vCPU per match
-├─ RAM: ~500MB per match
-├─ 대역폭: ~500KB/s per match
-└─ 월 비용 (1000 동시 매치): ~$3,000-5,000
-
-MMORPG (5000명 동시접속):
-├─ CPU: 8-16 vCPU
-├─ RAM: 32-64GB
-├─ 대역폭: ~50MB/s
-└─ 월 비용: ~$2,000-5,000 per server
-
-비용 최적화 전략:
-✓ Auto-scaling (플레이어 적을 때 서버 축소)
-✓ Spot instances (저렴한 스팟 인스턴스)
-✓ 지역별 서버 배치 (가까운 서버로 연결)
-✓ 매치 완료 후 빠른 서버 재활용
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row" style="justify-content:center; align-items:stretch; gap:16px;">
+                                <div class="flow-box" style="flex:1;">
+                                    <div class="flow-box__title">FPS 게임 (64명, 60틱)</div>
+                                    <div class="flow-box__items">CPU: ~0.5 vCPU/match<br>RAM: ~500MB/match<br>대역폭: ~500KB/s/match<br>월 비용 (1000 동시 매치): ~$3,000-5,000</div>
+                                </div>
+                                <div class="flow-box" style="flex:1;">
+                                    <div class="flow-box__title">MMORPG (5000명 동시접속)</div>
+                                    <div class="flow-box__items">CPU: 8-16 vCPU<br>RAM: 32-64GB<br>대역폭: ~50MB/s<br>월 비용: ~$2,000-5,000/server</div>
+                                </div>
+                            </div>
+                            <div style="text-align:center; margin: 8px 0;"><span class="flow-arrow-down">↓</span></div>
+                            <div class="flow-row" style="justify-content:center;">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">비용 최적화 전략</div>
+                                    <div class="flow-box__items">Auto-scaling (플레이어 적을 때 서버 축소)<br>Spot instances (저렴한 스팟 인스턴스)<br>지역별 서버 배치 (가까운 서버로 연결)<br>매치 완료 후 빠른 서버 재활용</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">Dedicated Server 비용 예시 및 최적화 전략</p>
                     </div>
                 </div>
             </div>
@@ -213,28 +225,30 @@ MMORPG (5000명 동시접속):
                 <div class="a">
                     <p><strong>플레이어 중 한 명</strong>이 서버와 클라이언트 역할을 동시에 합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-Listen Server 구조:
-
-┌───────────────────────────────────────┐
-│           Host (서버 + 클라이언트)      │
-│  ┌─────────────┐  ┌─────────────┐     │
-│  │   Server    │──│   Client    │     │
-│  │  (게임로직)  │  │  (렌더링)   │     │
-│  └──────┬──────┘  └─────────────┘     │
-│         │                             │
-└─────────┼─────────────────────────────┘
-          │
-    ┌─────┴─────┐
-    ▼           ▼
- Client A    Client B
-(게스트)     (게스트)
-
-호스트의 이점:
-- 0ms 지연 (자기 서버니까)
-- 호스트 이탈 = 게임 종료
-- 치트 가능 (서버 권한 보유)
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row" style="justify-content:center; margin-bottom:8px;">
+                                <div class="flow-box flow-box--highlight" style="text-align:center;">
+                                    <div class="flow-box__title">Host (서버 + 클라이언트)</div>
+                                    <div class="flow-box__items">Server (게임로직) + Client (렌더링)</div>
+                                </div>
+                            </div>
+                            <div style="text-align:center; margin:4px 0;">
+                                <span class="flow-arrow-down">↓</span>
+                                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                                <span class="flow-arrow-down">↓</span>
+                            </div>
+                            <div class="flow-row" style="justify-content:center;">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Client A</div>
+                                    <div class="flow-box__items">(게스트)</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Client B</div>
+                                    <div class="flow-box__items">(게스트)</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">호스트 이점: 0ms 지연, 서버 권한 보유 / 단점: 호스트 이탈 = 게임 종료, 치트 가능</p>
                     </div>
                 </div>
 
@@ -352,34 +366,41 @@ private:
                 <div class="a">
                     <p><strong>1:1 또는 소수 인원</strong>의 게임에 적합합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-P2P 적합 사례:
-
-격투 게임 (1v1):
-┌─────┐         ┌─────┐
-│  A  │◀───────▶│  B  │
-└─────┘  직접   └─────┘
-         연결
-
-- 서버 비용 없음
-- 지연 최소화 (직접 연결)
-- 롤백 넷코드와 궁합 좋음
-
-RTS (2-8명, Lockstep):
-┌─────┐    ┌─────┐
-│  A  │◀──▶│  B  │
-└──┬──┘    └──┬──┘
-   │          │
-   └────┬─────┘
-        ▼
-     ┌─────┐
-     │  C  │
-     └─────┘
-
-- 입력만 공유 (대역폭 낮음)
-- 모두가 같은 시뮬레이션
-- 한 명이라도 느리면 모두 대기
-                        </pre>
+                        <div class="flow-diagram">
+                            <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">격투 게임 (1v1):</div>
+                            <div class="flow-row" style="margin-bottom:16px;">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">A</div>
+                                </div>
+                                <span class="flow-arrow">⟷</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">B</div>
+                                </div>
+                                <div class="flow-box flow-box--highlight" style="margin-left:12px;">
+                                    <div class="flow-box__items">서버 비용 없음 / 지연 최소화 (직접 연결) / 롤백 넷코드와 궁합 좋음</div>
+                                </div>
+                            </div>
+                            <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">RTS (2-8명, Lockstep):</div>
+                            <div class="flow-row" style="margin-bottom:4px;">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">A</div>
+                                </div>
+                                <span class="flow-arrow">⟷</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">B</div>
+                                </div>
+                            </div>
+                            <div style="text-align:center; margin:4px 0;"><span class="flow-arrow-down">↓</span></div>
+                            <div class="flow-row" style="margin-bottom:8px;">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">C</div>
+                                </div>
+                                <div class="flow-box flow-box--highlight" style="margin-left:12px;">
+                                    <div class="flow-box__items">입력만 공유 (대역폭 낮음) / 모두가 같은 시뮬레이션 / 한 명이라도 느리면 모두 대기</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">P2P 적합 사례: 격투 게임과 RTS</p>
                     </div>
                 </div>
 
@@ -454,27 +475,27 @@ private:
                 <div class="a">
                     <p>많은 게임이 <strong>하이브리드</strong> 방식을 사용합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-하이브리드 예시들:
-
-1. Fortnite / PUBG:
-   ├─ 랭크 매치: Dedicated Server (공정성)
-   └─ 커스텀 매치: Listen Server (비용 절감)
-
-2. Call of Duty:
-   ├─ PC: Dedicated Server
-   └─ 콘솔: Listen Server + Host Migration
-
-3. 격투 게임 (Street Fighter 6):
-   ├─ 온라인: P2P + 롤백 넷코드
-   └─ 토너먼트: Dedicated Server
-
-4. MMO (WoW):
-   └─ 전체: Dedicated Server (필수)
-
-5. 인디 게임:
-   └─ Steam Relay (Valve 서버 이용)
-                        </pre>
+                        <div class="hierarchy-diagram">
+                            <div class="hierarchy-item hierarchy-item--root">하이브리드 예시들</div>
+                            <div class="hierarchy-children">
+                                <div class="hierarchy-item">
+                                    <strong>Fortnite / PUBG</strong> — 랭크 매치: Dedicated Server (공정성) / 커스텀 매치: Listen Server (비용 절감)
+                                </div>
+                                <div class="hierarchy-item">
+                                    <strong>Call of Duty</strong> — PC: Dedicated Server / 콘솔: Listen Server + Host Migration
+                                </div>
+                                <div class="hierarchy-item">
+                                    <strong>격투 게임 (SF6)</strong> — 온라인: P2P + 롤백 넷코드 / 토너먼트: Dedicated Server
+                                </div>
+                                <div class="hierarchy-item">
+                                    <strong>MMO (WoW)</strong> — 전체: Dedicated Server (필수)
+                                </div>
+                                <div class="hierarchy-item">
+                                    <strong>인디 게임</strong> — Steam Relay (Valve 서버 이용)
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">실제 게임들의 서버 방식 선택 사례</p>
                     </div>
                 </div>
 
@@ -534,27 +555,55 @@ public:
                 <div class="q">어떤 방식을 선택해야 하나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-서버 방식 선택 플로우차트:
-
-                    ┌───────────────┐
-                    │ 경쟁/랭크 게임? │
-                    └───────┬───────┘
-                    Yes ↙     ↘ No
-         ┌─────────────┐    ┌───────────────┐
-         │  Dedicated  │    │  플레이어 수?  │
-         │   Server    │    └───────┬───────┘
-         └─────────────┘      ≤4 ↙     ↘ >4
-                    ┌───────────┐    ┌───────────┐
-                    │   P2P     │    │  Listen   │
-                    │ (격투,RTS)│    │  Server   │
-                    └───────────┘    └───────────┘
-
-예산 고려:
-├─ 예산 충분: Dedicated Server
-├─ 예산 제한: Listen + Host Migration
-└─ 예산 없음: P2P + Steam Relay
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row" style="justify-content:center; margin-bottom:8px;">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">경쟁/랭크 게임?</div>
+                                </div>
+                            </div>
+                            <div style="text-align:center; margin:4px 0;">
+                                <span style="font-size:0.8rem; color:var(--text-muted);">Yes</span>
+                                <span class="flow-arrow-down">↓</span>
+                                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                                <span style="font-size:0.8rem; color:var(--text-muted);">No</span>
+                                <span class="flow-arrow-down">↓</span>
+                            </div>
+                            <div class="flow-row" style="justify-content:center; margin-bottom:8px;">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Dedicated Server</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">플레이어 수?</div>
+                                </div>
+                            </div>
+                            <div style="text-align:center; margin:4px 0;">
+                                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                                <span style="font-size:0.8rem; color:var(--text-muted);">4명 이하</span>
+                                <span class="flow-arrow-down">↓</span>
+                                &nbsp;&nbsp;&nbsp;
+                                <span style="font-size:0.8rem; color:var(--text-muted);">4명 초과</span>
+                                <span class="flow-arrow-down">↓</span>
+                            </div>
+                            <div class="flow-row" style="justify-content:center; margin-bottom:12px;">
+                                <div style="flex:1;"></div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">P2P</div>
+                                    <div class="flow-box__items">(격투, RTS)</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Listen Server</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="hierarchy-diagram" style="margin-top:12px;">
+                            <div class="hierarchy-item hierarchy-item--root">예산 고려</div>
+                            <div class="hierarchy-children">
+                                <div class="hierarchy-item">예산 충분: Dedicated Server</div>
+                                <div class="hierarchy-item">예산 제한: Listen + Host Migration</div>
+                                <div class="hierarchy-item">예산 없음: P2P + Steam Relay</div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">서버 방식 선택 플로우차트</p>
                     </div>
 
                     <table class="compare-table">

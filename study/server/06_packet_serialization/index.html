@@ -8,9 +8,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../server.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../server.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>1바이트를 아끼기 위한 전쟁</h1>
             <p class="subtitle">게임 패킷 직렬화와 대역폭 최적화 기법</p>
         </header>
@@ -22,19 +24,25 @@
                 <div class="a">
                     <p>메모리의 데이터를 <strong>바이트 스트림</strong>으로 변환하는 과정입니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-메모리 → 네트워크 전송 → 메모리
-
-┌─────────────────┐                     ┌─────────────────┐
-│ struct Player { │                     │ struct Player { │
-│   int id = 42   │──▶ [바이트 스트림] ──▶│   int id = ?    │
-│   float x = 1.5 │    2A 00 00 00      │   float x = ?   │
-│   float y = 2.0 │    00 00 C0 3F      │   float y = ?   │
-│ }               │    00 00 00 40      │ }               │
-└─────────────────┘                     └─────────────────┘
-    직렬화                                  역직렬화
- (Serialize)                            (Deserialize)
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row" style="justify-content:center;">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">struct Player</div>
+                                    <div class="flow-box__items">int id = 42<br>float x = 1.5<br>float y = 2.0</div>
+                                </div>
+                                <span class="flow-arrow">&rarr; 직렬화</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">바이트스트림</div>
+                                    <div class="flow-box__items" style="font-family:monospace;">2A 00 00 00<br>00 00 C0 3F<br>00 00 00 40</div>
+                                </div>
+                                <span class="flow-arrow">&rarr; 역직렬화</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">struct Player</div>
+                                    <div class="flow-box__items">int id = ?<br>float x = ?<br>float y = ?</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">메모리 &rarr; 네트워크 전송 &rarr; 메모리</p>
                     </div>
                     <p class="highlight">직렬화 없이는 구조체를 네트워크로 보낼 수 없습니다.</p>
                 </div>
@@ -159,20 +167,23 @@ struct PackedPacket {
                 <div class="a">
                     <p><strong>Zero-copy deserialization</strong> - 역직렬화 없이 바로 접근합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-일반 직렬화 (Protobuf 등):
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  네트워크    │────▶│   파싱       │────▶│   메모리     │
-│  버퍼        │     │   (복사)     │     │   객체       │
-└──────────────┘     └──────────────┘     └──────────────┘
-                          비용 발생!
-
-FlatBuffers:
-┌──────────────┐     ┌──────────────┐
-│  네트워크    │────▶│  직접 접근    │  (복사 없음!)
-│  버퍼        │◀────│  (포인터)    │
-└──────────────┘     └──────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">일반 직렬화 (Protobuf 등):</div>
+                            <div class="flow-row" style="justify-content:center; margin-bottom:12px;">
+                                <div class="flow-box"><div class="flow-box__title">네트워크 버퍼</div></div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box" style="border-color:#ef4444;"><div class="flow-box__title">파싱 (복사)</div><div class="flow-box__items">비용 발생!</div></div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box"><div class="flow-box__title">메모리 객체</div></div>
+                            </div>
+                            <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">FlatBuffers:</div>
+                            <div class="flow-row" style="justify-content:center;">
+                                <div class="flow-box"><div class="flow-box__title">네트워크 버퍼</div></div>
+                                <span class="flow-arrow">&harr;</span>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">직접 접근 (포인터)</div><div class="flow-box__items">복사 없음!</div></div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">일반 직렬화 vs FlatBuffers 비교</p>
                     </div>
                     <div class="code-block">
                         <div class="code-header">FlatBuffers 사용 예시</div>
@@ -293,35 +304,45 @@ public:
                 <div class="q">실제로 얼마나 압축이 되나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-플레이어 상태 패킷 비교:
-
-[일반 직렬화]
-struct PlayerState {
-    uint32_t id;           // 4 bytes
-    float x, y, z;         // 12 bytes
-    float pitch, yaw;      // 8 bytes
-    uint32_t health;       // 4 bytes
-    uint32_t armor;        // 4 bytes
-    bool isCrouching;      // 1 byte (+3 padding)
-    bool isAiming;         // 1 byte (+3 padding)
-};
-// Total: 40 bytes
-
-[비트 패킹 직렬화]
-- id: 10 bits (최대 1024명)
-- x, y: 각 16 bits (-1000~1000m, 3cm 정밀도)
-- z: 12 bits (0~100m, 2.5cm 정밀도)
-- pitch: 9 bits (-90~90도, 0.35도 정밀도)
-- yaw: 10 bits (0~360도, 0.35도 정밀도)
-- health: 7 bits (0~100)
-- armor: 7 bits (0~100)
-- isCrouching: 1 bit
-- isAiming: 1 bit
-// Total: 10+16+16+12+9+10+7+7+1+1 = 89 bits = 12 bytes
-
-절약: 40 - 12 = 28 bytes (70% 감소!)
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-side-by-side" style="gap: 12px;">
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">일반 직렬화 (40 bytes)</div>
+                                    <div class="flow-box" style="width:100%; text-align:left;">
+                                        <div class="flow-box__items" style="font-family:monospace; font-size:0.78rem;">
+                                            uint32_t id &mdash; 4B<br>
+                                            float x, y, z &mdash; 12B<br>
+                                            float pitch, yaw &mdash; 8B<br>
+                                            uint32_t health &mdash; 4B<br>
+                                            uint32_t armor &mdash; 4B<br>
+                                            bool isCrouching &mdash; 1B (+3 padding)<br>
+                                            bool isAiming &mdash; 1B (+3 padding)
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">비트 패킹 직렬화 (12 bytes)</div>
+                                    <div class="flow-box flow-box--highlight" style="width:100%; text-align:left;">
+                                        <div class="flow-box__items" style="font-family:monospace; font-size:0.78rem;">
+                                            id: 10 bits (최대 1024명)<br>
+                                            x, y: 각 16 bits (3cm 정밀도)<br>
+                                            z: 12 bits (2.5cm 정밀도)<br>
+                                            pitch: 9 bits (0.35도 정밀도)<br>
+                                            yaw: 10 bits (0.35도 정밀도)<br>
+                                            health: 7 bits (0~100)<br>
+                                            armor: 7 bits (0~100)<br>
+                                            isCrouching: 1 bit<br>
+                                            isAiming: 1 bit
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flow-box" style="width:100%; margin-top:8px; border-color:#22c55e;">
+                                <div class="flow-box__title" style="color:#22c55e;">절약: 40 - 12 = 28 bytes (70% 감소!)</div>
+                                <div class="flow-box__items">Total: 10+16+16+12+9+10+7+7+1+1 = 89 bits = 12 bytes</div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">플레이어 상태 패킷 비교</p>
                     </div>
                     <p class="highlight">60틱 서버에서 100명이면: 28 * 100 * 60 = 초당 168KB 절약</p>
                 </div>
@@ -423,28 +444,38 @@ public:
                 <div class="a">
                     <p>서버와 클라이언트가 같은 baseline을 유지해야 합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-Delta Snapshot 시스템:
-
-Server                                        Client
-  │                                              │
-  ├── Snapshot #10 (전체) ──────────────────────▶│ baseline = #10
-  │                                              │
-  ├── Delta #11 (vs #10) ──────────────────────▶│ 적용 → #11
-  │                                              │
-  ├── Delta #12 (vs #10) ──────────────────────▶│ 적용 → #12
-  │                                              │
-  │◀────────────────────────── ACK #12 ─────────│
-  │                                              │
-  │   baseline 업데이트: #12                      │
-  │                                              │
-  ├── Delta #13 (vs #12) ──────────────────────▶│ 적용 → #13
-  │                                              │
-  │   만약 #11, #12가 손실되면?                   │
-  │                                              │
-  ├── Delta #13 (vs #10) ──────────────────────▶│ #10 baseline
-  │   ↑ ACK 안 온 가장 오래된 baseline 사용        │ 에서 적용
-                        </pre>
+                        <div class="flow-diagram">
+                            <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">Delta Snapshot 시스템:</div>
+                            <div class="flow-side-by-side" style="gap: 12px;">
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">Server</div>
+                                    <div class="flow-col" style="gap:4px;">
+                                        <div class="flow-label">Snapshot #10 (전체) &rarr;</div>
+                                        <div class="flow-label">Delta #11 (vs #10) &rarr;</div>
+                                        <div class="flow-label">Delta #12 (vs #10) &rarr;</div>
+                                        <div class="flow-label" style="color:#60a5fa;">&larr; ACK #12 수신</div>
+                                        <div class="flow-label" style="color:#22c55e;">baseline 업데이트: #12</div>
+                                        <div class="flow-label">Delta #13 (vs #12) &rarr;</div>
+                                    </div>
+                                </div>
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">Client</div>
+                                    <div class="flow-col" style="gap:4px;">
+                                        <div class="flow-label">baseline = #10</div>
+                                        <div class="flow-label">적용 &rarr; #11</div>
+                                        <div class="flow-label">적용 &rarr; #12</div>
+                                        <div class="flow-label" style="color:#60a5fa;">ACK #12 전송 &rarr;</div>
+                                        <div class="flow-label">&nbsp;</div>
+                                        <div class="flow-label">적용 &rarr; #13</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flow-box" style="width:100%; margin-top:12px; border-color:#ef4444;">
+                                <div class="flow-box__title" style="color:#ef4444;">만약 #11, #12가 손실되면?</div>
+                                <div class="flow-box__items">Delta #13 (vs #10)으로 전송 &rarr; ACK 안 온 가장 오래된 baseline 사용</div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">Delta Snapshot 기반 동기화</p>
                     </div>
                 </div>
             </div>
@@ -667,24 +698,38 @@ private:
                 <div class="q">대역폭 예산은 어떻게 계획하나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-대역폭 예산 예시 (FPS, 60틱, 32명):
-
-[클라이언트 → 서버] (업로드)
-- 입력 패킷: ~20 bytes * 60/s = 1.2 KB/s
-
-[서버 → 클라이언트] (다운로드)
-- 월드 스냅샷: ~12 bytes/entity * 32명 * 20/s = 7.5 KB/s
-- 이벤트: ~200 bytes/s (평균)
-- 합계: ~8 KB/s
-
-대역폭 최적화 체크리스트:
-□ 위치: float(4B) → quantized(2B)
-□ 회전: quaternion(16B) → smallest-three(4B)
-□ 델타 압축 적용
-□ Interest Management로 불필요한 엔티티 제외
-□ 틱레이트 조절 (가까운 적: 60Hz, 먼 적: 10Hz)
-                        </pre>
+                        <div class="flow-diagram">
+                            <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px; font-weight:600;">대역폭 예산 예시 (FPS, 60틱, 32명):</div>
+                            <div class="flow-side-by-side" style="gap: 12px;">
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">클라이언트 &rarr; 서버 (업로드)</div>
+                                    <div class="flow-box" style="width:100%;">
+                                        <div class="flow-box__items">입력 패킷: ~20 bytes &times; 60/s = 1.2 KB/s</div>
+                                    </div>
+                                </div>
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">서버 &rarr; 클라이언트 (다운로드)</div>
+                                    <div class="flow-box" style="width:100%;">
+                                        <div class="flow-box__items">
+                                            월드 스냅샷: ~12B/entity &times; 32명 &times; 20/s = 7.5 KB/s<br>
+                                            이벤트: ~200 bytes/s (평균)<br>
+                                            <strong>합계: ~8 KB/s</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flow-box" style="width:100%; margin-top:12px; text-align:left;">
+                                <div class="flow-box__title">대역폭 최적화 체크리스트</div>
+                                <div class="flow-box__items">
+                                    &check; 위치: float(4B) &rarr; quantized(2B)<br>
+                                    &check; 회전: quaternion(16B) &rarr; smallest-three(4B)<br>
+                                    &check; 델타 압축 적용<br>
+                                    &check; Interest Management로 불필요한 엔티티 제외<br>
+                                    &check; 틱레이트 조절 (가까운 적: 60Hz, 먼 적: 10Hz)
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">대역폭 예산 계획</p>
                     </div>
                 </div>
             </div>

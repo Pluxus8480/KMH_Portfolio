@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>멀리 있는 나무를 왜 정밀하게 그릴까?</h1>
             <p class="subtitle">LOD 시스템으로 렌더링 성능 최적화하기</p>
         </header>
@@ -26,22 +28,24 @@
                     <p class="warning">10만 폴리곤 모델이 화면에 10픽셀로 그려진다면? → 99.99% 낭비!</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-같은 캐릭터, 다른 거리
-
-가까움 (LOD 0)        중간 (LOD 1)        멀리 (LOD 2)
-
-    ╭─────╮             ╭───╮               ╭╮
-   ╱│     │╲           ╱│   │╲             ││
-  ╱ │     │ ╲         │ │   │ │            ││
- │  │     │  │        │ └───┘ │            ╰╯
- │  │     │  │        │       │
- │  │     │  │        ╰───────╯
- ╰──┴─────┴──╯
-
- 50,000 폴리곤        5,000 폴리곤       500 폴리곤
- 화면 500px           화면 50px          화면 5px
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight" style="flex:3;">
+                                    <div class="flow-box__title">LOD 0 (가까움)</div>
+                                    <div class="flow-box__items">50,000 폴리곤<br>화면 500px</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box" style="flex:2;">
+                                    <div class="flow-box__title">LOD 1 (중간)</div>
+                                    <div class="flow-box__items">5,000 폴리곤<br>화면 50px</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box" style="flex:1;">
+                                    <div class="flow-box__title">LOD 2 (멀리)</div>
+                                    <div class="flow-box__items">500 폴리곤<br>화면 5px</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -252,16 +256,22 @@ public:
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-LOD 전환 방법 비교
-
-즉시 전환:          히스테리시스:         블렌딩:
-LOD 0 ━━━┓         LOD 0 ━━━╮          LOD 0 ━━━╲
-         ┃              │   ╰╮              ╲
-LOD 1    ┗━━━       LOD 1   ╰━━━        LOD 1 ━━╲━━
-                                                 ╲
-팝핑 발생!        전환 빈도 감소       부드러운 전환
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">즉시 전환</div>
+                                    <div class="flow-box__items">LOD 0 &rarr; LOD 1<br>팝핑 발생!</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">히스테리시스</div>
+                                    <div class="flow-box__items">전환 경계에 마진 추가<br>전환 빈도 감소</div>
+                                </div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">블렌딩</div>
+                                    <div class="flow-box__items">두 LOD를 알파 블렌딩<br>부드러운 전환</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -366,19 +376,19 @@ private:
                     <p class="highlight">HLOD(Hierarchical LOD)는 여러 물체를 하나로 병합합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-HLOD 계층 구조
-
-가까움:                  멀리:
-┌─────┐ ┌─────┐         ┌───────────┐
-│건물1│ │건물2│   →    │  건물 그룹  │
-└─────┘ └─────┘         │   (병합)   │
-┌─────┐ ┌─────┐         └───────────┘
-│건물3│ │건물4│
-└─────┘ └─────┘
-
-개별 렌더링 (4 draw calls)   단일 렌더링 (1 draw call)
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">가까움 (개별 렌더링)</div>
+                                    <div class="flow-box__items">건물1, 건물2, 건물3, 건물4<br>4 Draw Calls</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">멀리 (HLOD 병합)</div>
+                                    <div class="flow-box__items">건물 그룹 (병합)<br>1 Draw Call</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <p><strong>Impostor (빌보드):</strong></p>

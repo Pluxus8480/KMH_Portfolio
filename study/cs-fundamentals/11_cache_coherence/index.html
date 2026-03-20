@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"Core마다 캐시가 달라도 괜찮나요?"</h1>
             <p class="subtitle">MESI 프로토콜과 캐시 일관성</p>
         </header>
@@ -27,37 +29,25 @@
                     <p>각 코어가 별도 캐시를 가지면 <strong>같은 데이터의 다른 버전</strong>이 존재할 수 있습니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    캐시 일관성 문제 예시                              │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   초기: Memory[X] = 0                                               │
-│                                                                     │
-│   Core 0              Core 1              Memory                    │
-│   ┌─────────┐         ┌─────────┐         ┌─────────┐              │
-│   │Cache: - │         │Cache: - │         │ X = 0   │              │
-│   └─────────┘         └─────────┘         └─────────┘              │
-│                                                                     │
-│   Step 1: Core 0 reads X                                           │
-│   ┌─────────┐         ┌─────────┐         ┌─────────┐              │
-│   │Cache:X=0│         │Cache: - │         │ X = 0   │              │
-│   └─────────┘         └─────────┘         └─────────┘              │
-│                                                                     │
-│   Step 2: Core 1 reads X                                           │
-│   ┌─────────┐         ┌─────────┐         ┌─────────┐              │
-│   │Cache:X=0│         │Cache:X=0│         │ X = 0   │              │
-│   └─────────┘         └─────────┘         └─────────┘              │
-│                                                                     │
-│   Step 3: Core 0 writes X = 1 (캐시만 업데이트)                     │
-│   ┌─────────┐         ┌─────────┐         ┌─────────┐              │
-│   │Cache:X=1│         │Cache:X=0│ ← 불일치!│ X = 0   │              │
-│   └─────────┘         └─────────┘         └─────────┘              │
-│                                                                     │
-│   문제: Core 1이 X를 읽으면 오래된 값(0)을 봄!                      │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">초기 상태</div>
+                                    <div class="flow-box__items">Core 0 Cache: -<br>Core 1 Cache: -<br>Memory[X] = 0</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Step 1-2: 양쪽 읽기</div>
+                                    <div class="flow-box__items">Core 0 Cache: X=0<br>Core 1 Cache: X=0<br>Memory[X] = 0</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box" style="border-color:#e74c3c">
+                                    <div class="flow-box__title">Step 3: Core 0 writes X=1</div>
+                                    <div class="flow-box__items">Core 0 Cache: X=1<br>Core 1 Cache: X=0 &larr; 불일치!<br>Memory[X] = 0</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">문제: Core 1이 X를 읽으면 오래된 값(0)을 봄!</p>
                     </div>
                 </div>
             </div>
@@ -71,97 +61,118 @@
                     <p>각 캐시 라인에 4가지 상태 중 하나를 부여합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                      MESI 상태 정의                                  │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   M (Modified)    : 이 캐시만 가지고 있고, 수정됨                   │
-│                     메모리와 다른 값 (dirty)                        │
-│                     다른 코어가 읽으려면 이 캐시가 제공해야 함       │
-│                                                                     │
-│   E (Exclusive)   : 이 캐시만 가지고 있고, 깨끗함                   │
-│                     메모리와 같은 값                                │
-│                     수정하면 M 상태로 전이 (버스 트래픽 없음)       │
-│                                                                     │
-│   S (Shared)      : 여러 캐시가 가지고 있고, 깨끗함                 │
-│                     메모리와 같은 값                                │
-│                     수정하려면 다른 캐시 무효화 필요                 │
-│                                                                     │
-│   I (Invalid)     : 무효 (사용 불가)                                │
-│                     데이터를 사용하려면 다시 로드해야 함             │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">M (Modified)</div>
+                                    <div class="flow-box__items">이 캐시만 보유, 수정됨 (dirty)<br>메모리와 다른 값<br>다른 코어가 읽으려면 이 캐시가 제공</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">E (Exclusive)</div>
+                                    <div class="flow-box__items">이 캐시만 보유, 깨끗함<br>메모리와 같은 값<br>수정하면 M으로 (버스 트래픽 없음)</div>
+                                </div>
+                            </div>
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">S (Shared)</div>
+                                    <div class="flow-box__items">여러 캐시 보유, 깨끗함<br>메모리와 같은 값<br>수정하려면 다른 캐시 무효화 필요</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">I (Invalid)</div>
+                                    <div class="flow-box__items">무효 (사용 불가)<br>사용하려면 다시 로드 필요</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    MESI 상태 전이 다이어그램                         │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│                    ┌──────────────────────┐                        │
-│                    │      Invalid (I)      │                        │
-│                    └───────────┬──────────┘                        │
-│                                │                                    │
-│       Read Miss ───────────────┼─────────── Read Miss              │
-│       (only me)                │           (others have it)        │
-│            │                   │                │                  │
-│            ▼                   │                ▼                  │
-│     ┌─────────────┐           │         ┌─────────────┐           │
-│     │ Exclusive(E)│◀──────────┼────────▶│  Shared (S) │           │
-│     └──────┬──────┘           │         └──────┬──────┘           │
-│            │                   │                │                  │
-│       Write│                   │           Write│                  │
-│            │                   │                │                  │
-│            ▼                   │                ▼                  │
-│     ┌─────────────┐           │         ┌─────────────┐           │
-│     │ Modified(M) │◀──────────┴────────▶│ (other)     │           │
-│     └─────────────┘  (다른 코어가 읽기)  │ Invalidate  │           │
-│            │                            └─────────────┘           │
-│            │                                                       │
-│       Write-back (eviction)                                        │
-│            │                                                       │
-│            ▼                                                       │
-│        [Memory]                                                    │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Invalid (I)</div>
+                                    <div class="flow-box__items">시작 상태</div>
+                                </div>
+                            </div>
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Exclusive (E)</div>
+                                    <div class="flow-box__items">&larr; Read Miss (only me)<br>&rarr; Write: Modified로</div>
+                                </div>
+                                <div class="flow-arrow">&harr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Shared (S)</div>
+                                    <div class="flow-box__items">&larr; Read Miss (others have it)<br>&rarr; Write: Invalidate + Modified로</div>
+                                </div>
+                            </div>
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Modified (M)</div>
+                                    <div class="flow-box__items">&larr; E에서 Write<br>&larr; S에서 Write + 다른 캐시 무효화<br>&rarr; 다른 코어 읽기: S로 + write-back<br>&rarr; eviction: Memory로 write-back</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="q">구체적인 동작 예시를 보여주세요.</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    MESI 동작 예시                                    │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Core 0 Cache        Core 1 Cache        Memory                   │
-│   Line | State        Line | State        Value                    │
-│   ─────┼──────        ─────┼──────        ─────                    │
-│                                                                     │
-│   1. Core 0 reads X (miss)                                         │
-│   X=5  │  E           -    │  I           X=5                      │
-│        (Exclusive: 나만 가지고 있음)                                │
-│                                                                     │
-│   2. Core 1 reads X (miss, bus snoop)                              │
-│   X=5  │  S           X=5  │  S           X=5                      │
-│        (Shared: 둘 다 가지고 있음)                                  │
-│                                                                     │
-│   3. Core 0 writes X=10                                            │
-│   X=10 │  M           -    │  I           X=5                      │
-│        ↑                   ↑                                       │
-│   (Modified)         (Invalidated!)                                │
-│                                                                     │
-│   4. Core 1 reads X (miss)                                         │
-│   X=10 │  S           X=10 │  S           X=10                     │
-│        (Core 0이 먼저 메모리에 write-back)                          │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="mesi-example" style="border:1px solid var(--border-color, #444); border-radius:8px; overflow:hidden;">
+                            <div style="background:var(--card-bg, #1e1e2e); padding:10px 16px; border-bottom:1px solid var(--border-color, #444); text-align:center; font-weight:bold; font-size:1.05em;">MESI 동작 예시</div>
+                            <div style="padding:16px; display:flex; flex-direction:column; gap:18px;">
+                                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; text-align:center; font-weight:bold; font-size:0.95em; border-bottom:1px solid var(--border-color, #444); padding-bottom:8px;">
+                                    <span>Core 0 Cache</span>
+                                    <span>Core 1 Cache</span>
+                                    <span>Memory</span>
+                                </div>
+                                <div>
+                                    <div style="font-weight:bold; margin-bottom:6px;">1. Core 0 reads X (miss)</div>
+                                    <div class="flow-diagram">
+                                        <div class="flow-row">
+                                            <div class="flow-box flow-box--highlight" style="flex:1"><div class="flow-box__title">Core 0</div><div class="flow-box__items">X=5 | <strong>E</strong></div></div>
+                                            <div class="flow-box" style="flex:1; opacity:0.5"><div class="flow-box__title">Core 1</div><div class="flow-box__items">- | I</div></div>
+                                            <div class="flow-box" style="flex:1"><div class="flow-box__title">Memory</div><div class="flow-box__items">X=5</div></div>
+                                        </div>
+                                    </div>
+                                    <p style="font-size:0.85em; color:var(--text-secondary, #aaa); margin:4px 0 0 0;">(Exclusive: 나만 가지고 있음)</p>
+                                </div>
+                                <span class="flow-arrow-down">&darr;</span>
+                                <div>
+                                    <div style="font-weight:bold; margin-bottom:6px;">2. Core 1 reads X (miss, bus snoop)</div>
+                                    <div class="flow-diagram">
+                                        <div class="flow-row">
+                                            <div class="flow-box" style="flex:1"><div class="flow-box__title">Core 0</div><div class="flow-box__items">X=5 | <strong>S</strong></div></div>
+                                            <div class="flow-box" style="flex:1"><div class="flow-box__title">Core 1</div><div class="flow-box__items">X=5 | <strong>S</strong></div></div>
+                                            <div class="flow-box" style="flex:1"><div class="flow-box__title">Memory</div><div class="flow-box__items">X=5</div></div>
+                                        </div>
+                                    </div>
+                                    <p style="font-size:0.85em; color:var(--text-secondary, #aaa); margin:4px 0 0 0;">(Shared: 둘 다 가지고 있음)</p>
+                                </div>
+                                <span class="flow-arrow-down">&darr;</span>
+                                <div>
+                                    <div style="font-weight:bold; margin-bottom:6px;">3. Core 0 writes X=10</div>
+                                    <div class="flow-diagram">
+                                        <div class="flow-row">
+                                            <div class="flow-box flow-box--highlight" style="flex:1"><div class="flow-box__title">Core 0</div><div class="flow-box__items">X=10 | <strong>M</strong><br>(Modified)</div></div>
+                                            <div class="flow-box" style="flex:1; border-color:#e74c3c"><div class="flow-box__title">Core 1</div><div class="flow-box__items">- | <strong>I</strong><br>(Invalidated!)</div></div>
+                                            <div class="flow-box" style="flex:1"><div class="flow-box__title">Memory</div><div class="flow-box__items">X=5</div></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <span class="flow-arrow-down">&darr;</span>
+                                <div>
+                                    <div style="font-weight:bold; margin-bottom:6px;">4. Core 1 reads X (miss)</div>
+                                    <div class="flow-diagram">
+                                        <div class="flow-row">
+                                            <div class="flow-box" style="flex:1"><div class="flow-box__title">Core 0</div><div class="flow-box__items">X=10 | <strong>S</strong></div></div>
+                                            <div class="flow-box" style="flex:1"><div class="flow-box__title">Core 1</div><div class="flow-box__items">X=10 | <strong>S</strong></div></div>
+                                            <div class="flow-box" style="flex:1"><div class="flow-box__title">Memory</div><div class="flow-box__items">X=10</div></div>
+                                        </div>
+                                    </div>
+                                    <p style="font-size:0.85em; color:var(--text-secondary, #aaa); margin:4px 0 0 0;">(Core 0이 먼저 메모리에 write-back)</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job System & Burst | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+
+        <header class="content-header">
+            <h1>메인 스레드 혼자 일하게 둘 건가?</h1>
+            <p class="subtitle">Job System과 Burst Compiler로 멀티스레드 성능 끌어올리기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 왜 메인 스레드만으로는 부족한가</h2>
+            <div class="conversation">
+                <div class="q">Unity는 싱글 스레드라고 하던데, 멀티코어를 활용할 수 없나요?</div>
+                <div class="a">
+                    <p>Unity의 대부분의 API는 메인 스레드에서만 호출할 수 있습니다. 하지만 현대 CPU는 4~16개의 코어를 가지고 있죠. 한 코어만 100%로 돌리고 나머지는 놀리는 것은 엄청난 낭비입니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>레스토랑에 셰프가 8명 있는데, 주문을 1명이 다 처리하는 상황입니다. 나머지 7명은 구경만 하고 있죠.</p>
+                        <p>Job System은 주문을 여러 셰프에게 나눠주는 주방장(스케줄러)입니다.</p>
+                    </div>
+
+                    <p class="highlight">C# Job System은 Unity가 제공하는 안전한 멀티스레드 프레임워크입니다. 직접 Thread를 생성하지 않고도 워커 스레드를 활용할 수 있습니다.</p>
+                </div>
+
+                <div class="q">그냥 C# Thread를 쓰면 안 되나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th>C# Thread</th><th>Job System</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>스레드 관리</td><td>직접 생성/파괴</td><td>Unity가 풀 관리</td></tr>
+                            <tr><td>Unity API</td><td>사용 불가</td><td>제한적 사용 가능</td></tr>
+                            <tr><td>안전성</td><td>경쟁 조건 직접 처리</td><td>안전 시스템 내장</td></tr>
+                            <tr><td>Burst 호환</td><td>불가</td><td>완벽 호환</td></tr>
+                            <tr><td>디버깅</td><td>매우 어려움</td><td>안전 검사 제공</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">주의: C# Thread에서 Transform, GameObject 등 Unity API를 호출하면 크래시가 발생합니다. Job System은 이를 컴파일 타임에 방지합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: IJob — 첫 번째 Job 만들기</h2>
+            <div class="conversation">
+                <div class="q">가장 간단한 Job은 어떻게 만드나요?</div>
+                <div class="a">
+                    <p>IJob 인터페이스를 구현하는 struct를 만듭니다. class가 아니라 <strong>struct</strong>여야 합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 기본 IJob</div>
+                        <pre><code>using Unity.Jobs;
+using Unity.Collections;
+
+// Job 정의 (반드시 struct!)
+public struct CalculateDamageJob : IJob
+{
+    public int baseDamage;
+    public float multiplier;
+    public NativeArray&lt;int&gt; result; // 결과를 담을 컨테이너
+
+    public void Execute()
+    {
+        result[0] = (int)(baseDamage * multiplier);
+    }
+}
+
+// Job 실행
+public class DamageCalculator : MonoBehaviour
+{
+    void Update()
+    {
+        // 1. NativeArray 할당
+        var result = new NativeArray&lt;int&gt;(1, Allocator.TempJob);
+
+        // 2. Job 생성 및 데이터 설정
+        var job = new CalculateDamageJob
+        {
+            baseDamage = 100,
+            multiplier = 1.5f,
+            result = result
+        };
+
+        // 3. 스케줄링 (워커 스레드에 전달)
+        JobHandle handle = job.Schedule();
+
+        // 4. 완료 대기
+        handle.Complete();
+
+        // 5. 결과 읽기
+        Debug.Log($"최종 데미지: {result[0]}");
+
+        // 6. 메모리 해제 (필수!)
+        result.Dispose();
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">핵심 흐름: 할당 &rarr; 설정 &rarr; Schedule &rarr; Complete &rarr; 읽기 &rarr; Dispose</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: IJobParallelFor — 대량 데이터 병렬 처리</h2>
+            <div class="conversation">
+                <div class="q">수천 개의 적을 동시에 처리하려면 어떻게 하나요?</div>
+                <div class="a">
+                    <p>IJobParallelFor는 배열의 각 요소를 여러 워커 스레드에 나눠서 병렬 처리합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 1만 개 적의 거리 계산</div>
+                        <pre><code>using Unity.Burst;
+using Unity.Jobs;
+using Unity.Collections;
+using Unity.Mathematics;
+
+[BurstCompile]
+public struct DistanceCheckJob : IJobParallelFor
+{
+    [ReadOnly] public NativeArray&lt;float3&gt; enemyPositions;
+    [ReadOnly] public float3 playerPosition;
+    [ReadOnly] public float alertRange;
+    public NativeArray&lt;bool&gt; isInRange;
+
+    public void Execute(int index)
+    {
+        float distance = math.distance(enemyPositions[index],
+                                        playerPosition);
+        isInRange[index] = distance &lt;= alertRange;
+    }
+}
+
+// 사용
+void Update()
+{
+    var positions = new NativeArray&lt;float3&gt;(enemyCount, Allocator.TempJob);
+    var results = new NativeArray&lt;bool&gt;(enemyCount, Allocator.TempJob);
+
+    // 적 위치 복사
+    for (int i = 0; i &lt; enemyCount; i++)
+        positions[i] = enemies[i].transform.position;
+
+    var job = new DistanceCheckJob
+    {
+        enemyPositions = positions,
+        playerPosition = player.position,
+        alertRange = 20f,
+        isInRange = results
+    };
+
+    // innerLoopBatchCount = 64: 64개씩 묶어서 스레드에 배분
+    JobHandle handle = job.Schedule(enemyCount, 64);
+    handle.Complete();
+
+    for (int i = 0; i &lt; enemyCount; i++)
+    {
+        if (results[i])
+            enemies[i].SetAlert(true);
+    }
+
+    positions.Dispose();
+    results.Dispose();
+}</code></pre>
+                    </div>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">메인 스레드</div>
+                                <div class="flow-box__items">데이터 준비 &rarr; Schedule</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">워커 스레드들</div>
+                                <div class="flow-box__items">[0..63] [64..127] [128..191] ...</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">메인 스레드</div>
+                                <div class="flow-box__items">Complete &rarr; 결과 사용</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: NativeContainer — 안전한 데이터 공유</h2>
+            <div class="conversation">
+                <div class="q">왜 일반 배열 대신 NativeArray를 써야 하나요?</div>
+                <div class="a">
+                    <p>C#의 관리 힙(managed heap)에 있는 객체는 GC가 이동시킬 수 있고, 워커 스레드에서 안전하게 접근할 수 없습니다.</p>
+                    <p class="highlight">NativeContainer는 비관리 메모리(unmanaged memory)에 할당되어 GC의 영향을 받지 않고, Job System의 안전 검사를 지원합니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>컨테이너</th><th>용도</th><th>비고</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>NativeArray&lt;T&gt;</strong></td><td>고정 크기 배열</td><td>가장 기본, 자주 사용</td></tr>
+                            <tr><td><strong>NativeList&lt;T&gt;</strong></td><td>가변 크기 리스트</td><td>ParallelWriter로 병렬 추가</td></tr>
+                            <tr><td><strong>NativeHashMap&lt;K,V&gt;</strong></td><td>해시맵</td><td>키-값 검색</td></tr>
+                            <tr><td><strong>NativeQueue&lt;T&gt;</strong></td><td>큐</td><td>FIFO 처리</td></tr>
+                        </tbody>
+                    </table>
+
+                    <p class="warning">주의: NativeContainer는 반드시 Dispose()로 해제해야 합니다. 해제하지 않으면 메모리 누수가 발생하고, Unity가 경고 로그를 출력합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Allocator 종류</div>
+                        <pre><code>// Temp: 1프레임 이내 사용 (가장 빠름)
+var temp = new NativeArray&lt;int&gt;(100, Allocator.Temp);
+
+// TempJob: 4프레임 이내, Job에서 사용
+var tempJob = new NativeArray&lt;int&gt;(100, Allocator.TempJob);
+
+// Persistent: 수동 Dispose까지 유지 (가장 느림)
+var persistent = new NativeArray&lt;int&gt;(100, Allocator.Persistent);</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">[ReadOnly]와 [WriteOnly] 어트리뷰트는 왜 쓰나요?</div>
+                <div class="a">
+                    <p>Job System의 안전 시스템이 데이터 경쟁(race condition)을 방지하기 위해 사용합니다.</p>
+                    <p class="key-point">[ReadOnly]로 표시된 NativeArray는 여러 Job이 동시에 읽을 수 있습니다. 아무 표시가 없으면 하나의 Job만 접근할 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Burst Compiler — 극한의 최적화</h2>
+            <div class="conversation">
+                <div class="q">Burst Compiler는 무엇이고 얼마나 빨라지나요?</div>
+                <div class="a">
+                    <p>Burst는 C# Job 코드를 고도로 최적화된 네이티브 코드(LLVM 기반)로 변환하는 컴파일러입니다.</p>
+                    <p class="highlight">단순히 [BurstCompile]을 추가하는 것만으로 10~100배 성능 향상을 얻을 수 있습니다. SIMD 자동 벡터화, 루프 언롤링, 상수 전파 등을 수행합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Burst 적용</div>
+                        <pre><code>using Unity.Burst;
+
+[BurstCompile]
+public struct BoidSimulationJob : IJobParallelFor
+{
+    [ReadOnly] public NativeArray&lt;float3&gt; positions;
+    [ReadOnly] public NativeArray&lt;float3&gt; velocities;
+    public NativeArray&lt;float3&gt; newVelocities;
+    public float neighborRadius;
+    public float deltaTime;
+
+    public void Execute(int index)
+    {
+        float3 separation = float3.zero;
+        float3 alignment = float3.zero;
+        float3 cohesion = float3.zero;
+        int neighborCount = 0;
+
+        for (int i = 0; i &lt; positions.Length; i++)
+        {
+            if (i == index) continue;
+            float dist = math.distance(positions[index], positions[i]);
+            if (dist &lt; neighborRadius)
+            {
+                separation += (positions[index] - positions[i]) / dist;
+                alignment += velocities[i];
+                cohesion += positions[i];
+                neighborCount++;
+            }
+        }
+
+        if (neighborCount &gt; 0)
+        {
+            alignment /= neighborCount;
+            cohesion = (cohesion / neighborCount) - positions[index];
+            newVelocities[index] = math.normalize(
+                separation + alignment * 0.5f + cohesion * 0.3f);
+        }
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">Burst에서 사용할 수 없는 것은 무엇인가요?</div>
+                <div class="a">
+                    <p>Burst는 HPC#(High Performance C#) 서브셋만 지원합니다:</p>
+                    <ul>
+                        <li>참조 타입(class, string) 사용 불가 &rarr; struct만 가능</li>
+                        <li>가상 호출(virtual), 인터페이스 호출 불가</li>
+                        <li>try-catch 사용 불가</li>
+                        <li>Unity.Mathematics 라이브러리 사용 권장 (System.Math 대신)</li>
+                        <li>GC 할당 금지 (new class(), List 등)</li>
+                    </ul>
+                    <p class="key-point">Unity.Mathematics의 float3, math.distance 등은 Burst와 SIMD에 최적화되어 있으므로 Vector3 대신 사용하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실전 — Job 체이닝과 의존성</h2>
+            <div class="conversation">
+                <div class="q">여러 Job을 순서대로 실행하려면 어떻게 하나요?</div>
+                <div class="a">
+                    <p>JobHandle을 사용하여 의존성 체인을 만듭니다. 메인 스레드를 블로킹하지 않고 Job끼리 순서를 보장할 수 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Job 체이닝</div>
+                        <pre><code>void Update()
+{
+    var positions = new NativeArray&lt;float3&gt;(count, Allocator.TempJob);
+    var distances = new NativeArray&lt;float&gt;(count, Allocator.TempJob);
+    var filtered = new NativeArray&lt;bool&gt;(count, Allocator.TempJob);
+
+    // Job 1: 거리 계산
+    var distJob = new CalcDistanceJob
+    {
+        positions = positions,
+        target = playerPos,
+        distances = distances
+    };
+    JobHandle distHandle = distJob.Schedule(count, 64);
+
+    // Job 2: 거리 기반 필터링 (Job 1 완료 후 실행)
+    var filterJob = new FilterJob
+    {
+        distances = distances,
+        maxRange = 50f,
+        results = filtered
+    };
+    JobHandle filterHandle = filterJob.Schedule(count, 64, distHandle);
+
+    // 최종 완료 대기 (두 Job 모두 끝남)
+    filterHandle.Complete();
+
+    // 결과 사용...
+    positions.Dispose();
+    distances.Dispose();
+    filtered.Dispose();
+}</code></pre>
+                    </div>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Schedule Job1</div>
+                                <div class="flow-box__items">메인 스레드 (즉시 반환)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Schedule Job2</div>
+                                <div class="flow-box__items">의존성: Job1 handle</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Complete</div>
+                                <div class="flow-box__items">모든 Job 완료 대기</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="key-point">Schedule 호출은 즉시 반환됩니다. 실제 실행은 워커 스레드에서 비동기로 진행되며, Complete를 호출해야 결과를 안전하게 읽을 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Job System</strong>은 안전한 멀티스레드 프레임워크로, 워커 스레드를 자동 관리한다</li>
+                <li><strong>IJob</strong>은 단일 작업, <strong>IJobParallelFor</strong>는 대량 데이터 병렬 처리에 사용한다</li>
+                <li><strong>NativeContainer</strong>는 비관리 메모리에 할당되며 반드시 Dispose해야 한다</li>
+                <li><strong>Burst Compiler</strong>는 [BurstCompile]만 추가해도 10~100배 성능을 향상시킨다</li>
+                <li>여러 Job은 <strong>JobHandle 의존성</strong>으로 체이닝하여 순서를 보장한다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

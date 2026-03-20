@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"if문이 왜 느려요?"</h1>
             <p class="subtitle">CPU 파이프라인과 분기 예측의 비밀</p>
         </header>
@@ -34,29 +36,33 @@
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    5단계 파이프라인 예시                             │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   단계:   IF      ID      EX      MEM     WB                        │
-│          (Fetch) (Decode) (Execute) (Memory) (WriteBack)            │
-│                                                                     │
-│   사이클 1: [I1-IF]                                                 │
-│   사이클 2: [I1-ID] [I2-IF]                                         │
-│   사이클 3: [I1-EX] [I2-ID] [I3-IF]                                 │
-│   사이클 4: [I1-MEM][I2-EX] [I3-ID] [I4-IF]                         │
-│   사이클 5: [I1-WB] [I2-MEM][I3-EX] [I4-ID] [I5-IF]                 │
-│   사이클 6:        [I2-WB] [I3-MEM][I4-EX] [I5-ID] [I6-IF]          │
-│   ...                                                               │
-│                                                                     │
-│   파이프라인 없이: 5명령어 × 5사이클 = 25사이클                     │
-│   파이프라인 사용: 5 + 4 = 9사이클 (거의 1 IPC!)                    │
-│                                                                     │
-│   ※ 현대 CPU는 10~20단계 파이프라인 사용                           │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">사이클 1</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>I1-IF</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">사이클 2</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>I1-ID</span><span>I2-IF</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">사이클 3</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>I1-EX</span><span>I2-ID</span><span>I3-IF</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">사이클 4</div>
+                                <div class="pipeline-bar pb-light"><span>I1-MEM</span><span>I2-EX</span><span>I3-ID</span><span>I4-IF</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">사이클 5</div>
+                                <div class="pipeline-bar pb-light"><span>I1-WB</span><span>I2-MEM</span><span>I3-EX</span><span>I4-ID</span><span>I5-IF</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">사이클 6</div>
+                                <div class="pipeline-bar pb-post"><span>I2-WB</span><span>I3-MEM</span><span>I4-EX</span><span>I5-ID</span><span>I6-IF</span></div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">단계: IF(Fetch) &rarr; ID(Decode) &rarr; EX(Execute) &rarr; MEM(Memory) &rarr; WB(WriteBack)<br>파이프라인 없이: 25사이클 / 파이프라인 사용: 9사이클 (거의 1 IPC!) / 현대 CPU는 10~20단계</p>
                     </div>
                 </div>
 
@@ -102,30 +108,25 @@
                     <p>if문의 결과를 알기 전에 다음 명령어를 미리 가져와야 하기 때문입니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    분기로 인한 파이프라인 스톨                        │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   코드:                                                             │
-│   1: CMP r1, r2      // 비교                                        │
-│   2: JE label        // 같으면 점프                                  │
-│   3: ADD r3, 1       // 점프 안 하면 실행                           │
-│   ...                                                               │
-│   label:                                                            │
-│   10: SUB r3, 1      // 점프하면 실행                               │
-│                                                                     │
-│   예측 실패 시:                                                      │
-│   ┌────┬────┬────┬────┬────┬────┬────┬────┬────┬────┐             │
-│   │I1-F│I1-D│I1-E│I1-M│I1-W│    │    │    │    │    │             │
-│   │    │I2-F│I2-D│I2-E│MISS│FLUSH│    │    │    │    │ ← 파이프   │
-│   │    │    │I3-F│I3-D│XXXX│XXXX│I10-F│I10-D│I10-E│    │   라인    │
-│   └────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘   비움!    │
-│                                                                     │
-│   예측 실패 페널티: 10~20 사이클 (파이프라인 깊이만큼)              │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">정상 실행</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>I1-F</span><span>I1-D</span><span>I1-E</span><span>I1-M</span><span>I1-W</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">분기 명령</div>
+                                <div class="pipeline-bar pb-shadow"><span>I2-F</span><span>I2-D</span><span>I2-E</span><span style="background:#e74c3c;color:#fff">MISS</span><span style="background:#e74c3c;color:#fff">FLUSH</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">잘못된 예측 (버림)</div>
+                                <div class="pipeline-bar pb-shadow"><span>I3-F</span><span>I3-D</span><span style="background:#e74c3c;color:#fff">XXXX</span><span style="background:#e74c3c;color:#fff">XXXX</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">재시작 (올바른 경로)</div>
+                                <div class="pipeline-bar pb-light"><span>I10-F</span><span>I10-D</span><span>I10-E</span><span>...</span></div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">예측 실패 페널티: 10~20 사이클 (파이프라인 깊이만큼) - 파이프라인 비움!</p>
                     </div>
 
                     <p class="highlight">현대 CPU는 90% 이상의 예측 정확도를 가집니다!</p>
@@ -136,33 +137,30 @@
                     <p>과거 패턴을 기억하고 예측합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    2비트 포화 카운터 예측기                          │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   상태 전이:                                                         │
-│                                                                     │
-│              Taken                    Taken                         │
-│          ┌──────────┐            ┌──────────┐                      │
-│          │          ▼            │          ▼                      │
-│   ┌──────┴───┐  ┌───┴──────┐  ┌─┴────────┐  ┌───────────┐         │
-│   │ Strongly │  │  Weakly  │  │  Weakly  │  │ Strongly  │         │
-│   │ Not      │──│ Not      │──│  Taken   │──│  Taken    │         │
-│   │ Taken    │  │ Taken    │  │          │  │           │         │
-│   │  (00)    │  │  (01)    │  │  (10)    │  │   (11)    │         │
-│   └──────────┘  └──────────┘  └──────────┘  └───────────┘         │
-│          ▲          │              │              ▲                 │
-│          └──────────┘              └──────────────┘                 │
-│           Not Taken                  Not Taken                      │
-│                                                                     │
-│   루프 예시 (for 100회):                                            │
-│   - 처음 1~2회: 예측 실패 가능                                      │
-│   - 이후: Strongly Taken 상태 유지 → 99% 예측 성공                 │
-│   - 마지막: 1회 예측 실패 (루프 탈출)                               │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Strongly Not Taken (00)</div>
+                                    <div class="flow-box__items">예측: Not Taken</div>
+                                </div>
+                                <div class="flow-arrow">Taken &rarr;<br>&larr; Not Taken</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Weakly Not Taken (01)</div>
+                                    <div class="flow-box__items">예측: Not Taken</div>
+                                </div>
+                                <div class="flow-arrow">Taken &rarr;<br>&larr; Not Taken</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Weakly Taken (10)</div>
+                                    <div class="flow-box__items">예측: Taken</div>
+                                </div>
+                                <div class="flow-arrow">Taken &rarr;<br>&larr; Not Taken</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Strongly Taken (11)</div>
+                                    <div class="flow-box__items">예측: Taken</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">루프 예시 (for 100회): 처음 1~2회 예측 실패 가능 &rarr; 이후 Strongly Taken 유지 (99% 성공) &rarr; 마지막 1회 예측 실패 (루프 탈출)</p>
                     </div>
                 </div>
             </div>

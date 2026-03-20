@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>1000개 물체 중 충돌을 어떻게 빨리 찾을까?</h1>
             <p class="subtitle">Quadtree와 Octree를 활용한 공간 분할 기법</p>
         </header>
@@ -26,12 +28,24 @@
                     <p class="warning">1000개 물체 = 약 50만 번의 충돌 체크, 프레임마다!</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-Brute Force 방식: O(n²)
-
-물체 1000개 → 1000 × 999 / 2 = 499,500 쌍
-60 FPS → 초당 약 3천만 번 충돌 체크! 💀
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Brute Force: O(n&sup2;)</div>
+                                    <div class="flow-box__items">물체 1000개</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">499,500 쌍</div>
+                                    <div class="flow-box__items">1000 &times; 999 / 2</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">60 FPS</div>
+                                    <div class="flow-box__items">초당 약 <strong>3천만 번</strong> 충돌 체크!</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -57,25 +71,29 @@ Brute Force 방식: O(n²)
                     <p class="key-point">Quad(4) + Tree = 4개로 나누는 트리</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-Quadtree 분할 과정
-
-┌─────────────────┐       ┌────────┬────────┐
-│                 │       │   NW   │   NE   │
-│    전체 공간     │  →    ├────────┼────────┤
-│                 │       │   SW   │   SE   │
-└─────────────────┘       └────────┴────────┘
-
-각 사분면에 물체가 많으면 다시 4분할:
-
-┌────┬────┬────────┐
-│    │    │   NE   │
-├────┼────┤        │
-│    │ ★ ├────────┤  ★ 위치의 물체를 찾으려면
-├────┴────┤   SE   │  → NW → SE만 탐색!
-│   SW    │        │
-└─────────┴────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">전체 공간</div>
+                                    <div class="flow-box__items">분할 전 단일 영역</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">4분할</div>
+                                    <div class="flow-box__items">
+                                        <table style="width:100%; text-align:center; border-collapse:collapse;">
+                                            <tr><td style="border:1px solid rgba(255,255,255,0.3); padding:8px;">NW</td><td style="border:1px solid rgba(255,255,255,0.3); padding:8px;">NE</td></tr>
+                                            <tr><td style="border:1px solid rgba(255,255,255,0.3); padding:8px;">SW</td><td style="border:1px solid rgba(255,255,255,0.3); padding:8px;">SE</td></tr>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">재귀 분할</div>
+                                    <div class="flow-box__items">물체가 많은 사분면을 다시 4분할<br>탐색: NW &rarr; SE만!</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -250,20 +268,21 @@ public:
                     <p class="highlight">Quadtree의 3D 버전이 Octree입니다. 공간을 8개의 영역으로 분할합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-Octree 8분할
-
-     ┌────────┬────────┐
-    /│  UNW   │  UNE  /│
-   / ├────────┼──────/ ┤
-  ┌────────┬────────┐  │
-  │  USW   │  USE   │  │   U = Upper (위)
-  ├────────┼────────┤  │   L = Lower (아래)
-  │  LNW   │  LNE   │ /│
-  ├────────┼────────┤/ ┤   N/S = North/South
-  │  LSW   │  LSE   │  │   E/W = East/West
-  └────────┴────────┘──┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; max-width:300px; margin:0 auto;">
+                                <div style="background:rgba(78,205,196,0.2); border:1px solid rgba(78,205,196,0.5); padding:8px; text-align:center; border-radius:4px;">UNW</div>
+                                <div style="background:rgba(78,205,196,0.2); border:1px solid rgba(78,205,196,0.5); padding:8px; text-align:center; border-radius:4px;">UNE</div>
+                                <div style="background:rgba(78,205,196,0.2); border:1px solid rgba(78,205,196,0.5); padding:8px; text-align:center; border-radius:4px;">USW</div>
+                                <div style="background:rgba(78,205,196,0.2); border:1px solid rgba(78,205,196,0.5); padding:8px; text-align:center; border-radius:4px;">USE</div>
+                                <div style="background:rgba(108,92,231,0.2); border:1px solid rgba(108,92,231,0.5); padding:8px; text-align:center; border-radius:4px;">LNW</div>
+                                <div style="background:rgba(108,92,231,0.2); border:1px solid rgba(108,92,231,0.5); padding:8px; text-align:center; border-radius:4px;">LNE</div>
+                                <div style="background:rgba(108,92,231,0.2); border:1px solid rgba(108,92,231,0.5); padding:8px; text-align:center; border-radius:4px;">LSW</div>
+                                <div style="background:rgba(108,92,231,0.2); border:1px solid rgba(108,92,231,0.5); padding:8px; text-align:center; border-radius:4px;">LSE</div>
+                            </div>
+                            <div style="text-align:center; margin-top:0.5em; font-size:0.85em; color:#aaa;">
+                                U = Upper (위) / L = Lower (아래) / N/S = North/South / E/W = East/West
+                            </div>
+                        </div>
                     </div>
 
                     <table class="compare-table">
@@ -447,15 +466,19 @@ public:
                     <p>경계를 약간 넓혀서 물체가 여러 노드에 걸치는 문제 해결</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-일반 Quadtree                 Loose Quadtree
-┌────┬────┐                  ┌────┬────┐
-│  ○│    │  물체가 경계에    │  (○)   │  경계를 확장하여
-│   │    │  걸치면 처리 복잡  │        │  단일 노드에 포함
-├───┼────┤                  ├────┼────┤
-│   │    │                  │        │
-└───┴────┘                  └────┴────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">일반 Quadtree</div>
+                                    <div class="flow-box__items">물체가 경계에 걸치면<br>처리가 복잡해짐</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Loose Quadtree</div>
+                                    <div class="flow-box__items">경계를 확장하여<br>단일 노드에 포함</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <p><strong>2. Object Pool 사용:</strong></p>

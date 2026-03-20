@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
 
         <header class="content-header">
             <h1>하드코딩은 이제 그만</h1>
@@ -87,23 +87,30 @@ public:
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Content Browser에서의 Data Asset:
-
-Content/
-├── Items/
-│   ├── DA_Sword_Iron.uasset      ← UItemDataAsset
-│   ├── DA_Sword_Steel.uasset
-│   ├── DA_Sword_Legendary.uasset
-│   └── ...
-│
-└── Enemies/
-    ├── DA_Enemy_Goblin.uasset    ← UEnemyDataAsset
-    ├── DA_Enemy_Orc.uasset
-    └── DA_Enemy_Dragon.uasset
-
-각 에셋을 더블클릭하면 에디터에서 값 수정 가능!
-                </pre>
+                <div class="hierarchy-diagram">
+                    <div class="hierarchy-item hierarchy-item--root">Content/</div>
+                    <div class="hierarchy-children">
+                        <div style="margin-bottom: 12px;">
+                            <div class="hierarchy-item" style="font-weight: 600; margin-bottom: 6px;">Items/</div>
+                            <div class="hierarchy-children">
+                                <div class="hierarchy-item">DA_Sword_Iron.uasset</div>
+                                <div class="hierarchy-item">DA_Sword_Steel.uasset</div>
+                                <div class="hierarchy-item flow-box--highlight">DA_Sword_Legendary.uasset</div>
+                            </div>
+                            <div class="flow-label">UItemDataAsset</div>
+                        </div>
+                        <div>
+                            <div class="hierarchy-item" style="font-weight: 600; margin-bottom: 6px;">Enemies/</div>
+                            <div class="hierarchy-children">
+                                <div class="hierarchy-item">DA_Enemy_Goblin.uasset</div>
+                                <div class="hierarchy-item">DA_Enemy_Orc.uasset</div>
+                                <div class="hierarchy-item flow-box--warning">DA_Enemy_Dragon.uasset</div>
+                            </div>
+                            <div class="flow-label">UEnemyDataAsset</div>
+                        </div>
+                    </div>
+                    <div class="flow-label" style="margin-top: 12px;">각 에셋을 더블클릭하면 에디터에서 값 수정 가능!</div>
+                </div>
                 <p class="diagram-caption">Data Asset 폴더 구조</p>
             </div>
         </section>
@@ -213,22 +220,58 @@ struct FItemTableRow : public FTableRowBase
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Data Table 에디터 뷰:
-
-┌────────────────────────────────────────────────────────────┐
-│  DT_Items (Data Table)                                     │
-├────────────┬──────────┬───────┬────────┬─────────┬────────┤
-│ Row Name   │ Name     │ Level │ Damage │ Defense │ Price  │
-├────────────┼──────────┼───────┼────────┼─────────┼────────┤
-│ Iron_Sword │철검      │  1    │  10    │   0     │  100   │
-│ Steel_Sword│강철검    │  5    │  25    │   0     │  500   │
-│ Iron_Shield│철방패    │  1    │   0    │  15     │  150   │
-│ Heal_Potion│회복약    │  1    │   0    │   0     │   50   │
-└────────────┴──────────┴───────┴────────┴─────────┴────────┘
-
-CSV로 Export/Import 가능!
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-group">
+                        <div class="flow-group__title">DT_Items (Data Table)</div>
+                        <table class="compare-table">
+                            <thead>
+                                <tr>
+                                    <th>Row Name</th>
+                                    <th>Name</th>
+                                    <th>Level</th>
+                                    <th>Damage</th>
+                                    <th>Defense</th>
+                                    <th>Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Iron_Sword</td>
+                                    <td>철검</td>
+                                    <td>1</td>
+                                    <td>10</td>
+                                    <td>0</td>
+                                    <td>100</td>
+                                </tr>
+                                <tr>
+                                    <td>Steel_Sword</td>
+                                    <td>강철검</td>
+                                    <td>5</td>
+                                    <td>25</td>
+                                    <td>0</td>
+                                    <td>500</td>
+                                </tr>
+                                <tr>
+                                    <td>Iron_Shield</td>
+                                    <td>철방패</td>
+                                    <td>1</td>
+                                    <td>0</td>
+                                    <td>15</td>
+                                    <td>150</td>
+                                </tr>
+                                <tr>
+                                    <td>Heal_Potion</td>
+                                    <td>회복약</td>
+                                    <td>1</td>
+                                    <td>0</td>
+                                    <td>0</td>
+                                    <td>50</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="flow-label" style="margin-top: 8px;">CSV로 Export/Import 가능!</div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Data Table 에디터</p>
             </div>
 
@@ -268,24 +311,38 @@ if (SwordData)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Curve Float: CC_DamageByLevel
-
-스탯
-│
-100├                          ●
-   │                      ●
- 75├                  ●
-   │              ●
- 50├          ●
-   │      ●
- 25├  ●
-   │●
-  0└──────────────────────────→ 레벨
-    0   5   10  15  20  25  30
-
-비선형 성장 곡선으로 자연스러운 밸런스!
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-group">
+                        <div class="flow-group__title">Curve Float: CC_DamageByLevel</div>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Lv 0~5</div>
+                                <div class="pipeline-bar pb-gbuffer" style="flex: 0.25;"><span>0~25</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Lv 5~10</div>
+                                <div class="pipeline-bar pb-gbuffer" style="flex: 0.35;"><span>25~40</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Lv 10~15</div>
+                                <div class="pipeline-bar pb-light" style="flex: 0.5;"><span>40~55</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Lv 15~20</div>
+                                <div class="pipeline-bar pb-light" style="flex: 0.65;"><span>55~72</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Lv 20~25</div>
+                                <div class="pipeline-bar pb-post" style="flex: 0.8;"><span>72~88</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Lv 25~30</div>
+                                <div class="pipeline-bar pb-post" style="flex: 1;"><span>88~100</span></div>
+                            </div>
+                        </div>
+                        <div class="flow-label" style="margin-top: 8px;">비선형 성장 곡선으로 자연스러운 밸런스!</div>
+                    </div>
+                </div>
                 <p class="diagram-caption">레벨-스탯 커브</p>
             </div>
 

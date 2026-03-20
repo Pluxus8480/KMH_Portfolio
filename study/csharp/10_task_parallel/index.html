@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Parallel Library | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>일을 나눠서 동시에 처리하면?</h1>
+            <p class="subtitle">Task Parallel Library로 멀티코어 활용하기</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: Thread에서 Task로의 진화</h2>
+            <div class="conversation">
+                <div class="q">Thread를 직접 만들면 되는데, 왜 Task를 쓰나요?</div>
+                <div class="a">
+                    <p>Thread는 운영체제 수준의 리소스로, 생성과 소멸에 비용이 큽니다. 하나의 Thread는 약 <strong>1MB의 스택 메모리</strong>를 사용하며, 컨텍스트 스위칭 비용도 발생합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>비유로 이해하기</strong>
+                        <p><strong>Thread</strong>는 직원을 직접 고용하는 것입니다. 채용/해고 비용이 크고, 일이 없어도 월급을 줘야 합니다.</p>
+                        <p><strong>Task</strong>는 할 일 목록(작업)을 인력사무소(ThreadPool)에 맡기는 것입니다. 사무소가 적절한 인원을 배정하고, 일이 끝나면 다른 작업에 투입합니다.</p>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>Thread</th>
+                                <th>Task</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>추상화 수준</td>
+                                <td>OS 스레드 (저수준)</td>
+                                <td>작업 단위 (고수준)</td>
+                            </tr>
+                            <tr>
+                                <td>생성 비용</td>
+                                <td>높음 (~1MB 스택)</td>
+                                <td>낮음 (풀에서 빌림)</td>
+                            </tr>
+                            <tr>
+                                <td>반환값</td>
+                                <td>없음</td>
+                                <td>Task&lt;T&gt;로 결과 반환</td>
+                            </tr>
+                            <tr>
+                                <td>예외 처리</td>
+                                <td>스레드 내에서 직접 처리</td>
+                                <td>await에서 자동 전파</td>
+                            </tr>
+                            <tr>
+                                <td>취소</td>
+                                <td>Abort (위험)</td>
+                                <td>CancellationToken (안전)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">Task는 어떻게 만들고 실행하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - Task 기본 사용법</div>
+                        <pre><code>// 1. Task.Run: 가장 일반적인 방법
+Task task = Task.Run(() =>
+{
+    Console.WriteLine("백그라운드에서 실행 중");
+    Thread.Sleep(1000);
+});
+
+// 2. 결과가 있는 Task
+Task&lt;int&gt; calcTask = Task.Run(() =>
+{
+    return CalculatePathfinding();
+});
+int result = await calcTask;
+
+// 3. 여러 Task 동시 실행 후 전부 대기
+Task&lt;MapData&gt; mapTask = Task.Run(() => LoadMap());
+Task&lt;AudioData&gt; audioTask = Task.Run(() => LoadAudio());
+Task&lt;TextureData&gt; texTask = Task.Run(() => LoadTextures());
+
+await Task.WhenAll(mapTask, audioTask, texTask);
+
+// 모든 결과 사용
+var map = mapTask.Result;
+var audio = audioTask.Result;
+var textures = texTask.Result;</code></pre>
+                    </div>
+                    <p class="highlight">Task.WhenAll을 사용하면 독립적인 작업들을 동시에 실행하여 총 소요 시간을 단축할 수 있습니다. 3초, 2초, 4초 걸리는 작업을 병렬로 돌리면 총 4초만에 완료됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: Parallel.For - 데이터 병렬 처리</h2>
+            <div class="conversation">
+                <div class="q">반복문을 병렬로 돌릴 수 있나요?</div>
+                <div class="a">
+                    <p><code>Parallel.For</code>와 <code>Parallel.ForEach</code>는 데이터 병렬 처리에 특화된 도구입니다. 내부적으로 데이터를 청크(chunk)로 분할하고 ThreadPool의 스레드에 분배합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Parallel.For 기본 사용</div>
+                        <pre><code>// 10000개 몬스터의 AI 업데이트
+Monster[] monsters = GetActiveMonsters();
+
+// 순차 처리: 싱글 코어만 사용
+for (int i = 0; i &lt; monsters.Length; i++)
+{
+    monsters[i].UpdateAI(deltaTime);
+}
+
+// 병렬 처리: 모든 코어 활용
+Parallel.For(0, monsters.Length, i =>
+{
+    monsters[i].UpdateAI(deltaTime);
+});</code></pre>
+                    </div>
+
+                    <p class="warning">Parallel.For 내부에서 공유 자원에 접근하면 경쟁 조건(race condition)이 발생합니다! 각 반복이 독립적일 때만 사용하세요.</p>
+                </div>
+
+                <div class="q">실제로 얼마나 빨라지나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 벤치마크: 경로 탐색 병렬화</div>
+                        <pre><code>// 1000개 NPC의 경로 재계산
+NPC[] npcs = GetAllNPCs();
+
+// 순차: 8코어 중 1개만 사용 → ~320ms
+foreach (var npc in npcs)
+    npc.RecalculatePath(navMesh);
+
+// 병렬: 8코어 모두 활용 → ~48ms (6.7배 향상)
+Parallel.ForEach(npcs, npc =>
+{
+    npc.RecalculatePath(navMesh);
+});
+
+// 최대 동시성 제한 (서버에서 중요)
+var options = new ParallelOptions
+{
+    MaxDegreeOfParallelism = Environment.ProcessorCount / 2
+};
+Parallel.ForEach(npcs, options, npc =>
+{
+    npc.RecalculatePath(navMesh);
+});</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>시나리오</th>
+                                <th>순차 처리</th>
+                                <th>Parallel (8코어)</th>
+                                <th>속도 향상</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>경로 탐색 x1000</td>
+                                <td>320ms</td>
+                                <td>48ms</td>
+                                <td>6.7배</td>
+                            </tr>
+                            <tr>
+                                <td>시야 검사 x5000</td>
+                                <td>150ms</td>
+                                <td>24ms</td>
+                                <td>6.3배</td>
+                            </tr>
+                            <tr>
+                                <td>충돌 검사 x10000</td>
+                                <td>80ms</td>
+                                <td>13ms</td>
+                                <td>6.2배</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">이론적 최대 속도 향상은 코어 수와 같지만, 스레드 관리 오버헤드로 인해 실제로는 70~85% 수준의 효율을 보입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: PLINQ - 쿼리의 병렬화</h2>
+            <div class="conversation">
+                <div class="q">LINQ 쿼리도 병렬로 실행할 수 있나요?</div>
+                <div class="a">
+                    <p>네! <code>.AsParallel()</code> 한 줄만 추가하면 LINQ 쿼리가 자동으로 병렬 실행됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - PLINQ 사용 예시</div>
+                        <pre><code>List&lt;Player&gt; allPlayers = GetAllPlayers();
+
+// 순차 LINQ
+var topPlayers = allPlayers
+    .Where(p => p.IsActive)
+    .Select(p => new { p.Name, Score = CalculateScore(p) })
+    .OrderByDescending(x => x.Score)
+    .Take(100)
+    .ToList();
+
+// 병렬 PLINQ: .AsParallel() 추가만 하면 됨!
+var topPlayersPlinq = allPlayers
+    .AsParallel()
+    .Where(p => p.IsActive)
+    .Select(p => new { p.Name, Score = CalculateScore(p) })
+    .OrderByDescending(x => x.Score)
+    .Take(100)
+    .ToList();</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">PLINQ가 항상 빠른 건 아니겠죠?</div>
+                <div class="a">
+                    <p>맞습니다. PLINQ는 요소별 처리 비용이 충분히 클 때만 효과적입니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">PLINQ 효과적</div>
+                                <div class="flow-box__items">요소별 처리가 무거움<br>데이터가 많음<br>각 요소가 독립적</div>
+                            </div>
+                            <div class="flow-arrow">vs</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">PLINQ 비효율적</div>
+                                <div class="flow-box__items">요소별 처리가 가벼움<br>데이터가 적음<br>순서가 중요함</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - PLINQ 세밀한 제어</div>
+                        <pre><code>// 최대 병렬 수준 제한
+var result = data.AsParallel()
+    .WithDegreeOfParallelism(4)
+    .Where(x => HeavyFilter(x))
+    .ToList();
+
+// 순서 보존이 필요할 때
+var orderedResult = data.AsParallel()
+    .AsOrdered()  // 원본 순서 유지 (약간의 오버헤드)
+    .Where(x => x.IsValid)
+    .Select(x => Transform(x))
+    .ToList();
+
+// 병렬이 비효율적이면 자동으로 순차 실행
+var autoResult = data.AsParallel()
+    .WithExecutionMode(ParallelExecutionMode.Default)
+    .Select(x => x * 2) // 너무 가벼우면 순차로 전환됨
+    .ToList();</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: CancellationToken - 안전한 작업 취소</h2>
+            <div class="conversation">
+                <div class="q">실행 중인 Task를 어떻게 안전하게 취소하나요?</div>
+                <div class="a">
+                    <p><code>CancellationToken</code>은 협력적(cooperative) 취소 메커니즘입니다. 작업을 강제로 중단하지 않고, "취소가 요청되었으니 적절히 종료하세요"라는 신호를 보냅니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - CancellationToken 기본 사용법</div>
+                        <pre><code>// 취소 토큰 소스 생성
+var cts = new CancellationTokenSource();
+CancellationToken token = cts.Token;
+
+// 취소 가능한 작업 시작
+Task loadTask = Task.Run(() =>
+{
+    for (int i = 0; i &lt; 1000; i++)
+    {
+        // 주기적으로 취소 확인
+        token.ThrowIfCancellationRequested();
+
+        LoadChunk(i);
+    }
+}, token);
+
+// 3초 후 자동 취소
+cts.CancelAfter(TimeSpan.FromSeconds(3));
+
+// 또는 수동 취소 (예: 유저가 취소 버튼 클릭)
+cts.Cancel();
+
+try
+{
+    await loadTask;
+}
+catch (OperationCanceledException)
+{
+    Console.WriteLine("로딩이 취소되었습니다.");
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">게임에서 CancellationToken이 필요한 상황이 뭔가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 씬 전환 시 로딩 취소</div>
+                        <pre><code>class SceneLoader
+{
+    private CancellationTokenSource _loadCts;
+
+    public async Task LoadSceneAsync(string sceneName)
+    {
+        // 이전 로딩이 진행 중이면 취소
+        _loadCts?.Cancel();
+        _loadCts = new CancellationTokenSource();
+        var token = _loadCts.Token;
+
+        try
+        {
+            // 병렬 로딩 with 취소 지원
+            var mapTask = LoadMapAsync(sceneName, token);
+            var npcTask = LoadNPCsAsync(sceneName, token);
+            var envTask = LoadEnvironmentAsync(sceneName, token);
+
+            await Task.WhenAll(mapTask, npcTask, envTask);
+
+            InitializeScene(
+                mapTask.Result, npcTask.Result, envTask.Result);
+        }
+        catch (OperationCanceledException)
+        {
+            // 정리 작업
+            CleanupPartialLoad();
+            Console.WriteLine($"{sceneName} 로딩 취소됨");
+        }
+    }
+
+    private async Task&lt;MapData&gt; LoadMapAsync(
+        string name, CancellationToken ct)
+    {
+        var data = new MapData();
+        foreach (var chunk in GetChunks(name))
+        {
+            ct.ThrowIfCancellationRequested();
+            await data.LoadChunkAsync(chunk);
+        }
+        return data;
+    }
+}</code></pre>
+                    </div>
+                    <p class="highlight">씬 전환 시 이전 씬의 로딩을 즉시 취소하고 새 씬 로딩을 시작할 수 있습니다. CancellationToken 없이는 이전 로딩이 끝날 때까지 기다려야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 게임 로딩 병렬화 실전</h2>
+            <div class="conversation">
+                <div class="q">게임의 초기 로딩을 TPL로 최적화하면 어떤 구조가 되나요?</div>
+                <div class="a">
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">순차 로딩</div>
+                                <div class="flow-box__items">맵 3초 &rarr; NPC 2초<br>&rarr; UI 1초 &rarr; 사운드 2초<br>총 8초</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">병렬 로딩</div>
+                                <div class="flow-box__items">맵/NPC/UI/사운드<br>동시 진행<br>총 3초 (가장 느린 것 기준)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 종합 로딩 시스템</div>
+                        <pre><code>class GameLoader
+{
+    private readonly IProgress&lt;float&gt; _progress;
+    private int _completedTasks;
+    private int _totalTasks;
+
+    public async Task&lt;GameData&gt; LoadGameAsync(
+        CancellationToken ct = default)
+    {
+        _totalTasks = 4;
+        _completedTasks = 0;
+
+        // 독립적인 리소스는 모두 병렬 로딩
+        var mapTask = LoadWithProgress(
+            () => LoadMapDataAsync(ct), "맵");
+        var npcTask = LoadWithProgress(
+            () => LoadNPCDataAsync(ct), "NPC");
+        var uiTask = LoadWithProgress(
+            () => LoadUIAssetsAsync(ct), "UI");
+        var audioTask = LoadWithProgress(
+            () => LoadAudioAsync(ct), "사운드");
+
+        await Task.WhenAll(mapTask, npcTask, uiTask, audioTask);
+
+        // 의존성이 있는 초기화는 순차 실행
+        var gameData = new GameData();
+        gameData.Map = mapTask.Result;
+        gameData.NPCs = npcTask.Result;
+        gameData.InitializeNPCPaths(); // 맵 + NPC 모두 필요
+
+        return gameData;
+    }
+
+    private async Task&lt;T&gt; LoadWithProgress&lt;T&gt;(
+        Func&lt;Task&lt;T&gt;&gt; loader, string name)
+    {
+        var result = await loader();
+        int done = Interlocked.Increment(ref _completedTasks);
+        _progress?.Report((float)done / _totalTasks);
+        Console.WriteLine($"[{done}/{_totalTasks}] {name} 로딩 완료");
+        return result;
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">Interlocked.Increment로 스레드 안전하게 진행 상황을 추적하고, IProgress&lt;T&gt;를 통해 UI 스레드에 로딩 진행률을 전달합니다.</p>
+                </div>
+
+                <div class="q">병렬 처리 시 주의할 점은?</div>
+                <div class="a">
+                    <p class="warning">공유 자원에 동시 접근하면 데이터가 손상됩니다. lock, Interlocked, ConcurrentDictionary 등의 동기화 도구를 사용하거나, 각 Task가 독립적인 데이터만 처리하도록 설계하세요.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 안전한 병렬 집계</div>
+                        <pre><code>// 위험: 공유 변수에 동시 접근
+int totalDamage = 0;
+Parallel.ForEach(attacks, attack =>
+{
+    totalDamage += attack.Damage; // 경쟁 조건!
+});
+
+// 안전: Interlocked 사용
+int totalDamageSafe = 0;
+Parallel.ForEach(attacks, attack =>
+{
+    Interlocked.Add(ref totalDamageSafe, attack.Damage);
+});
+
+// 더 빠른 방법: 로컬 합산 후 병합
+int fastest = attacks.AsParallel()
+    .Sum(a => a.Damage); // PLINQ가 알아서 분할/병합</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 요약 -->
+        <section class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li><strong>Task</strong>는 Thread보다 가벼운 작업 단위로, ThreadPool 기반으로 동작하며 결과 반환과 예외 전파를 자동 지원한다</li>
+                <li><strong>Parallel.For/ForEach</strong>는 데이터 병렬 처리에 최적화되어 있으며, 각 반복이 독립적일 때 코어 수에 비례한 성능 향상을 달성한다</li>
+                <li><strong>PLINQ</strong>은 .AsParallel() 한 줄로 LINQ 쿼리를 병렬화하지만, 요소별 처리가 가벼우면 오히려 느려진다</li>
+                <li><strong>CancellationToken</strong>은 협력적 취소 메커니즘으로, 씬 전환이나 타임아웃 시 안전하게 작업을 중단할 수 있다</li>
+                <li>병렬 처리 시 공유 자원 접근에는 반드시 <strong>Interlocked, lock, Concurrent 컬렉션</strong> 등의 동기화 도구를 사용해야 한다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

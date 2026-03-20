@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>물이 퍼지듯 영역을 채운다?</h1>
             <p class="subtitle">Flood Fill과 Flow Field를 활용한 경로 최적화</p>
         </header>
@@ -32,21 +34,65 @@
                     </ul>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-Flood Fill 예시
-
-시작 전:                  Flood Fill 후:
-┌─┬─┬─┬─┬─┐            ┌─┬─┬─┬─┬─┐
-│ │ │█│ │ │            │●│●│█│○│○│
-├─┼─┼─┼─┼─┤            ├─┼─┼─┼─┼─┤
-│ │★│█│ │ │   →       │●│★│█│○│○│
-├─┼─┼─┼─┼─┤            ├─┼─┼─┼─┼─┤
-│ │ │█│ │ │            │●│●│█│○│○│
-└─┴─┴─┴─┴─┘            └─┴─┴─┴─┴─┘
-
-★: 시작점  █: 벽  ●: 채워진 영역
-벽으로 분리된 오른쪽(○)은 채워지지 않음
-                        </pre>
+                        <div class="flow-diagram" style="flex-direction: column; gap: 1.2em;">
+                            <div style="font-weight: bold; text-align: center;">Flood Fill 예시</div>
+                            <div class="flow-row" style="justify-content: center; align-items: center; gap: 2em; flex-wrap: wrap;">
+                                <div style="text-align: center;">
+                                    <div style="font-size: 0.9em; margin-bottom: 0.5em; font-weight: bold;">시작 전:</div>
+                                    <table style="border-collapse: collapse; margin: 0 auto;">
+                                        <tr>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center;">&nbsp;</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center;">&nbsp;</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; background: #444; color: #fff;">█</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center;">&nbsp;</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center;">&nbsp;</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center;">&nbsp;</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; color: #facc15; font-weight: bold;">★</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; background: #444; color: #fff;">█</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center;">&nbsp;</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center;">&nbsp;</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center;">&nbsp;</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center;">&nbsp;</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; background: #444; color: #fff;">█</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center;">&nbsp;</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center;">&nbsp;</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <span class="flow-arrow" style="font-size: 1.5em;">→</span>
+                                <div style="text-align: center;">
+                                    <div style="font-size: 0.9em; margin-bottom: 0.5em; font-weight: bold;">Flood Fill 후:</div>
+                                    <table style="border-collapse: collapse; margin: 0 auto;">
+                                        <tr>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; background: rgba(59,130,246,0.3); color: #60a5fa;">●</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; background: rgba(59,130,246,0.3); color: #60a5fa;">●</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; background: #444; color: #fff;">█</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; color: #888;">○</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; color: #888;">○</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; background: rgba(59,130,246,0.3); color: #60a5fa;">●</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; background: rgba(59,130,246,0.3); color: #facc15; font-weight: bold;">★</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; background: #444; color: #fff;">█</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; color: #888;">○</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; color: #888;">○</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; background: rgba(59,130,246,0.3); color: #60a5fa;">●</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; background: rgba(59,130,246,0.3); color: #60a5fa;">●</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; background: #444; color: #fff;">█</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; color: #888;">○</td>
+                                            <td style="border: 1px solid #555; width: 32px; height: 32px; text-align: center; color: #888;">○</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                            <div style="text-align: center; font-size: 0.85em; color: #aaa;">★: 시작점 &nbsp; █: 벽 &nbsp; ●: 채워진 영역 &nbsp; 벽으로 분리된 오른쪽(○)은 채워지지 않음</div>
+                        </div>
                     </div>
                 </div>
 
@@ -184,22 +230,40 @@ public:
                     <p class="highlight">BFS로 목표에서 시작하여 각 셀까지의 거리를 기록합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-거리 필드 (Distance Field)
-
-목표(G)에서 BFS:
-┌───┬───┬───┬───┬───┐
-│ 4 │ 3 │ █ │ 5 │ 6 │
-├───┼───┼───┼───┼───┤
-│ 3 │ 2 │ █ │ 4 │ 5 │
-├───┼───┼───┼───┼───┤
-│ 2 │ 1 │ G │ 1 │ 2 │
-├───┼───┼───┼───┼───┤
-│ 3 │ 2 │ 1 │ 2 │ 3 │
-└───┴───┴───┴───┴───┘
-
-숫자 = 목표까지의 최단 거리
-                        </pre>
+                        <div class="flow-diagram" style="flex-direction: column; gap: 1em;">
+                            <div style="font-weight: bold; text-align: center;">거리 필드 (Distance Field) — 목표(G)에서 BFS:</div>
+                            <table style="border-collapse: collapse; margin: 0 auto;">
+                                <tr>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.1);">4</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.15);">3</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: #444; color: #fff;">█</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.08);">5</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.05);">6</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.15);">3</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.25);">2</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: #444; color: #fff;">█</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.1);">4</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.08);">5</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.25);">2</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.35);">1</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(34,197,94,0.3); color: #4ade80; font-weight: bold;">G</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.35);">1</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.25);">2</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.15);">3</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.25);">2</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.35);">1</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.25);">2</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(59,130,246,0.15);">3</td>
+                                </tr>
+                            </table>
+                            <p class="diagram-caption">숫자 = 목표까지의 최단 거리</p>
+                        </div>
                     </div>
 
                     <div class="code-block">
@@ -258,21 +322,40 @@ public:
                     <p class="highlight">각 셀에서 목표로 향하는 방향을 저장하여, 수천 유닛이 동일한 필드를 공유합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-Flow Field (화살표 = 이동 방향)
-
-┌───┬───┬───┬───┬───┐
-│ ↓ │ ↓ │ █ │ ↓ │ ↓ │
-├───┼───┼───┼───┼───┤
-│ ↓ │ ↓ │ █ │ ↙ │ ↓ │
-├───┼───┼───┼───┼───┤
-│ → │ → │ G │ ← │ ← │
-├───┼───┼───┼───┼───┤
-│ ↗ │ ↑ │ ↑ │ ↑ │ ↖ │
-└───┴───┴───┴───┴───┘
-
-모든 유닛은 화살표를 따라 이동하면 G에 도착!
-                        </pre>
+                        <div class="flow-diagram" style="flex-direction: column; gap: 1em;">
+                            <div style="font-weight: bold; text-align: center;">Flow Field (화살표 = 이동 방향)</div>
+                            <table style="border-collapse: collapse; margin: 0 auto;">
+                                <tr>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">↓</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">↓</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: #444; color: #fff;">█</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">↓</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">↓</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">↓</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">↓</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: #444; color: #fff;">█</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">↙</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">↓</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">→</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">→</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; background: rgba(34,197,94,0.3); color: #4ade80; font-weight: bold;">G</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">←</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">←</td>
+                                </tr>
+                                <tr>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">↗</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">↑</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">↑</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">↑</td>
+                                    <td style="border: 1px solid #555; width: 40px; height: 40px; text-align: center; font-size: 1.2em;">↖</td>
+                                </tr>
+                            </table>
+                            <p class="diagram-caption">모든 유닛은 화살표를 따라 이동하면 G에 도착!</p>
+                        </div>
                     </div>
 
                     <div class="code-block">
@@ -498,18 +581,40 @@ void computeWithCosts(int goalX, int goalY,
                     </table>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-사용 사례:
-
-A* 적합:                    Flow Field 적합:
-- RPG 파티 이동              - RTS 대규모 유닛 이동
-- 개별 NPC 패스파인딩         - 타워 디펜스 몬스터 웨이브
-- 동적 목표 추적              - 군중 시뮬레이션
-
-하이브리드:
-- Flow Field로 대략적 방향
-- 로컬 A*로 장애물 회피
-                        </pre>
+                        <div class="flow-diagram" style="flex-direction: column; gap: 1.2em;">
+                            <div style="font-weight: bold; text-align: center;">사용 사례:</div>
+                            <div class="flow-row" style="justify-content: center; gap: 2em; flex-wrap: wrap;">
+                                <div class="flow-box" style="min-width: 200px;">
+                                    <div class="flow-box__title">A* 적합</div>
+                                    <div class="flow-box__items">
+                                        <ul style="margin: 0; padding-left: 1.2em; text-align: left;">
+                                            <li>RPG 파티 이동</li>
+                                            <li>개별 NPC 패스파인딩</li>
+                                            <li>동적 목표 추적</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="flow-box" style="min-width: 200px;">
+                                    <div class="flow-box__title">Flow Field 적합</div>
+                                    <div class="flow-box__items">
+                                        <ul style="margin: 0; padding-left: 1.2em; text-align: left;">
+                                            <li>RTS 대규모 유닛 이동</li>
+                                            <li>타워 디펜스 몬스터 웨이브</li>
+                                            <li>군중 시뮬레이션</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flow-box" style="max-width: 300px; margin: 0 auto;">
+                                <div class="flow-box__title">하이브리드</div>
+                                <div class="flow-box__items">
+                                    <ul style="margin: 0; padding-left: 1.2em; text-align: left;">
+                                        <li>Flow Field로 대략적 방향</li>
+                                        <li>로컬 A*로 장애물 회피</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <p class="key-point">Supreme Commander, StarCraft 2 등 RTS 게임은 Flow Field를 사용합니다!</p>

@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"같은 코드인데 왜 100배 느리죠?"</h1>
             <p class="subtitle">CPU 캐시를 이해하면 성능이 보인다</p>
         </header>
@@ -27,35 +29,33 @@
                     <p>RAM은 CPU에 비해 <strong>너무 느립니다</strong>. 그 격차를 캐시가 메웁니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    메모리 계층 구조와 지연 시간                       │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   레벨        용량         지연시간      CPU 사이클     비유         │
-│   ─────────────────────────────────────────────────────────────    │
-│                                                                     │
-│   Register    ~1KB         0.25ns        1 cycle      뇌            │
-│      ▲                                                              │
-│      │        ×2~4                                                  │
-│   L1 Cache    64KB         1ns           4 cycles     메모장       │
-│      ▲                                                              │
-│      │        ×3~4                                                  │
-│   L2 Cache    256KB        4ns           12 cycles    책상 위 서류  │
-│      ▲                                                              │
-│      │        ×10~15                                                │
-│   L3 Cache    8~32MB       40ns          120 cycles   책장          │
-│      ▲                                                              │
-│      │        ×100~200                                              │
-│   RAM         16~64GB      100ns         300 cycles   창고          │
-│      ▲                                                              │
-│      │        ×100,000                                              │
-│   SSD/HDD     1~4TB        10-100ms      수천만 cycles  다른 도시   │
-│                                                                     │
-│   ※ L1 캐시 미스 1번 = L1 히트 100번 시간                          │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Register (~1KB, 0.25ns, 1 cycle) - 뇌</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>가장 빠름</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">L1 Cache (64KB, 1ns, 4 cycles) - 메모장</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>&times;2~4</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">L2 Cache (256KB, 4ns, 12 cycles) - 책상 위 서류</div>
+                                <div class="pipeline-bar pb-light"><span>&times;3~4</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">L3 Cache (8~32MB, 40ns, 120 cycles) - 책장</div>
+                                <div class="pipeline-bar pb-post"><span>&times;10~15</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">RAM (16~64GB, 100ns, 300 cycles) - 창고</div>
+                                <div class="pipeline-bar pb-shadow"><span>&times;100~200</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">SSD/HDD (1~4TB, 10-100ms, 수천만 cycles) - 다른 도시</div>
+                                <div class="pipeline-bar pb-shadow"><span>&times;100,000</span></div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">L1 캐시 미스 1번 = L1 히트 100번 시간</p>
                     </div>
 
                     <p class="highlight">캐시 히트율 90%→95%로 올리면 성능이 2배 향상될 수 있습니다!</p>
@@ -66,31 +66,26 @@
                     <p><strong>캐시 라인(Cache Line)</strong> 단위입니다. 보통 64바이트입니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                       캐시 라인 구조                                 │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   메모리 주소 0x1000 요청 시:                                       │
-│                                                                     │
-│   RAM:                                                              │
-│   ┌────────────────────────────────────────────────────────────┐   │
-│   │ 0x0FC0      │ 0x1000 ← 요청    │ 0x1040      │ 0x1080     │   │
-│   │ (64 bytes)  │ (64 bytes)       │ (64 bytes)  │ (64 bytes) │   │
-│   └─────────────┴──────────────────┴─────────────┴────────────┘   │
-│                        │                                            │
-│                        │ 64바이트 전체를 캐시로 복사                 │
-│                        ▼                                            │
-│   Cache Line:                                                       │
-│   ┌────────────────────────────────────────────────────────────┐   │
-│   │ 0x1000-0x103F (64 bytes) : byte0 byte1 ... byte63          │   │
-│   └────────────────────────────────────────────────────────────┘   │
-│                                                                     │
-│   → 1바이트만 필요해도 64바이트 전체가 로드됨                       │
-│   → 인접 데이터도 함께 캐시에 있음 (공간 지역성 활용)               │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">RAM (메모리 주소 0x1000 요청 시)</div>
+                                <div class="pipeline-bar pb-light"><span>0x0FC0 (64B)</span><span style="outline:2px solid #fff">0x1000 &larr; 요청 (64B)</span><span>0x1040 (64B)</span><span>0x1080 (64B)</span></div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">RAM 0x1000 영역</div>
+                                    <div class="flow-box__items">64바이트 전체를 캐시로 복사</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Cache Line</div>
+                                    <div class="flow-box__items">0x1000-0x103F (64 bytes)<br>byte0 byte1 ... byte63</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">1바이트만 필요해도 64바이트 전체가 로드됨 / 인접 데이터도 함께 캐시에 있음 (공간 지역성 활용)</p>
                     </div>
                 </div>
             </div>
@@ -177,36 +172,32 @@ void colMajorSum() {
                     <p>전통적인 OOP와 반대로 생각합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    AoS vs SoA 비교                                   │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  AoS (Array of Structures) - 전통적 OOP                             │
-│  ┌───────────────────────────────────────────────────────────────┐ │
-│  │ Entity0                │ Entity1                │ Entity2     │ │
-│  │ [pos][vel][hp][name]   │ [pos][vel][hp][name]   │ [pos]...   │ │
-│  │ ← 64바이트 →           │ ← 64바이트 →           │            │ │
-│  └───────────────────────────────────────────────────────────────┘ │
-│                                                                     │
-│  위치만 업데이트하면? → 캐시 라인마다 필요한 건 pos(12B)뿐!         │
-│  나머지 52바이트는 낭비 (캐시 효율 18%)                             │
-│                                                                     │
-│  ─────────────────────────────────────────────────────────────────  │
-│                                                                     │
-│  SoA (Structure of Arrays) - DOD                                    │
-│  ┌───────────────────────────────────────────────────────────────┐ │
-│  │ positions[]    │ [pos0][pos1][pos2][pos3][pos4][pos5]...      │ │
-│  │ velocities[]   │ [vel0][vel1][vel2][vel3][vel4][vel5]...      │ │
-│  │ healths[]      │ [hp0][hp1][hp2][hp3][hp4][hp5][hp6]...       │ │
-│  │ names[]        │ [name0][name1][name2]...                     │ │
-│  └───────────────────────────────────────────────────────────────┘ │
-│                                                                     │
-│  위치만 업데이트하면? → positions 배열만 순차 접근                  │
-│  캐시 라인 100% 활용!                                               │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">AoS (Array of Structures) - 전통적 OOP</div>
+                                <div class="pipeline-bar pb-shadow"><span>Entity0: [pos][vel][hp][name] (64B)</span><span>Entity1: [pos][vel][hp][name] (64B)</span><span>Entity2: [pos]...</span></div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">위치만 업데이트하면? 캐시 라인마다 필요한 건 pos(12B)뿐! 나머지 52바이트 낭비 (캐시 효율 18%)</p>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">SoA (Structure of Arrays) - DOD</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>positions[]: pos0, pos1, pos2, pos3, pos4, pos5 ...</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label"></div>
+                                <div class="pipeline-bar pb-light"><span>velocities[]: vel0, vel1, vel2, vel3, vel4, vel5 ...</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label"></div>
+                                <div class="pipeline-bar pb-post"><span>healths[]: hp0, hp1, hp2, hp3, hp4, hp5, hp6 ...</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label"></div>
+                                <div class="pipeline-bar pb-shadow"><span>names[]: name0, name1, name2 ...</span></div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">위치만 업데이트하면? positions 배열만 순차 접근 / 캐시 라인 100% 활용!</p>
                     </div>
 
                     <div class="code-block">

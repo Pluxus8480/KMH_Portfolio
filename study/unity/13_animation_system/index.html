@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unity Animation System | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+
+        <header class="content-header">
+            <h1>캐릭터에 생명을 불어넣는 법</h1>
+            <p class="subtitle">Animator와 Playables API로 애니메이션 시스템 심화</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Animator Controller 기초</h2>
+            <div class="conversation">
+                <div class="q">Animator Controller가 정확히 뭔가요?</div>
+                <div class="a">
+                    <p>Animator Controller는 캐릭터의 애니메이션 상태와 전환 규칙을 정의하는 상태 머신(State Machine)입니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>신호등을 생각해보세요. 초록 → 노랑 → 빨강 순서로 바뀌고, 각 상태에서 다음 상태로 전환되는 조건이 정해져 있습니다.</p>
+                        <p>Animator도 Idle → Walk → Run 처럼 상태를 정의하고, 파라미터 조건에 따라 전환합니다.</p>
+                    </div>
+
+                    <p class="highlight">Animator는 상태(State), 전환(Transition), 파라미터(Parameter) 세 가지 요소로 구성됩니다.</p>
+                </div>
+
+                <div class="q">파라미터 타입은 어떤 게 있나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>타입</th><th>용도</th><th>예시</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Float</td><td>연속적 값 (블렌드 트리)</td><td>Speed, Direction</td></tr>
+                            <tr><td>Int</td><td>정수 상태 구분</td><td>WeaponType</td></tr>
+                            <tr><td>Bool</td><td>On/Off 토글</td><td>IsGrounded, IsCrouching</td></tr>
+                            <tr><td>Trigger</td><td>일회성 이벤트</td><td>Jump, Attack, Die</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Animator 파라미터 제어</div>
+                        <pre><code>// 해시 캐싱 (문자열 비교보다 빠름)
+private static readonly int SpeedHash = Animator.StringToHash("Speed");
+private static readonly int JumpHash = Animator.StringToHash("Jump");
+private static readonly int IsGroundedHash = Animator.StringToHash("IsGrounded");
+
+void Update()
+{
+    float speed = _rigidbody.velocity.magnitude;
+    _animator.SetFloat(SpeedHash, speed);
+    _animator.SetBool(IsGroundedHash, _isGrounded);
+
+    if (Input.GetButtonDown("Jump"))
+        _animator.SetTrigger(JumpHash);
+}</code></pre>
+                    </div>
+                    <p class="warning">Animator.SetFloat("Speed", value)처럼 문자열을 직접 사용하면 매번 해시 변환이 발생합니다. 반드시 StringToHash로 캐싱하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Animation Layer와 Avatar Mask</h2>
+            <div class="conversation">
+                <div class="q">하체는 걷고 상체는 총을 쏘려면 어떻게 해야 하나요?</div>
+                <div class="a">
+                    <p>Animation Layer를 사용합니다. 레이어를 분리하면 신체 부위별로 독립적인 애니메이션을 재생할 수 있습니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Base Layer</div>
+                                <div class="flow-box__items">이동 애니메이션 (전신)</div>
+                            </div>
+                            <div class="flow-arrow">+</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Upper Body Layer</div>
+                                <div class="flow-box__items">상체 전투 애니메이션</div>
+                            </div>
+                            <div class="flow-arrow">=</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">최종 결과</div>
+                                <div class="flow-box__items">하체 이동 + 상체 사격</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="q">Avatar Mask는 뭔가요?</div>
+                <div class="a">
+                    <p>Avatar Mask는 레이어가 영향을 줄 본(뼈대)을 선택하는 필터입니다.</p>
+                    <p class="key-point">Upper Body Mask를 만들면 Spine(척추) 이상의 본만 해당 레이어의 애니메이션이 적용되고, 하체는 Base Layer의 애니메이션을 유지합니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>레이어 속성</th><th>설명</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Weight</td><td>레이어 영향도 (0~1). 코드에서 동적으로 조절 가능</td></tr>
+                            <tr><td>Blending: Override</td><td>하위 레이어를 완전히 덮어씀</td></tr>
+                            <tr><td>Blending: Additive</td><td>하위 레이어에 추가 (숨쉬기 등)</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 레이어 Weight 동적 제어</div>
+                        <pre><code>// 전투 진입 시 상체 레이어 활성화
+public void EnterCombat()
+{
+    // 1번 레이어(Upper Body)의 Weight를 1로
+    _animator.SetLayerWeight(1, 1f);
+}
+
+// 전투 종료 시 부드럽게 비활성화
+private IEnumerator FadeOutUpperLayer()
+{
+    float weight = 1f;
+    while (weight > 0f)
+    {
+        weight -= Time.deltaTime * 2f;
+        _animator.SetLayerWeight(1, Mathf.Max(0, weight));
+        yield return null;
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Blend Tree 활용</h2>
+            <div class="conversation">
+                <div class="q">Idle, Walk, Run을 자연스럽게 전환하려면?</div>
+                <div class="a">
+                    <p>Blend Tree를 사용하면 파라미터 값에 따라 여러 애니메이션을 부드럽게 섞어줍니다.</p>
+                    <p class="highlight">Blend Tree는 상태 전환(Transition)과 다릅니다. Transition은 A에서 B로 전환되지만, Blend Tree는 A와 B를 동시에 섞습니다.</p>
+                </div>
+
+                <div class="q">1D Blend와 2D Blend는 어떻게 다른가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>타입</th><th>파라미터</th><th>용도</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>1D</td><td>1개 (ex: Speed)</td><td>Idle → Walk → Run 속도 블렌딩</td></tr>
+                            <tr><td>2D Simple Directional</td><td>2개 (ex: X, Y)</td><td>8방향 이동 (각 방향 1개 클립)</td></tr>
+                            <tr><td>2D Freeform Directional</td><td>2개</td><td>같은 방향에 여러 속도의 클립</td></tr>
+                            <tr><td>2D Freeform Cartesian</td><td>2개</td><td>비방향성 블렌딩 (기울기+속도)</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 2D Blend Tree 파라미터 설정</div>
+                        <pre><code>// 이동 입력을 Blend Tree 파라미터로 전달
+void Update()
+{
+    float h = Input.GetAxis("Horizontal");
+    float v = Input.GetAxis("Vertical");
+
+    // 부드러운 댐핑 적용 (급격한 전환 방지)
+    _animator.SetFloat("MoveX", h, 0.1f, Time.deltaTime);
+    _animator.SetFloat("MoveY", v, 0.1f, Time.deltaTime);
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Playables API</h2>
+            <div class="conversation">
+                <div class="q">Animator Controller가 있는데 왜 Playables API가 필요한가요?</div>
+                <div class="a">
+                    <p>Animator Controller는 에디터에서 시각적으로 편리하지만, 런타임에서 동적으로 애니메이션을 조합하기 어렵습니다.</p>
+                    <p class="key-point">Playables API는 코드로 애니메이션 그래프를 생성하고 조작할 수 있어, 런타임 동적 애니메이션에 적합합니다.</p>
+                </div>
+
+                <div class="q">Playables API의 구조는 어떻게 되나요?</div>
+                <div class="a">
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">PlayableGraph</div>
+                                <div class="flow-box__items">전체 그래프 컨테이너</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">AnimationMixerPlayable</div>
+                                <div class="flow-box__items">여러 입력을 혼합</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">AnimationPlayableOutput</div>
+                                <div class="flow-box__items">Animator에 결과 출력</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Playables API 기본 사용법</div>
+                        <pre><code>using UnityEngine.Playables;
+using UnityEngine.Animations;
+
+public class PlayableAnimator : MonoBehaviour
+{
+    public AnimationClip walkClip;
+    public AnimationClip runClip;
+
+    private PlayableGraph _graph;
+    private AnimationMixerPlayable _mixer;
+
+    void Start()
+    {
+        // 그래프 생성
+        _graph = PlayableGraph.Create("MyGraph");
+
+        // 클립을 Playable로 변환
+        var walkPlayable = AnimationClipPlayable.Create(_graph, walkClip);
+        var runPlayable = AnimationClipPlayable.Create(_graph, runClip);
+
+        // 믹서 생성 (2개 입력)
+        _mixer = AnimationMixerPlayable.Create(_graph, 2);
+        _graph.Connect(walkPlayable, 0, _mixer, 0);
+        _graph.Connect(runPlayable, 0, _mixer, 1);
+
+        // 출력 연결
+        var output = AnimationPlayableOutput.Create(_graph, "Anim", GetComponent&lt;Animator&gt;());
+        output.SetSourcePlayable(_mixer);
+
+        _graph.Play();
+    }
+
+    void Update()
+    {
+        // 속도에 따라 Walk/Run 블렌딩
+        float blend = Mathf.Clamp01(_speed / _maxSpeed);
+        _mixer.SetInputWeight(0, 1f - blend);
+        _mixer.SetInputWeight(1, blend);
+    }
+
+    void OnDestroy()
+    {
+        if (_graph.IsValid())
+            _graph.Destroy();
+    }
+}</code></pre>
+                    </div>
+                    <p class="warning">PlayableGraph는 반드시 OnDestroy에서 Destroy()를 호출해야 합니다. 그렇지 않으면 메모리 누수가 발생합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: Inverse Kinematics (IK)</h2>
+            <div class="conversation">
+                <div class="q">캐릭터가 경사면에서도 자연스럽게 발을 딛게 하려면?</div>
+                <div class="a">
+                    <p>Inverse Kinematics(IK)를 사용합니다. 기존 Forward Kinematics는 루트 → 말단 방향으로 본을 회전시키지만, IK는 반대로 말단 위치를 지정하면 나머지 본이 자동 계산됩니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>로봇 팔을 생각해보세요. FK는 각 관절의 각도를 일일이 설정해서 손 위치를 결정합니다.</p>
+                        <p>IK는 "손이 여기 와야 해"라고 목표만 지정하면 각 관절 각도를 역으로 계산합니다.</p>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Foot IK 구현</div>
+                        <pre><code>// Animator에서 IK Pass 활성화 필요 (레이어 설정)
+void OnAnimatorIK(int layerIndex)
+{
+    // 왼발 IK
+    Ray ray = new Ray(
+        _animator.GetIKPosition(AvatarIKGoal.LeftFoot) + Vector3.up,
+        Vector3.down
+    );
+
+    if (Physics.Raycast(ray, out RaycastHit hit, 2f, _groundLayer))
+    {
+        _animator.SetIKPositionWeight(AvatarIKGoal.LeftFoot, 1f);
+        _animator.SetIKRotationWeight(AvatarIKGoal.LeftFoot, 1f);
+
+        _animator.SetIKPosition(AvatarIKGoal.LeftFoot, hit.point + Vector3.up * 0.05f);
+
+        Quaternion footRotation = Quaternion.LookRotation(
+            Vector3.ProjectOnPlane(transform.forward, hit.normal), hit.normal
+        );
+        _animator.SetIKRotation(AvatarIKGoal.LeftFoot, footRotation);
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">IK는 어디에 주로 사용되나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>용도</th><th>설명</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Foot IK</td><td>경사면/계단에서 발이 지면을 정확히 딛도록</td></tr>
+                            <tr><td>Hand IK</td><td>총기, 손잡이 등 오브젝트를 정확히 잡도록</td></tr>
+                            <tr><td>Look At</td><td>캐릭터 시선이 특정 타겟을 바라보도록</td></tr>
+                            <tr><td>Two Bone IK</td><td>Animation Rigging 패키지의 정밀 IK</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 애니메이션 성능 최적화</h2>
+            <div class="conversation">
+                <div class="q">애니메이션이 많아지면 성능 문제는 없나요?</div>
+                <div class="a">
+                    <p>Animator Controller가 복잡해지면 상태 전환 평가, 블렌딩 계산 비용이 증가합니다.</p>
+                    <p class="key-point">Culling Mode 설정으로 화면 밖 캐릭터의 애니메이션 비용을 줄일 수 있습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>Culling Mode</th><th>동작</th><th>용도</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Always Animate</td><td>항상 업데이트</td><td>카메라 밖에서도 상태가 중요한 경우</td></tr>
+                            <tr><td>Cull Update Transforms</td><td>본 변환만 생략</td><td>대부분의 NPC</td></tr>
+                            <tr><td>Cull Completely</td><td>완전히 중단</td><td>배경 캐릭터, 군중</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">Cull Completely를 사용하면 화면에 다시 들어왔을 때 마지막 상태에서 재개됩니다. 시간 기반 로직이 있다면 주의하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Animator Controller</strong>: 상태 머신 기반 — 파라미터 해시를 캐싱하여 성능을 확보하라</li>
+                <li><strong>Layer + Avatar Mask</strong>: 상/하체 분리 애니메이션은 레이어와 마스크로 구현한다</li>
+                <li><strong>Blend Tree</strong>: 이동 애니메이션은 Transition이 아닌 Blend Tree로 자연스럽게 섞어라</li>
+                <li><strong>Playables API</strong>: 런타임 동적 애니메이션이 필요하면 Playables로 그래프를 직접 구성하라</li>
+                <li><strong>IK</strong>: Foot IK로 지형 적응, Hand IK로 오브젝트 상호작용을 자연스럽게 처리하라</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

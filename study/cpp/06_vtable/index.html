@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>virtual 함수는 어떻게 동작할까?</h1>
             <p class="subtitle">vtable과 vptr의 내부 구조 파헤치기</p>
         </header>
@@ -68,28 +70,23 @@ animal->speak();  // "Woof!" 출력! (Dog::speak 호출)</code></pre>
                     <p><strong>vtable</strong>: 클래스당 하나, 가상 함수 포인터 배열</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-vtable 구조
-
-Animal 객체                  Animal vtable
-┌────────────┐              ┌─────────────────┐
-│   vptr ────┼─────────────▶│ &Animal::speak  │
-├────────────┤              │ &Animal::eat    │
-│  멤버 변수  │              │ &Animal::~Animal│
-└────────────┘              └─────────────────┘
-
-Dog 객체                     Dog vtable
-┌────────────┐              ┌─────────────────┐
-│   vptr ────┼─────────────▶│ &Dog::speak     │ ← 오버라이드
-├────────────┤              │ &Animal::eat    │ ← 상속
-│  멤버 변수  │              │ &Dog::~Dog      │ ← 오버라이드
-└────────────┘              └─────────────────┘
-
-가상 함수 호출:
-animal->speak()
-→ (*(animal->vptr[0]))()
-→ Dog::speak() 호출!
-                        </pre>
+                        <p><strong>vtable 구조</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">Animal 객체</div><div class="flow-box__items">vptr<br>멤버 변수</div></div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box"><div class="flow-box__title">Animal vtable</div><div class="flow-box__items">&amp;Animal::speak<br>&amp;Animal::eat<br>&amp;Animal::~Animal</div></div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram" style="margin-top: 1rem;">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">Dog 객체</div><div class="flow-box__items">vptr<br>멤버 변수</div></div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">Dog vtable</div><div class="flow-box__items">&amp;Dog::speak (오버라이드)<br>&amp;Animal::eat (상속)<br>&amp;Dog::~Dog (오버라이드)</div></div>
+                            </div>
+                        </div>
+                        <p><strong>가상 함수 호출:</strong><br>
+                        animal-&gt;speak() &rarr; (*(animal-&gt;vptr[0]))() &rarr; Dog::speak() 호출!</p>
                     </div>
                 </div>
             </div>
@@ -180,27 +177,24 @@ public:
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-다중 상속 메모리 레이아웃
-
-C 객체
-┌────────────┐      ┌─────────────────┐
-│ A::vptr ───┼─────▶│ C vtable (A부분)│
-├────────────┤      │ &C::funcA       │
-│ A::dataA   │      │ &C::~C          │
-├────────────┤      │ &C::funcC       │
-│ B::vptr ───┼──┐   └─────────────────┘
-├────────────┤  │
-│ B::dataB   │  │   ┌─────────────────┐
-├────────────┤  └──▶│ C vtable (B부분)│
-│ C::dataC   │      │ &C::funcB       │
-└────────────┘      │ &C::~C (thunk)  │
-                    └─────────────────┘
-
-포인터 조정 (thunk):
-B* b = new C();  // 포인터가 B 부분을 가리키도록 조정
-b->funcB();      // C::funcB 호출
-                        </pre>
+                        <p><strong>다중 상속 메모리 레이아웃</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">C 객체</div><div class="flow-box__items">A::vptr<br>A::dataA<br>B::vptr<br>B::dataB<br>C::dataC</div></div>
+                                <div class="flow-arrow">A::vptr &rarr;</div>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">C vtable (A부분)</div><div class="flow-box__items">&amp;C::funcA<br>&amp;C::~C<br>&amp;C::funcC</div></div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram" style="margin-top: 1rem;">
+                            <div class="flow-row">
+                                <div class="flow-box" style="visibility:hidden;"><div class="flow-box__title">C 객체</div><div class="flow-box__items">placeholder</div></div>
+                                <div class="flow-arrow">B::vptr &rarr;</div>
+                                <div class="flow-box"><div class="flow-box__title">C vtable (B부분)</div><div class="flow-box__items">&amp;C::funcB<br>&amp;C::~C (thunk)</div></div>
+                            </div>
+                        </div>
+                        <p><strong>포인터 조정 (thunk):</strong><br>
+                        B* b = new C(); // 포인터가 B부분을 가리키도록 조정<br>
+                        b-&gt;funcB(); // C::funcB 호출</p>
                     </div>
                 </div>
             </div>

@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>NPC는 어떻게 최단 경로를 찾을까?</h1>
             <p class="subtitle">A* 알고리즘과 JPS(Jump Point Search) 길찾기 기법</p>
         </header>
@@ -54,20 +56,19 @@
                 </div>
 
                 <div class="visual-section">
-                    <pre class="diagram">
-A* 탐색 순서 (S: 시작, G: 목표, █: 벽)
-
-    1   2   3   4   5
-  ┌───┬───┬───┬───┬───┐
-1 │ S │ 2 │ 3 │ 4 │ 5 │   f = g + h
-  ├───┼───┼───┼───┼───┤
-2 │ 1 │███│███│███│ 6 │   S의 f = 0 + 4 = 4
-  ├───┼───┼───┼───┼───┤   노드2의 f = 1 + 3 = 4
-3 │ 2 │███│ G │ 7 │ 8 │   노드1의 f = 1 + 4 = 5
-  ├───┼───┼───┼───┼───┤
-4 │ 3 │ 4 │ 5 │ 6 │ 9 │   → 더 유망한 노드부터 탐색
-  └───┴───┴───┴───┴───┘
-                    </pre>
+                    <div class="flow-diagram">
+                        <table class="compare-table" style="text-align:center; font-size:0.85em;">
+                            <thead>
+                                <tr><th></th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th style="text-align:left;">f = g + h</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><strong>1</strong></td><td style="background:#4ecdc4;color:#fff;">S</td><td>2</td><td>3</td><td>4</td><td>5</td><td style="text-align:left;">S의 f=0+4=4</td></tr>
+                                <tr><td><strong>2</strong></td><td>1</td><td style="background:#333;color:#666;">wall</td><td style="background:#333;color:#666;">wall</td><td style="background:#333;color:#666;">wall</td><td>6</td><td style="text-align:left;">노드2의 f=1+3=4</td></tr>
+                                <tr><td><strong>3</strong></td><td>2</td><td style="background:#333;color:#666;">wall</td><td style="background:#ff6b6b;color:#fff;">G</td><td>7</td><td>8</td><td style="text-align:left;">노드1의 f=1+4=5</td></tr>
+                                <tr><td><strong>4</strong></td><td>3</td><td>4</td><td>5</td><td>6</td><td>9</td><td style="text-align:left;">&rarr; 더 유망한 노드부터 탐색</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                     <p class="diagram-caption">f값이 작은 노드를 우선 탐색하여 불필요한 탐색을 줄임</p>
                 </div>
 
@@ -229,17 +230,19 @@ public:
                     <p>격자 맵에서 A*는 대칭 경로(symmetrical paths)를 모두 탐색합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-A*의 대칭 경로 문제
-
-S─┬─┬─┐    S에서 G까지 가는 경로가 여러 개 있지만
-  │ │ │    실제로는 모두 같은 비용입니다.
-  ├─┼─┼─┤
-  │ │ │ │   A*는 이 대칭 경로들을 모두 탐색하여
-  └─┴─┴─G   불필요한 연산이 발생합니다.
-
-  탐색한 노드: 16개 (전체 노드)
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">A*의 대칭 경로 문제</div>
+                                    <div class="flow-box__items">S에서 G까지 가는 경로가 여러 개 있지만<br>실제로는 모두 같은 비용<br>A*는 대칭 경로를 모두 탐색하여<br>불필요한 연산 발생</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">결과</div>
+                                    <div class="flow-box__items">탐색한 노드: <strong>16개</strong> (전체 노드)</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -249,18 +252,27 @@ S─┬─┬─┐    S에서 G까지 가는 경로가 여러 개 있지만
                     <p>점프 포인트: 방향 전환이 필요한 중요한 지점만 선택</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-JPS의 점프 포인트
-
-S───────────┐    점프 포인트: 방향이 꺾이는 곳
-            │
-            │    S에서 오른쪽으로 점프
-            │    벽을 만나면 점프 포인트!
-            └────G
-
-  탐색한 노드: 3개 (S, 코너, G)
-  → 80% 이상 노드 탐색 감소!
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">S (시작)</div>
+                                    <div class="flow-box__items">오른쪽으로 점프</div>
+                                </div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">코너 (점프 포인트)</div>
+                                    <div class="flow-box__items">벽을 만나 방향 전환</div>
+                                </div>
+                                <div class="flow-arrow">&darr;</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">G (목표)</div>
+                                    <div class="flow-box__items">도착</div>
+                                </div>
+                            </div>
+                            <div style="text-align:center; margin-top:0.5em; font-size:0.9em;">
+                                <p>탐색한 노드: <strong>3개</strong> (S, 코너, G) &rarr; <strong>80% 이상</strong> 노드 탐색 감소!</p>
+                            </div>
+                        </div>
                     </div>
 
                     <p>JPS의 핵심 규칙:</p>

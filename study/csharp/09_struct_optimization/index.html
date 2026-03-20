@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>struct 최적화 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>작고 빠른 값의 세계</h1>
+            <p class="subtitle">struct 최적화와 ref struct로 GC 부담 줄이기</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: class vs struct, 언제 struct를 써야 할까?</h2>
+            <div class="conversation">
+                <div class="q">struct와 class의 근본적인 차이가 뭔가요?</div>
+                <div class="a">
+                    <p>가장 큰 차이는 <strong>메모리 할당 위치</strong>입니다. class는 힙(heap)에, struct는 스택(stack)이나 인라인에 할당됩니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>비유로 이해하기</strong>
+                        <p><strong>class</strong>는 택배 보관함에 물건을 넣고 번호표(참조)를 나눠주는 것입니다. 번호표만 복사되고, 물건은 하나입니다.</p>
+                        <p><strong>struct</strong>는 물건 자체를 직접 전달하는 것입니다. 전달할 때마다 통째로 복사됩니다.</p>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>class (참조 타입)</th>
+                                <th>struct (값 타입)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>할당 위치</td>
+                                <td>힙 (GC 관리)</td>
+                                <td>스택 / 인라인</td>
+                            </tr>
+                            <tr>
+                                <td>복사 동작</td>
+                                <td>참조 복사 (8바이트)</td>
+                                <td>값 전체 복사</td>
+                            </tr>
+                            <tr>
+                                <td>GC 부담</td>
+                                <td>있음</td>
+                                <td>없음</td>
+                            </tr>
+                            <tr>
+                                <td>null 가능</td>
+                                <td>가능</td>
+                                <td>불가 (Nullable 제외)</td>
+                            </tr>
+                            <tr>
+                                <td>상속</td>
+                                <td>가능</td>
+                                <td>불가</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">struct는 언제 사용하는 것이 좋나요?</div>
+                <div class="a">
+                    <p>Microsoft의 공식 가이드라인에 따르면 다음 조건을 <strong>모두</strong> 만족할 때 struct를 고려합니다:</p>
+                    <p class="highlight">크기가 16바이트 이하이고, 불변(immutable)이며, 수명이 짧고, 박싱될 일이 없을 때 struct가 유리합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 게임에서의 적합한 struct 예시</div>
+                        <pre><code>// 좋은 예: 작고, 불변이고, 자주 생성/파괴됨
+public readonly struct DamageInfo
+{
+    public readonly float Amount;
+    public readonly DamageType Type;
+    public readonly int AttackerId;
+
+    public DamageInfo(float amount, DamageType type, int attackerId)
+    {
+        Amount = amount;
+        Type = type;
+        AttackerId = attackerId;
+    }
+}
+
+// 나쁜 예: 너무 크고 가변적
+public struct PlayerData // class가 더 적합!
+{
+    public string Name;        // 참조 타입 포함
+    public int Level;
+    public float[] Stats;      // 배열 = 참조 타입
+    public List&lt;Item&gt; Items;   // 컬렉션 = 참조 타입
+}</code></pre>
+                    </div>
+                    <p class="warning">struct에 참조 타입 필드가 있으면 결국 힙 할당이 발생합니다. string, 배열, 클래스 등을 필드로 포함하면 struct의 이점이 크게 줄어듭니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: readonly struct로 방어적 복사 방지</h2>
+            <div class="conversation">
+                <div class="q">방어적 복사(defensive copy)가 뭔가요?</div>
+                <div class="a">
+                    <p>struct를 <code>readonly</code> 필드나 <code>in</code> 매개변수로 전달하면, 컴파일러는 원본이 변경되지 않도록 <strong>전체를 복사</strong>한 뒤 메소드를 호출합니다. 이것이 방어적 복사입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 방어적 복사 발생 예시</div>
+                        <pre><code>public struct Vector3
+{
+    public float X, Y, Z;
+
+    public float Length() => MathF.Sqrt(X * X + Y * Y + Z * Z);
+}
+
+class Player
+{
+    private readonly Vector3 _position; // readonly 필드
+
+    public float GetDistance()
+    {
+        // 컴파일러: "_position이 변경될까 봐 걱정되니 복사하자!"
+        // 실제로는 Vector3 전체를 복사한 뒤 Length() 호출
+        return _position.Length(); // 숨겨진 12바이트 복사 발생!
+    }
+}</code></pre>
+                    </div>
+                    <p class="warning">이 복사는 눈에 보이지 않아서 발견하기 매우 어렵습니다. 큰 struct에서 메소드를 자주 호출하면 심각한 성능 저하가 발생합니다.</p>
+                </div>
+
+                <div class="q">어떻게 해결하나요?</div>
+                <div class="a">
+                    <p><code>readonly struct</code>로 선언하면 컴파일러가 "이 struct는 절대 변경되지 않는다"는 것을 알고, 방어적 복사를 생략합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - readonly struct로 해결</div>
+                        <pre><code>// readonly struct: 모든 필드가 readonly임을 보장
+public readonly struct Vector3
+{
+    public readonly float X, Y, Z;
+
+    public Vector3(float x, float y, float z)
+    {
+        X = x; Y = y; Z = z;
+    }
+
+    // readonly 메소드: 이 메소드가 필드를 변경하지 않음을 보장
+    public readonly float Length()
+        => MathF.Sqrt(X * X + Y * Y + Z * Z);
+
+    // 새 인스턴스를 반환하는 패턴 (immutable)
+    public readonly Vector3 Normalized()
+    {
+        float len = Length();
+        return new Vector3(X / len, Y / len, Z / len);
+    }
+}
+
+class Player
+{
+    private readonly Vector3 _position;
+
+    public float GetDistance()
+    {
+        // readonly struct이므로 방어적 복사 없음!
+        return _position.Length();
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">성능이 중요한 struct는 항상 readonly struct로 선언하는 것을 습관화하세요. 방어적 복사로 인한 숨겨진 성능 손실을 원천 차단합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: in 매개변수와 ref 반환</h2>
+            <div class="conversation">
+                <div class="q">큰 struct를 함수에 전달할 때 복사 비용을 줄이려면?</div>
+                <div class="a">
+                    <p><code>in</code> 키워드를 사용하면 struct를 참조로 전달하면서 읽기 전용임을 보장합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - in 매개변수</div>
+                        <pre><code>public readonly struct Matrix4x4
+{
+    // 64바이트 크기의 struct (16개의 float)
+    public readonly float M11, M12, M13, M14;
+    public readonly float M21, M22, M23, M24;
+    public readonly float M31, M32, M33, M34;
+    public readonly float M41, M42, M43, M44;
+}
+
+// 값 전달: 64바이트 복사 발생
+static Matrix4x4 Multiply(Matrix4x4 a, Matrix4x4 b) { ... }
+
+// in 전달: 참조만 전달 (8바이트), 수정 불가
+static Matrix4x4 Multiply(in Matrix4x4 a, in Matrix4x4 b) { ... }
+
+// 호출 측
+var result = Multiply(in modelMatrix, in viewMatrix);</code></pre>
+                    </div>
+                    <p class="warning">in 매개변수로 전달된 struct가 readonly struct가 아니면, 메소드 호출 시 방어적 복사가 발생합니다! in과 readonly struct는 반드시 함께 사용하세요.</p>
+                </div>
+
+                <div class="q">ref 반환은 뭔가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - ref 반환으로 복사 없이 접근</div>
+                        <pre><code>public class TransformPool
+{
+    private Transform[] _transforms = new Transform[1000];
+
+    // ref 반환: 복사 없이 원본 참조를 반환
+    public ref Transform GetTransform(int index)
+    {
+        return ref _transforms[index];
+    }
+
+    // readonly ref: 읽기 전용 참조 반환
+    public ref readonly Transform GetTransformReadOnly(int index)
+    {
+        return ref _transforms[index];
+    }
+}
+
+// 사용
+ref Transform t = ref pool.GetTransform(entityId);
+t.Position = newPos; // 원본을 직접 수정 (복사 없음)</code></pre>
+                    </div>
+                    <p class="highlight">ref 반환을 사용하면 배열이나 컬렉션 내부의 struct를 복사 없이 직접 수정할 수 있습니다. ECS 패턴에서 컴포넌트 접근 시 핵심적인 기법입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: ref struct - 스택 전용 타입</h2>
+            <div class="conversation">
+                <div class="q">ref struct는 일반 struct와 뭐가 다른가요?</div>
+                <div class="a">
+                    <p><code>ref struct</code>는 <strong>절대로 힙에 올라갈 수 없는</strong> struct입니다. 스택에만 존재하므로 GC의 관리 대상이 아닙니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - ref struct의 제약</div>
+                        <pre><code>public ref struct StackOnlyBuffer
+{
+    private Span&lt;byte&gt; _data;
+
+    public StackOnlyBuffer(Span&lt;byte&gt; data)
+    {
+        _data = data;
+    }
+}
+
+// 사용 가능
+StackOnlyBuffer buf = new StackOnlyBuffer(stackalloc byte[64]);
+
+// 불가능한 것들:
+// object boxed = buf;                    // 박싱 불가
+// Task.Run(() => Use(buf));              // 클로저 캡처 불가
+// async Task ProcessAsync(StackOnlyBuffer b) // async 불가
+// class Container { StackOnlyBuffer b; } // 클래스 필드 불가
+// List&lt;StackOnlyBuffer&gt; list;            // 제네릭 인자 불가</code></pre>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>기능</th>
+                                <th>struct</th>
+                                <th>ref struct</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>스택 할당</td>
+                                <td>가능</td>
+                                <td>가능</td>
+                            </tr>
+                            <tr>
+                                <td>힙 할당 (박싱)</td>
+                                <td>가능</td>
+                                <td>불가</td>
+                            </tr>
+                            <tr>
+                                <td>클래스 필드</td>
+                                <td>가능</td>
+                                <td>불가</td>
+                            </tr>
+                            <tr>
+                                <td>async 메소드</td>
+                                <td>가능</td>
+                                <td>불가</td>
+                            </tr>
+                            <tr>
+                                <td>인터페이스 구현</td>
+                                <td>가능</td>
+                                <td>불가</td>
+                            </tr>
+                            <tr>
+                                <td>Span 필드 보유</td>
+                                <td>불가</td>
+                                <td>가능</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">Span&lt;T&gt;가 ref struct인 이유가 이거군요?</div>
+                <div class="a">
+                    <p>맞습니다! Span&lt;T&gt;는 내부에 관리되는 포인터(ref T)를 가지고 있으므로 ref struct여야 합니다. 힙에 저장되면 GC가 포인터를 추적하기 어려워지고, 가리키는 스택 메모리가 해제된 후에도 참조가 남을 수 있기 때문입니다.</p>
+                    <p class="highlight">ref struct의 제약은 단점이 아니라, 메모리 안전성을 보장하기 위한 의도적인 설계입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 실전 struct 레이아웃 최적화</h2>
+            <div class="conversation">
+                <div class="q">struct의 필드 순서가 성능에 영향을 주나요?</div>
+                <div class="a">
+                    <p>네. <code>StructLayout</code>을 지정하지 않으면 CLR이 자동으로 필드를 재배치하여 패딩을 최소화합니다. 하지만 네이티브 코드와 연동하거나 네트워크 패킷을 정의할 때는 명시적 레이아웃이 필요합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 레이아웃 제어</div>
+                        <pre><code>// Sequential: 선언 순서대로 배치 (네이티브 연동용)
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public readonly struct PacketHeader
+{
+    public readonly ushort PacketId;  // 2바이트
+    public readonly ushort Length;    // 2바이트
+    public readonly uint Sequence;   // 4바이트
+    // 총 8바이트, 패딩 없음
+}
+
+// Explicit: 오프셋 직접 지정 (Union 구현)
+[StructLayout(LayoutKind.Explicit)]
+public struct PacketData
+{
+    [FieldOffset(0)] public int IntValue;
+    [FieldOffset(0)] public float FloatValue;
+    // 같은 메모리를 int/float로 해석 (C의 union과 동일)
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">게임에서 struct 최적화의 종합적인 예시를 보여주세요.</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 총알 시스템 최적화 (SoA 패턴)</div>
+                        <pre><code>// 나쁜 예: AoS (Array of Structures) - 캐시 비효율
+struct BulletAoS
+{
+    public Vector3 Position;  // 12바이트
+    public Vector3 Velocity;  // 12바이트
+    public float Damage;      // 4바이트
+    public float Lifetime;    // 4바이트
+    public int OwnerId;       // 4바이트
+    // = 36바이트, 패딩 포함 40바이트
+}
+BulletAoS[] bullets = new BulletAoS[10000];
+
+// 좋은 예: SoA (Structure of Arrays) - 캐시 친화적
+struct BulletPool
+{
+    public Vector3[] Positions;   // 위치만 모아놓음
+    public Vector3[] Velocities;  // 속도만 모아놓음
+    public float[] Lifetimes;     // 수명만 모아놓음
+    public int Count;
+}
+
+// 위치 업데이트 시: 연속된 메모리만 접근 (캐시 히트율 극대화)
+for (int i = 0; i &lt; pool.Count; i++)
+{
+    pool.Positions[i] += pool.Velocities[i] * deltaTime;
+    pool.Lifetimes[i] -= deltaTime;
+}</code></pre>
+                    </div>
+                    <p class="key-point">SoA 패턴을 사용하면 동일한 필드만 연속으로 접근하므로 CPU 캐시 히트율이 크게 향상됩니다. 총알, 파티클 등 대량의 동일 오브젝트 처리에 효과적입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 요약 -->
+        <section class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>struct는 <strong>16바이트 이하</strong>, 불변, 수명이 짧고 박싱이 없을 때 class보다 유리하다</li>
+                <li><strong>readonly struct</strong>로 선언하면 방어적 복사를 방지하여 숨겨진 성능 손실을 차단한다</li>
+                <li><strong>in 매개변수</strong>는 큰 struct를 참조로 전달하되, readonly struct와 반드시 함께 사용해야 한다</li>
+                <li><strong>ref struct</strong>는 스택 전용 타입으로, Span&lt;T&gt;처럼 힙 할당이 불가능한 고성능 구조체를 만든다</li>
+                <li>대량 오브젝트 처리 시 <strong>SoA 패턴</strong>으로 캐시 친화적 레이아웃을 구성하면 성능이 크게 향상된다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>NPC는 울퉁불퉁한 지형을 어떻게 걸을까?</h1>
             <p class="subtitle">3D 지형에서 네비게이션 메시(NavMesh) 생성하기</p>
         </header>
@@ -26,22 +28,19 @@
                     <p class="warning">경사면, 계단, 다리 등 복잡한 지형을 표현하기 어렵습니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-그리드 vs NavMesh
-
-그리드 방식:                NavMesh 방식:
-┌─┬─┬─┬─┬─┐               ┌───────────┐
-│ │ │█│ │ │               │ Polygon A │
-├─┼─┼─┼─┼─┤               └─────┬─────┘
-│ │ │█│ │ │                     │ 연결
-├─┼─┼─┼─┼─┤               ┌─────┴─────┐
-│ │ │ │ │ │               │ Polygon B │
-└─┴─┴─┴─┴─┘               └───────────┘
-
-• 해상도에 따른 정밀도    • 자유로운 형태
-• 메모리 낭비             • 적은 메모리
-• 대각선 이동 부자연스러움  • 부드러운 경로
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">그리드 방식</div>
+                                    <div class="flow-box__items">해상도에 따른 정밀도<br>메모리 낭비<br>대각선 이동 부자연스러움</div>
+                                </div>
+                                <span class="flow-arrow">vs</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">NavMesh 방식</div>
+                                    <div class="flow-box__items">자유로운 형태<br>적은 메모리<br>부드러운 경로</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -66,34 +65,34 @@
                     <p>Recast 라이브러리의 파이프라인을 기준으로:</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-NavMesh 생성 파이프라인
-
-┌─────────────────────────────────────────────┐
-│ 1. 복셀화 (Voxelization)                      │
-│    3D 메시 → 복셀 그리드 변환                   │
-└─────────────────────────────────────────────┘
-                    ↓
-┌─────────────────────────────────────────────┐
-│ 2. 영역 생성 (Region Generation)              │
-│    이동 가능 영역 식별                          │
-└─────────────────────────────────────────────┘
-                    ↓
-┌─────────────────────────────────────────────┐
-│ 3. 윤곽선 추출 (Contour Generation)           │
-│    영역 경계를 단순화된 폴리곤으로                │
-└─────────────────────────────────────────────┘
-                    ↓
-┌─────────────────────────────────────────────┐
-│ 4. 폴리곤 메시 생성 (Polygon Mesh)            │
-│    윤곽선을 볼록 다각형으로 분할                  │
-└─────────────────────────────────────────────┘
-                    ↓
-┌─────────────────────────────────────────────┐
-│ 5. 디테일 메시 (Detail Mesh)                  │
-│    지형 높이 정보 추가                          │
-└─────────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-col">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">1. 복셀화 (Voxelization)</div>
+                                    <div class="flow-box__items">3D 메시 &rarr; 복셀 그리드 변환</div>
+                                </div>
+                                <span class="flow-arrow-down">&darr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">2. 영역 생성 (Region Generation)</div>
+                                    <div class="flow-box__items">이동 가능 영역 식별</div>
+                                </div>
+                                <span class="flow-arrow-down">&darr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">3. 윤곽선 추출 (Contour Generation)</div>
+                                    <div class="flow-box__items">영역 경계를 단순화된 폴리곤으로</div>
+                                </div>
+                                <span class="flow-arrow-down">&darr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">4. 폴리곤 메시 생성 (Polygon Mesh)</div>
+                                    <div class="flow-box__items">윤곽선을 볼록 다각형으로 분할</div>
+                                </div>
+                                <span class="flow-arrow-down">&darr;</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">5. 디테일 메시 (Detail Mesh)</div>
+                                    <div class="flow-box__items">지형 높이 정보 추가</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -209,17 +208,22 @@ public:
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-Walkable 조건
-
-         정상              너무 가파름         공간 부족
-        ╱────╲              │              ┌──────┐
-       ╱      ╲             │╲             │      │
-      ╱   ✓    ╲            │ ╲ ✗          │  ✗  │
-     ─────────────       ───│──╲───       ─┴──────┴─
-
-    경사 &lt; 45°          경사 &gt; 45°       높이 &lt; 2m
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">정상</div>
+                                    <div class="flow-box__items">경사 &lt; 45&deg;<br>Walkable</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">너무 가파름</div>
+                                    <div class="flow-box__items">경사 &gt; 45&deg;<br>Unwalkable</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">공간 부족</div>
+                                    <div class="flow-box__items">높이 &lt; 2m<br>Unwalkable</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -401,26 +405,25 @@ public:
                     <p class="highlight">생성된 NavMesh는 A* 알고리즘으로 길찾기에 사용됩니다!</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-NavMesh 길찾기
-
-    Start ●
-           \
-            ╲ Poly A
-             ╲─────────┐
-              ╲        │
-               ╲ Edge  │ Poly B
-                ╲      │
-                 ╲─────┼───────┐
-                       │       │
-                       │ Poly C│
-                       │   ●   │
-                       └───────┘
-                         Goal
-
-경로: Poly A → Edge → Poly B → Edge → Poly C
-Funnel 알고리즘으로 실제 경로 최적화
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Start</div>
+                                    <div class="flow-box__items">Poly A</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Edge</div>
+                                    <div class="flow-box__items">Poly B</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Goal</div>
+                                    <div class="flow-box__items">Poly C</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">Funnel 알고리즘으로 실제 경로 최적화</p>
                     </div>
                 </div>
             </div>

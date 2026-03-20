@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coroutine과 UniTask | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+
+        <header class="content-header">
+            <h1>yield return 너머의 세계</h1>
+            <p class="subtitle">Coroutine과 UniTask — Unity 비동기 프로그래밍 완벽 비교</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Coroutine은 어떻게 동작하는가?</h2>
+            <div class="conversation">
+                <div class="q">Coroutine의 yield return null이 내부적으로 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>Unity의 Coroutine은 C#의 <strong>IEnumerator 인터페이스</strong>를 활용한 일종의 트릭입니다. 실제 멀티스레드가 아니라, 메인 스레드에서 실행을 쪼개는 것입니다.</p>
+
+                    <p class="highlight">C# 컴파일러는 yield return이 포함된 메서드를 내부적으로 상태 머신(State Machine) 클래스로 변환합니다. 각 yield return이 상태 전환 지점이 됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 우리가 작성하는 코드</div>
+                        <pre><code>IEnumerator FadeOut()
+{
+    float alpha = 1f;
+    while (alpha &gt; 0)
+    {
+        alpha -= Time.deltaTime;
+        SetAlpha(alpha);
+        yield return null; // 다음 프레임까지 대기
+    }
+}</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 컴파일러가 변환한 모습 (간략화)</div>
+                        <pre><code>// 컴파일러가 자동 생성하는 상태 머신
+class FadeOut_StateMachine : IEnumerator
+{
+    private int state = 0;
+    private float alpha;
+    private MonoBehaviour self;
+
+    public object Current { get; private set; }
+
+    public bool MoveNext()
+    {
+        switch (state)
+        {
+            case 0:
+                alpha = 1f;
+                state = 1;
+                goto case 1;
+
+            case 1:
+                if (alpha &gt; 0)
+                {
+                    alpha -= Time.deltaTime;
+                    self.SetAlpha(alpha);
+                    Current = null; // yield return null
+                    state = 1;
+                    return true;    // 아직 끝나지 않음
+                }
+                return false;       // 코루틴 종료
+        }
+        return false;
+    }
+}</code></pre>
+                    </div>
+
+                    <p>Unity 엔진은 매 프레임 <code>MoveNext()</code>를 호출합니다. true를 반환하면 계속 실행, false를 반환하면 코루틴 종료입니다.</p>
+                </div>
+
+                <div class="q">yield return의 종류에 따라 대기 시점이 다른가요?</div>
+                <div class="a">
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">FixedUpdate</div>
+                                <div class="flow-box__items">WaitForFixedUpdate</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Update</div>
+                                <div class="flow-box__items">yield return null</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">LateUpdate</div>
+                                <div class="flow-box__items">(이 뒤에 실행)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">렌더링 후</div>
+                                <div class="flow-box__items">WaitForEndOfFrame</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>yield return</th><th>대기 조건</th><th>실행 시점</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>null</code></td><td>다음 프레임</td><td>Update 이후</td></tr>
+                            <tr><td><code>new WaitForSeconds(n)</code></td><td>n초 후</td><td>Update 이후</td></tr>
+                            <tr><td><code>new WaitForFixedUpdate()</code></td><td>다음 FixedUpdate</td><td>FixedUpdate 이후</td></tr>
+                            <tr><td><code>new WaitForEndOfFrame()</code></td><td>프레임 렌더링 완료</td><td>렌더링 직후</td></tr>
+                            <tr><td><code>new WaitUntil(() =&gt; cond)</code></td><td>조건이 true될 때</td><td>Update 이후</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Coroutine의 한계</h2>
+            <div class="conversation">
+                <div class="q">Coroutine은 왜 "레거시"라는 평가를 받나요?</div>
+                <div class="a">
+                    <p>여전히 유용하지만, 현대적 비동기 프로그래밍 관점에서 여러 한계가 있습니다:</p>
+
+                    <p class="warning"><strong>1. 반환값이 없다</strong> — IEnumerator는 값을 반환할 수 없어, 결과를 콜백이나 외부 변수로 전달해야 합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 코루틴의 불편한 결과 전달</div>
+                        <pre><code>// 결과를 받을 방법이 없어서 콜백 사용
+IEnumerator LoadData(System.Action&lt;string&gt; onComplete)
+{
+    var request = UnityWebRequest.Get("https://api.example.com/data");
+    yield return request.SendWebRequest();
+    onComplete?.Invoke(request.downloadHandler.text);
+}
+
+// 호출 시 콜백 지옥 발생
+StartCoroutine(LoadData(data =&gt; {
+    StartCoroutine(ParseData(data, parsed =&gt; {
+        StartCoroutine(ApplyData(parsed, () =&gt; {
+            Debug.Log("완료... 읽기 힘들다");
+        }));
+    }));
+}));</code></pre>
+                    </div>
+
+                    <p class="warning"><strong>2. 에러 처리 불가</strong> — try-catch로 yield return을 감쌀 수 없습니다.</p>
+
+                    <p class="warning"><strong>3. MonoBehaviour 종속</strong> — 게임오브젝트가 비활성화되거나 파괴되면 코루틴이 즉시 중단됩니다.</p>
+
+                    <p class="warning"><strong>4. GC 할당</strong> — new WaitForSeconds()는 매번 힙에 할당합니다. (WaitForSeconds를 캐싱하여 완화 가능)</p>
+                </div>
+
+                <div class="q">WaitForSeconds를 캐싱하면 얼마나 도움이 되나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - WaitForSeconds 캐싱 패턴</div>
+                        <pre><code>// BAD: 매번 new 할당
+IEnumerator SpawnLoop()
+{
+    while (true)
+    {
+        SpawnEnemy();
+        yield return new WaitForSeconds(2f); // GC 부담
+    }
+}
+
+// GOOD: 캐싱하여 재사용
+private static readonly WaitForSeconds Wait2Sec = new WaitForSeconds(2f);
+
+IEnumerator SpawnLoop()
+{
+    while (true)
+    {
+        SpawnEnemy();
+        yield return Wait2Sec; // 할당 없음
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">WaitForSeconds, WaitForFixedUpdate 등은 readonly static으로 캐싱하면 GC 할당을 제거할 수 있습니다. 하지만 WaitForSecondsRealtime은 내부 상태가 있어 캐싱할 수 없습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: UniTask 소개</h2>
+            <div class="conversation">
+                <div class="q">UniTask는 무엇이고, Coroutine과 무엇이 다른가요?</div>
+                <div class="a">
+                    <p><strong>UniTask</strong>는 Unity에 최적화된 async/await 라이브러리입니다. C#의 Task와 달리 <strong>제로 GC 할당</strong>을 목표로 설계되었습니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>코루틴이 "전화로 한 줄씩 지시받는 요리"라면, UniTask는 "레시피 전체를 보고 자율적으로 요리하는 것"입니다.</p>
+                        <p>await는 "이 단계가 끝날 때까지 기다린 후 다음을 진행"이라는 자연스러운 흐름을 코드에 직접 표현합니다.</p>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 동일한 작업: Coroutine vs UniTask</div>
+                        <pre><code>// Coroutine 방식
+IEnumerator LoadAndApply(System.Action&lt;bool&gt; onComplete)
+{
+    var request = UnityWebRequest.Get(url);
+    yield return request.SendWebRequest();
+
+    if (request.result != UnityWebRequest.Result.Success)
+    {
+        Debug.LogError(request.error);
+        onComplete?.Invoke(false);
+        yield break;
+    }
+
+    var texture = DownloadHandlerTexture.GetContent(request);
+    image.texture = texture;
+    onComplete?.Invoke(true);
+}
+
+// UniTask 방식
+async UniTask&lt;bool&gt; LoadAndApplyAsync()
+{
+    try
+    {
+        var request = await UnityWebRequest.Get(url).SendWebRequest();
+        var texture = DownloadHandlerTexture.GetContent(request);
+        image.texture = texture;
+        return true;
+    }
+    catch (UnityWebRequestException e)
+    {
+        Debug.LogError(e.Message);
+        return false;
+    }
+}</code></pre>
+                    </div>
+                    <p class="highlight">UniTask는 반환값, try-catch 에러 처리, MonoBehaviour 비종속이 모두 가능합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: UniTask 실전 활용</h2>
+            <div class="conversation">
+                <div class="q">UniTask의 대기(Delay) 기능은 어떻게 다른가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - UniTask 다양한 대기 방법</div>
+                        <pre><code>using Cysharp.Threading.Tasks;
+using System.Threading;
+
+public class UniTaskExamples : MonoBehaviour
+{
+    // 시간 대기
+    async UniTaskVoid DelayExample()
+    {
+        await UniTask.Delay(1000);                    // 1초 (ms 단위)
+        await UniTask.Delay(TimeSpan.FromSeconds(2)); // 2초
+        await UniTask.DelayFrame(5);                  // 5프레임
+        await UniTask.Yield(PlayerLoopTiming.FixedUpdate); // FixedUpdate 대기
+    }
+
+    // 조건 대기
+    async UniTaskVoid WaitExample()
+    {
+        await UniTask.WaitUntil(() =&gt; hp &lt;= 0);
+        PlayDeathAnimation();
+    }
+
+    // 병렬 실행
+    async UniTask LoadAllResources()
+    {
+        var (textures, sounds, configs) = await UniTask.WhenAll(
+            LoadTexturesAsync(),
+            LoadSoundsAsync(),
+            LoadConfigsAsync()
+        );
+        // 세 작업이 모두 완료된 후 실행
+        InitializeGame(textures, sounds, configs);
+    }
+
+    // 타임아웃
+    async UniTask&lt;string&gt; FetchWithTimeout()
+    {
+        var cts = new CancellationTokenSource();
+        cts.CancelAfterSlim(TimeSpan.FromSeconds(5));
+
+        try
+        {
+            return await FetchDataAsync()
+                .AttachExternalCancellation(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            Debug.Log("타임아웃!");
+            return null;
+        }
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">CancellationToken이 왜 중요한가요?</div>
+                <div class="a">
+                    <p class="key-point">CancellationToken은 UniTask의 생명줄입니다. 오브젝트가 파괴되었는데 비동기 작업이 계속 실행되면 NullReferenceException이 발생합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - CancellationToken 올바른 사용법</div>
+                        <pre><code>public class Enemy : MonoBehaviour
+{
+    private CancellationTokenSource cts;
+
+    async UniTaskVoid Start()
+    {
+        // 이 게임오브젝트의 Destroy와 연동
+        var token = this.GetCancellationTokenOnDestroy();
+
+        try
+        {
+            while (true)
+            {
+                await Patrol(token);
+                await UniTask.Delay(1000, cancellationToken: token);
+                await Attack(token);
+                await UniTask.Delay(500, cancellationToken: token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 오브젝트 파괴 시 자연스럽게 종료
+        }
+    }
+}</code></pre>
+                    </div>
+                    <p class="warning">GetCancellationTokenOnDestroy()를 사용하지 않으면, Destroy 이후에도 비동기 코드가 실행되어 크래시가 발생할 수 있습니다. 모든 UniTask에 CancellationToken을 전달하는 습관을 들이세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 성능 비교와 선택 기준</h2>
+            <div class="conversation">
+                <div class="q">Coroutine과 UniTask의 성능 차이는 실제로 얼마나 큰가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>항목</th><th>Coroutine</th><th>UniTask</th><th>C# Task</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>GC 할당</strong></td>
+                                <td>yield마다 Boxing 발생 가능</td>
+                                <td>제로 할당 (구조체 기반)</td>
+                                <td>Task 객체 힙 할당</td>
+                            </tr>
+                            <tr>
+                                <td><strong>반환값</strong></td>
+                                <td>불가</td>
+                                <td>UniTask&lt;T&gt;</td>
+                                <td>Task&lt;T&gt;</td>
+                            </tr>
+                            <tr>
+                                <td><strong>에러 처리</strong></td>
+                                <td>불가 (yield 내)</td>
+                                <td>try-catch 완전 지원</td>
+                                <td>try-catch 지원</td>
+                            </tr>
+                            <tr>
+                                <td><strong>취소</strong></td>
+                                <td>StopCoroutine</td>
+                                <td>CancellationToken</td>
+                                <td>CancellationToken</td>
+                            </tr>
+                            <tr>
+                                <td><strong>스레드</strong></td>
+                                <td>메인 스레드만</td>
+                                <td>메인 + 워커 스레드</td>
+                                <td>ThreadPool</td>
+                            </tr>
+                            <tr>
+                                <td><strong>MonoBehaviour 의존</strong></td>
+                                <td>필수</td>
+                                <td>불필요</td>
+                                <td>불필요</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">그러면 항상 UniTask를 쓰면 되나요?</div>
+                <div class="a">
+                    <p>상황에 따라 다릅니다:</p>
+                    <ul>
+                        <li><strong>Coroutine이 적합</strong>: 간단한 시퀀스 (2~3줄), 프로토타이핑, 팀 학습 비용이 부담될 때</li>
+                        <li><strong>UniTask가 적합</strong>: 네트워크 요청, 리소스 로딩, 복잡한 비동기 흐름, 반환값/에러 처리가 필요할 때</li>
+                        <li><strong>C# Task는 주의</strong>: Unity 메인 스레드에서 벗어나므로, UnityEngine API 호출 시 오류 발생</li>
+                    </ul>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>Coroutine은 일반 가위, UniTask는 전동 가위입니다.</p>
+                        <p>종이 한 장 자를 때는 일반 가위가 빠르고 간편합니다. 하지만 100장을 정밀하게 잘라야 한다면 전동 가위가 압도적으로 효율적입니다.</p>
+                    </div>
+
+                    <p class="key-point">UniTask의 await UniTask.SwitchToThreadPool()과 await UniTask.SwitchToMainThread()를 사용하면 무거운 계산을 워커 스레드에서 수행하고, 결과를 메인 스레드에서 적용할 수 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 스레드 전환 패턴</div>
+                        <pre><code>async UniTask&lt;Mesh&gt; GenerateMeshAsync(int[] data, CancellationToken token)
+{
+    // 워커 스레드에서 무거운 계산
+    await UniTask.SwitchToThreadPool();
+
+    var vertices = new Vector3[data.Length];
+    var triangles = new int[data.Length * 3];
+    // ... 복잡한 메시 계산 (메인 스레드 블로킹 없음)
+
+    // 다시 메인 스레드로 복귀 (Unity API 사용)
+    await UniTask.SwitchToMainThread(token);
+
+    var mesh = new Mesh();
+    mesh.vertices = vertices;
+    mesh.triangles = triangles;
+    mesh.RecalculateNormals();
+    return mesh;
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: UniTask 도입 시 주의사항</h2>
+            <div class="conversation">
+                <div class="q">기존 프로젝트에 UniTask를 도입할 때 주의할 점은?</div>
+                <div class="a">
+                    <ul>
+                        <li><strong>async void 금지</strong>: 반드시 <code>async UniTaskVoid</code> 또는 <code>async UniTask</code>를 사용하세요. async void는 예외가 삼켜집니다.</li>
+                        <li><strong>Forget() 호출</strong>: Fire-and-forget 패턴에서는 <code>.Forget()</code>을 호출하여 경고를 억제합니다.</li>
+                        <li><strong>한 프레임 딜레이</strong>: <code>await UniTask.Yield()</code>는 <code>yield return null</code>과 동일합니다.</li>
+                    </ul>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 흔한 실수와 올바른 패턴</div>
+                        <pre><code>// BAD: async void — 예외가 삼켜짐
+async void OnButtonClick()
+{
+    await LoadDataAsync(); // 예외 발생 시 추적 불가
+}
+
+// GOOD: UniTaskVoid + Forget
+async UniTaskVoid OnButtonClickAsync()
+{
+    await LoadDataAsync(); // 예외가 정상적으로 전파됨
+}
+
+// 이벤트 핸들러에서 호출
+button.onClick.AddListener(() =&gt; OnButtonClickAsync().Forget());</code></pre>
+                    </div>
+                    <p class="highlight">UniTask는 NuGet이 아닌 <strong>Unity Package Manager</strong>의 Git URL로 설치합니다: https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>Coroutine은 <strong>IEnumerator 기반 상태 머신</strong>이며, 컴파일러가 yield return마다 상태를 분리한다</li>
+                <li>Coroutine의 한계: <strong>반환값 없음, try-catch 불가, MonoBehaviour 종속, GC 할당</strong></li>
+                <li><strong>UniTask</strong>는 제로 GC 할당의 async/await 라이브러리로, 모든 Coroutine 한계를 해결한다</li>
+                <li><strong>CancellationToken</strong>을 항상 전달하여 오브젝트 파괴 후 비동기 코드 실행을 방지하라</li>
+                <li>간단한 대기에는 Coroutine, 복잡한 비동기 흐름에는 <strong>UniTask</strong>를 선택하라</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

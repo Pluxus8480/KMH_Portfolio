@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
 
         <header class="content-header">
             <h1>같은 세상을 공유하는 법</h1>
@@ -30,26 +30,27 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-┌─────────────────────────────────────────────────────────┐
-│                    서버 권한 모델                        │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│                    ┌──────────┐                         │
-│                    │  SERVER  │ ← 진실의 원천           │
-│                    │ (권한)   │                         │
-│                    └────┬─────┘                         │
-│                         │                               │
-│          ┌──────────────┼──────────────┐               │
-│          │ Replicate    │ Replicate    │               │
-│          ▼              ▼              ▼               │
-│    ┌──────────┐   ┌──────────┐   ┌──────────┐         │
-│    │ Client 1 │   │ Client 2 │   │ Client 3 │         │
-│    │ (복제본) │   │ (복제본) │   │ (복제본) │         │
-│    └──────────┘   └──────────┘   └──────────┘         │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box flow-box--highlight" style="margin:0 auto; max-width:220px;">
+                        <div class="flow-box__title">SERVER</div>
+                        <div class="flow-box__items"><p>권한 - 진실의 원천</p></div>
+                    </div>
+                    <div class="flow-arrow">Replicate ▼</div>
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Client 1</div>
+                            <div class="flow-box__items"><p>복제본</p></div>
+                        </div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Client 2</div>
+                            <div class="flow-box__items"><p>복제본</p></div>
+                        </div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Client 3</div>
+                            <div class="flow-box__items"><p>복제본</p></div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">서버가 모든 클라이언트에 상태 복제</p>
             </div>
         </section>
@@ -305,32 +306,32 @@ void AMyCharacter::Server_Fire_Implementation()
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-┌─────────────────────────────────────────────────────────────┐
-│                    네트워크 Role 예시                        │
-│                   (플레이어 캐릭터)                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │                     SERVER                            │  │
-│  │  Player1의 캐릭터: Authority (권한)                  │  │
-│  │  Player2의 캐릭터: Authority (권한)                  │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                              │
-│  ┌────────────────────┐    ┌────────────────────┐          │
-│  │    CLIENT 1        │    │    CLIENT 2        │          │
-│  │                    │    │                    │          │
-│  │ 내 캐릭터:         │    │ 내 캐릭터:         │          │
-│  │   AutonomousProxy  │    │   AutonomousProxy  │          │
-│  │   (자율 프록시)    │    │   (자율 프록시)    │          │
-│  │                    │    │                    │          │
-│  │ 상대 캐릭터:       │    │ 상대 캐릭터:       │          │
-│  │   SimulatedProxy   │    │   SimulatedProxy   │          │
-│  │   (시뮬레이션)     │    │   (시뮬레이션)     │          │
-│  └────────────────────┘    └────────────────────┘          │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box flow-box--highlight" style="width:100%;">
+                        <div class="flow-box__title">SERVER</div>
+                        <div class="flow-box__items">
+                            <p>Player1의 캐릭터: Authority (권한)</p>
+                            <p>Player2의 캐릭터: Authority (권한)</p>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">▼</div>
+                    <div class="flow-row">
+                        <div class="flow-box" style="flex:1;">
+                            <div class="flow-box__title">CLIENT 1</div>
+                            <div class="flow-box__items">
+                                <p><strong>내 캐릭터:</strong> AutonomousProxy (자율 프록시)</p>
+                                <p><strong>상대 캐릭터:</strong> SimulatedProxy (시뮬레이션)</p>
+                            </div>
+                        </div>
+                        <div class="flow-box" style="flex:1;">
+                            <div class="flow-box__title">CLIENT 2</div>
+                            <div class="flow-box__items">
+                                <p><strong>내 캐릭터:</strong> AutonomousProxy (자율 프록시)</p>
+                                <p><strong>상대 캐릭터:</strong> SimulatedProxy (시뮬레이션)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">같은 Actor가 위치에 따라 다른 Role</p>
             </div>
 

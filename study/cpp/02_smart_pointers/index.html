@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>스마트 포인터는 어떻게 메모리를 자동 관리할까?</h1>
             <p class="subtitle">unique_ptr, shared_ptr, weak_ptr 내부 구현 파헤치기</p>
         </header>
@@ -156,24 +158,24 @@ public:
                     <p class="highlight">제어 블록(Control Block)에서 참조 카운트를 관리합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-shared_ptr 구조
-
-shared_ptr 객체           제어 블록              실제 객체
-┌──────────────┐       ┌──────────────┐       ┌──────────┐
-│ ptr ─────────┼───────┼──────────────┼──────▶│ 데이터   │
-│ control ─────┼──────▶│ strong_count │       └──────────┘
-└──────────────┘       │ weak_count   │
-                       │ deleter      │
-                       │ allocator    │
-                       └──────────────┘
-
-make_shared 사용 시:
-┌──────────────┐       ┌───────────────────────┐
-│ ptr ─────────┼──────▶│ 제어 블록 + 데이터    │
-│ control ─────┼──────▶│ (한 번의 메모리 할당)  │
-└──────────────┘       └───────────────────────┘
-                        </pre>
+                        <p><strong>shared_ptr 구조</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">shared_ptr 객체</div><div class="flow-box__items">ptr<br>control</div></div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box"><div class="flow-box__title">제어 블록</div><div class="flow-box__items">strong_count<br>weak_count<br>deleter<br>allocator</div></div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">실제 객체</div><div class="flow-box__items">데이터</div></div>
+                            </div>
+                        </div>
+                        <p><strong>make_shared 사용 시:</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">shared_ptr 객체</div><div class="flow-box__items">ptr<br>control</div></div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">제어 블록 + 데이터</div><div class="flow-box__items">(한 번의 메모리 할당)</div></div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="code-block">

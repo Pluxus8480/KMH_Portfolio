@@ -8,9 +8,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../server.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../server.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>왜 나만 매번 고수를 만나지?</h1>
             <p class="subtitle">공정한 게임을 만드는 매치메이킹 시스템 설계</p>
         </header>
@@ -22,22 +24,25 @@
                 <div class="a">
                     <p>크게 세 가지 상충되는 목표가 있습니다:</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-매치메이킹의 트릴레마:
-
-              공정성 (Fairness)
-                   /\
-                  /  \
-                 /    \
-                /      \
-               /________\
-       대기 시간        게임 품질
-      (Wait Time)    (Match Quality)
-
-세 가지를 모두 만족시킬 수 없음!
-- 공정성 ↑ + 품질 ↑ → 대기 시간 ↑
-- 대기 시간 ↓ → 공정성 ↓ or 품질 ↓
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">매치메이킹의 트릴레마</div>
+                            <div class="flow-box flow-box--highlight" style="margin: 0 auto 8px; max-width: 200px;">
+                                <div class="flow-box__title">공정성 (Fairness)</div>
+                            </div>
+                            <div class="flow-row" style="justify-content: center;">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">대기 시간 (Wait Time)</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">게임 품질 (Match Quality)</div>
+                                </div>
+                            </div>
+                            <div class="flow-label" style="margin-top: 12px;">
+                                세 가지를 모두 만족시킬 수 없음!<br>
+                                공정성 + 품질 &#x2191; &#x2192; 대기 시간 &#x2191;<br>
+                                대기 시간 &#x2193; &#x2192; 공정성 &#x2193; or 품질 &#x2193;
+                            </div>
+                        </div>
                     </div>
                     <p class="highlight">좋은 매치메이킹은 이 세 요소의 <strong>균형점</strong>을 찾는 것입니다.</p>
                 </div>
@@ -178,31 +183,33 @@ private:
                 <div class="a">
                     <p>Glicko는 레이팅의 <strong>불확실성(RD, Rating Deviation)</strong>을 함께 관리합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-Elo vs Glicko 비교:
-
-Elo: 점수만 있음
-┌─────────────────────────────────────────┐
-│  Player A: 1500                         │
-│  Player B: 1500                         │
-│                                         │
-│  둘 다 1500이면 실력이 같은 건가?        │
-│  A는 1000게임, B는 10게임인데?           │
-└─────────────────────────────────────────┘
-
-Glicko: 점수 + 불확실성
-┌─────────────────────────────────────────┐
-│  Player A: 1500 ± 50  (RD = 50)         │
-│  │████████████████│                      │
-│  1450          1550                      │
-│  "높은 확신" - 1000게임 플레이            │
-│                                         │
-│  Player B: 1500 ± 200 (RD = 200)        │
-│  │████████████████████████████████│      │
-│  1300                          1700     │
-│  "낮은 확신" - 10게임 플레이              │
-└─────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">Elo vs Glicko 비교</div>
+                            <div class="flow-side-by-side" style="gap: 12px;">
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">Elo: 점수만 있음</div>
+                                    <div class="flow-box" style="width: 100%;">
+                                        <div class="flow-box__items">
+                                            Player A: 1500<br>
+                                            Player B: 1500<br><br>
+                                            둘 다 1500이면 실력이 같은 건가?<br>
+                                            A는 1000게임, B는 10게임인데?
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">Glicko: 점수 + 불확실성</div>
+                                    <div class="flow-box flow-box--highlight" style="width: 100%; margin-bottom: 8px;">
+                                        <div class="flow-box__title">Player A: 1500 &plusmn; 50 (RD=50)</div>
+                                        <div class="flow-box__items">"높은 확신" - 1000게임 플레이</div>
+                                    </div>
+                                    <div class="flow-box flow-box--warning" style="width: 100%;">
+                                        <div class="flow-box__title">Player B: 1500 &plusmn; 200 (RD=200)</div>
+                                        <div class="flow-box__items">"낮은 확신" - 10게임 플레이</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="code-block">
                         <div class="code-header">Glicko-2 핵심 개념</div>
@@ -414,27 +421,47 @@ private:
                 <div class="a">
                     <p>강한 SBMM은 모든 게임을 "땀나는 경기"로 만듭니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-SBMM 강도에 따른 경험:
-
-약한 SBMM (캐주얼):
-┌────────────────────────────────────────┐
-│ 쉬운 게임 ████████                      │
-│ 보통 게임 ██████████████████            │
-│ 어려운 게임 ██████                       │
-│                                        │
-│ → 다양한 경험, 가끔 스트레스              │
-└────────────────────────────────────────┘
-
-강한 SBMM (경쟁):
-┌────────────────────────────────────────┐
-│ 쉬운 게임 ██                            │
-│ 보통 게임 ████████████████████████████  │
-│ 어려운 게임 ██                           │
-│                                        │
-│ → 항상 비슷한 난이도, 매번 집중 필요       │
-└────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); margin-bottom: 12px;">SBMM 강도에 따른 경험</div>
+                            <div class="flow-side-by-side" style="gap: 12px;">
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">약한 SBMM (캐주얼)</div>
+                                    <div class="pipeline">
+                                        <div class="pipeline-stage">
+                                            <div class="pipeline-label" style="min-width: 80px;">쉬운 게임</div>
+                                            <div class="pipeline-bar pb-light" style="width: 40%;"><span></span></div>
+                                        </div>
+                                        <div class="pipeline-stage">
+                                            <div class="pipeline-label" style="min-width: 80px;">보통 게임</div>
+                                            <div class="pipeline-bar pb-gbuffer" style="width: 80%;"><span></span></div>
+                                        </div>
+                                        <div class="pipeline-stage">
+                                            <div class="pipeline-label" style="min-width: 80px;">어려운 게임</div>
+                                            <div class="pipeline-bar pb-post" style="width: 30%;"><span></span></div>
+                                        </div>
+                                    </div>
+                                    <div class="flow-label">다양한 경험, 가끔 스트레스</div>
+                                </div>
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">강한 SBMM (경쟁)</div>
+                                    <div class="pipeline">
+                                        <div class="pipeline-stage">
+                                            <div class="pipeline-label" style="min-width: 80px;">쉬운 게임</div>
+                                            <div class="pipeline-bar pb-light" style="width: 10%;"><span></span></div>
+                                        </div>
+                                        <div class="pipeline-stage">
+                                            <div class="pipeline-label" style="min-width: 80px;">보통 게임</div>
+                                            <div class="pipeline-bar pb-gbuffer" style="width: 95%;"><span></span></div>
+                                        </div>
+                                        <div class="pipeline-stage">
+                                            <div class="pipeline-label" style="min-width: 80px;">어려운 게임</div>
+                                            <div class="pipeline-bar pb-post" style="width: 10%;"><span></span></div>
+                                        </div>
+                                    </div>
+                                    <div class="flow-label">항상 비슷한 난이도, 매번 집중 필요</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <p class="highlight">고수 플레이어들은 "편하게 즐기고 싶은데 항상 고수만 만난다"고 불만을 표합니다.</p>
                 </div>

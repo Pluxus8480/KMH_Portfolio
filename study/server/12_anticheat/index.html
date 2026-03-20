@@ -8,9 +8,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../server.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../server.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>치터는 어떻게 막을까?</h1>
             <p class="subtitle">게임 안티치트 시스템의 원리와 서버 측 검증</p>
         </header>
@@ -22,35 +24,50 @@
                 <div class="a">
                     <p>크게 클라이언트 측과 네트워크 측으로 나눕니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-치트 유형 분류:
-
-클라이언트 측:
-├─ 메모리 조작
-│   ├─ Wallhack (벽투시)
-│   ├─ Speed hack (이동 속도)
-│   ├─ God mode (무적)
-│   └─ Item duplication
-│
-├─ 입력 자동화
-│   ├─ Aimbot (자동 조준)
-│   ├─ Triggerbot (자동 사격)
-│   └─ Macro/봇
-│
-└─ 클라이언트 파일 변조
-    ├─ 텍스처 변경 (투명화)
-    └─ 모델 변경 (히트박스 확대)
-
-네트워크 측:
-├─ 패킷 조작
-│   ├─ 위치 조작
-│   ├─ 데미지 조작
-│   └─ 아이템 조작
-│
-└─ 네트워크 조작
-    ├─ Lag switch (의도적 지연)
-    └─ 패킷 복제
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-side-by-side" style="gap: 12px;">
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">클라이언트 측</div>
+                                    <div class="hierarchy-diagram">
+                                        <div class="hierarchy-item hierarchy-item--root">메모리 조작</div>
+                                        <div class="hierarchy-children">
+                                            <div class="hierarchy-item">Wallhack (벽투시)</div>
+                                            <div class="hierarchy-item">Speedhack (이동 속도)</div>
+                                            <div class="hierarchy-item">God mode (무적)</div>
+                                            <div class="hierarchy-item">Item duplication</div>
+                                        </div>
+                                        <div class="hierarchy-item hierarchy-item--root" style="margin-top:8px;">입력 자동화</div>
+                                        <div class="hierarchy-children">
+                                            <div class="hierarchy-item">Aimbot (자동 조준)</div>
+                                            <div class="hierarchy-item">Triggerbot (자동 사격)</div>
+                                            <div class="hierarchy-item">Macro/봇</div>
+                                        </div>
+                                        <div class="hierarchy-item hierarchy-item--root" style="margin-top:8px;">클라이언트 파일 변조</div>
+                                        <div class="hierarchy-children">
+                                            <div class="hierarchy-item">텍스처 변경 (투명화)</div>
+                                            <div class="hierarchy-item">모델 변경 (히트박스 확대)</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">네트워크 측</div>
+                                    <div class="hierarchy-diagram">
+                                        <div class="hierarchy-item hierarchy-item--root">패킷 조작</div>
+                                        <div class="hierarchy-children">
+                                            <div class="hierarchy-item">위치 조작</div>
+                                            <div class="hierarchy-item">데미지 조작</div>
+                                            <div class="hierarchy-item">아이템 조작</div>
+                                        </div>
+                                        <div class="hierarchy-item hierarchy-item--root" style="margin-top:8px;">네트워크 조작</div>
+                                        <div class="hierarchy-children">
+                                            <div class="hierarchy-item">Lagswitch (의도적 지연)</div>
+                                            <div class="hierarchy-item">패킷 복제</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">치트 유형 분류</p>
                     </div>
                 </div>
 
@@ -413,40 +430,42 @@ public:
                 <div class="q">인간과 에임봇의 차이점은?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-인간 vs 에임봇 조준 패턴:
-
-[인간]
-각도
-  │     ╱──────  목표 근처에서
-  │   ╱          천천히 미세 조정
-  │  ╱
-  │╱
-  └────────────── 시간
-
-- 점진적 가속/감속
-- 목표 근처에서 미세 조정
-- 개인차 있는 반응 시간
-
-[에임봇]
-각도
-  │         ┌────  순간적으로 정확히
-  │         │      목표에 도달
-  │         │
-  │─────────┘
-  └────────────── 시간
-
-- 순간적인 "스냅"
-- 완벽한 정확도
-- 일정한 반응 시간
-- 목표 전환 시 급격한 각도 변화
-
-탐지 포인트:
-✓ 각속도 분포 (인간은 정규분포)
-✓ 조준 도달 시간 (인간은 300ms~, 봇은 <100ms)
-✓ 미세 조정 패턴 (인간은 오버슈팅)
-✓ 타겟 전환 시 움직임 (인간은 부드러움)
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-side-by-side" style="gap: 12px;">
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">인간 조준 패턴</div>
+                                    <div class="flow-box" style="width:100%;">
+                                        <div class="flow-box__items" style="text-align:left;">
+                                            &bull; 점진적 가속/감속<br>
+                                            &bull; 목표 근처에서 미세 조정<br>
+                                            &bull; 개인차 있는 반응 시간<br>
+                                            &bull; 부드러운 곡선 궤적
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flow-group" style="flex: 1;">
+                                    <div class="flow-group__title">에임봇 조준 패턴</div>
+                                    <div class="flow-box" style="width:100%; border-color:#ef4444;">
+                                        <div class="flow-box__items" style="text-align:left;">
+                                            &bull; 순간적인 "스냅"<br>
+                                            &bull; 완벽한 정확도<br>
+                                            &bull; 일정한 반응 시간<br>
+                                            &bull; 목표 전환 시 급격한 각도 변화
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flow-box flow-box--highlight" style="width:100%; margin-top:12px; text-align:left;">
+                                <div class="flow-box__title">탐지 포인트</div>
+                                <div class="flow-box__items">
+                                    &check; 각속도 분포 (인간은 정규분포)<br>
+                                    &check; 조준 도달 시간 (인간은 300ms~, 봇은 &lt;100ms)<br>
+                                    &check; 미세 조정 패턴 (인간은 오버슈팅)<br>
+                                    &check; 타겟 전환 시 움직임 (인간은 부드러움)
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">인간 vs 에임봇 조준 패턴 비교</p>
                     </div>
                 </div>
             </div>
@@ -537,39 +556,42 @@ private:
                 <div class="q">클라이언트 측 안티치트는 어떻게 동작하나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-클라이언트 안티치트 계층:
-
-┌─────────────────────────────────────────┐
-│           Anti-Cheat Software           │
-│  (EAC, BattlEye, Vanguard, etc.)       │
-├─────────────────────────────────────────┤
-│                                         │
-│  1. 커널 드라이버                        │
-│     - 메모리 보호                        │
-│     - 프로세스 감시                      │
-│     - 드라이버 무결성                    │
-│                                         │
-│  2. 프로세스 모니터링                    │
-│     - 의심스러운 프로세스 탐지            │
-│     - DLL 인젝션 탐지                    │
-│     - 디버거 탐지                        │
-│                                         │
-│  3. 메모리 스캐닝                        │
-│     - 알려진 치트 시그니처               │
-│     - 코드 변조 탐지                     │
-│     - 값 변조 탐지                       │
-│                                         │
-│  4. 파일 무결성                          │
-│     - 게임 파일 해시 검증                │
-│     - 변조된 에셋 탐지                   │
-│                                         │
-│  5. 행동 분석                           │
-│     - 입력 패턴 분석                     │
-│     - 비정상 API 호출 탐지               │
-│                                         │
-└─────────────────────────────────────────┘
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-box flow-box--highlight" style="width:100%; margin-bottom:12px;">
+                                <div class="flow-box__title">Anti-Cheat Software (EAC, BattlEye, Vanguard, etc.)</div>
+                            </div>
+                            <div class="hierarchy-diagram">
+                                <div class="hierarchy-item hierarchy-item--root">1. 커널 드라이버</div>
+                                <div class="hierarchy-children">
+                                    <div class="hierarchy-item">메모리 보호</div>
+                                    <div class="hierarchy-item">프로세스 감시</div>
+                                    <div class="hierarchy-item">드라이버 무결성</div>
+                                </div>
+                                <div class="hierarchy-item hierarchy-item--root" style="margin-top:8px;">2. 프로세스 모니터링</div>
+                                <div class="hierarchy-children">
+                                    <div class="hierarchy-item">의심스러운 프로세스 탐지</div>
+                                    <div class="hierarchy-item">DLL 인젝션 탐지</div>
+                                    <div class="hierarchy-item">디버거 탐지</div>
+                                </div>
+                                <div class="hierarchy-item hierarchy-item--root" style="margin-top:8px;">3. 메모리 스캐닝</div>
+                                <div class="hierarchy-children">
+                                    <div class="hierarchy-item">알려진 치트 시그니처</div>
+                                    <div class="hierarchy-item">코드 변조 탐지</div>
+                                    <div class="hierarchy-item">값 변조 탐지</div>
+                                </div>
+                                <div class="hierarchy-item hierarchy-item--root" style="margin-top:8px;">4. 파일 무결성</div>
+                                <div class="hierarchy-children">
+                                    <div class="hierarchy-item">게임 파일 해시 검증</div>
+                                    <div class="hierarchy-item">변조된 에셋 탐지</div>
+                                </div>
+                                <div class="hierarchy-item hierarchy-item--root" style="margin-top:8px;">5. 행동 분석</div>
+                                <div class="hierarchy-children">
+                                    <div class="hierarchy-item">입력 패턴 분석</div>
+                                    <div class="hierarchy-item">비정상 API 호출 탐지</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">클라이언트 안티치트 계층 구조</p>
                     </div>
                 </div>
 

@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../database.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../database.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"3년 키운 캐릭터가 사라졌어요"</h1>
             <p class="subtitle">게임 데이터 백업과 복구 전략</p>
         </header>
@@ -34,28 +36,57 @@
                     <p>크게 세 가지 방식이 있습니다:</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                         백업 방식 비교                               │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  1. Full Backup (전체 백업)                                          │
-│  ┌─────────────────────────────────────────────────────┐            │
-│  │ [전체 데이터 복사] ─── 크기: 100GB, 시간: 2시간      │            │
-│  └─────────────────────────────────────────────────────┘            │
-│                                                                     │
-│  2. Incremental Backup (증분 백업)                                   │
-│  ┌─────┐   ┌───┐   ┌───┐   ┌───┐                                   │
-│  │Full │──▶│+5G│──▶│+3G│──▶│+4G│  마지막 백업 이후 변경분만          │
-│  └─────┘   └───┘   └───┘   └───┘                                   │
-│                                                                     │
-│  3. Differential Backup (차등 백업)                                  │
-│  ┌─────┐   ┌───┐   ┌────┐   ┌─────┐                                │
-│  │Full │──▶│+5G│──▶│+8G │──▶│+12G │  Full 이후 모든 변경분          │
-│  └─────┘   └───┘   └────┘   └─────┘                                │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>1. Full Backup (전체 백업)</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">전체 데이터 복사</div>
+                                    <div class="flow-box__items">크기: 100GB, 시간: 2시간</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p><strong>2. Incremental Backup (증분 백업)</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Full</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">+5G</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">+3G</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">+4G</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p>마지막 백업 이후 변경분만</p>
+                        <p><strong>3. Differential Backup (차등 백업)</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Full</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">+5G</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">+8G</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">+12G</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p>Full 이후 모든 변경분</p>
                     </div>
 
                     <table class="compare-table">
@@ -105,28 +136,26 @@
                 <div class="q">WAL 기반 PITR은 어떻게 동작하나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                        PITR 복구 과정                                │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   [Base Backup]        [WAL Logs]                [Target Time]      │
-│   일요일 00:00         월~토 변경 기록           토요일 15:22:33     │
-│        │                    │                          │            │
-│        ▼                    ▼                          ▼            │
-│   ┌─────────┐    ┌─────────────────────┐    ┌─────────────────┐    │
-│   │ 전체    │───▶│  WAL 순차 적용      │───▶│  Target 시점    │    │
-│   │ 복원    │    │  (Replay)           │    │  도달!          │    │
-│   └─────────┘    └─────────────────────┘    └─────────────────┘    │
-│                                                                     │
-│   Timeline:                                                         │
-│   ──●──────────────────────────────────────────●────────────────▶  │
-│     │                                          │                    │
-│   Base                                       Target                 │
-│   Backup                                     Time                   │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>PITR 복구 과정</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Base Backup</div>
+                                    <div class="flow-box__items">일요일 00:00<br>전체 복원</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">WAL Logs</div>
+                                    <div class="flow-box__items">월~토 변경 기록<br>WAL 순차 적용 (Replay)</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Target Time</div>
+                                    <div class="flow-box__items">토요일 15:22:33<br>Target 시점 도달!</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">Timeline: Base Backup &rarr; WAL 순차 적용 &rarr; Target Time 도달</p>
                     </div>
 
                     <div class="code-block">
@@ -184,33 +213,54 @@ mysqlbinlog --stop-position=12345 mysql-bin.000001 | mysql</code></pre>
                     <p>데이터 중요도에 따라 <strong>계층화된 백업 정책</strong>을 적용합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    게임 데이터 백업 계층                             │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  Tier 1: 결제/재화 (Critical)                                       │
-│  ├── 실시간 동기 복제 (Sync Replication)                            │
-│  ├── 트랜잭션 로그 별도 보관                                         │
-│  └── RPO: 0초 (데이터 손실 불가)                                    │
-│                                                                     │
-│  Tier 2: 캐릭터/인벤토리 (Important)                                │
-│  ├── 비동기 복제 + 5분 스냅샷                                       │
-│  ├── WAL 연속 아카이브                                              │
-│  └── RPO: 5분 이내                                                  │
-│                                                                     │
-│  Tier 3: 퀘스트 진행/설정 (Normal)                                  │
-│  ├── 시간별 증분 백업                                               │
-│  └── RPO: 1시간 이내                                                │
-│                                                                     │
-│  Tier 4: 로그/통계 (Low)                                            │
-│  ├── 일간 백업                                                      │
-│  └── RPO: 24시간 이내                                               │
-│                                                                     │
-│  ※ RPO (Recovery Point Objective): 허용 가능한 데이터 손실 시간     │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>게임 데이터 백업 계층</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row--3col">
+                                <div class="flow-box flow-box--warning">
+                                    <div class="flow-box__title">Tier 1: 결제/재화 (Critical)</div>
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>실시간 동기 복제 (Sync Replication)</li>
+                                            <li>트랜잭션 로그 별도 보관</li>
+                                            <li>RPO: 0초 (데이터 손실 불가)</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Tier 2: 캐릭터/인벤토리 (Important)</div>
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>비동기 복제 + 5분 스냅샷</li>
+                                            <li>WAL 연속 아카이브</li>
+                                            <li>RPO: 5분 이내</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="flow-box flow-box--info">
+                                    <div class="flow-box__title">Tier 3: 퀘스트 진행/설정 (Normal)</div>
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>시간별 증분 백업</li>
+                                            <li>RPO: 1시간 이내</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Tier 4: 로그/통계 (Low)</div>
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>일간 백업</li>
+                                            <li>RPO: 24시간 이내</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">RPO (Recovery Point Objective): 허용 가능한 데이터 손실 시간</p>
                     </div>
                 </div>
 
@@ -303,36 +353,35 @@ echo "=== 점검 백업 완료 ==="</code></pre>
                     <p><strong>선택적 롤백</strong>이 필요합니다. 전체 롤백은 다른 유저에게 피해를 줍니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    해킹 피해 복구 프로세스                           │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   1. 피해 확인                                                       │
-│   ┌──────────────────────────────────────────────────────────────┐ │
-│   │ 로그 분석: 언제, 어떤 아이템이, 누구에게 이동했는지           │ │
-│   │ IP 확인: 평소와 다른 접속 위치/패턴인지                      │ │
-│   │ 피해 범위: 인벤토리, 골드, 거래 내역                         │ │
-│   └──────────────────────────────────────────────────────────────┘ │
-│                              │                                      │
-│                              ▼                                      │
-│   2. 피해 시점 확정                                                  │
-│   ┌──────────────────────────────────────────────────────────────┐ │
-│   │ 정상 마지막 활동: 2024-01-15 14:00:00                        │ │
-│   │ 해킹 시작 추정: 2024-01-15 15:30:00                          │ │
-│   │ 복구 대상 시점: 2024-01-15 14:00:00                          │ │
-│   └──────────────────────────────────────────────────────────────┘ │
-│                              │                                      │
-│                              ▼                                      │
-│   3. 선택적 복구 실행                                                │
-│   ┌──────────────────────────────────────────────────────────────┐ │
-│   │ - 해당 유저 데이터만 추출                                      │ │
-│   │ - 복구 시점 데이터로 교체                                      │ │
-│   │ - 관련 거래 처리 (아이템 회수 or 보상)                        │ │
-│   └──────────────────────────────────────────────────────────────┘ │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>해킹 피해 복구 프로세스</strong></p>
+                        <div class="flow-column">
+                            <div class="flow-box" style="width:100%">
+                                <div class="flow-box__title">1. 피해 확인</div>
+                                <div class="flow-box__items">
+                                    로그 분석: 언제, 어떤 아이템이, 누구에게 이동했는지<br>
+                                    IP 확인: 평소와 다른 접속 위치/패턴인지<br>
+                                    피해 범위: 인벤토리, 골드, 거래 내역
+                                </div>
+                            </div>
+                            <span class="flow-arrow-down">&darr;</span>
+                            <div class="flow-box" style="width:100%">
+                                <div class="flow-box__title">2. 피해 시점 확정</div>
+                                <div class="flow-box__items">
+                                    정상 마지막 활동: 2024-01-15 14:00:00<br>
+                                    해킹 시작 추정: 2024-01-15 15:30:00<br>
+                                    복구 대상 시점: 2024-01-15 14:00:00
+                                </div>
+                            </div>
+                            <span class="flow-arrow-down">&darr;</span>
+                            <div class="flow-box flow-box--highlight" style="width:100%">
+                                <div class="flow-box__title">3. 선택적 복구 실행</div>
+                                <div class="flow-box__items">
+                                    해당 유저 데이터만 추출<br>
+                                    복구 시점 데이터로 교체<br>
+                                    관련 거래 처리 (아이템 회수 or 보상)
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="code-block">
@@ -470,35 +519,51 @@ ORDER BY item_instance_id, depth;</code></pre>
                     <p><strong>DR(Disaster Recovery) 사이트</strong>를 구축해야 합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                      DR 구성 예시                                    │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   Primary Site (서울)                DR Site (부산)                 │
-│   ┌──────────────────┐              ┌──────────────────┐           │
-│   │   Game Server    │              │   Standby Server │           │
-│   │   ┌──────────┐   │              │   ┌──────────┐   │           │
-│   │   │   App    │   │              │   │   App    │   │           │
-│   │   └──────────┘   │              │   │ (대기)    │   │           │
-│   │   ┌──────────┐   │  Async       │   └──────────┘   │           │
-│   │   │    DB    │───┼──Repl.──────▶│   ┌──────────┐   │           │
-│   │   │ (Master) │   │              │   │    DB    │   │           │
-│   │   └──────────┘   │              │   │ (Slave)  │   │           │
-│   └──────────────────┘              │   └──────────┘   │           │
-│                                     └──────────────────┘           │
-│                                                                     │
-│   장애 발생 시:                                                      │
-│   1. Primary 장애 감지 (Health Check)                               │
-│   2. DNS Failover 또는 Load Balancer 전환                           │
-│   3. DR Site DB를 Master로 승격                                     │
-│   4. 서비스 재개                                                    │
-│                                                                     │
-│   RTO (Recovery Time Objective): 30분 ~ 2시간                       │
-│   RPO (Recovery Point Objective): 비동기 복제 지연만큼 (수초~수분)   │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>DR 구성 예시</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Primary Site (서울)</div>
+                                    <div class="flow-box__items">
+                                        Game Server<br>
+                                        App + DB (Master)
+                                    </div>
+                                </div>
+                                <span class="flow-arrow">Async Repl. &rarr;</span>
+                                <div class="flow-box flow-box--info">
+                                    <div class="flow-box__title">DR Site (부산)</div>
+                                    <div class="flow-box__items">
+                                        Standby Server<br>
+                                        App (대기) + DB (Slave)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p><strong>장애 발생 시:</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--small">
+                                    <div class="flow-box__title">1</div>
+                                    <div class="flow-box__items">Primary 장애 감지</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--small">
+                                    <div class="flow-box__title">2</div>
+                                    <div class="flow-box__items">DNS Failover 전환</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--small">
+                                    <div class="flow-box__title">3</div>
+                                    <div class="flow-box__items">DR DB Master 승격</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--highlight flow-box--small">
+                                    <div class="flow-box__title">4</div>
+                                    <div class="flow-box__items">서비스 재개</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p>RTO: 30분 ~ 2시간 / RPO: 비동기 복제 지연만큼 (수초~수분)</p>
                     </div>
                 </div>
 

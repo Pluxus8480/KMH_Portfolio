@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
 
         <header class="content-header">
             <h1>수백만 입자로 마법을 그리다</h1>
@@ -76,32 +76,31 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-┌─────────────────────────────────────────────────────────────┐
-│                    Niagara System                            │
-│                   (최상위 컨테이너)                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │               Emitter 1 (불꽃)                       │   │
-│  │  ┌────────────────────────────────────────────┐     │   │
-│  │  │ Emitter Properties │ System에서의 설정     │     │   │
-│  │  ├────────────────────────────────────────────┤     │   │
-│  │  │ Emitter Spawn     │ 에미터 초기화          │     │   │
-│  │  │ Emitter Update    │ 에미터 업데이트        │     │   │
-│  │  ├────────────────────────────────────────────┤     │   │
-│  │  │ Particle Spawn    │ 파티클 생성 시         │     │   │
-│  │  │ Particle Update   │ 파티클 매 프레임       │     │   │
-│  │  └────────────────────────────────────────────┘     │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │               Emitter 2 (연기)                       │   │
-│  │  ...                                                 │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box flow-box--highlight" style="width:100%;">
+                        <div class="flow-box__title">Niagara System (최상위 컨테이너)</div>
+                        <div class="flow-box__items">
+                            <div class="flow-box" style="width:100%; margin-bottom:12px;">
+                                <div class="flow-box__title">Emitter 1 (불꽃)</div>
+                                <div class="flow-box__items">
+                                    <table class="compare-table" style="margin:0;">
+                                        <tbody>
+                                            <tr><td><strong>Emitter Properties</strong></td><td>System에서의 설정</td></tr>
+                                            <tr><td><strong>Emitter Spawn</strong></td><td>에미터 초기화</td></tr>
+                                            <tr><td><strong>Emitter Update</strong></td><td>에미터 업데이트</td></tr>
+                                            <tr><td><strong>Particle Spawn</strong></td><td>파티클 생성 시</td></tr>
+                                            <tr><td><strong>Particle Update</strong></td><td>파티클 매 프레임</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="flow-box" style="width:100%;">
+                                <div class="flow-box__title">Emitter 2 (연기)</div>
+                                <div class="flow-box__items"><p>...</p></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Niagara System 계층 구조</p>
             </div>
 
@@ -324,32 +323,25 @@ Get Skinned Triangle Data
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-이벤트 기반 이펙트 체인:
-
-┌──────────────────┐
-│  Emitter: 총알   │
-│                  │
-│  Death Event ────┼──────────────────────────────┐
-│  (파티클 사망시) │                              │
-└──────────────────┘                              │
-                                                  │
-                               ┌──────────────────┼──────────────┐
-                               │  Emitter: 폭발  │              │
-                               │                  │ Event Handler│
-                               │  스폰 위치 =     │ ◀────────────┘
-                               │  총알 사망 위치  │
-                               │                  │
-                               │  Collision ──────┼─────────────┐
-                               └──────────────────┘             │
-                                                                │
-                                               ┌────────────────┼───┐
-                                               │ Emitter: 파편 │   │
-                                               │                │   │
-                                               │ 충돌 위치에서  │◀──┘
-                                               │ 파편 생성      │
-                                               └────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-box">
+                        <div class="flow-box__title">Emitter: 총알</div>
+                        <div class="flow-box__items"><p>Death Event (파티클 사망시)</p></div>
+                    </div>
+                    <div class="flow-arrow">Event Handler ▼</div>
+                    <div class="flow-box">
+                        <div class="flow-box__title">Emitter: 폭발</div>
+                        <div class="flow-box__items">
+                            <p>스폰 위치 = 총알 사망 위치</p>
+                            <p>Collision 이벤트 발생</p>
+                        </div>
+                    </div>
+                    <div class="flow-arrow">Collision ▼</div>
+                    <div class="flow-box">
+                        <div class="flow-box__title">Emitter: 파편</div>
+                        <div class="flow-box__items"><p>충돌 위치에서 파편 생성</p></div>
+                    </div>
+                </div>
                 <p class="diagram-caption">이벤트로 연결된 이펙트 체인</p>
             </div>
 

@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>두 물체가 부딪혔는지 어떻게 알까?</h1>
             <p class="subtitle">SAT(분리축 정리)와 GJK 충돌 감지 알고리즘</p>
         </header>
@@ -26,35 +28,27 @@
                     <p class="highlight">Broad Phase → Narrow Phase</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-충돌 감지 파이프라인
-
-┌─────────────────────────────────────────────┐
-│           모든 물체 (1000개)                  │
-└─────────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────────┐
-│  Broad Phase (대략적 검사)                    │
-│  - AABB 검사, 공간 분할                       │
-│  - O(n log n) ~ O(n)                        │
-└─────────────────────────────────────────────┘
-                    │
-              (후보 50쌍)
-                    ▼
-┌─────────────────────────────────────────────┐
-│  Narrow Phase (정밀 검사)                     │
-│  - SAT, GJK 알고리즘                         │
-│  - 실제 충돌 여부 판정                         │
-└─────────────────────────────────────────────┘
-                    │
-              (실제 충돌 10쌍)
-                    ▼
-┌─────────────────────────────────────────────┐
-│  충돌 응답 (Response)                         │
-│  - 밀어내기, 반발, 데미지 등                   │
-└─────────────────────────────────────────────┘
-                        </pre>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">입력</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>모든 물체 (1000개)</span></div>
+                            </div>
+                            <div style="text-align:center; font-size:1.2em;">&darr;</div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Broad Phase</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>AABB 검사, 공간 분할</span><span>O(n log n) ~ O(n)</span></div>
+                            </div>
+                            <div style="text-align:center; font-size:0.85em; color:#aaa;">&darr; 후보 50쌍</div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Narrow Phase</div>
+                                <div class="pipeline-bar pb-light"><span>SAT, GJK 알고리즘</span><span>실제 충돌 여부 판정</span></div>
+                            </div>
+                            <div style="text-align:center; font-size:0.85em; color:#aaa;">&darr; 실제 충돌 10쌍</div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Response</div>
+                                <div class="pipeline-bar pb-post"><span>밀어내기, 반발, 데미지 등</span></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -85,28 +79,37 @@
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-SAT 원리
-
-        축1 투영                    축2 투영
-        ───────                    ───────
-
-  A ▓▓▓▓▓▓                    A ▓▓▓▓
-        B ▓▓▓▓▓▓               B    ▓▓▓▓▓
-        ────────                   ────────
-        겹침! ✓                   겹침! ✓
-
-        → 모든 축에서 겹침 = 충돌!
-
-        축3 투영 (분리축 발견)
-        ───────
-  A ▓▓▓▓
-              B ▓▓▓▓▓
-        ─────────────
-        분리! ✗
-
-        → 하나라도 분리 = 충돌 아님!
-                        </pre>
+                        <div class="flow-diagram">
+                            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; text-align:center;">
+                                <div style="background:rgba(78,205,196,0.15); border:1px solid rgba(78,205,196,0.4); border-radius:8px; padding:12px;">
+                                    <div style="font-weight:bold; margin-bottom:8px;">축1 투영</div>
+                                    <div style="background:rgba(78,205,196,0.4); height:12px; width:60%; margin:4px auto; border-radius:3px;"></div>
+                                    <div style="font-size:0.8em; color:#aaa;">A</div>
+                                    <div style="background:rgba(108,92,231,0.4); height:12px; width:60%; margin:4px auto 4px 30%; border-radius:3px;"></div>
+                                    <div style="font-size:0.8em; color:#aaa;">B</div>
+                                    <div style="color:#4ecdc4; font-weight:bold; margin-top:4px;">겹침 &#10003;</div>
+                                </div>
+                                <div style="background:rgba(78,205,196,0.15); border:1px solid rgba(78,205,196,0.4); border-radius:8px; padding:12px;">
+                                    <div style="font-weight:bold; margin-bottom:8px;">축2 투영</div>
+                                    <div style="background:rgba(78,205,196,0.4); height:12px; width:50%; margin:4px auto 4px 10%; border-radius:3px;"></div>
+                                    <div style="font-size:0.8em; color:#aaa;">A</div>
+                                    <div style="background:rgba(108,92,231,0.4); height:12px; width:50%; margin:4px auto 4px 30%; border-radius:3px;"></div>
+                                    <div style="font-size:0.8em; color:#aaa;">B</div>
+                                    <div style="color:#4ecdc4; font-weight:bold; margin-top:4px;">겹침 &#10003;</div>
+                                </div>
+                                <div style="background:rgba(255,107,107,0.15); border:1px solid rgba(255,107,107,0.4); border-radius:8px; padding:12px;">
+                                    <div style="font-weight:bold; margin-bottom:8px;">축3 투영 (분리축)</div>
+                                    <div style="background:rgba(78,205,196,0.4); height:12px; width:40%; margin:4px auto 4px 5%; border-radius:3px;"></div>
+                                    <div style="font-size:0.8em; color:#aaa;">A</div>
+                                    <div style="background:rgba(108,92,231,0.4); height:12px; width:40%; margin:4px auto 4px 55%; border-radius:3px;"></div>
+                                    <div style="font-size:0.8em; color:#aaa;">B</div>
+                                    <div style="color:#ff6b6b; font-weight:bold; margin-top:4px;">분리 &#10007;</div>
+                                </div>
+                            </div>
+                            <div style="text-align:center; margin-top:12px; font-size:0.9em;">
+                                <p><strong>하나라도 분리</strong> = 충돌 아님! / <strong>모든 축에서 겹침</strong> = 충돌!</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -245,20 +248,22 @@ private:
                     <p>두 도형의 민코프스키 차가 원점을 포함하면 충돌!</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-민코프스키 차 (A - B)
-
-    도형 A          도형 B         A - B (민코프스키 차)
-    ┌───┐          ┌───┐
-    │   │    -     │   │    =    ┌───────────┐
-    └───┘          └───┘         │     ●     │ 원점 포함!
-                                  │  (원점)   │ → 충돌
-                                  └───────────┘
-
-두 도형이 떨어져 있으면:
-
-    A - B가 원점을 포함하지 않음 → 충돌 아님
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">도형 A</div>
+                                </div>
+                                <div class="flow-arrow">&minus;</div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">도형 B</div>
+                                </div>
+                                <div class="flow-arrow">=</div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">A - B (민코프스키 차)</div>
+                                    <div class="flow-box__items">&bull; 원점 포함 &rarr; <strong>충돌!</strong><br>&bull; 원점 미포함 &rarr; 충돌 아님</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -435,25 +440,27 @@ private:
                     <p>GJK는 충돌 여부만 알려주므로, EPA(Expanding Polytope Algorithm)로 침투 정보를 얻습니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-EPA (Expanding Polytope Algorithm)
-
-1. GJK가 찾은 심플렉스에서 시작
-
-   ┌─────────┐
-   │  ●      │  심플렉스 (삼각형)
-   │ (원점)  │
-   └─────────┘
-
-2. 원점에서 가장 가까운 엣지 찾기
-
-3. 그 방향으로 새 Support 점 추가
-
-4. 반복하여 침투 벡터(MTV) 계산
-
-   MTV = Minimum Translation Vector
-   → 물체를 밀어낼 최소 거리와 방향
-                        </pre>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Step 1</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>GJK가 찾은 심플렉스(삼각형)에서 시작, 원점 포함</span></div>
+                            </div>
+                            <div style="text-align:center; font-size:1.2em;">&darr;</div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Step 2</div>
+                                <div class="pipeline-bar pb-light"><span>원점에서 가장 가까운 엣지 찾기</span></div>
+                            </div>
+                            <div style="text-align:center; font-size:1.2em;">&darr;</div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Step 3</div>
+                                <div class="pipeline-bar pb-post"><span>그 방향으로 새 Support 점 추가</span></div>
+                            </div>
+                            <div style="text-align:center; font-size:1.2em;">&darr;</div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Step 4</div>
+                                <div class="pipeline-bar pb-shadow"><span>반복하여 침투 벡터(MTV) 계산 &mdash; 물체를 밀어낼 최소 거리와 방향</span></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

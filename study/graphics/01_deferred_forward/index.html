@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>빛을 그리는 두 가지 철학</h1>
@@ -30,25 +30,24 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Forward Rendering 파이프라인:
-
-For each Object:
-    For each Light:
-        ┌─────────────────────────────────────────────┐
-        │  Vertex Shader                              │
-        │  → 정점 변환                                │
-        └─────────────────┬───────────────────────────┘
-                          ▼
-        ┌─────────────────────────────────────────────┐
-        │  Fragment Shader                            │
-        │  → 텍스처 샘플링                            │
-        │  → 라이팅 계산 (모든 라이트)               │
-        │  → 최종 색상 출력                          │
-        └─────────────────┬───────────────────────────┘
-                          ▼
-                    Frame Buffer
-                </pre>
+                <div class="flow-diagram">
+                    <p style="margin-bottom:0.5rem; color: var(--text-secondary);">For each Object / For each Light:</p>
+                    <div class="flow-col">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Vertex Shader</div>
+                            <div class="flow-box__items">정점 변환</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Fragment Shader</div>
+                            <div class="flow-box__items">텍스처 샘플링 → 라이팅 계산 (모든 라이트) → 최종 색상 출력</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Frame Buffer</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Forward Rendering의 기본 흐름</p>
             </div>
 
@@ -104,32 +103,30 @@ float4 ForwardPS(VSOutput input) : SV_Target
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Deferred Rendering 파이프라인:
-
-┌─────────────────────────────────────────────────────────┐
-│                    Geometry Pass                         │
-│  For each Object:                                       │
-│    → G-Buffer에 기하 정보 저장                          │
-│                                                          │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐   │
-│  │ Albedo   │ │ Normal   │ │ Depth    │ │ Specular │   │
-│  │ (RGB)    │ │ (XYZ)    │ │ (Z)      │ │ (RGB)    │   │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘   │
-│                    G-Buffer                              │
-└─────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────┐
-│                    Lighting Pass                         │
-│  For each Light:                                        │
-│    → G-Buffer 샘플링                                    │
-│    → 라이팅 계산                                        │
-│    → 결과 누적                                          │
-│                                                          │
-│  최종 결과 = Σ(각 라이트의 기여)                       │
-└─────────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-col">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Geometry Pass</div>
+                            <div class="flow-box__items">
+                                For each Object: G-Buffer에 기하 정보 저장
+                            </div>
+                        </div>
+                        <div class="flow-row" style="justify-content:center; margin: 0.5rem 0;">
+                            <div class="flow-box" style="flex:none; min-width:auto; padding:0.4rem 0.8rem;"><div class="flow-box__title">Albedo (RGB)</div></div>
+                            <div class="flow-box" style="flex:none; min-width:auto; padding:0.4rem 0.8rem;"><div class="flow-box__title">Normal (XYZ)</div></div>
+                            <div class="flow-box" style="flex:none; min-width:auto; padding:0.4rem 0.8rem;"><div class="flow-box__title">Depth (Z)</div></div>
+                            <div class="flow-box" style="flex:none; min-width:auto; padding:0.4rem 0.8rem;"><div class="flow-box__title">Specular (RGB)</div></div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Lighting Pass</div>
+                            <div class="flow-box__items">
+                                For each Light: G-Buffer 샘플링 → 라이팅 계산 → 결과 누적<br>
+                                최종 결과 = Σ(각 라이트의 기여)
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Deferred Rendering의 2단계 구조</p>
             </div>
         </section>

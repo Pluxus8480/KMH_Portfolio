@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>수천 개를 하나처럼</h1>
@@ -30,26 +30,25 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Draw Call 비용 분석:
-
-CPU 작업 (각 Draw Call마다):
-┌──────────────────────────────────────────────────┐
-│  1. 상태 검증 (Validation)                        │
-│  2. 셰이더/텍스처 바인딩 변경                      │
-│  3. 상수 버퍼 업데이트                             │
-│  4. 드라이버 API 호출                              │
-│  5. 커맨드 버퍼에 기록                             │
-└──────────────────────────────────────────────────┘
-                    │
-                    ▼ GPU에 제출
-┌──────────────────────────────────────────────────┐
-│  GPU: 실제 렌더링 (상대적으로 빠름)               │
-└──────────────────────────────────────────────────┘
-
-Draw Call이 많으면 → CPU가 병목
-Draw Call이 적으면 → GPU 활용 극대화
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-col">
+                        <div class="flow-box">
+                            <div class="flow-box__title">CPU 작업 (각 Draw Call마다)</div>
+                            <div class="flow-box__items">
+                                1. 상태 검증 (Validation)<br>
+                                2. 셰이더/텍스처 바인딩 변경<br>
+                                3. 상수 버퍼 업데이트<br>
+                                4. 드라이버 API 호출<br>
+                                5. 커맨드 버퍼에 기록
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">GPU: 실제 렌더링 (상대적으로 빠름)</div>
+                        </div>
+                    </div>
+                    <p style="margin-top:0.5rem; color: var(--text-secondary); font-size:0.85rem;">Draw Call이 많으면 → CPU가 병목 / Draw Call이 적으면 → GPU 활용 극대화</p>
+                </div>
                 <p class="diagram-caption">Draw Call의 CPU 오버헤드</p>
             </div>
         </section>
@@ -65,27 +64,32 @@ Draw Call이 적으면 → GPU 활용 극대화
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Static Batching 전:
-
-오브젝트 A    오브젝트 B    오브젝트 C
-┌───┐        ┌───┐        ┌───┐
-│ △ │        │ △ │        │ △ │
-└───┘        └───┘        └───┘
-Draw 1       Draw 2       Draw 3
-(같은 머티리얼이라도 3번의 Draw Call)
-
-Static Batching 후:
-
-┌─────────────────────────────────┐
-│  Combined Mesh (A + B + C)      │
-│  ┌───┐  ┌───┐  ┌───┐           │
-│  │ △ │  │ △ │  │ △ │           │
-│  └───┘  └───┘  └───┘           │
-└─────────────────────────────────┘
-              Draw 1
-    (1번의 Draw Call로 모두 렌더링)
-                </pre>
+                <div class="flow-diagram">
+                    <p style="margin-bottom:0.5rem; color: var(--text-secondary);">Static Batching 전:</p>
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">오브젝트 A</div>
+                            <div class="flow-box__items">Draw 1</div>
+                        </div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">오브젝트 B</div>
+                            <div class="flow-box__items">Draw 2</div>
+                        </div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">오브젝트 C</div>
+                            <div class="flow-box__items">Draw 3</div>
+                        </div>
+                    </div>
+                    <p style="margin:0.3rem 0; color: var(--text-secondary); font-size:0.85rem;">같은 머티리얼이라도 3번의 Draw Call</p>
+                    <div class="flow-col" style="align-items:center;">
+                        <span class="flow-arrow-down">↓</span>
+                    </div>
+                    <p style="margin-bottom:0.5rem; color: var(--text-secondary);">Static Batching 후:</p>
+                    <div class="flow-box flow-box--highlight">
+                        <div class="flow-box__title">Combined Mesh (A + B + C)</div>
+                        <div class="flow-box__items">Draw 1 — 1번의 Draw Call로 모두 렌더링</div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Static Batching 개념</p>
             </div>
 
@@ -189,29 +193,34 @@ void StaticBatch(std::vector<StaticMesh*>& meshes)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-GPU Instancing 구조:
-
-       Mesh Data (1개)              Instance Data (N개)
-┌─────────────────────────┐    ┌──────────────────────────┐
-│  Vertex Buffer          │    │  Instance Buffer         │
-│  ┌───────────────────┐  │    │  ┌────────────────────┐  │
-│  │ Position, Normal  │  │    │  │ World Matrix [0]   │  │
-│  │ UV, Tangent       │  │    │  │ World Matrix [1]   │  │
-│  └───────────────────┘  │    │  │ World Matrix [2]   │  │
-│                         │    │  │ ...                │  │
-│  Index Buffer           │    │  │ World Matrix [N-1] │  │
-│  ┌───────────────────┐  │    │  └────────────────────┘  │
-│  │ 0, 1, 2, ...      │  │    │                          │
-│  └───────────────────┘  │    │  + Color, Scale, etc.   │
-└─────────────────────────┘    └──────────────────────────┘
-            │                              │
-            └──────────────┬───────────────┘
-                           │
-                           ▼
-              DrawIndexedInstanced(N)
-              (1번의 Draw Call로 N개 렌더링)
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Mesh Data (1개)</div>
+                            <div class="flow-box__items">
+                                Vertex Buffer: Position, Normal, UV, Tangent<br>
+                                Index Buffer: 0, 1, 2, ...
+                            </div>
+                        </div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Instance Data (N개)</div>
+                            <div class="flow-box__items">
+                                World Matrix [0]<br>
+                                World Matrix [1]<br>
+                                ...<br>
+                                World Matrix [N-1]<br>
+                                + Color, Scale, etc.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flow-col" style="align-items:center;">
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">DrawIndexedInstanced(N)</div>
+                            <div class="flow-box__items">1번의 Draw Call로 N개 렌더링</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">GPU Instancing 데이터 구조</p>
             </div>
 
@@ -329,35 +338,35 @@ float4 PS_Instanced(PSInput input) : SV_Target
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Indirect Drawing 파이프라인:
-
-┌─────────────────────────────────────────────────────┐
-│  Compute Shader (GPU Culling)                       │
-│  ┌───────────────────────────────────────────────┐  │
-│  │  For each instance:                           │  │
-│  │    if (FrustumCull(instance) == VISIBLE)     │  │
-│  │      AppendToVisibleBuffer(instance)          │  │
-│  │      atomicAdd(drawArgs.instanceCount, 1)     │  │
-│  └───────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────┐
-│  Indirect Arguments Buffer (GPU에서 작성)           │
-│  ┌───────────────────────────────────────────────┐  │
-│  │  IndexCountPerInstance: 36                    │  │
-│  │  InstanceCount: ??? (GPU가 결정)              │  │
-│  │  StartIndexLocation: 0                        │  │
-│  │  BaseVertexLocation: 0                        │  │
-│  │  StartInstanceLocation: 0                     │  │
-│  └───────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
-                         │
-                         ▼
-         DrawIndexedInstancedIndirect()
-         (CPU는 인스턴스 수를 모르고 그냥 호출)
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-col">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Compute Shader (GPU Culling)</div>
+                            <div class="flow-box__items">
+                                For each instance:<br>
+                                &nbsp;&nbsp;if (FrustumCull(instance) == VISIBLE)<br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;AppendToVisibleBuffer(instance)<br>
+                                &nbsp;&nbsp;&nbsp;&nbsp;atomicAdd(drawArgs.instanceCount, 1)
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Indirect Arguments Buffer (GPU에서 작성)</div>
+                            <div class="flow-box__items">
+                                IndexCountPerInstance: 36<br>
+                                InstanceCount: ??? (GPU가 결정)<br>
+                                StartIndexLocation: 0<br>
+                                BaseVertexLocation: 0<br>
+                                StartInstanceLocation: 0
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">DrawIndexedInstancedIndirect()</div>
+                            <div class="flow-box__items">CPU는 인스턴스 수를 모르고 그냥 호출</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">GPU-Driven Rendering</p>
             </div>
 

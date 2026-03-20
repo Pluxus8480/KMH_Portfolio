@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NavMesh AI 네비게이션 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+
+        <header class="content-header">
+            <h1>NPC는 길을 어떻게 찾는가?</h1>
+            <p class="subtitle">NavMesh 기반 AI 네비게이션 시스템 구축하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: NavMesh란 무엇인가?</h2>
+            <div class="conversation">
+                <div class="q">NPC가 장애물을 피해 플레이어를 추적하려면 어떤 데이터가 필요한가요?</div>
+                <div class="a">
+                    <p>NPC가 걸어다닐 수 있는 영역을 미리 계산해 놓은 데이터가 필요합니다. 이것이 바로 <strong>NavMesh(Navigation Mesh)</strong>입니다.</p>
+                    <p class="highlight">NavMesh는 3D 공간에서 이동 가능한 표면을 삼각형 메시로 표현한 데이터입니다. NPC는 이 메시 위에서만 이동하며, 메시 밖은 장애물로 취급됩니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>놀이터에서 "바닥이 용암이다!"라는 놀이를 떠올려보세요. 아이들은 안전한 타일 위에서만 이동합니다.</p>
+                        <p>NavMesh가 바로 그 "안전한 타일"을 정의합니다. 메시가 있는 곳만 걸을 수 있고, 없는 곳은 용암(이동 불가)입니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">NavMesh는 어떻게 생성하나요?</div>
+                <div class="a">
+                    <p>Unity에서는 두 가지 방식으로 NavMesh를 생성(Bake)할 수 있습니다:</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>방식</th><th>특징</th><th>사용 시점</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>레거시 Bake</strong></td>
+                                <td>Navigation 윈도우에서 정적 Bake</td>
+                                <td>고정된 맵, 간단한 프로젝트</td>
+                            </tr>
+                            <tr>
+                                <td><strong>NavMesh Surface (컴포넌트)</strong></td>
+                                <td>런타임 Bake, 동적 업데이트 가능</td>
+                                <td>프로시저럴 맵, 동적 환경</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">Unity 2022 이후로는 AI Navigation 패키지의 NavMeshSurface 컴포넌트 방식이 권장됩니다. Window &gt; Package Manager에서 "AI Navigation"을 설치하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: NavMeshAgent 설정과 이동</h2>
+            <div class="conversation">
+                <div class="q">NavMeshAgent 컴포넌트의 주요 설정값은 무엇인가요?</div>
+                <div class="a">
+                    <p>NavMeshAgent는 NPC에 부착하여 NavMesh 위에서 자동 이동을 처리하는 컴포넌트입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>속성</th><th>설명</th><th>권장 값 (인간형)</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>Speed</strong></td><td>이동 속도 (m/s)</td><td>3.5~5.0</td></tr>
+                            <tr><td><strong>Angular Speed</strong></td><td>회전 속도 (deg/s)</td><td>120~360</td></tr>
+                            <tr><td><strong>Acceleration</strong></td><td>가속도</td><td>8~12</td></tr>
+                            <tr><td><strong>Stopping Distance</strong></td><td>목표 근처 정지 거리</td><td>0.5~2.0</td></tr>
+                            <tr><td><strong>Radius</strong></td><td>에이전트 충돌 반경</td><td>0.3~0.5</td></tr>
+                            <tr><td><strong>Height</strong></td><td>에이전트 높이</td><td>1.8~2.0</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">기본적인 추적 AI는 어떻게 구현하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - 기본 추적 AI</div>
+                        <pre><code>using UnityEngine;
+using UnityEngine.AI;
+
+[RequireComponent(typeof(NavMeshAgent))]
+public class EnemyChaseAI : MonoBehaviour
+{
+    [SerializeField] private Transform target;
+    [SerializeField] private float updateInterval = 0.2f;
+    [SerializeField] private float chaseRange = 15f;
+
+    private NavMeshAgent agent;
+    private float nextUpdateTime;
+
+    void Awake()
+    {
+        agent = GetComponent&lt;NavMeshAgent&gt;();
+    }
+
+    void Update()
+    {
+        if (Time.time &lt; nextUpdateTime) return;
+        nextUpdateTime = Time.time + updateInterval;
+
+        if (target == null) return;
+
+        float distance = Vector3.Distance(transform.position, target.position);
+
+        if (distance &lt;= chaseRange)
+        {
+            agent.SetDestination(target.position);
+            agent.isStopped = false;
+        }
+        else
+        {
+            agent.isStopped = true;
+        }
+    }
+}</code></pre>
+                    </div>
+                    <p class="warning">매 프레임 SetDestination을 호출하면 매우 비효율적입니다. 0.1~0.3초 간격으로 업데이트하면 성능과 반응성의 균형을 맞출 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: NavMesh Area와 비용 설정</h2>
+            <div class="conversation">
+                <div class="q">NPC가 특정 지역을 피하거나 선호하게 만들 수 있나요?</div>
+                <div class="a">
+                    <p>NavMesh는 <strong>Area</strong>라는 개념으로 영역에 이동 비용을 부여할 수 있습니다. 기본 제공 Area:</p>
+                    <ul>
+                        <li><strong>Walkable</strong> (비용 1): 일반 이동 가능 영역</li>
+                        <li><strong>Not Walkable</strong>: 이동 불가</li>
+                        <li><strong>Jump</strong> (비용 2): 점프가 필요한 영역</li>
+                    </ul>
+                    <p class="highlight">비용이 높은 영역은 경로 계산 시 우회됩니다. 예를 들어 늪지대에 비용 5를 설정하면, NPC는 약간 돌아가더라도 늪을 피합니다.</p>
+                </div>
+
+                <div class="q">에이전트 유형에 따라 다른 영역을 걷게 할 수 있나요?</div>
+                <div class="a">
+                    <p>네, <strong>Agent Type</strong>별로 다른 NavMesh를 Bake할 수 있습니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Humanoid</div>
+                                <div class="flow-box__items">Radius: 0.4, Height: 2.0</div>
+                            </div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Large Monster</div>
+                                <div class="flow-box__items">Radius: 1.5, Height: 3.0</div>
+                            </div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Small Creature</div>
+                                <div class="flow-box__items">Radius: 0.2, Height: 0.5</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>큰 몬스터는 좁은 골목을 통과하지 못하고, 작은 생물은 작은 틈새를 지나갈 수 있습니다.</p>
+                    <p class="key-point">NavMeshSurface 컴포넌트에서 Agent Type을 설정하고, 각 유형별로 별도의 NavMesh를 Bake해야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: Off-Mesh Link — 뛰어내리기와 사다리</h2>
+            <div class="conversation">
+                <div class="q">NPC가 절벽을 뛰어내리거나 사다리를 타게 하려면?</div>
+                <div class="a">
+                    <p>NavMesh는 연속된 평면만 연결합니다. 분리된 두 지점을 연결하려면 <strong>Off-Mesh Link</strong>를 사용합니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">2층 NavMesh</div>
+                                <div class="flow-box__items">높은 플랫폼</div>
+                            </div>
+                            <div class="flow-arrow" style="font-size:1.5em;">&darr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Off-Mesh Link</div>
+                                <div class="flow-box__items">점프/사다리 연결</div>
+                            </div>
+                            <div class="flow-arrow" style="font-size:1.5em;">&darr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">1층 NavMesh</div>
+                                <div class="flow-box__items">낮은 플랫폼</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - Off-Mesh Link 커스텀 이동</div>
+                        <pre><code>private IEnumerator TraverseOffMeshLink(NavMeshAgent agent)
+{
+    OffMeshLinkData link = agent.currentOffMeshLinkData;
+    Vector3 startPos = agent.transform.position;
+    Vector3 endPos = link.endPos + Vector3.up * agent.baseOffset;
+    float duration = 0.5f;
+    float elapsed = 0f;
+
+    // 포물선 점프 이동
+    while (elapsed &lt; duration)
+    {
+        float t = elapsed / duration;
+        Vector3 pos = Vector3.Lerp(startPos, endPos, t);
+        pos.y += Mathf.Sin(t * Mathf.PI) * 2f; // 포물선 높이
+        agent.transform.position = pos;
+        elapsed += Time.deltaTime;
+        yield return null;
+    }
+
+    agent.CompleteOffMeshLink();
+}</code></pre>
+                    </div>
+                    <p class="warning">agent.CompleteOffMeshLink()를 호출하지 않으면 에이전트가 링크 위에 영원히 멈춰 있습니다. 반드시 이동 완료 후 호출하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 동적 장애물과 NavMesh Obstacle</h2>
+            <div class="conversation">
+                <div class="q">게임 중에 배럴을 밀어서 길을 막으면, NPC가 알아서 우회하나요?</div>
+                <div class="a">
+                    <p><strong>NavMesh Obstacle</strong> 컴포넌트를 사용하면 런타임에 NavMesh를 갱신할 수 있습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>모드</th><th>동작</th><th>성능</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Carve = Off</strong></td>
+                                <td>에이전트가 장애물을 물리적으로 밀어냄</td>
+                                <td>가벼움</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Carve = On</strong></td>
+                                <td>NavMesh에 구멍을 뚫어 경로 재계산</td>
+                                <td>무거움 (동적 리베이크)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">Carve 모드는 NavMesh를 실시간으로 수정하므로 성능 비용이 있습니다. 움직이는 장애물에는 Carve Off, 정지한 바리케이드에는 Carve On을 사용하세요.</p>
+                </div>
+
+                <div class="q">NavMesh Obstacle의 Carve가 Too Expensive하다면 대안이 있나요?</div>
+                <div class="a">
+                    <p>몇 가지 최적화 전략이 있습니다:</p>
+                    <ul>
+                        <li><strong>Move Threshold</strong>: 장애물이 이 거리 이상 움직여야 NavMesh를 다시 깎음 (기본 0.1)</li>
+                        <li><strong>Time to Stationary</strong>: 장애물이 정지한 후 이 시간 뒤에만 Carve 수행</li>
+                        <li><strong>Carve Only Stationary</strong>: 움직이는 동안은 Carve하지 않음</li>
+                    </ul>
+                    <p class="key-point">Carve Only Stationary를 체크하면, 장애물이 이동 중일 때는 에이전트가 단순 회피(avoidance)만 하고, 정지하면 NavMesh를 업데이트합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: NavMeshSurface와 런타임 Bake</h2>
+            <div class="conversation">
+                <div class="q">프로시저럴 던전처럼 런타임에 맵이 생성되면 NavMesh는 어떻게 만드나요?</div>
+                <div class="a">
+                    <p><strong>NavMeshSurface</strong> 컴포넌트를 사용하면 런타임에 NavMesh를 Bake할 수 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 런타임 NavMesh Bake</div>
+                        <pre><code>using UnityEngine;
+using UnityEngine.AI;
+using Unity.AI.Navigation;
+
+public class DungeonNavMeshBuilder : MonoBehaviour
+{
+    [SerializeField] private NavMeshSurface surface;
+
+    public void OnDungeonGenerated()
+    {
+        // 던전 생성 완료 후 NavMesh Bake
+        surface.BuildNavMesh();
+        Debug.Log("NavMesh bake 완료!");
+    }
+
+    public void OnRoomAdded()
+    {
+        // 방 추가 시 점진적 업데이트
+        surface.UpdateNavMesh(surface.navMeshData);
+    }
+}</code></pre>
+                    </div>
+
+                    <p class="warning">BuildNavMesh()는 메인 스레드에서 실행되므로 큰 맵에서는 프레임 드랍이 발생할 수 있습니다. AsyncOperation을 반환하는 UpdateNavMesh를 사용하면 비동기로 처리할 수 있습니다.</p>
+                </div>
+
+                <div class="q">여러 층(Floor)이 있는 건물에서는?</div>
+                <div class="a">
+                    <p>각 층마다 별도의 NavMeshSurface를 배치하고, 층 간 이동은 Off-Mesh Link나 NavMesh Link로 연결합니다. 엘리베이터나 계단을 Off-Mesh Link로 구현하면 자연스러운 층간 이동이 가능합니다.</p>
+                    <p class="key-point">NavMeshSurface의 Collect Objects 옵션을 "Children"으로 설정하면 해당 오브젝트의 자식들만 대상으로 Bake하므로, 층별 관리가 편리합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>NavMesh</strong>는 이동 가능 영역을 삼각형 메시로 표현한 데이터이며, NPC는 이 위에서만 이동한다</li>
+                <li><strong>NavMeshAgent</strong>의 SetDestination 호출 빈도를 0.1~0.3초 간격으로 제한하면 성능이 크게 개선된다</li>
+                <li><strong>Off-Mesh Link</strong>로 점프, 사다리 등 분리된 NavMesh 영역을 연결할 수 있다</li>
+                <li><strong>NavMesh Obstacle</strong>의 Carve 모드는 강력하지만 비용이 크므로, Carve Only Stationary 옵션을 활용하라</li>
+                <li><strong>NavMeshSurface</strong>는 런타임 Bake를 지원하여 프로시저럴 맵에서도 AI 네비게이션이 가능하다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

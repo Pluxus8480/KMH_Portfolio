@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C# Study | KMH Portfolio</title>
+    <meta name="description" content="C# 학습 기록">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💜</text></svg>">
+</head>
+<body>
+    <header class="header" id="header">
+        <nav class="nav container">
+            <a href="../index.html" class="nav__logo"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></a>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item"><a href="../index.html#about" class="nav__link">About</a></li>
+                <li class="nav__item"><a href="../index.html#projects" class="nav__link">Projects</a></li>
+                <li class="nav__item"><a href="../index.html#skills" class="nav__link">Skills</a></li>
+                <li class="nav__item"><a href="../study.html" class="nav__link active">Study</a></li>
+                <li class="nav__item"><a href="../index.html#contact" class="nav__link">Contact</a></li>
+            </ul>
+            <button class="nav__toggle" id="nav-toggle"><span></span><span></span><span></span></button>
+        </nav>
+    </header>
+    <main class="main">
+        <section class="study-detail section">
+            <div class="container">
+                <nav class="breadcrumb"><a href="../study.html">Study</a><span>/</span><span>C#</span></nav>
+                <div class="study-detail__header">
+                    <span class="study-detail__icon">💜</span>
+                    <h1 class="study-detail__title">C#</h1>
+                </div>
+                <p class="study-detail__desc">C# 언어 심화 학습 기록</p>
+                <div class="study-detail__content">
+                    <div class="study-topics">
+                        <h2 class="study-topics__title">학습 주제 목록</h2>
+                        <ul class="study-topics__list">
+                            <li class="study-topic">
+                                <a href="csharp/01_value_vs_reference/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">01</span>
+                                    <span class="study-topic__name">값 타입 vs 참조 타입 — Boxing의 함정</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/02_delegate_event/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">02</span>
+                                    <span class="study-topic__name">delegate와 event — 콜백의 모든 것</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/03_async_await/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">03</span>
+                                    <span class="study-topic__name">async/await 내부 동작 원리</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/04_linq/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">04</span>
+                                    <span class="study-topic__name">LINQ 심화 — 지연 평가와 성능</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/05_garbage_collector/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">05</span>
+                                    <span class="study-topic__name">Garbage Collector 세대별 수집</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/06_span_memory/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">06</span>
+                                    <span class="study-topic__name">Span&lt;T&gt;와 Memory&lt;T&gt; — 제로 할당</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/07_reflection/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">07</span>
+                                    <span class="study-topic__name">Reflection과 Attribute</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/08_generic_variance/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">08</span>
+                                    <span class="study-topic__name">제네릭 공변성/반공변성</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/09_struct_optimization/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">09</span>
+                                    <span class="study-topic__name">struct 최적화와 ref struct</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/10_task_parallel/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">10</span>
+                                    <span class="study-topic__name">Task Parallel Library (TPL)</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/11_expression_tree/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">11</span>
+                                    <span class="study-topic__name">Expression Tree — 코드를 데이터로</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/12_unsafe_code/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">12</span>
+                                    <span class="study-topic__name">unsafe 코드와 포인터</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/13_pattern_matching/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">13</span>
+                                    <span class="study-topic__name">패턴 매칭 심화 (C# 10+)</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/14_source_generator/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">14</span>
+                                    <span class="study-topic__name">Source Generator — 컴파일 타임 코드 생성</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp/15_disposable_pattern/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">15</span>
+                                    <span class="study-topic__name">IDisposable과 리소스 관리 패턴</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <footer class="footer"><div class="container"><div class="footer__content"><p class="footer__name"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></p><p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p></div></div></footer>
+    <script src="../js/study.js"></script>
+</body>
+</html>

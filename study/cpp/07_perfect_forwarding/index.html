@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>인자를 그대로 전달하고 싶다면?</h1>
             <p class="subtitle">Perfect Forwarding과 Universal Reference 마스터하기</p>
         </header>
@@ -114,17 +116,25 @@ int main() {
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-Universal Reference 타입 추론
-
-example(a);  // a는 lvalue
-├── T = int& (lvalue이므로 참조로 추론)
-└── T&& = int& && = int& (참조 붕괴)
-
-example(20); // 20은 rvalue
-├── T = int (rvalue이므로 값으로 추론)
-└── T&& = int && = int&& (rvalue reference)
-                        </pre>
+                        <p><strong>Universal Reference 타입 추론</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">example(a)</div><div class="flow-box__items">a는 lvalue</div></div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box"><div class="flow-box__title">T = int&</div><div class="flow-box__items">lvalue이므로 참조로 추론</div></div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">T&& = int&</div><div class="flow-box__items">int& && = int& (참조 붕괴)</div></div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram" style="margin-top: 1rem;">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">example(20)</div><div class="flow-box__items">20은 rvalue</div></div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box"><div class="flow-box__title">T = int</div><div class="flow-box__items">rvalue이므로 값으로 추론</div></div>
+                                <div class="flow-arrow">&rarr;</div>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">T&& = int&&</div><div class="flow-box__items">int && = int&& (rvalue reference)</div></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

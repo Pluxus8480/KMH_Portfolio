@@ -8,9 +8,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../database.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../database.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>DB가 느린데 어떻게 하지?</h1>
             <p class="subtitle">Redis를 활용한 게임 서버 캐싱 전략</p>
         </header>
@@ -22,21 +24,38 @@
                 <div class="a">
                     <p>DB 디스크 I/O는 느립니다. 메모리 캐시는 <strong>100배 이상 빠릅니다</strong>.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-응답 시간 비교:
-
-L1 Cache:         ~1ns     ████
-L2 Cache:         ~10ns    ████████
-RAM:              ~100ns   ████████████████████
-Redis (로컬):     ~0.5ms   ██████████████████████████████
-SSD:              ~0.5ms   ██████████████████████████████
-MySQL (인덱스):   ~5-10ms  █████████████████████████████████████████████████
-HDD:              ~10ms    █████████████████████████████████████████████████████
-
-Redis vs MySQL 차이:
-- 단순 조회: Redis 0.1ms, MySQL 5ms → 50배 차이
-- 동시 요청 1000개: Redis 처리 가능, MySQL 병목
-                        </pre>
+                        <p><strong>응답 시간 비교</strong></p>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">L1 Cache ~1ns</div>
+                                <div class="pipeline-bar pb-gbuffer" style="width:10%"><span></span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">L2 Cache ~10ns</div>
+                                <div class="pipeline-bar pb-gbuffer" style="width:15%"><span></span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">RAM ~100ns</div>
+                                <div class="pipeline-bar pb-light" style="width:25%"><span></span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">Redis (로컬) ~0.5ms</div>
+                                <div class="pipeline-bar pb-light" style="width:45%"><span></span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">SSD ~0.5ms</div>
+                                <div class="pipeline-bar pb-post" style="width:45%"><span></span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">MySQL (인덱스) ~5-10ms</div>
+                                <div class="pipeline-bar pb-shadow" style="width:80%"><span></span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">HDD ~10ms</div>
+                                <div class="pipeline-bar pb-shadow" style="width:90%"><span></span></div>
+                            </div>
+                        </div>
+                        <p>Redis vs MySQL: 단순 조회 50배 차이 / 동시 요청 1000개 시 MySQL 병목</p>
                     </div>
                     <p class="highlight">게임에서 초당 수천 번 조회되는 데이터는 캐시에 넣어야 합니다.</p>
                 </div>
@@ -96,24 +115,28 @@ Redis vs MySQL 차이:
                 <div class="a">
                     <p>가장 기본적인 패턴입니다. 애플리케이션이 캐시를 직접 관리합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-Cache-Aside (Lazy Loading) 패턴:
-
-[읽기]
-   App ──1. 캐시 조회──▶ Redis
-        ◀── 2a. HIT ───
-        ◀── 2b. MISS ──
-            │
-            └── 3. DB 조회 ──▶ MySQL
-            ◀── 4. 결과 ────
-            │
-            └── 5. 캐시 저장 ──▶ Redis
-
-[쓰기]
-   App ──1. DB 저장 ───▶ MySQL
-        │
-        └── 2. 캐시 삭제 ──▶ Redis (무효화)
-                        </pre>
+                        <p><strong>Cache-Aside (Lazy Loading) 패턴</strong></p>
+                        <p><strong>[읽기]</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">App</div></div>
+                                <span class="flow-arrow">1. 캐시 조회 &rarr;</span>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">Redis</div><div class="flow-box__items">2a. HIT &rarr; 반환<br>2b. MISS</div></div>
+                                <span class="flow-arrow">3. DB 조회 &rarr;</span>
+                                <div class="flow-box"><div class="flow-box__title">MySQL</div><div class="flow-box__items">4. 결과 반환</div></div>
+                            </div>
+                        </div>
+                        <p>5. MISS 시 결과를 Redis에 캐시 저장</p>
+                        <p><strong>[쓰기]</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">App</div></div>
+                                <span class="flow-arrow">1. DB 저장 &rarr;</span>
+                                <div class="flow-box"><div class="flow-box__title">MySQL</div></div>
+                                <span class="flow-arrow">2. 캐시 삭제 &rarr;</span>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">Redis (무효화)</div></div>
+                            </div>
+                        </div>
                     </div>
                     <div class="code-block">
                         <div class="code-header">Cache-Aside 구현</div>
@@ -164,25 +187,28 @@ public:
                 <div class="q">Write-Through와 Write-Behind는 뭔가요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-Write-Through:
-┌─────────────────────────────────────────────┐
-│   App ──▶ Cache ──▶ DB (동기 쓰기)          │
-│                                             │
-│   모든 쓰기가 캐시와 DB 둘 다 즉시 반영       │
-│   + 일관성 보장                              │
-│   - 쓰기 지연 증가                           │
-└─────────────────────────────────────────────┘
-
-Write-Behind (Write-Back):
-┌─────────────────────────────────────────────┐
-│   App ──▶ Cache ──(비동기)──▶ DB            │
-│                                             │
-│   캐시에만 먼저 쓰고, DB는 나중에 배치로     │
-│   + 쓰기 성능 좋음                           │
-│   - 캐시 장애 시 데이터 손실 위험            │
-└─────────────────────────────────────────────┘
-                        </pre>
+                        <p><strong>Write-Through:</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">App</div></div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">Cache</div></div>
+                                <span class="flow-arrow">동기 쓰기 &rarr;</span>
+                                <div class="flow-box"><div class="flow-box__title">DB</div></div>
+                            </div>
+                        </div>
+                        <p>모든 쓰기가 캐시와 DB 둘 다 즉시 반영 / + 일관성 보장 / - 쓰기 지연 증가</p>
+                        <p><strong>Write-Behind (Write-Back):</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">App</div></div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">Cache</div></div>
+                                <span class="flow-arrow">비동기 &rarr;</span>
+                                <div class="flow-box"><div class="flow-box__title">DB</div></div>
+                            </div>
+                        </div>
+                        <p>캐시에만 먼저 쓰고, DB는 나중에 배치로 / + 쓰기 성능 좋음 / - 캐시 장애 시 데이터 손실 위험</p>
                     </div>
                     <div class="code-block">
                         <div class="code-header">Write-Behind 구현</div>
@@ -239,31 +265,17 @@ public:
                 <div class="q">어떤 데이터를 캐시해야 하나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-캐시 대상 판단:
-
-                    읽기 빈도
-                       ↑
-                  높음 │  ★ 최적 캐시 대상
-                       │    - 캐릭터 기본 정보
-                       │    - 아이템 정의 테이블
-                       │    - 랭킹 상위권
-                       │
-                       │  ▲ 선택적 캐시
-                       │    - 인벤토리
-                       │    - 친구 목록
-                       │
-                  낮음 │  △ 캐시 불필요
-                       │    - 로그 데이터
-                       │    - 결제 기록
-                       └────────────────────────▶
-                          낮음              높음
-                               쓰기 빈도
-
-★ = 높은 읽기, 낮은 쓰기 → 반드시 캐시
-▲ = 읽기/쓰기 모두 높음 → TTL 짧게, 무효화 전략 중요
-△ = 낮은 읽기 → 캐시 효과 없음
-                        </pre>
+                        <p><strong>캐시 대상 판단 (읽기 빈도 vs 쓰기 빈도)</strong></p>
+                        <table class="compare-table">
+                            <thead>
+                                <tr><th>구분</th><th>읽기</th><th>쓰기</th><th>캐시 전략</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><strong>최적 캐시 대상</strong></td><td>높음</td><td>낮음</td><td>반드시 캐시 (캐릭터 기본 정보, 아이템 정의 테이블, 랭킹 상위권)</td></tr>
+                                <tr><td><strong>선택적 캐시</strong></td><td>높음</td><td>높음</td><td>TTL 짧게, 무효화 전략 중요 (인벤토리, 친구 목록)</td></tr>
+                                <tr><td><strong>캐시 불필요</strong></td><td>낮음</td><td>-</td><td>캐시 효과 없음 (로그 데이터, 결제 기록)</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -339,22 +351,18 @@ public:
                         <p>캐시와 DB의 불일치는 심각한 버그를 만듭니다.</p>
                     </div>
                     <div class="visual-section">
-                        <pre class="diagram">
-캐시 불일치 문제:
-
-Timeline:
-t=0: Cache: gold=1000, DB: gold=1000 (일치 ✓)
-
-t=1: 서버A가 DB 업데이트 (gold=900)
-     Cache: gold=1000, DB: gold=900 (불일치!)
-
-t=2: 서버B가 캐시 조회 → gold=1000 (잘못된 값!)
-
-해결 방법:
-1. TTL 설정 (시간 지나면 자동 만료)
-2. 업데이트 시 캐시 삭제
-3. 이벤트 기반 무효화 (Pub/Sub)
-                        </pre>
+                        <p><strong>캐시 불일치 문제</strong></p>
+                        <table class="compare-table">
+                            <thead>
+                                <tr><th>시점</th><th>Cache</th><th>DB</th><th>상태</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>t=0</td><td>gold=1000</td><td>gold=1000</td><td>일치</td></tr>
+                                <tr><td>t=1 (서버A DB 업데이트)</td><td>gold=1000</td><td>gold=900</td><td>불일치!</td></tr>
+                                <tr><td>t=2 (서버B 캐시 조회)</td><td>gold=1000</td><td>gold=900</td><td>잘못된 값!</td></tr>
+                            </tbody>
+                        </table>
+                        <p><strong>해결 방법:</strong> 1. TTL 설정 (자동 만료) / 2. 업데이트 시 캐시 삭제 / 3. 이벤트 기반 무효화 (Pub/Sub)</p>
                     </div>
                 </div>
 
@@ -414,18 +422,25 @@ public:
                 <div class="a">
                     <p>캐시가 만료될 때 수많은 요청이 동시에 DB로 몰리는 현상입니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-Cache Stampede:
-
-캐시 만료 시점:
-    Request 1 ─┬─▶ 캐시 MISS ─▶ DB 쿼리 ─┐
-    Request 2 ─┤─▶ 캐시 MISS ─▶ DB 쿼리 ─┤
-    Request 3 ─┤─▶ 캐시 MISS ─▶ DB 쿼리 ─┼─▶ DB 과부하!
-    Request 4 ─┤─▶ 캐시 MISS ─▶ DB 쿼리 ─┤
-    Request 5 ─┘─▶ 캐시 MISS ─▶ DB 쿼리 ─┘
-
-해결책: Lock 또는 Stale-While-Revalidate
-                        </pre>
+                        <p><strong>Cache Stampede</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">캐시 만료 시점</div>
+                                    <div class="flow-box__items">Request 1<br>Request 2<br>Request 3<br>Request 4<br>Request 5</div>
+                                </div>
+                                <span class="flow-arrow">모두 MISS &rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">DB 쿼리</div>
+                                    <div class="flow-box__items">동시에 5개 쿼리 실행</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">DB 과부하!</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p><strong>해결책:</strong> Lock 또는 Stale-While-Revalidate</p>
                     </div>
                     <div class="code-block">
                         <div class="code-header">Stampede 방지: 분산 락</div>
@@ -524,33 +539,39 @@ public:
                 <div class="q">Redis가 죽으면 어떻게 되나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-Redis 고가용성 구성:
-
-1. Replication (복제)
-   ┌─────────┐
-   │ Master  │───복제───▶ Slave 1
-   │ (쓰기)  │───복제───▶ Slave 2
-   └─────────┘
-   - Master 장애 시 Slave가 승격
-
-2. Sentinel (감시)
-   ┌──────────────────────────────────┐
-   │         Sentinel 클러스터         │
-   │    (Master 모니터링, 자동 전환)    │
-   └──────────────────────────────────┘
-            │
-            ▼
-   Master ◀───▶ Slave
-
-3. Cluster (분산)
-   ┌────────┐ ┌────────┐ ┌────────┐
-   │ Node 1 │ │ Node 2 │ │ Node 3 │
-   │ 0-5460 │ │5461-10922│ │10923-16383│
-   └────────┘ └────────┘ └────────┘
-   - 해시 슬롯으로 데이터 분산
-   - 노드 추가로 수평 확장
-                        </pre>
+                        <p><strong>1. Replication (복제)</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">Master (쓰기)</div></div>
+                                <span class="flow-arrow">복제 &rarr;</span>
+                                <div class="flow-box"><div class="flow-box__title">Slave 1</div></div>
+                                <div class="flow-box"><div class="flow-box__title">Slave 2</div></div>
+                            </div>
+                        </div>
+                        <p>Master 장애 시 Slave가 승격</p>
+                        <p><strong>2. Sentinel (감시)</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-col">
+                                <div class="flow-box"><div class="flow-box__title">Sentinel 클러스터</div><div class="flow-box__items">Master 모니터링, 자동 전환</div></div>
+                                <span class="flow-arrow-down">&#8595;</span>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight"><div class="flow-box__title">Master</div></div>
+                                <span class="flow-arrow">&harr;</span>
+                                <div class="flow-box"><div class="flow-box__title">Slave</div></div>
+                            </div>
+                        </div>
+                        <p><strong>3. Cluster (분산)</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box"><div class="flow-box__title">Node 1</div><div class="flow-box__items">슬롯 0-5460</div></div>
+                                <div class="flow-box"><div class="flow-box__title">Node 2</div><div class="flow-box__items">슬롯 5461-10922</div></div>
+                                <div class="flow-box"><div class="flow-box__title">Node 3</div><div class="flow-box__items">슬롯 10923-16383</div></div>
+                            </div>
+                        </div>
+                        <p>해시 슬롯으로 데이터 분산 / 노드 추가로 수평 확장</p>
                     </div>
                 </div>
             </div>

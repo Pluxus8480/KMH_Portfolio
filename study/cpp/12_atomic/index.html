@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cpp.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>락 없이 스레드 안전하게?</h1>
             <p class="subtitle">std::atomic과 메모리 오더링의 세계</p>
         </header>
@@ -169,16 +171,33 @@ void consumer() {
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-메모리 순서 옵션
-
-relaxed         가장 약함, 원자성만 보장
-├── consume     읽기 의존성만 동기화 (거의 안 씀)
-├── acquire     이 읽기 이후 명령 재배열 방지
-├── release     이 쓰기 이전 명령 재배열 방지
-├── acq_rel     acquire + release
-└── seq_cst     가장 강함, 전역 순서 보장 (기본값)
-                        </pre>
+                        <p><strong>메모리 순서 옵션</strong></p>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">relaxed</div>
+                                <div class="pipeline-bar pb-light"><span>가장 약함, 원자성만 보장</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">consume</div>
+                                <div class="pipeline-bar pb-light"><span>읽기 의존성만 동기화 (거의 안 씀)</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">acquire</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>이 읽기 이후 명령 재배열 방지</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">release</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>이 쓰기 이전 명령 재배열 방지</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">acq_rel</div>
+                                <div class="pipeline-bar pb-shadow"><span>acquire + release</span></div>
+                            </div>
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">seq_cst</div>
+                                <div class="pipeline-bar pb-post"><span>가장 강함, 전역 순서 보장 (기본값)</span></div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="code-block">

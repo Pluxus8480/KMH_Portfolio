@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>눈부신 빛의 표현</h1>
@@ -30,26 +30,23 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Dynamic Range 비교:
-
-현실 세계:
-0.0001 ────────────────────────────────────── 100,000+
- │                                              │
-달빛                                           태양
-
-LDR (8비트):
-0.0 ───────────────── 1.0
- │                     │
-검정                   흰색 (클램프)
-
-HDR (16비트+ 부동소수점):
-0.0 ────────────────────────────────────── ∞
- │                                         │
-검정                               무한한 밝기
-
-HDR → 1.0 초과 값 → Bloom, 노출 조절에 활용
-                </pre>
+                <div class="flow-diagram">
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">현실 세계</div>
+                            <div class="pipeline-bar pb-gbuffer" style="flex:5;"><span>0.0001 (달빛)</span><span style="flex:1;text-align:center;">. . . . . . . .</span><span>100,000+ (태양)</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">LDR (8비트)</div>
+                            <div class="pipeline-bar pb-shadow" style="flex:1.5;"><span>0.0 (검정)</span><span style="flex:1;text-align:center;">. .</span><span>1.0 (흰색, 클램프)</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">HDR (16비트+)</div>
+                            <div class="pipeline-bar pb-light" style="flex:5;"><span>0.0 (검정)</span><span style="flex:1;text-align:center;">. . . . . . . .</span><span>무한한 밝기</span></div>
+                        </div>
+                    </div>
+                    <div class="flow-label" style="margin-top:8px;">HDR → 1.0 초과 값 → Bloom, 노출 조절에 활용</div>
+                </div>
                 <p class="diagram-caption">Dynamic Range 차이</p>
             </div>
 
@@ -143,48 +140,43 @@ device->CreateShaderResourceView(hdrTexture, nullptr, &hdrSRV);</code></pre>
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Bloom 파이프라인:
-
-HDR Scene
-┌──────────────────────────────────────────┐
-│     ☀️ (값: 5.0)                         │
-│                    💡 (값: 2.0)          │
-│  일반 오브젝트 (값: 0.3~0.8)             │
-└──────────────────────────────────────────┘
-                    │
-          ┌────────┴────────┐
-          │                 │
-          ▼                 ▼
-    ┌──────────┐      ┌──────────┐
-    │ Threshold│      │ Original │
-    │ (밝은 부분│      │  (원본)  │
-    │  추출)   │      │          │
-    └──────────┘      └──────────┘
-          │                 │
-          ▼                 │
-    ┌──────────┐            │
-    │ Downsample│           │
-    │ + Blur    │           │
-    └──────────┘            │
-          │                 │
-          ▼                 │
-    ┌──────────┐            │
-    │ Upsample │            │
-    │ + Blur   │            │
-    └──────────┘            │
-          │                 │
-          └────────┬────────┘
-                   │
-                   ▼
-            ┌──────────┐
-            │ Composite│
-            │ (합성)   │
-            └──────────┘
-                   │
-                   ▼
-             Final Output
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box flow-box--wide flow-box--info">
+                            <div class="flow-box__title">HDR Scene</div>
+                            <div class="flow-box__items">태양(5.0) / 조명(2.0) / 일반 오브젝트(0.3~0.8)</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-row">
+                            <div class="flow-column" style="flex:1;">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Threshold</div>
+                                    <div class="flow-box__items">밝은 부분 추출</div>
+                                </div>
+                                <span class="flow-arrow-down">↓</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Downsample + Blur</div>
+                                </div>
+                                <span class="flow-arrow-down">↓</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Upsample + Blur</div>
+                                </div>
+                            </div>
+                            <div class="flow-column" style="flex:1;">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Original</div>
+                                    <div class="flow-box__items">원본 유지</div>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Composite (합성)</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-label">Final Output</div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Bloom 처리 단계</p>
             </div>
 
@@ -264,35 +256,53 @@ float4 BlurVertical_PS(float2 uv : TEXCOORD) : SV_Target
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-다운샘플/업샘플 체인:
-
-다운샘플 (Blur + Downsample):
-
-MIP 0: 1920×1080  ┌────────────────────────┐
-                  │                        │
-                  └────────────────────────┘
-                           ↓ 1/2
-MIP 1:  960×540   ┌────────────────┐
-                  │                │
-                  └────────────────┘
-                           ↓ 1/2
-MIP 2:  480×270   ┌──────────┐
-                  │          │
-                  └──────────┘
-                           ↓ 1/2
-MIP 3:  240×135   ┌──────┐
-                  │      │
-                  └──────┘
-
-업샘플 (Blur + Upsample + Add):
-
-MIP 3 → MIP 2 → MIP 1 → MIP 0
-  │        │        │        │
-  └──ADD───┴──ADD───┴──ADD───┴→ Final Bloom
-
-각 레벨의 블러가 누적되어 넓은 Bloom 효과
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-group">
+                        <div class="flow-group__title">다운샘플 (Blur + Downsample)</div>
+                        <div class="flow-column">
+                            <div class="flow-box" style="min-width:260px;">
+                                <div class="flow-box__title">MIP 0</div>
+                                <div class="flow-box__items">1920 x 1080</div>
+                            </div>
+                            <span class="flow-arrow-down">↓ 1/2</span>
+                            <div class="flow-box" style="min-width:210px;">
+                                <div class="flow-box__title">MIP 1</div>
+                                <div class="flow-box__items">960 x 540</div>
+                            </div>
+                            <span class="flow-arrow-down">↓ 1/2</span>
+                            <div class="flow-box" style="min-width:160px;">
+                                <div class="flow-box__title">MIP 2</div>
+                                <div class="flow-box__items">480 x 270</div>
+                            </div>
+                            <span class="flow-arrow-down">↓ 1/2</span>
+                            <div class="flow-box" style="min-width:120px;">
+                                <div class="flow-box__title">MIP 3</div>
+                                <div class="flow-box__items">240 x 135</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flow-group" style="margin-top:16px;">
+                        <div class="flow-group__title">업샘플 (Blur + Upsample + Add)</div>
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--small">
+                                <div class="flow-box__title">MIP 3</div>
+                            </div>
+                            <span class="flow-arrow">→ ADD →</span>
+                            <div class="flow-box flow-box--small">
+                                <div class="flow-box__title">MIP 2</div>
+                            </div>
+                            <span class="flow-arrow">→ ADD →</span>
+                            <div class="flow-box flow-box--small">
+                                <div class="flow-box__title">MIP 1</div>
+                            </div>
+                            <span class="flow-arrow">→ ADD →</span>
+                            <div class="flow-box flow-box--small flow-box--highlight">
+                                <div class="flow-box__title">MIP 0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flow-label" style="margin-top:8px;">각 레벨의 블러가 누적되어 넓은 Bloom 효과</div>
+                </div>
                 <p class="diagram-caption">Progressive Bloom 체인</p>
             </div>
 

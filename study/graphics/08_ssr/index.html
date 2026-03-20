@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>화면 안에서 반사를 찾아서</h1>
@@ -82,29 +82,24 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-SSR Ray Marching:
-
-화면 (Screen Space)
-┌─────────────────────────────────────────┐
-│                                         │
-│      물체 A                             │
-│        ■                                │
-│        │                                │
-│        │ 반사광                         │
-│        ↓                                │
-│  ══════●══════════  반사 표면           │
-│        │\                               │
-│        │ \  반사 레이                   │
-│        │  ●                             │
-│        │   ●                            │
-│        │    ●                           │
-│        │     ◉ ← 깊이 교차!            │
-│                                         │
-└─────────────────────────────────────────┘
-
-◉ 지점의 색상 = 반사될 색상
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-col">
+                        <div class="flow-box">
+                            <div class="flow-box__title">물체 A</div>
+                            <div class="flow-box__items">반사광이 표면에 닿음</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">반사 표면</div>
+                            <div class="flow-box__items">반사 레이를 화면 공간에서 마칭<br>● → ● → ● → ◉ (깊이 교차!)</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">교차점 ◉</div>
+                            <div class="flow-box__items">이 지점의 색상 = 반사될 색상</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Screen Space Ray Marching</p>
             </div>
 
@@ -210,20 +205,25 @@ float4 SSR_PS(float2 uv : TEXCOORD) : SV_Target
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Hi-Z Buffer (최대 깊이 밉맵):
-
-MIP 0 (원본):     MIP 1:          MIP 2:
-┌─┬─┬─┬─┬─┬─┬─┬─┐ ┌───┬───┬───┬───┐ ┌───────┬───────┐
-│1│2│3│4│5│6│7│8│ │max│max│max│max│ │  max  │  max  │
-├─┼─┼─┼─┼─┼─┼─┼─┤ │1,2│3,4│5,6│7,8│ │ 1-4   │ 5-8   │
-│ │ │ │ │ │ │ │ │ ├───┼───┼───┼───┤ └───────┴───────┘
-└─┴─┴─┴─┴─┴─┴─┴─┘ │   │   │   │   │
-                  └───┴───┴───┴───┘
-
-높은 MIP = 해당 영역의 최대 깊이
-→ 레이가 확실히 통과할 수 있으면 큰 단계로 점프
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">MIP 0 (원본)</div>
+                            <div class="flow-box__items">각 픽셀의 깊이값<br>1, 2, 3, 4, 5, 6, 7, 8</div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">MIP 1</div>
+                            <div class="flow-box__items">2x2 영역의 최대 깊이<br>max(1,2), max(3,4), max(5,6), max(7,8)</div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">MIP 2</div>
+                            <div class="flow-box__items">4x4 영역의 최대 깊이<br>max(1-4), max(5-8)</div>
+                        </div>
+                    </div>
+                    <p style="margin-top:0.5rem; color: var(--text-secondary); font-size:0.85rem;">높은 MIP = 해당 영역의 최대 깊이 → 레이가 확실히 통과할 수 있으면 큰 단계로 점프</p>
+                </div>
                 <p class="diagram-caption">Hierarchical-Z Buffer 구조</p>
             </div>
 
@@ -357,24 +357,28 @@ float3 SampleReflectionWithRoughness(float2 hitUV, float roughness)
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-SSR + Fallback 조합:
-
-┌─────────────────────────────────────────────────────┐
-│                     최종 반사                        │
-└─────────────────────────────────────────────────────┘
-                         ▲
-                         │
-        ┌────────────────┼────────────────┐
-        │                │                │
-   ┌────┴────┐    ┌──────┴──────┐   ┌─────┴─────┐
-   │   SSR   │  + │Environment│ + │ Planar    │
-   │ (우선)  │    │   Map     │   │Reflection │
-   │         │    │ (폴백)    │   │ (선택)    │
-   └─────────┘    └───────────┘   └───────────┘
-
-SSR 실패 시 → 환경 맵으로 자연스럽게 전환
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">SSR (우선)</div>
+                        </div>
+                        <span class="flow-arrow">+</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Environment Map (폴백)</div>
+                        </div>
+                        <span class="flow-arrow">+</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Planar Reflection (선택)</div>
+                        </div>
+                    </div>
+                    <div class="flow-col" style="align-items:center;">
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">최종 반사</div>
+                            <div class="flow-box__items">SSR 실패 시 → 환경 맵으로 자연스럽게 전환</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">하이브리드 반사 시스템</p>
             </div>
         </section>

@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>GPU의 범용 계산 능력</h1>
@@ -30,27 +30,52 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-일반 셰이더 vs Compute Shader:
-
-Vertex/Pixel Shader:
-┌─────────────────────────────────────────────────────┐
-│  Input Assembler → VS → Rasterizer → PS → Output   │
-│        정해진 파이프라인을 따름                      │
-│        정점/픽셀 단위 처리                          │
-└─────────────────────────────────────────────────────┘
-
-Compute Shader:
-┌─────────────────────────────────────────────────────┐
-│                                                     │
-│   버퍼/텍스처  →  [Compute Shader]  →  버퍼/텍스처  │
-│                                                     │
-│   - 파이프라인 독립적                               │
-│   - 임의 스레드 그룹으로 실행                       │
-│   - 스레드 간 공유 메모리                           │
-│   - 동기화 가능                                     │
-└─────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-side-by-side">
+                        <div class="flow-group">
+                            <div class="flow-group__title">Vertex/Pixel Shader</div>
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--small">
+                                    <div class="flow-box__items">IA</div>
+                                </div>
+                                <span class="flow-arrow">→</span>
+                                <div class="flow-box flow-box--small">
+                                    <div class="flow-box__items">VS</div>
+                                </div>
+                                <span class="flow-arrow">→</span>
+                                <div class="flow-box flow-box--small">
+                                    <div class="flow-box__items">Rasterizer</div>
+                                </div>
+                                <span class="flow-arrow">→</span>
+                                <div class="flow-box flow-box--small">
+                                    <div class="flow-box__items">PS</div>
+                                </div>
+                                <span class="flow-arrow">→</span>
+                                <div class="flow-box flow-box--small">
+                                    <div class="flow-box__items">Output</div>
+                                </div>
+                            </div>
+                            <div class="flow-label">정해진 파이프라인 / 정점&middot;픽셀 단위 처리</div>
+                        </div>
+                        <div class="flow-group">
+                            <div class="flow-group__title">Compute Shader</div>
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__items">버퍼/텍스처</div>
+                                </div>
+                                <span class="flow-arrow">→</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Compute Shader</div>
+                                </div>
+                                <span class="flow-arrow">→</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__items">버퍼/텍스처</div>
+                                </div>
+                            </div>
+                            <div class="flow-label">파이프라인 독립 / 임의 스레드 그룹 / 공유 메모리 / 동기화</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Compute Shader의 독립성</p>
             </div>
 
@@ -102,32 +127,52 @@ Compute Shader:
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Compute Shader 스레드 계층:
-
-Dispatch(2, 2, 1)  →  2×2×1 = 4개 스레드 그룹
-
-┌─────────────────────┬─────────────────────┐
-│   Group (0,0,0)     │   Group (1,0,0)     │
-│   ┌───┬───┬───┬───┐ │   ┌───┬───┬───┬───┐ │
-│   │ T │ T │ T │ T │ │   │ T │ T │ T │ T │ │
-│   ├───┼───┼───┼───┤ │   ├───┼───┼───┼───┤ │
-│   │ T │ T │ T │ T │ │   │ T │ T │ T │ T │ │
-│   ├───┼───┼───┼───┤ │   ├───┼───┼───┼───┤ │
-│   │ T │ T │ T │ T │ │   │ T │ T │ T │ T │ │
-│   ├───┼───┼───┼───┤ │   ├───┼───┼───┼───┤ │
-│   │ T │ T │ T │ T │ │   │ T │ T │ T │ T │ │
-│   └───┴───┴───┴───┘ │   └───┴───┴───┴───┘ │
-├─────────────────────┼─────────────────────┤
-│   Group (0,1,0)     │   Group (1,1,0)     │
-│       ...           │       ...           │
-└─────────────────────┴─────────────────────┘
-
-[numthreads(4, 4, 1)]  →  그룹당 4×4×1 = 16 스레드
-
-총 스레드 수 = 그룹 수 × 그룹당 스레드 수
-            = 4 × 16 = 64 스레드
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-label" style="margin-bottom:8px;font-weight:600;color:var(--text-primary);">Dispatch(2, 2, 1) → 2x2x1 = 4개 스레드 그룹</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <div class="flow-box flow-box--info">
+                            <div class="flow-box__title">Group (0,0,0)</div>
+                            <div class="flow-box__items" style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px;margin-top:6px;">
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                                <span style="background:rgba(255,255,255,0.08);padding:2px;border-radius:2px;font-size:0.7rem;">T</span>
+                            </div>
+                        </div>
+                        <div class="flow-box flow-box--info">
+                            <div class="flow-box__title">Group (1,0,0)</div>
+                            <div class="flow-box__items">4x4 = 16 threads</div>
+                        </div>
+                        <div class="flow-box flow-box--info">
+                            <div class="flow-box__title">Group (0,1,0)</div>
+                            <div class="flow-box__items">4x4 = 16 threads</div>
+                        </div>
+                        <div class="flow-box flow-box--info">
+                            <div class="flow-box__title">Group (1,1,0)</div>
+                            <div class="flow-box__items">4x4 = 16 threads</div>
+                        </div>
+                    </div>
+                    <div class="flow-row" style="margin-top:12px;justify-content:center;gap:12px;">
+                        <div class="flow-box flow-box--small">
+                            <div class="flow-box__items">[numthreads(4,4,1)]</div>
+                        </div>
+                        <div class="flow-box flow-box--small flow-box--highlight">
+                            <div class="flow-box__items">총 = 4 groups x 16 threads = 64</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">스레드 그룹 구조</p>
             </div>
 

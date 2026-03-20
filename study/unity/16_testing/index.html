@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unity Testing | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+
+        <header class="content-header">
+            <h1>게임도 테스트 코드가 필요한가?</h1>
+            <p class="subtitle">Unity Test Framework로 안정적인 게임 개발하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 게임에서 테스트가 필요한 이유</h2>
+            <div class="conversation">
+                <div class="q">게임은 직접 플레이해보면 되는데, 왜 테스트 코드를 써야 하나요?</div>
+                <div class="a">
+                    <p>직접 플레이해서 찾는 버그는 빙산의 일각입니다. 수동 테스트로는 모든 경우의 수를 커버할 수 없습니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>건물을 지을 때 "눈으로 보니까 괜찮아"라고 하지 않습니다. 구조 계산서, 안전 검사를 통해 체계적으로 검증합니다.</p>
+                        <p>테스트 코드는 코드의 안전 검사입니다. 변경할 때마다 자동으로 "이전에 되던 것이 여전히 되는가?"를 확인합니다.</p>
+                    </div>
+
+                    <p class="highlight">테스트의 핵심 가치는 "회귀 방지"입니다. 새 기능을 추가할 때 기존 기능이 깨지지 않았음을 자동으로 검증합니다.</p>
+                </div>
+
+                <div class="q">어떤 부분을 테스트해야 하나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>테스트 적합</th><th>테스트 부적합</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>데미지 계산 공식</td><td>카메라 앵글이 예쁜지</td></tr>
+                            <tr><td>인벤토리 아이템 추가/삭제</td><td>UI 레이아웃이 자연스러운지</td></tr>
+                            <tr><td>스킬 쿨다운 로직</td><td>파티클 이펙트가 화려한지</td></tr>
+                            <tr><td>세이브/로드 데이터 무결성</td><td>BGM 분위기가 맞는지</td></tr>
+                            <tr><td>상태 전환 (FSM) 로직</td><td>조작감이 좋은지</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">규칙이 명확하고 결과가 예측 가능한 로직이 테스트하기 좋습니다. "느낌"이나 "감성"은 테스트 코드로 검증할 수 없습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: EditMode vs PlayMode 테스트</h2>
+            <div class="conversation">
+                <div class="q">Unity Test Framework의 두 가지 모드는 뭔가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th>EditMode Test</th><th>PlayMode Test</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>실행 환경</td><td>에디터 모드 (Play 없이)</td><td>Play 모드 진입</td></tr>
+                            <tr><td>속도</td><td>빠름 (밀리초 단위)</td><td>느림 (씬 로드 필요)</td></tr>
+                            <tr><td>MonoBehaviour</td><td>사용 불가</td><td>사용 가능</td></tr>
+                            <tr><td>코루틴</td><td>불가</td><td>가능 (UnityTest)</td></tr>
+                            <tr><td>용도</td><td>순수 로직, 유틸리티</td><td>게임 오브젝트 상호작용</td></tr>
+                            <tr><td>어셈블리</td><td>Tests.asmdef (Editor)</td><td>Tests.asmdef (Runtime)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">EditMode 테스트 코드는 어떻게 작성하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - EditMode 테스트 예시</div>
+                        <pre><code>using NUnit.Framework;
+
+[TestFixture]
+public class DamageCalculatorTests
+{
+    private DamageCalculator _calculator;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _calculator = new DamageCalculator();
+    }
+
+    [Test]
+    public void CalculateDamage_BasicAttack_ReturnsCorrectDamage()
+    {
+        // Arrange
+        float attackPower = 100f;
+        float defense = 30f;
+
+        // Act
+        float damage = _calculator.Calculate(attackPower, defense);
+
+        // Assert
+        Assert.AreEqual(70f, damage);
+    }
+
+    [Test]
+    public void CalculateDamage_NegativeResult_ReturnMinimumOne()
+    {
+        // 방어력이 공격력보다 높아도 최소 1 데미지
+        float damage = _calculator.Calculate(10f, 999f);
+        Assert.GreaterOrEqual(damage, 1f);
+    }
+
+    [TestCase(100f, 0f, 100f)]
+    [TestCase(100f, 50f, 50f)]
+    [TestCase(0f, 50f, 1f)]
+    public void CalculateDamage_VariousInputs(
+        float atk, float def, float expected)
+    {
+        float damage = _calculator.Calculate(atk, def);
+        Assert.AreEqual(expected, damage);
+    }
+}</code></pre>
+                    </div>
+                    <p class="key-point">TestCase 어트리뷰트를 사용하면 하나의 테스트 메서드로 여러 입력 조합을 검증할 수 있습니다.</p>
+                </div>
+
+                <div class="q">PlayMode 테스트는 어떻게 다른가요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# - PlayMode 테스트 예시</div>
+                        <pre><code>using System.Collections;
+using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestUtils;
+
+public class PlayerHealthTests
+{
+    private GameObject _playerObj;
+    private PlayerHealth _health;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _playerObj = new GameObject("TestPlayer");
+        _health = _playerObj.AddComponent&lt;PlayerHealth&gt;();
+        _health.Initialize(maxHp: 100);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        Object.Destroy(_playerObj);
+    }
+
+    [UnityTest]  // PlayMode에서는 UnityTest 사용
+    public IEnumerator TakeDamage_ReducesHealth()
+    {
+        _health.TakeDamage(30);
+
+        yield return null;  // 한 프레임 대기
+
+        Assert.AreEqual(70, _health.CurrentHp);
+    }
+
+    [UnityTest]
+    public IEnumerator TakeDamage_WhenDead_TriggersDeathEvent()
+    {
+        bool deathTriggered = false;
+        _health.OnDeath += () =&gt; deathTriggered = true;
+
+        _health.TakeDamage(200);
+
+        yield return null;
+
+        Assert.IsTrue(deathTriggered);
+        Assert.AreEqual(0, _health.CurrentHp);
+    }
+}</code></pre>
+                    </div>
+                    <p class="warning">PlayMode 테스트에서 생성한 GameObject는 반드시 TearDown에서 Destroy해야 합니다. 그렇지 않으면 다음 테스트에 영향을 줍니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 테스트 가능한 설계</h2>
+            <div class="conversation">
+                <div class="q">MonoBehaviour는 new로 생성할 수 없어서 테스트하기 어려운데요?</div>
+                <div class="a">
+                    <p>맞습니다. 그래서 핵심 로직을 MonoBehaviour에서 분리하는 것이 중요합니다.</p>
+                    <p class="highlight">게임 로직은 순수 C# 클래스(POCO)로 작성하고, MonoBehaviour는 Unity 이벤트를 받아 로직 클래스에 전달하는 역할만 합니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">MonoBehaviour</div>
+                                <div class="flow-box__items">Unity 이벤트 수신 (Update, OnCollision)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Logic Class (POCO)</div>
+                                <div class="flow-box__items">핵심 로직 (데미지, 인벤토리, FSM)</div>
+                            </div>
+                            <div class="flow-arrow">&larr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">EditMode Test</div>
+                                <div class="flow-box__items">new로 직접 생성하여 테스트</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 테스트 가능한 구조 분리</div>
+                        <pre><code>// 순수 로직 클래스 (테스트 가능)
+public class Inventory
+{
+    private List&lt;Item&gt; _items = new List&lt;Item&gt;();
+    public int MaxSlots { get; }
+
+    public Inventory(int maxSlots) { MaxSlots = maxSlots; }
+
+    public bool TryAddItem(Item item)
+    {
+        if (_items.Count >= MaxSlots) return false;
+        _items.Add(item);
+        return true;
+    }
+
+    public bool RemoveItem(string itemId)
+    {
+        return _items.RemoveAll(i =&gt; i.Id == itemId) > 0;
+    }
+
+    public int ItemCount =&gt; _items.Count;
+}
+
+// MonoBehaviour는 브릿지 역할만
+public class InventoryController : MonoBehaviour
+{
+    private Inventory _inventory;
+
+    void Awake()
+    {
+        _inventory = new Inventory(maxSlots: 20);
+    }
+
+    public void OnItemPickup(Item item)
+    {
+        if (_inventory.TryAddItem(item))
+            ShowPickupEffect(item);
+        else
+            ShowInventoryFullMessage();
+    }
+}
+
+// EditMode 테스트 (빠르고 안정적)
+[Test]
+public void TryAddItem_WhenFull_ReturnsFalse()
+{
+    var inventory = new Inventory(maxSlots: 2);
+    inventory.TryAddItem(new Item("sword"));
+    inventory.TryAddItem(new Item("shield"));
+
+    bool result = inventory.TryAddItem(new Item("potion"));
+
+    Assert.IsFalse(result);
+    Assert.AreEqual(2, inventory.ItemCount);
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">의존성 주입은 어떻게 활용하나요?</div>
+                <div class="a">
+                    <p>인터페이스를 통해 의존성을 주입하면, 테스트 시 Mock 객체로 대체할 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 인터페이스와 Mock 활용</div>
+                        <pre><code>// 인터페이스 정의
+public interface ISaveSystem
+{
+    void Save(string key, string data);
+    string Load(string key);
+}
+
+// 실제 구현
+public class PlayerPrefsSaveSystem : ISaveSystem
+{
+    public void Save(string key, string data)
+        =&gt; PlayerPrefs.SetString(key, data);
+    public string Load(string key)
+        =&gt; PlayerPrefs.GetString(key, "");
+}
+
+// 게임 로직은 인터페이스에 의존
+public class GameProgressManager
+{
+    private readonly ISaveSystem _save;
+    public GameProgressManager(ISaveSystem save) { _save = save; }
+
+    public void SaveProgress(int level, int score)
+    {
+        string data = JsonUtility.ToJson(
+            new ProgressData { Level = level, Score = score }
+        );
+        _save.Save("progress", data);
+    }
+}
+
+// 테스트용 Mock
+public class MockSaveSystem : ISaveSystem
+{
+    public string LastKey;
+    public string LastData;
+    public void Save(string key, string data)
+    {
+        LastKey = key;
+        LastData = data;
+    }
+    public string Load(string key) =&gt; LastData ?? "";
+}
+
+// 테스트
+[Test]
+public void SaveProgress_StoresCorrectData()
+{
+    var mock = new MockSaveSystem();
+    var manager = new GameProgressManager(mock);
+
+    manager.SaveProgress(level: 5, score: 1000);
+
+    Assert.AreEqual("progress", mock.LastKey);
+    StringAssert.Contains("1000", mock.LastData);
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 테스트 패턴과 팁</h2>
+            <div class="conversation">
+                <div class="q">좋은 테스트의 조건은 뭔가요?</div>
+                <div class="a">
+                    <p>좋은 테스트는 FIRST 원칙을 따릅니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>원칙</th><th>의미</th><th>설명</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Fast</td><td>빠르게</td><td>수백 개의 테스트가 수 초 안에 완료</td></tr>
+                            <tr><td>Isolated</td><td>독립적으로</td><td>다른 테스트에 영향 없이 단독 실행 가능</td></tr>
+                            <tr><td>Repeatable</td><td>반복 가능하게</td><td>몇 번을 실행해도 같은 결과</td></tr>
+                            <tr><td>Self-validating</td><td>자체 검증</td><td>성공/실패가 자동으로 판별</td></tr>
+                            <tr><td>Timely</td><td>적시에</td><td>코드 작성과 함께 테스트 작성</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">테스트 메서드 이름은 어떻게 짓나요?</div>
+                <div class="a">
+                    <p class="key-point">테스트 이름은 "메서드_시나리오_기대결과" 패턴을 사용합니다. 이름만 보고 무엇을 검증하는지 알 수 있어야 합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">테스트 네이밍 패턴</div>
+                        <pre><code>// 패턴: Method_Scenario_ExpectedResult
+
+[Test] public void TakeDamage_WhenShieldActive_ReducesShieldFirst() { }
+[Test] public void TakeDamage_WhenHpZero_TriggersDeathEvent() { }
+[Test] public void Heal_WhenOverMax_ClampsToMaxHp() { }
+[Test] public void AddItem_WhenInventoryFull_ReturnsFalse() { }
+[Test] public void CalculateCritical_WhenCritRate100_AlwaysCrits() { }</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: AAA 패턴과 Assertion</h2>
+            <div class="conversation">
+                <div class="q">테스트 코드의 구조는 어떻게 짜야 하나요?</div>
+                <div class="a">
+                    <p>AAA (Arrange-Act-Assert) 패턴을 따르면 일관되고 읽기 쉬운 테스트를 작성할 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - AAA 패턴</div>
+                        <pre><code>[Test]
+public void ApplyBuff_DoubleAttack_DoublesAttackPower()
+{
+    // Arrange - 테스트 환경 준비
+    var stats = new CharacterStats(baseAttack: 50);
+    var buff = new Buff(BuffType.DoubleAttack, duration: 10f);
+
+    // Act - 테스트 대상 실행
+    stats.ApplyBuff(buff);
+
+    // Assert - 결과 검증
+    Assert.AreEqual(100, stats.AttackPower);
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">NUnit에서 자주 쓰는 Assert 메서드는?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>Assert 메서드</th><th>용도</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Assert.AreEqual(expected, actual)</td><td>값이 같은지</td></tr>
+                            <tr><td>Assert.IsTrue(condition)</td><td>조건이 참인지</td></tr>
+                            <tr><td>Assert.IsNull(obj)</td><td>null인지</td></tr>
+                            <tr><td>Assert.Throws&lt;T&gt;(action)</td><td>예외가 발생하는지</td></tr>
+                            <tr><td>Assert.That(actual, Is.InRange(a, b))</td><td>범위 내 값인지</td></tr>
+                            <tr><td>CollectionAssert.Contains(list, item)</td><td>컬렉션에 포함되는지</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 다양한 Assert 활용</div>
+                        <pre><code>// float 비교 시 오차 허용
+Assert.AreEqual(3.14f, result, 0.01f);
+
+// 예외 발생 검증
+Assert.Throws&lt;ArgumentException&gt;(() =&gt; {
+    inventory.AddItem(null);
+});
+
+// 컬렉션 검증
+var loot = lootTable.GenerateLoot();
+CollectionAssert.IsNotEmpty(loot);
+Assert.That(loot.Count, Is.LessThanOrEqualTo(5));</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: CI 연동과 자동화</h2>
+            <div class="conversation">
+                <div class="q">테스트를 자동으로 실행할 수는 없나요?</div>
+                <div class="a">
+                    <p>CI/CD 파이프라인에 Unity 테스트를 통합하면 코드 푸시마다 자동으로 테스트가 실행됩니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Git Push</div>
+                                <div class="flow-box__items">코드 변경 커밋</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">CI Trigger</div>
+                                <div class="flow-box__items">GitHub Actions / Jenkins</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Unity Test Runner</div>
+                                <div class="flow-box__items">EditMode + PlayMode 테스트</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">결과 리포트</div>
+                                <div class="flow-box__items">성공/실패 알림</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">Unity CLI 테스트 실행 명령어</div>
+                        <pre><code># EditMode 테스트 실행
+Unity.exe -batchmode -runTests \
+  -projectPath ./MyProject \
+  -testPlatform EditMode \
+  -testResults ./results/editmode.xml
+
+# PlayMode 테스트 실행
+Unity.exe -batchmode -runTests \
+  -projectPath ./MyProject \
+  -testPlatform PlayMode \
+  -testResults ./results/playmode.xml</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">테스트 커버리지는 얼마나 목표해야 하나요?</div>
+                <div class="a">
+                    <p>게임 프로젝트에서 100% 커버리지는 비현실적이고 불필요합니다.</p>
+                    <p class="key-point">핵심 게임 로직(전투 공식, 경제 시스템, 상태 전환)의 커버리지를 80% 이상 유지하는 것이 현실적인 목표입니다. 렌더링, 입력, UI는 수동 QA가 더 효과적입니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>영역</th><th>테스트 방식</th><th>커버리지 목표</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>전투/스킬 로직</td><td>EditMode 단위 테스트</td><td>80%+</td></tr>
+                            <tr><td>인벤토리/경제</td><td>EditMode 단위 테스트</td><td>80%+</td></tr>
+                            <tr><td>씬 전환/로딩</td><td>PlayMode 통합 테스트</td><td>핵심 경로만</td></tr>
+                            <tr><td>UI/UX</td><td>수동 QA</td><td>-</td></tr>
+                            <tr><td>그래픽/이펙트</td><td>수동 QA</td><td>-</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>테스트의 가치</strong>: 회귀 버그를 방지하고, 리팩토링 시 안전망 역할을 한다</li>
+                <li><strong>EditMode vs PlayMode</strong>: 순수 로직은 EditMode(빠름), Unity 기능은 PlayMode(느림)</li>
+                <li><strong>테스트 가능한 설계</strong>: 핵심 로직을 POCO로 분리하고, MonoBehaviour는 브릿지만 담당</li>
+                <li><strong>의존성 주입</strong>: 인터페이스와 Mock으로 외부 의존성을 격리하여 테스트</li>
+                <li><strong>CI 자동화</strong>: Git Push마다 자동 테스트를 실행하여 코드 품질을 지속적으로 검증</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

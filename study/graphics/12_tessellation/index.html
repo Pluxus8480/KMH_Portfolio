@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>GPU가 폴리곤을 만들어내다</h1>
@@ -30,24 +30,35 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Tessellation 개념:
-
-원본 (Low Poly):          Tessellation 후:
-
-    △                    ╱╲╱╲╱╲╱╲
-   ╱ ╲                  ╱╲╱╲╱╲╱╲╱╲
-  ╱   ╲                ╱╲╱╲╱╲╱╲╱╲╱╲
- ╱     ╲              ╱╲╱╲╱╲╱╲╱╲╱╲╱╲
-╱───────╲            ╱╲╱╲╱╲╱╲╱╲╱╲╱╲╱╲
-
-삼각형 1개  →  삼각형 N개 (GPU에서 생성)
-
-장점:
-- 메모리: 저폴리 메시만 전송
-- LOD: 거리에 따라 분할 수준 조절
-- Displacement: 높이 맵으로 실제 지오메트리 변형
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-side-by-side">
+                        <div class="flow-group">
+                            <div class="flow-group__title">원본 (Low Poly)</div>
+                            <div class="flow-box" style="min-height:80px;">
+                                <div class="flow-box__title">삼각형 1개</div>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;"><span class="flow-arrow">→</span></div>
+                        <div class="flow-group">
+                            <div class="flow-group__title">Tessellation 후</div>
+                            <div class="flow-box flow-box--highlight" style="min-height:80px;">
+                                <div class="flow-box__title">삼각형 N개</div>
+                                <div class="flow-box__items">GPU에서 동적 생성</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flow-row" style="margin-top:12px;justify-content:center;gap:12px;">
+                        <div class="flow-box flow-box--small flow-box--info">
+                            <div class="flow-box__items">메모리: 저폴리만 전송</div>
+                        </div>
+                        <div class="flow-box flow-box--small flow-box--info">
+                            <div class="flow-box__items">LOD: 거리별 분할 조절</div>
+                        </div>
+                        <div class="flow-box flow-box--small flow-box--info">
+                            <div class="flow-box__items">Displacement: 높이맵 변형</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Tessellation 분할 개념</p>
             </div>
 
@@ -68,46 +79,42 @@ Tessellation 개념:
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-DirectX 11 Tessellation 파이프라인:
-
-┌─────────────────┐
-│  Input Assembler│
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Vertex Shader  │ → 정점별 처리 (평소처럼)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   Hull Shader   │ → 패치별 Tessellation Factor 결정
-│  (프로그래머블)  │    "얼마나 분할할까?"
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   Tessellator   │ → 실제 분할 수행 (고정 기능)
-│  (Fixed Function)│    UV 좌표와 토폴로지 생성
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Domain Shader  │ → 새 정점 위치 계산
-│  (프로그래머블)  │    Displacement 적용
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Geometry Shader │ (선택)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Rasterizer     │
-└─────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Input Assembler</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Vertex Shader</div>
+                            <div class="flow-box__items">정점별 처리 (평소처럼)</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Hull Shader (프로그래머블)</div>
+                            <div class="flow-box__items">패치별 Tessellation Factor 결정<br>"얼마나 분할할까?"</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--warning">
+                            <div class="flow-box__title">Tessellator (Fixed Function)</div>
+                            <div class="flow-box__items">실제 분할 수행<br>UV 좌표와 토폴로지 생성</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Domain Shader (프로그래머블)</div>
+                            <div class="flow-box__items">새 정점 위치 계산<br>Displacement 적용</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Geometry Shader</div>
+                            <div class="flow-box__items">(선택)</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Rasterizer</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Tessellation 스테이지</p>
             </div>
 
@@ -235,23 +242,30 @@ HS_OUTPUT HS_Main(
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Barycentric 좌표:
-
-       P0
-       ╱╲
-      ╱  ╲
-     ╱    ╲
-    ╱  ●P  ╲    P = u*P0 + v*P1 + w*P2
-   ╱        ╲   (u + v + w = 1)
-  ╱──────────╲
-P2            P1
-
-Tessellator가 생성한 각 점에 대해
-Domain Shader가 호출됨
-
-uvw 좌표로 원래 패치의 속성을 보간
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box flow-box--info" style="min-width:280px;">
+                            <div class="flow-box__title">Barycentric 좌표</div>
+                            <div class="flow-box__items">
+                                삼각형 꼭짓점: P0, P1, P2<br>
+                                내부 점 P = u&middot;P0 + v&middot;P1 + w&middot;P2<br>
+                                (u + v + w = 1)
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Tessellator</div>
+                                <div class="flow-box__items">각 점의 uvw 좌표 생성</div>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Domain Shader</div>
+                                <div class="flow-box__items">uvw로 패치 속성 보간</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Barycentric 좌표계</p>
             </div>
 
@@ -312,24 +326,40 @@ DS_OUTPUT DS_Main(
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Normal Map vs Displacement:
-
-원본:           Normal Map:        Displacement:
-
-─────────      ─────────          ╱╲  ╱╲  ╱╲
-                                 ╱  ╲╱  ╲╱  ╲
-
-프로파일:      프로파일:          프로파일:
-─────────      ─────────          ∧∨∧∨∧∨∧
-
-실제 형태      형태는 그대로      실제 형태 변화!
-변화 없음      라이팅만 변화      실루엣 변화
-
-그림자:        그림자:            그림자:
-─────────      ─────────          ▓▒░▒▓░▒▓
-(변화 없음)    (변화 없음)        (울퉁불퉁)
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row--3col">
+                        <div class="flow-group">
+                            <div class="flow-group__title">원본</div>
+                            <div class="flow-box">
+                                <div class="flow-box__items">
+                                    프로파일: 평평함<br>
+                                    실제 형태 변화 없음<br>
+                                    그림자 변화 없음
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-group">
+                            <div class="flow-group__title">Normal Map</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__items">
+                                    프로파일: 평평함<br>
+                                    형태 그대로, 라이팅만 변화<br>
+                                    그림자 변화 없음
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-group">
+                            <div class="flow-group__title">Displacement</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__items">
+                                    프로파일: 울퉁불퉁<br>
+                                    실제 형태 변화!<br>
+                                    실루엣 + 그림자 변화
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">표면 디테일 기법 비교</p>
             </div>
 

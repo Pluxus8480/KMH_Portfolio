@@ -8,9 +8,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../database.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../database.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>아이템 복사 버그는 왜 생길까?</h1>
             <p class="subtitle">안전한 인벤토리 시스템 DB 설계와 아이템 무결성</p>
         </header>
@@ -21,29 +23,55 @@
                 <div class="q">인벤토리 시스템에서 고려해야 할 점은?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-인벤토리 시스템 핵심 요구사항:
-
-1. 데이터 무결성
-   - 아이템 복사 방지
-   - 아이템 소실 방지
-   - 음수 수량 방지
-
-2. 성능
-   - 인벤토리 전체 로드: 50ms 이내
-   - 아이템 이동/사용: 100ms 이내
-   - 동시 거래 처리
-
-3. 유연성
-   - 다양한 아이템 타입 (장비, 소모품, 재료)
-   - 아이템별 고유 속성 (강화, 인챈트, 소켓)
-   - 스택 가능/불가능 아이템
-
-4. 추적
-   - 아이템 획득/소비 로그
-   - 거래 이력
-   - 롤백 지원
-                        </pre>
+                        <p><strong>인벤토리 시스템 핵심 요구사항:</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row--3col">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">1. 데이터 무결성</div>
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>아이템 복사 방지</li>
+                                            <li>아이템 소실 방지</li>
+                                            <li>음수 수량 방지</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">2. 성능</div>
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>인벤토리 전체 로드: 50ms 이내</li>
+                                            <li>아이템 이동/사용: 100ms 이내</li>
+                                            <li>동시 거래 처리</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">3. 유연성</div>
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>다양한 아이템 타입</li>
+                                            <li>아이템별 고유 속성</li>
+                                            <li>스택 가능/불가능</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">4. 추적</div>
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>아이템 획득/소비 로그</li>
+                                            <li>거래 이력</li>
+                                            <li>롤백 지원</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -148,27 +176,37 @@ CREATE TABLE equipment_slots (
                 <div class="q">아이템 복사 버그는 왜 생기나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-아이템 복사 버그 시나리오:
-
-1. Race Condition (동시 요청)
-   ┌─────────────────────────────────────────────────┐
-   │ Request A: 아이템 사용          Request B: 거래 │
-   │     │                               │          │
-   │  아이템 존재 확인 ✓             아이템 확인 ✓   │
-   │     │                               │          │
-   │  아이템 사용 처리               아이템 이동     │
-   │     │                               │          │
-   │  삭제                           삭제 (이미 없음)│
-   │                                     │          │
-   │  결과: 아이템 사용 + 거래 모두 성공! │          │
-   └─────────────────────────────────────────────────┘
-
-2. 롤백 타이밍 악용
-   - 아이템 거래 후 연결 끊기
-   - 서버가 롤백하면 아이템 복구
-   - 상대방은 이미 받은 아이템 보유
-                        </pre>
+                        <p><strong>아이템 복사 버그 시나리오:</strong></p>
+                        <p><strong>1. Race Condition (동시 요청)</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--warning">
+                                    <div class="flow-box__title">Request A: 아이템 사용</div>
+                                    <div class="flow-box__items">
+                                        아이템 존재 확인 &check;<br>
+                                        아이템 사용 처리<br>
+                                        삭제
+                                    </div>
+                                </div>
+                                <div class="flow-box flow-box--warning">
+                                    <div class="flow-box__title">Request B: 거래</div>
+                                    <div class="flow-box__items">
+                                        아이템 확인 &check;<br>
+                                        아이템 이동<br>
+                                        삭제 (이미 없음)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="warning">결과: 아이템 사용 + 거래 모두 성공! (복사 발생)</p>
+                        <p><strong>2. 롤백 타이밍 악용</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__items">아이템 거래 후 연결 끊기 &rarr; 서버가 롤백하면 아이템 복구 &rarr; 상대방은 이미 받은 아이템 보유</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../graphics.html" class="back-link">← Graphics 목록으로</a>
+        <a href="../../graphics.html" class="back-link">← Graphics 목록으로</a>
 
         <header class="content-header">
             <h1>렌더링 후의 마법</h1>
@@ -30,31 +30,46 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-렌더링 파이프라인에서의 위치:
-
-┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│  Geometry   │ → │  Lighting   │ → │   Opaque    │
-│    Pass     │   │    Pass     │   │  Objects    │
-└─────────────┘   └─────────────┘   └─────────────┘
-                                           │
-                                           ▼
-┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│   Bloom     │ ← │   HDR       │ ← │ Translucent │
-│             │   │  Buffer     │   │  Objects    │
-└─────────────┘   └─────────────┘   └─────────────┘
-      │
-      ▼
-┌─────────────────────────────────────────────────┐
-│              Post-Processing Chain              │
-├─────────────────────────────────────────────────┤
-│  SSAO → SSR → DoF → Motion Blur → Bloom →      │
-│  Color Grading → Tone Mapping → AA → UI        │
-└─────────────────────────────────────────────────┘
-                      │
-                      ▼
-               Final Frame Buffer
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Geometry Pass</div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Lighting Pass</div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Opaque Objects</div>
+                        </div>
+                    </div>
+                    <div class="flow-col" style="align-items:center;">
+                        <span class="flow-arrow-down">↓</span>
+                    </div>
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Translucent Objects</div>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">HDR Buffer</div>
+                        </div>
+                    </div>
+                    <div class="flow-col" style="align-items:center;">
+                        <span class="flow-arrow-down">↓</span>
+                    </div>
+                    <div class="flow-box flow-box--highlight">
+                        <div class="flow-box__title">Post-Processing Chain</div>
+                        <div class="flow-box__items">SSAO → SSR → DoF → Motion Blur → Bloom → Color Grading → Tone Mapping → AA → UI</div>
+                    </div>
+                    <div class="flow-col" style="align-items:center;">
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Final Frame Buffer</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Post-Processing의 위치</p>
             </div>
         </section>
@@ -288,28 +303,26 @@ void BloomUpsample()
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Color LUT 사용:
-
-입력 색상 (R, G, B)
-        │
-        ▼
-┌─────────────────────────────────────┐
-│         3D LUT (32³ 또는 64³)       │
-│                                     │
-│   RGB 값을 좌표로 사용하여          │
-│   변환된 색상을 조회                │
-│                                     │
-│   [0.2, 0.5, 0.8] → LUT[5][16][26]  │
-│                                     │
-└─────────────────────────────────────┘
-        │
-        ▼
-출력 색상 (R', G', B')
-
-아티스트가 Photoshop/DaVinci에서
-LUT 제작 → 게임에 적용
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-col">
+                        <div class="flow-box">
+                            <div class="flow-box__title">입력 색상 (R, G, B)</div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">3D LUT (32³ 또는 64³)</div>
+                            <div class="flow-box__items">
+                                RGB 값을 좌표로 사용하여 변환된 색상을 조회<br>
+                                예: [0.2, 0.5, 0.8] → LUT[5][16][26]
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓</span>
+                        <div class="flow-box">
+                            <div class="flow-box__title">출력 색상 (R', G', B')</div>
+                        </div>
+                    </div>
+                    <p style="margin-top:0.5rem; color: var(--text-secondary); font-size:0.85rem;">아티스트가 Photoshop/DaVinci에서 LUT 제작 → 게임에 적용</p>
+                </div>
                 <p class="diagram-caption">LUT 기반 Color Grading</p>
             </div>
 

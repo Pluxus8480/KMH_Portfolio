@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>벽 뒤에 숨은 적을 왜 그릴까?</h1>
             <p class="subtitle">Occlusion Culling으로 보이지 않는 물체 제거하기</p>
         </header>
@@ -26,22 +28,19 @@
                     <p><strong>Occlusion Culling:</strong> 시야 안이지만 다른 물체에 가려진 물체 제거</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-Frustum vs Occlusion Culling
-
-        카메라 시야
-          ╱    ╲
-         ╱      ╲
-        ╱  벽    ╲
-       ╱ ┌────┐   ╲
-      ╱  │    │ ●  ╲   ● = 가려진 물체
-     ╱   └────┘     ╲
-    ╱                ╲
-   ●                  ●
-
-Frustum Culling: 양쪽 ● 제거 (시야 밖)
-Occlusion Culling: 벽 뒤 ● 제거 (가려짐)
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Frustum Culling</div>
+                                    <div class="flow-box__items">카메라 시야 밖의 물체 제거<br>(양쪽 물체 제거)</div>
+                                </div>
+                                <span class="flow-arrow">vs</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Occlusion Culling</div>
+                                    <div class="flow-box__items">시야 안이지만 벽에 가려진 물체 제거<br>(벽 뒤 물체 제거)</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <p class="highlight">실내 씬에서는 Occlusion Culling이 더 효과적입니다!</p>
@@ -114,23 +113,25 @@ Occlusion Culling: 벽 뒤 ● 제거 (가려짐)
                     <p class="highlight">공간을 셀(Cell)로 나누고, 포털(문/창문)로 연결합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-Portal Culling 구조
-
-┌─────────┬─────────┬─────────┐
-│  Room A │  Room B │  Room C │
-│         ┿         ┿         │
-│   👁    │         │    ●    │
-│ (카메라)│         │ (물체)  │
-└─────────┴─────────┴─────────┘
-           Portal1    Portal2
-
-카메라가 Room A에 있을 때:
-1. Room A의 물체: 보임
-2. Portal1을 통해 Room B 검사
-3. Portal2를 통해 Room C 검사 (Portal1 ∩ Portal2)
-4. 포털 밖 영역: 컬링!
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Room A</div>
+                                    <div class="flow-box__items">카메라 위치<br>물체: 보임</div>
+                                </div>
+                                <span class="flow-arrow">Portal1 &rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Room B</div>
+                                    <div class="flow-box__items">Portal1을 통해 검사</div>
+                                </div>
+                                <span class="flow-arrow">Portal2 &rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Room C</div>
+                                    <div class="flow-box__items">Portal1 &cap; Portal2<br>교차 영역만 검사</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">포털 밖 영역은 컬링!</p>
                     </div>
 
                     <div class="code-block">
@@ -388,21 +389,25 @@ public:
                     <p class="highlight">Hi-Z는 깊이 버퍼의 밉맵을 사용하여 빠르게 테스트합니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-Hierarchical Z-Buffer
-
-Level 0 (원본):     Level 1 (2x2):    Level 2 (4x4):
-┌─┬─┬─┬─┐           ┌───┬───┐          ┌───────┐
-│1│2│3│4│           │max│max│          │  max  │
-├─┼─┼─┼─┤           │(1-4)(5-8)│       │ (전체)│
-│5│6│7│8│    →     ├───┼───┤     →   └───────┘
-├─┼─┼─┼─┤           │max│max│
-│...    │           │...│...│
-└───────┘           └───┴───┘
-
-각 레벨은 자식 4개의 최대값 저장
-→ 큰 물체는 상위 레벨에서 빠르게 컬링!
-                        </pre>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Level 0 (원본)</div>
+                                    <div class="flow-box__items">개별 픽셀 깊이값<br>1, 2, 3, 4, 5, 6, 7, 8...</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Level 1 (2x2)</div>
+                                    <div class="flow-box__items">4픽셀의 max값<br>max(1-4), max(5-8)...</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Level 2 (4x4)</div>
+                                    <div class="flow-box__items">전체 max값<br>큰 물체 빠르게 컬링!</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">각 레벨은 자식 4개의 최대값 저장. 큰 물체는 상위 레벨에서 빠르게 컬링!</p>
                     </div>
 
                     <div class="code-block">

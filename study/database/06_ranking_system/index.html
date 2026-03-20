@@ -8,9 +8,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../database.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../database.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>100만 명 중 내 등수는 몇 등?</h1>
             <p class="subtitle">Redis Sorted Set으로 실시간 랭킹 시스템 구현</p>
         </header>
@@ -21,21 +23,32 @@
                 <div class="q">랭킹 시스템은 어떤 기능이 필요한가요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-랭킹 시스템 핵심 기능:
-
-1. 점수 업데이트      - O(log N)
-2. 상위 N명 조회      - O(log N + M)
-3. 내 등수 조회       - O(log N)
-4. 특정 등수 조회     - O(log N)
-5. 내 주변 랭킹 조회  - O(log N + M)
-
-요구사항:
-- 실시간 반영 (점수 변경 즉시)
-- 빠른 조회 (100ms 이내)
-- 100만+ 유저 지원
-- 동점자 처리
-                        </pre>
+                        <p><strong>랭킹 시스템 핵심 기능:</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row--3col">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">점수 업데이트</div>
+                                    <div class="flow-box__items">O(log N)</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">상위 N명 조회</div>
+                                    <div class="flow-box__items">O(log N + M)</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">내 등수 조회</div>
+                                    <div class="flow-box__items">O(log N)</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">특정 등수 조회</div>
+                                    <div class="flow-box__items">O(log N)</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">내 주변 랭킹 조회</div>
+                                    <div class="flow-box__items">O(log N + M)</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p><strong>요구사항:</strong> 실시간 반영 (점수 변경 즉시) / 빠른 조회 (100ms 이내) / 100만+ 유저 지원 / 동점자 처리</p>
                     </div>
                 </div>
 
@@ -70,26 +83,38 @@ SELECT * FROM characters ORDER BY level DESC LIMIT 100;
                 <div class="q">Sorted Set은 어떻게 동작하나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-Redis Sorted Set 구조:
-
-Key: "ranking:level"
-
-┌────────────────────────────────────┐
-│  Member (char_id)  │   Score      │
-├────────────────────────────────────┤
-│      user_1        │    99        │  ← Rank 1
-│      user_7        │    95        │  ← Rank 2
-│      user_3        │    90        │  ← Rank 3
-│      user_5        │    85        │  ← Rank 4
-│      ...           │    ...       │
-│      user_999      │    10        │  ← Rank N
-└────────────────────────────────────┘
-
-내부 구조: Skip List + Hash Table
-- Score로 정렬된 Skip List (범위 검색 빠름)
-- Member → Score 매핑 Hash Table (개별 조회 빠름)
-                        </pre>
+                        <p><strong>Redis Sorted Set 구조:</strong></p>
+                        <p>Key: "ranking:level"</p>
+                        <table class="compare-table">
+                            <thead>
+                                <tr>
+                                    <th>Member (char_id)</th>
+                                    <th>Score</th>
+                                    <th>Rank</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>user_1</td><td>99</td><td>Rank 1</td></tr>
+                                <tr><td>user_7</td><td>95</td><td>Rank 2</td></tr>
+                                <tr><td>user_3</td><td>90</td><td>Rank 3</td></tr>
+                                <tr><td>user_5</td><td>85</td><td>Rank 4</td></tr>
+                                <tr><td>...</td><td>...</td><td>...</td></tr>
+                                <tr><td>user_999</td><td>10</td><td>Rank N</td></tr>
+                            </tbody>
+                        </table>
+                        <p><strong>내부 구조:</strong> Skip List + Hash Table</p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Skip List</div>
+                                    <div class="flow-box__items">Score로 정렬 (범위 검색 빠름)</div>
+                                </div>
+                                <div class="flow-box flow-box--info">
+                                    <div class="flow-box__title">Hash Table</div>
+                                    <div class="flow-box__items">Member&rarr;Score 매핑 (개별 조회 빠름)</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

@@ -8,9 +8,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../database.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../database.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>DB 하나로 100만 유저를 감당할 수 있을까?</h1>
             <p class="subtitle">샤딩과 파티셔닝으로 데이터베이스 확장하기</p>
         </header>
@@ -21,24 +23,41 @@
                 <div class="q">DB가 느려지면 어떻게 해야 하나요?</div>
                 <div class="a">
                     <div class="visual-section">
-                        <pre class="diagram">
-DB 확장 방법:
-
-스케일업 (Scale Up):
-┌─────────────┐      ┌─────────────┐
-│   DB 서버   │  →   │ 더 좋은 DB  │
-│   (4 CPU)   │      │  (64 CPU)   │
-└─────────────┘      └─────────────┘
-장점: 간단, 코드 변경 없음
-단점: 비용 급증, 물리적 한계
-
-스케일아웃 (Scale Out):
-┌─────────────┐      ┌────┐┌────┐┌────┐
-│   DB 서버   │  →   │DB 1││DB 2││DB 3│
-└─────────────┘      └────┘└────┘└────┘
-장점: 무한 확장 가능, 비용 효율적
-단점: 분산 시스템 복잡도, 코드 변경 필요
-                        </pre>
+                        <p><strong>스케일업 (Scale Up):</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">DB 서버</div>
+                                    <div class="flow-box__items">4 CPU</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">더 좋은 DB</div>
+                                    <div class="flow-box__items">64 CPU</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p>장점: 간단, 코드 변경 없음 / 단점: 비용 급증, 물리적 한계</p>
+                        <p><strong>스케일아웃 (Scale Out):</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">DB 서버</div>
+                                    <div class="flow-box__items">단일</div>
+                                </div>
+                                <span class="flow-arrow">&rarr;</span>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">DB 1</div>
+                                </div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">DB 2</div>
+                                </div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">DB 3</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p>장점: 무한 확장 가능, 비용 효율적 / 단점: 분산 시스템 복잡도, 코드 변경 필요</p>
                     </div>
                     <p class="highlight">샤딩 = 데이터를 여러 DB에 분산 저장 (스케일아웃)</p>
                 </div>
@@ -82,24 +101,45 @@ DB 확장 방법:
                         </tbody>
                     </table>
                     <div class="visual-section">
-                        <pre class="diagram">
-파티셔닝 (Partitioning):
-┌─────────────────────────────────────┐
-│           Single DB Server          │
-│  ┌─────────┐ ┌─────────┐ ┌────────┐│
-│  │ Part 1  │ │ Part 2  │ │ Part 3 ││
-│  │ 2022년  │ │ 2023년  │ │ 2024년 ││
-│  └─────────┘ └─────────┘ └────────┘│
-└─────────────────────────────────────┘
-
-샤딩 (Sharding):
-┌─────────┐   ┌─────────┐   ┌─────────┐
-│ Shard 1 │   │ Shard 2 │   │ Shard 3 │
-│ User    │   │ User    │   │ User    │
-│ 1~100만 │   │100만~200만│ │200만~300만│
-└─────────┘   └─────────┘   └─────────┘
-  Server A      Server B      Server C
-                        </pre>
+                        <p><strong>파티셔닝 (Partitioning):</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-box flow-box--wide">
+                                <div class="flow-box__title">Single DB Server</div>
+                                <div class="flow-box__items">
+                                    <div class="flow-row" style="margin-top:4px;">
+                                        <div class="flow-box flow-box--small">
+                                            <div class="flow-box__title">Part 1</div>
+                                            <div class="flow-box__items">2022년</div>
+                                        </div>
+                                        <div class="flow-box flow-box--small">
+                                            <div class="flow-box__title">Part 2</div>
+                                            <div class="flow-box__items">2023년</div>
+                                        </div>
+                                        <div class="flow-box flow-box--small">
+                                            <div class="flow-box__title">Part 3</div>
+                                            <div class="flow-box__items">2024년</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p><strong>샤딩 (Sharding):</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Shard 1</div>
+                                    <div class="flow-box__items">User 1~100만<br>Server A</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Shard 2</div>
+                                    <div class="flow-box__items">User 100만~200만<br>Server B</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Shard 3</div>
+                                    <div class="flow-box__items">User 200만~300만<br>Server C</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -112,24 +152,42 @@ DB 확장 방법:
                 <div class="a">
                     <p>특정 샤드에 데이터가 몰려 <strong>핫스팟</strong>이 발생합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-나쁜 샤딩 키: 가입 날짜
-
-2024년 1월 가입자 → Shard 1 (과부하!)
-2024년 2월 가입자 → Shard 2 (거의 비어있음)
-2024년 3월 가입자 → Shard 3 (거의 비어있음)
-
-새 유저는 모두 최신 샤드로 → 불균형!
-
-좋은 샤딩 키: 유저 ID (해시)
-
-User 1 → Shard 1
-User 2 → Shard 2
-User 3 → Shard 3
-User 4 → Shard 1
-...
-균등하게 분산!
-                        </pre>
+                        <p><strong>나쁜 샤딩 키: 가입 날짜</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--warning">
+                                    <div class="flow-box__title">Shard 1 (과부하!)</div>
+                                    <div class="flow-box__items">2024년 1월 가입자</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Shard 2</div>
+                                    <div class="flow-box__items">2024년 2월 (거의 비어있음)</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Shard 3</div>
+                                    <div class="flow-box__items">2024년 3월 (거의 비어있음)</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p>새 유저는 모두 최신 샤드로 &rarr; 불균형!</p>
+                        <p><strong>좋은 샤딩 키: 유저 ID (해시)</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Shard 1</div>
+                                    <div class="flow-box__items">User 1, User 4, ...</div>
+                                </div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Shard 2</div>
+                                    <div class="flow-box__items">User 2, User 5, ...</div>
+                                </div>
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Shard 3</div>
+                                    <div class="flow-box__items">User 3, User 6, ...</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p>균등하게 분산!</p>
                     </div>
                 </div>
 
@@ -240,26 +298,45 @@ public:
                 <div class="a">
                     <p>크로스 샤드 트랜잭션은 <strong>2PC(Two-Phase Commit)</strong> 또는 <strong>Saga 패턴</strong>이 필요합니다.</p>
                     <div class="visual-section">
-                        <pre class="diagram">
-크로스 샤드 거래 (Saga 패턴):
-
-    Shard A                    Shard B
-       │                          │
-       ├── 1. A 골드 차감 (-1000) │
-       │   (임시 차감, 보상 트랜잭션 준비)
-       │                          │
-       │                          ├── 2. B 아이템 이동
-       │                          │   (성공 시 커밋)
-       │                          │
-       ├── 3. A 커밋             │
-       │   (차감 확정)            │
-       │                          │
-       ▼                          ▼
-    완료!                       완료!
-
-만약 2단계 실패 시:
-       ├── 보상: A 골드 복구 (+1000)
-                        </pre>
+                        <p><strong>크로스 샤드 거래 (Saga 패턴):</strong></p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Shard A</div>
+                                    <div class="flow-box__items">
+                                        1. A 골드 차감 (-1000)<br>
+                                        (임시 차감, 보상 트랜잭션 준비)<br>
+                                        3. A 커밋 (차감 확정)
+                                    </div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Shard B</div>
+                                    <div class="flow-box__items">
+                                        2. B 아이템 이동<br>
+                                        (성공 시 커밋)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">&darr;</span>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">완료!</div>
+                                    <div class="flow-box__items">양쪽 모두 커밋 성공</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p>만약 2단계 실패 시:</p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--warning">
+                                    <div class="flow-box__title">보상 트랜잭션</div>
+                                    <div class="flow-box__items">A 골드 복구 (+1000)</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">Saga 패턴: 각 단계가 실패하면 보상 트랜잭션으로 롤백</p>
                     </div>
                     <div class="code-block">
                         <div class="code-header">Saga 패턴 구현 예시</div>
@@ -317,24 +394,38 @@ public:
             <div class="conversation">
                 <div class="q">랭킹같이 전체 유저 데이터가 필요한 경우는?</div>
                 <div class="a">
+                    <div class="visual-section">
+                        <p><strong>방법 1: 별도 글로벌 DB</strong></p>
+                        <p>랭킹, 경매장 등은 별도 DB에서 관리</p>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Shard 1</div>
+                                    <div class="flow-box__items">User Data</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Shard 2</div>
+                                    <div class="flow-box__items">User Data</div>
+                                </div>
+                                <div class="flow-box">
+                                    <div class="flow-box__title">Shard 3</div>
+                                    <div class="flow-box__items">User Data</div>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">&darr;</span>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">Global DB</div>
+                                    <div class="flow-box__items">랭킹, 경매장</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="code-block">
                         <div class="code-header">글로벌 데이터 처리 전략</div>
-                        <pre><code>// 방법 1: 별도 글로벌 DB
-// 랭킹, 경매장 등은 별도 DB에서 관리
-┌──────────┐  ┌──────────┐  ┌──────────┐
-│ Shard 1  │  │ Shard 2  │  │ Shard 3  │
-│ User Data│  │ User Data│  │ User Data│
-└────┬─────┘  └────┬─────┘  └────┬─────┘
-     │             │             │
-     └─────────────┼─────────────┘
-                   ▼
-           ┌─────────────┐
-           │ Global DB   │
-           │ - 랭킹      │
-           │ - 경매장    │
-           └─────────────┘
-
-// 방법 2: Redis로 집계
+                        <pre><code>// 방법 2: Redis로 집계
 // 실시간 랭킹 → Redis Sorted Set
 redis.ZAdd("ranking:level", score, charId);
 auto topPlayers = redis.ZRevRange("ranking:level", 0, 99);

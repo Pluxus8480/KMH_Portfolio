@@ -10,9 +10,11 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../algorithm.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>빗자루로 쓸 듯이 충돌 후보를 찾는다?</h1>
             <p class="subtitle">Sweep and Prune (SAP) 알고리즘으로 Broad Phase 최적화</p>
         </header>
@@ -31,27 +33,22 @@
                     </div>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-Sweep and Prune 원리
-
-X축에 투영된 AABB들:
-
-      A        [========]
-      B    [======]
-      C              [====]
-      D                      [======]
-      E        [==]
-
-X축: ─────────────────────────────────────────►
-        ↑      ↑  ↑   ↑   ↑ ↑    ↑      ↑
-        B시작 A시작 E끝 B끝 A끝 C끝 D시작 D끝
-
-정렬 후 Sweep:
-B시작 → A시작 (B와 겹침 시작) → E끝 → B끝 → A끝 → C끝 → D시작 ...
-
-충돌 후보: (A,B), (A,E), (B,E)
-D는 다른 것들과 X축에서 겹치지 않음 → 충돌 체크 불필요!
-                        </pre>
+                        <div class="flow-diagram">
+                            <div style="font-size:0.85em; margin-bottom:12px;">
+                                <div style="margin-bottom:4px;"><strong>X축에 투영된 AABB들:</strong></div>
+                                <div style="display:flex; flex-direction:column; gap:4px;">
+                                    <div style="display:flex; align-items:center; gap:8px;"><span style="width:20px;">A</span><div style="margin-left:40%; width:35%; height:14px; background:rgba(78,205,196,0.4); border-radius:3px;"></div></div>
+                                    <div style="display:flex; align-items:center; gap:8px;"><span style="width:20px;">B</span><div style="margin-left:20%; width:30%; height:14px; background:rgba(108,92,231,0.4); border-radius:3px;"></div></div>
+                                    <div style="display:flex; align-items:center; gap:8px;"><span style="width:20px;">C</span><div style="margin-left:55%; width:20%; height:14px; background:rgba(255,206,86,0.4); border-radius:3px;"></div></div>
+                                    <div style="display:flex; align-items:center; gap:8px;"><span style="width:20px;">D</span><div style="margin-left:80%; width:25%; height:14px; background:rgba(255,107,107,0.4); border-radius:3px;"></div></div>
+                                    <div style="display:flex; align-items:center; gap:8px;"><span style="width:20px;">E</span><div style="margin-left:40%; width:12%; height:14px; background:rgba(78,205,196,0.4); border-radius:3px;"></div></div>
+                                </div>
+                            </div>
+                            <div style="font-size:0.85em;">
+                                <p><strong>충돌 후보:</strong> (A,B), (A,E), (B,E)</p>
+                                <p>D는 다른 것들과 X축에서 겹치지 않음 &rarr; 충돌 체크 불필요!</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -350,25 +347,20 @@ private:
                     </table>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-SAP가 유리한 상황:
-
-1. 물체가 천천히 움직임 (시간 일관성 ↑)
-   ○ → ○    거의 재정렬 없음
-
-2. 한 축에서 분리된 물체가 많음
-   [A]        [B]        [C]
-   → 겹치는 쌍이 적어 빠름
-
-SAP가 불리한 상황:
-
-1. 물체가 순간이동 (시간 일관성 ↓)
-   ○ ──────────────────────→ ○
-
-2. 물체가 한 축에 밀집
-   [A][B][C][D][E][F]  모두 겹침!
-   → 거의 n² 쌍 발생
-                        </pre>
+                        <div class="flow-diagram">
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                                <div style="background:rgba(78,205,196,0.15); border:1px solid rgba(78,205,196,0.4); border-radius:8px; padding:12px;">
+                                    <div style="font-weight:bold; color:#4ecdc4; margin-bottom:8px;">SAP가 유리한 상황</div>
+                                    <div style="font-size:0.85em;">1. 물체가 천천히 움직임 (시간 일관성 &uarr;)<br>&nbsp;&nbsp;&nbsp;거의 재정렬 없음</div>
+                                    <div style="font-size:0.85em; margin-top:6px;">2. 한 축에서 분리된 물체가 많음<br>&nbsp;&nbsp;&nbsp;겹치는 쌍이 적어 빠름</div>
+                                </div>
+                                <div style="background:rgba(255,107,107,0.15); border:1px solid rgba(255,107,107,0.4); border-radius:8px; padding:12px;">
+                                    <div style="font-weight:bold; color:#ff6b6b; margin-bottom:8px;">SAP가 불리한 상황</div>
+                                    <div style="font-size:0.85em;">1. 물체가 순간이동 (시간 일관성 &darr;)</div>
+                                    <div style="font-size:0.85em; margin-top:6px;">2. 물체가 한 축에 밀집<br>&nbsp;&nbsp;&nbsp;거의 n&sup2; 쌍 발생</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -12,9 +12,11 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">← 목록으로</a>
+
+
+        <header class="content-header">
             <h1>"구조체 크기가 왜 예상과 다르죠?"</h1>
             <p class="subtitle">메모리 정렬과 패딩의 비밀</p>
         </header>
@@ -27,34 +29,26 @@
                     <p>CPU는 <strong>정렬된 주소</strong>에서 데이터를 읽을 때 가장 효율적입니다.</p>
 
                     <div class="visual-section">
-                        <pre class="diagram">
-┌─────────────────────────────────────────────────────────────────────┐
-│                    정렬된 접근 vs 비정렬 접근                         │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   메모리 (4바이트 단위로 접근):                                      │
-│   ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┐                │
-│   │  0  │  1  │  2  │  3  │  4  │  5  │  6  │  7  │                │
-│   └─────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┘                │
-│                                                                     │
-│   정렬된 접근 (주소 0에서 int 읽기):                                 │
-│   ┌─────────────────┐                                               │
-│   │ 한 번에 읽기!   │  → 1 사이클                                   │
-│   └─────────────────┘                                               │
-│                                                                     │
-│   비정렬 접근 (주소 1에서 int 읽기):                                 │
-│       ┌─────────────────┐                                           │
-│       │  바이트 1,2,3   │  → 1차 접근                               │
-│       └─────────────────┘                                           │
-│               ┌─────────────────┐                                   │
-│               │    바이트 4     │  → 2차 접근                       │
-│               └─────────────────┘                                   │
-│   + 병합 연산 필요  → 2배 이상 느림!                                │
-│                                                                     │
-│   ※ 일부 CPU(ARM)는 비정렬 접근 시 예외 발생!                       │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                        </pre>
+                        <div class="pipeline">
+                            <div class="pipeline-stage">
+                                <div class="pipeline-label">메모리 (4바이트 단위로 접근)</div>
+                                <div class="pipeline-bar pb-gbuffer"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span></div>
+                            </div>
+                        </div>
+                        <div class="flow-diagram">
+                            <div class="flow-row">
+                                <div class="flow-box flow-box--highlight">
+                                    <div class="flow-box__title">정렬된 접근 (주소 0)</div>
+                                    <div class="flow-box__items">바이트 0,1,2,3을 한 번에 읽기!<br>&rarr; 1 사이클</div>
+                                </div>
+                                <div class="flow-arrow">&nbsp;</div>
+                                <div class="flow-box" style="border-color:#e74c3c">
+                                    <div class="flow-box__title">비정렬 접근 (주소 1)</div>
+                                    <div class="flow-box__items">1차: 바이트 1,2,3 접근<br>2차: 바이트 4 접근<br>+ 병합 연산 필요<br>&rarr; 2배 이상 느림!</div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="diagram-caption">일부 CPU(ARM)는 비정렬 접근 시 예외 발생!</p>
                     </div>
                 </div>
 

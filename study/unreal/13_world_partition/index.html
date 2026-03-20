@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="content-container">
-        <a href="../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
 
         <header class="content-header">
             <h1>끝없이 펼쳐진 세계를 담는 법</h1>
@@ -46,29 +46,48 @@
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-┌─────────────────────────────────────────────────────────────┐
-│                 World Partition 그리드                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│   ┌─────┬─────┬─────┬─────┬─────┬─────┐                    │
-│   │     │     │     │     │     │     │                    │
-│   │     │     │     │     │     │     │                    │
-│   ├─────┼─────┼─────┼─────┼─────┼─────┤                    │
-│   │     │█████│█████│█████│     │     │                    │
-│   │     │█████│█ P █│█████│     │     │ ← 로드된 셀       │
-│   ├─────┼─────┼─────┼─────┼─────┼─────┤   P = 플레이어    │
-│   │     │█████│█████│█████│     │     │                    │
-│   │     │█████│█████│█████│     │     │                    │
-│   ├─────┼─────┼─────┼─────┼─────┼─────┤                    │
-│   │     │     │     │     │     │     │                    │
-│   │     │     │     │     │     │     │                    │
-│   └─────┴─────┴─────┴─────┴─────┴─────┘                    │
-│                                                              │
-│   플레이어 주변 셀만 로드됨 (스트리밍 거리 기반)           │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-group">
+                        <div class="flow-group__title">World Partition 그리드</div>
+                        <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; max-width: 400px; margin: 0 auto;">
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small flow-box--highlight" style="min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small flow-box--highlight" style="min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small flow-box--highlight" style="min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small flow-box--highlight" style="min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small flow-box--highlight" style="min-width:0; padding:8px; font-size:0.7rem; font-weight:600; color:var(--accent-primary);">P</div>
+                            <div class="flow-box flow-box--small flow-box--highlight" style="min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small flow-box--highlight" style="min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small flow-box--highlight" style="min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small flow-box--highlight" style="min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                            <div class="flow-box flow-box--small" style="opacity:0.3; min-width:0; padding:8px;"></div>
+                        </div>
+                        <div class="flow-label" style="margin-top: 8px;">P = 플레이어 | 강조 셀 = 로드됨 | 흐린 셀 = 언로드됨<br>플레이어 주변 셀만 로드됨 (스트리밍 거리 기반)</div>
+                    </div>
+                </div>
                 <p class="diagram-caption">플레이어 위치 기반 셀 스트리밍</p>
             </div>
 
@@ -149,31 +168,38 @@ Maps/
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-Data Layers 예시: 시간대별 마을
-
-┌─────────────────────────────────────────────────┐
-│                같은 위치                        │
-├─────────────────────────────────────────────────┤
-│                                                  │
-│  Layer: Daytime (낮)                            │
-│  ┌─────────────────────────────────┐           │
-│  │  🌳 나무들                       │           │
-│  │  🏠 밝은 집                      │           │
-│  │  👥 NPC들이 돌아다님             │           │
-│  └─────────────────────────────────┘           │
-│                                                  │
-│  Layer: Nighttime (밤)                          │
-│  ┌─────────────────────────────────┐           │
-│  │  🌙 어두운 조명                  │           │
-│  │  🏚️ 창문에 불빛                  │           │
-│  │  🦇 밤 NPC들                     │           │
-│  └─────────────────────────────────┘           │
-│                                                  │
-│  게임 시간에 따라 Layer 전환                    │
-│                                                  │
-└─────────────────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-group">
+                        <div class="flow-group__title">Data Layers 예시: 시간대별 마을 (같은 위치)</div>
+                        <div class="flow-side-by-side">
+                            <div class="flow-group">
+                                <div class="flow-group__title">Layer: Daytime (낮)</div>
+                                <div class="flow-box flow-box--info" style="width: 100%; text-align: left;">
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>나무들</li>
+                                            <li>밝은 집</li>
+                                            <li>NPC들이 돌아다님</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flow-group">
+                                <div class="flow-group__title">Layer: Nighttime (밤)</div>
+                                <div class="flow-box" style="width: 100%; text-align: left; border-color: #6366f1; background: rgba(99,102,241,0.08);">
+                                    <div class="flow-box__items">
+                                        <ul>
+                                            <li>어두운 조명</li>
+                                            <li>창문에 불빛</li>
+                                            <li>밤 NPC들</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flow-label" style="margin-top: 8px;">게임 시간에 따라 Layer 전환</div>
+                    </div>
+                </div>
                 <p class="diagram-caption">Data Layer로 낮/밤 전환</p>
             </div>
 
@@ -208,26 +234,30 @@ void AMyGameMode::SwitchToNight()
             </div>
 
             <div class="visual-section">
-                <pre class="diagram">
-HLOD 동작 방식:
-
-가까운 거리: 개별 메시 렌더링
-┌─────────────────────────────────────┐
-│   🏠  🏠  🏠  🌳  🌳  🏠  🏠       │
-│   각각 별도 드로우콜 (7 calls)     │
-└─────────────────────────────────────┘
-                │
-                │ 거리 증가
-                ▼
-먼 거리: HLOD 프록시 메시
-┌─────────────────────────────────────┐
-│   ┌─────────────────────────┐       │
-│   │  ████████████████████  │       │
-│   │   (병합된 프록시 메시)  │       │
-│   └─────────────────────────┘       │
-│   1 드로우콜                        │
-└─────────────────────────────────────┘
-                </pre>
+                <div class="flow-diagram">
+                    <div class="flow-column">
+                        <div class="flow-box flow-box--wide">
+                            <div class="flow-box__title">가까운 거리: 개별 메시 렌더링</div>
+                            <div class="flow-box__items">
+                                <div class="flow-row" style="justify-content: center; gap: 4px; flex-wrap: wrap;">
+                                    <div class="flow-box flow-box--small" style="min-width: 40px; padding: 4px 6px; font-size: 0.7rem;">집</div>
+                                    <div class="flow-box flow-box--small" style="min-width: 40px; padding: 4px 6px; font-size: 0.7rem;">집</div>
+                                    <div class="flow-box flow-box--small" style="min-width: 40px; padding: 4px 6px; font-size: 0.7rem;">집</div>
+                                    <div class="flow-box flow-box--small" style="min-width: 40px; padding: 4px 6px; font-size: 0.7rem;">나무</div>
+                                    <div class="flow-box flow-box--small" style="min-width: 40px; padding: 4px 6px; font-size: 0.7rem;">나무</div>
+                                    <div class="flow-box flow-box--small" style="min-width: 40px; padding: 4px 6px; font-size: 0.7rem;">집</div>
+                                    <div class="flow-box flow-box--small" style="min-width: 40px; padding: 4px 6px; font-size: 0.7rem;">집</div>
+                                </div>
+                                <div style="margin-top: 4px;">각각 별도 드로우콜 (7 calls)</div>
+                            </div>
+                        </div>
+                        <span class="flow-arrow-down">↓ 거리 증가</span>
+                        <div class="flow-box flow-box--highlight flow-box--wide">
+                            <div class="flow-box__title">먼 거리: HLOD 프록시 메시</div>
+                            <div class="flow-box__items">병합된 프록시 메시 = 1 드로우콜</div>
+                        </div>
+                    </div>
+                </div>
                 <p class="diagram-caption">HLOD로 원거리 최적화</p>
             </div>
 
