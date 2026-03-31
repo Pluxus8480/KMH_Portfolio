@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C#의 string | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">← 목록으로</a>
+        <header class="content-header">
+            <h1>문자열을 수정했을 뿐인데 가비지가 생긴다고?</h1>
+            <p class="subtitle">C#의 string 불변성과 StringBuilder의 동작 원리</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: string은 왜 불변(Immutable)인가?</h2>
+            <div class="conversation">
+                <div class="q">C#에서 string이 불변(immutable)인 이유는 무엇인가요?</div>
+                <div class="a">
+                    <p>멀티스레드 환경을 고려한 설계입니다. 여러 스레드가 동시에 문자열에 접근할 때, 동기화 처리를 하는 것보다 <strong>읽기 전용</strong>으로 만드는 것이 비용이 더 저렴하기 때문입니다.</p>
+                    <p class="highlight">string에 대한 조작(+=, -= 등)을 하면 이전 객체에서 복사 후 연산을 하고 새로운 객체에 대입합니다. 이전 객체는 가비지가 되어 GC의 처리를 받게 됩니다.</p>
+                </div>
+
+                <div class="q">그러면 문자열 수정이 많은 경우에는 어떻게 해야 하나요?</div>
+                <div class="a">
+                    <p>수정이 많이 일어날 것으로 예상되는 문자열이라면 <code>StringBuilder</code> 클래스를 사용하는 것이 좋습니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>string은 마치 <strong>메모장에 펜으로 쓴 글씨</strong>와 같습니다. 한 글자를 고치려면 새 메모장에 처음부터 다시 써야 합니다.</p>
+                        <p>StringBuilder는 <strong>화이트보드</strong>와 같습니다. 이미 적힌 내용을 지우고 다시 쓸 수 있어서 훨씬 효율적입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: StringBuilder는 어떻게 동작하는가?</h2>
+            <div class="conversation">
+                <div class="q">StringBuilder가 string보다 수정에 유리한 원리는 무엇인가요?</div>
+                <div class="a">
+                    <p>StringBuilder는 기본적으로 <strong>16문자</strong>를 담을 수 있는 버퍼를 미리 할당합니다. 이 할당된 크기 내에서는 어떤 수정을 해도 가비지가 생성되지 않습니다.</p>
+                    <p class="highlight">미리 할당한 버퍼가 가득 찬 상태에서 Append를 하면, 새 버퍼를 할당한 뒤 버퍼 간 링크를 구성합니다. (.NET 4.0 이후)</p>
+                    <p class="warning">.NET 4.0 이전에는 C++의 vector처럼 이전 버퍼를 GC로 넘기고 새 버퍼를 할당하는 방식이었습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 나쁜 예 - 매번 새 string 객체 생성, 가비지 발생
+string result = "";
+for (int i = 0; i &lt; 1000; i++)
+{
+    result += i.ToString(); // 매 반복마다 가비지!
+}
+
+// 좋은 예 - StringBuilder 사용
+StringBuilder sb = new StringBuilder();
+for (int i = 0; i &lt; 1000; i++)
+{
+    sb.Append(i.ToString()); // 버퍼 내에서 처리
+}
+string result = sb.ToString();</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>C#의 string은 멀티스레드 안전성을 위해 불변(immutable)으로 설계되었다</li>
+                <li>string 수정 시 새 객체가 생성되며, 이전 객체는 가비지가 된다</li>
+                <li>StringBuilder는 미리 할당된 버퍼를 사용하여 가비지 생성 없이 문자열을 수정한다</li>
+                <li>.NET 4.0 이후 StringBuilder는 버퍼 초과 시 링크 방식으로 확장한다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

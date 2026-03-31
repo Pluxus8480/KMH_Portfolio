@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>전략 패턴 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>무기를 바꿔도 공격 코드는 그대로</h1>
+            <p class="subtitle">전략 패턴(Strategy Pattern)으로 유연한 행동 교체하기</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 전략 패턴이란?</h2>
+            <div class="conversation">
+                <div class="q">전략 패턴의 정의는?</div>
+                <div class="a">
+                    <p class="highlight">전략 패턴은 인터페이스를 통해 특정 행동들을 묶고, 이를 런타임에 교환하면서 사용하는 패턴입니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>캐릭터가 "공격" 버튼을 누르면, 지금 들고 있는 무기에 따라 다른 공격이 나갑니다.</p>
+                        <p>무기가 바뀌어도 "공격 버튼을 누른다"는 코드는 변하지 않습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 구현 예시</h2>
+            <div class="conversation">
+                <div class="q">게임에서 전략 패턴을 어떻게 적용하나요?</div>
+                <div class="a">
+                    <p>캐릭터의 무기가 총과 칼이 있다고 할 때:</p>
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>// IWeapon.h - 전략 인터페이스
+class IWeapon
+{
+public:
+    virtual void Attack() = 0;
+};
+
+// Player.h - 전략을 사용하는 컨텍스트
+class Player
+{
+    IWeapon* Weapon;
+
+    // 공격 키가 눌리면
+    void OnAttack() {
+        Weapon-&gt;Attack();  // 어떤 무기든 동일한 호출
+    }
+};
+
+// 구체적인 전략들
+class Sword : public IWeapon
+{
+    void Attack() override
+    {
+        // 검을 휘두른다
+    }
+};
+
+class Gun : public IWeapon
+{
+    void Attack() override
+    {
+        // 총을 쏜다
+    }
+};</code></pre>
+                    </div>
+                    <p class="key-point">플레이어가 무기를 변경해도 IWeapon 인터페이스만 알면 되므로, 플레이어 코드 변경 없이 무기 교체가 가능합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 핵심 가치</h2>
+            <div class="conversation">
+                <div class="q">전략 패턴의 핵심 가치는 무엇인가요?</div>
+                <div class="a">
+                    <p class="highlight">구체적인 클래스와 알고리즘 사이의 결합도를 낮추는 디자인 패턴입니다.</p>
+                    <p>구체 클래스를 수정하는 일이 줄어들어 유지보수에 큰 도움이 됩니다.</p>
+                    <p class="key-point">면접에서는 정의를 바로 말하기보다, 본인의 프로젝트에서 전략 패턴을 활용한 경험을 예시로 드는 것이 좋습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>전략 패턴은 인터페이스로 행동을 추상화하고 런타임에 교체하는 패턴</li>
+                <li>구체 클래스와 알고리즘 간 결합도를 낮춤</li>
+                <li>새로운 전략(무기, 행동 등) 추가 시 기존 코드 수정 불필요</li>
+                <li>면접에서는 실제 프로젝트 적용 경험을 예시로 드는 것이 효과적</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

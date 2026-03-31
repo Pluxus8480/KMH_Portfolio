@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메모리 단편화 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>메모리가 남는데 왜 할당이 안 될까?</h1>
+            <p class="subtitle">메모리 단편화(Memory Fragmentation)의 원인과 해결법</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 메모리 단편화란?</h2>
+            <div class="conversation">
+                <div class="q">메모리 단편화가 무엇인가요?</div>
+                <div class="a">
+                    <p class="highlight">메모리 단편화는 사용 가능한 메모리는 충분하지만, 흩어져 있어서 할당이 불가능한 경우를 의미합니다.</p>
+                    <p>종류는 <strong>외부 단편화</strong>와 <strong>내부 단편화</strong> 2가지가 있습니다.</p>
+                </div>
+
+                <div class="q">내부 단편화와 외부 단편화의 차이는?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>내부 단편화</th>
+                                <th>외부 단편화</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>정의</td>
+                                <td>프로세스에 필요한 것보다 많은 메모리를 할당</td>
+                                <td>전체 메모리는 충분하지만 연속 공간이 부족</td>
+                            </tr>
+                            <tr>
+                                <td>원인</td>
+                                <td>고정 크기 할당</td>
+                                <td>할당/해제 반복</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p><strong>내부 단편화:</strong> 1인실에 혼자 사는데 3인실을 배정받은 것 - 남는 공간이 낭비</p>
+                        <p><strong>외부 단편화:</strong> 주차장에 빈 자리가 여기저기 흩어져 있어서 대형 버스가 주차할 연속 공간이 없는 것</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 외부 단편화 해결법</h2>
+            <div class="conversation">
+                <div class="q">외부 단편화는 어떻게 해결하나요?</div>
+                <div class="a">
+                    <p><strong>1. 페이징(Paging)</strong></p>
+                    <p>보조 기억장치를 메모리처럼 구역을 나눈 뒤 필요한 부분을 메모리로 옮겨서 사용합니다.</p>
+                    <p class="highlight">페이지(Page)는 프로세스를 일정한 크기로 나눈 것을 의미합니다.</p>
+                    <ul>
+                        <li>첫 페이지를 우선 로드 후 이후 페이지를 차례로 로드</li>
+                        <li>프로세스가 같은 페이지를 사용한다면 공유하여 메모리 절약 가능</li>
+                        <li>페이지 테이블(PTBR)이 필요하여 시간/공간적 오버헤드 발생</li>
+                        <li>시간적 오버헤드는 TLB(Translation Lookaside Buffer)로 해결</li>
+                    </ul>
+
+                    <p><strong>2. 압축(Compaction)</strong></p>
+                    <p>삭제 공간들을 회수해 메모리를 정리하는 방식이지만, 비용이 많이 드는 작업입니다.</p>
+
+                    <p><strong>3. 통합(Coalescing)</strong></p>
+                    <p>인접한 빈 메모리 블록들을 합치는 작업으로, 압축보다 가벼운 방식입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 내부 단편화 해결법</h2>
+            <div class="conversation">
+                <div class="q">내부 단편화는 어떻게 해결하나요?</div>
+                <div class="a">
+                    <p><strong>세그멘테이션(Segmentation)</strong></p>
+                    <p>페이징이 일정 크기로 나누는 것이라면, 세그멘테이션은 <strong>논리 단위</strong>로 나누는 것입니다.</p>
+                    <ul>
+                        <li>논리 단위의 크기가 일정하지 않음</li>
+                        <li>논리 주소와 물리 주소를 매핑하는 테이블이 필요</li>
+                    </ul>
+                    <p class="warning">세그멘테이션은 외부 단편화가 발생할 우려가 있고, 크기가 제멋대로이기 때문에 실무에서는 페이징을 더 많이 사용합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 둘 다 해결하는 방법 - 메모리 풀</h2>
+            <div class="conversation">
+                <div class="q">내부/외부 단편화를 동시에 해결하는 방법이 있나요?</div>
+                <div class="a">
+                    <p class="highlight">메모리 풀(Memory Pool)은 필요한 메모리를 미리 할당받아 두고, 필요할 때 가져다 쓰고 반납하는 기법입니다.</p>
+                    <ul>
+                        <li>풀링 없이 할당/해제를 반복하면 단편화 발생</li>
+                        <li>미리 할당받은 공간을 가져다 쓰고 반납하므로 <strong>외부 단편화 없음</strong></li>
+                        <li>"필요한 만큼" 가져다 쓰므로 <strong>내부 단편화도 없음</strong></li>
+                    </ul>
+                    <p class="key-point">오브젝트 풀링과 비슷한 개념이며, 할당/해제가 빈번한 경우 매우 유용합니다. 게임 개발에서 총알, 이펙트 등에 자주 사용됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>내부 단편화:</strong> 필요보다 많은 메모리 할당으로 발생하는 낭비</li>
+                <li><strong>외부 단편화:</strong> 연속 공간 부족으로 발생하는 할당 실패</li>
+                <li>외부 단편화 해결: 페이징, 압축, 통합</li>
+                <li>내부 단편화 해결: 세그멘테이션 (그러나 외부 단편화 우려)</li>
+                <li><strong>메모리 풀</strong>은 내부/외부 단편화를 동시에 해결하는 효과적인 방법</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

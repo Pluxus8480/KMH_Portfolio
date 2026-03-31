@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>어댑터 패턴 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>플러그가 안 맞으면 변환기를 쓰면 된다</h1>
+            <p class="subtitle">어댑터 패턴(Adapter Pattern) - 호환되지 않는 인터페이스를 연결하는 기법</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 어댑터 패턴이란?</h2>
+            <div class="conversation">
+                <div class="q">어댑터 패턴이 뭔가요?</div>
+                <div class="a">
+                    <p>어댑터 패턴은 <strong>클래스의 인터페이스를 클라이언트가 기대하는 인터페이스로 변환</strong>해주는 구조 패턴입니다.</p>
+                    <p class="highlight">서로 호환되지 않는 인터페이스를 가진 클래스들이 함께 동작할 수 있도록 중간에 변환 계층을 두는 것이 핵심입니다.</p>
+                </div>
+
+                <div class="q">쉽게 비유하면 어떤 건가요?</div>
+                <div class="a">
+                    <div class="analogy-box">
+                        <strong>비유로 이해하기</strong>
+                        <p>해외여행을 가면 콘센트 모양이 다른 경우가 많습니다. 한국 플러그를 유럽 콘센트에 꽂으려면 <strong>플러그 변환기(어댑터)</strong>가 필요하죠.</p>
+                        <p>소프트웨어에서도 마찬가지입니다. 기존에 잘 동작하는 클래스가 있는데, 새로운 시스템의 인터페이스와 맞지 않을 때 어댑터를 끼워서 연결해주는 것입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 어댑터 패턴의 구조</h2>
+            <div class="conversation">
+                <div class="q">어댑터 패턴의 구조는 어떻게 되나요?</div>
+                <div class="a">
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Client</div>
+                                <div class="flow-box__items">Target 인터페이스를 사용</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Adapter</div>
+                                <div class="flow-box__items">Target 인터페이스 구현 + Adaptee 호출</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Adaptee</div>
+                                <div class="flow-box__items">실제 기능을 가진 기존 클래스</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>클라이언트는 Target 인터페이스만 알면 됩니다. Adapter가 내부적으로 Adaptee의 메서드를 호출하여 변환 작업을 수행합니다.</p>
+                </div>
+
+                <div class="q">코드로 보면 어떻게 되나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>// Target 인터페이스 - 클라이언트가 기대하는 형태
+class ITarget {
+public:
+    virtual void Request() = 0;
+};
+
+// Adaptee - 이미 존재하는 클래스 (인터페이스가 다름)
+class Adaptee {
+public:
+    void SpecificRequest() {
+        // 실제 기능 수행
+    }
+};
+
+// Adapter - 변환기 역할
+class Adapter : public ITarget {
+private:
+    Adaptee* adaptee;
+public:
+    Adapter(Adaptee* a) : adaptee(a) {}
+
+    void Request() override {
+        // Target의 Request()를 Adaptee의 SpecificRequest()로 변환
+        adaptee-&gt;SpecificRequest();
+    }
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 면접에서 자주 나오는 질문</h2>
+            <div class="conversation">
+                <div class="q">어댑터 패턴은 언제 사용하나요?</div>
+                <div class="a">
+                    <p>다음과 같은 상황에서 유용합니다:</p>
+                    <ul>
+                        <li><strong>레거시 코드 통합</strong> - 기존 라이브러리를 새 시스템에 맞춰야 할 때</li>
+                        <li><strong>서드파티 라이브러리 교체</strong> - 외부 라이브러리를 교체하되 기존 코드 변경을 최소화할 때</li>
+                        <li><strong>인터페이스 불일치 해소</strong> - 두 시스템의 인터페이스가 맞지 않을 때</li>
+                    </ul>
+                    <p class="key-point">핵심은 "기존 코드를 수정하지 않고" 새로운 인터페이스에 맞출 수 있다는 점입니다. 개방-폐쇄 원칙(OCP)을 잘 따르는 패턴입니다.</p>
+                </div>
+
+                <div class="q">클래스 어댑터와 객체 어댑터의 차이는?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>클래스 어댑터</th>
+                                <th>객체 어댑터</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>구현 방식</td>
+                                <td>다중 상속 사용</td>
+                                <td>컴포지션(합성) 사용</td>
+                            </tr>
+                            <tr>
+                                <td>유연성</td>
+                                <td>Adaptee의 서브클래스도 사용 불가</td>
+                                <td>Adaptee의 서브클래스도 어댑팅 가능</td>
+                            </tr>
+                            <tr>
+                                <td>언어 제약</td>
+                                <td>다중 상속 지원 언어 필요</td>
+                                <td>대부분 언어에서 사용 가능</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">C++은 다중 상속을 지원하므로 두 방식 모두 가능하지만, Java/C# 등에서는 객체 어댑터 방식을 사용합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>어댑터 패턴은 호환되지 않는 인터페이스를 변환하여 함께 동작할 수 있게 해주는 구조 패턴이다</li>
+                <li>플러그 변환기처럼, 기존 클래스의 코드를 수정하지 않고 새로운 인터페이스에 맞출 수 있다</li>
+                <li>클래스 어댑터(상속)와 객체 어댑터(합성) 두 가지 방식이 있으며, 일반적으로 객체 어댑터가 더 유연하다</li>
+                <li>레거시 코드 통합, 서드파티 라이브러리 교체 등의 상황에서 유용하다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

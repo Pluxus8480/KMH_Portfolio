@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가상 함수 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>반드시 재정의해야 하는 약속</h1>
+            <p class="subtitle">C++ 순수 가상 함수와 추상 클래스</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 순수 가상 함수란?</h2>
+            <div class="conversation">
+                <div class="q">순수 가상 함수는 무엇인가요?</div>
+                <div class="a">
+                    <p class="highlight">순수 가상 함수는 함수의 정의(구현)가 이루어지지 않고 <strong>선언만</strong> 한 가상 함수입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>class Animal {
+public:
+    virtual void Speak() = 0;  // 순수 가상 함수 - = 0 으로 선언
+};</code></pre>
+                    </div>
+
+                    <p>이렇게 순수 가상 함수가 하나라도 있는 클래스를 <strong>추상 클래스(abstract class)</strong>라고 부릅니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>&#x1F3AF; 비유로 이해하기</strong>
+                        <p>추상 클래스는 "설계도"와 같습니다. "동물은 소리를 낸다"는 규칙(순수 가상 함수)은 정해져 있지만, 구체적으로 어떤 소리를 내는지는 각 동물(자식 클래스)이 직접 정의해야 합니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">추상 클래스는 객체로 만들 수 있나요?</div>
+                <div class="a">
+                    <p class="warning">추상 클래스는 객체로 만들 수 없습니다. 오직 <strong>상속</strong>으로만 사용됩니다.</p>
+                    <p>그리고 추상 클래스를 상속받은 자식 클래스는 <strong>무조건 해당 순수 가상 함수를 override</strong> 해줘야 합니다. 구현하지 않으면 자식 클래스도 추상 클래스가 됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>class Animal {
+public:
+    virtual void Speak() = 0;
+};
+
+class Dog : public Animal {
+public:
+    void Speak() override {   // 반드시 구현해야 함!
+        std::cout &lt;&lt; "멍멍!" &lt;&lt; std::endl;
+    }
+};
+
+// Animal a;    // ERROR - 추상 클래스는 객체 생성 불가
+Dog d;          // OK - 순수 가상 함수를 구현했으므로 가능</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 순수 가상 함수 vs 일반 가상 함수</h2>
+            <div class="conversation">
+                <div class="q">일반 가상 함수와 어떤 차이가 있나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>순수 가상 함수</th>
+                                <th>일반 가상 함수</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>선언</td>
+                                <td><code>virtual void foo() = 0;</code></td>
+                                <td><code>virtual void foo() { ... }</code></td>
+                            </tr>
+                            <tr>
+                                <td>기본 구현</td>
+                                <td>없음</td>
+                                <td>있음 (부모의 구현 사용 가능)</td>
+                            </tr>
+                            <tr>
+                                <td>자식 재정의</td>
+                                <td>필수 (안 하면 컴파일 에러)</td>
+                                <td>선택 (안 해도 됨)</td>
+                            </tr>
+                            <tr>
+                                <td>부모 객체 생성</td>
+                                <td>불가능 (추상 클래스)</td>
+                                <td>가능</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="highlight">순수 가상 함수는 <strong>반드시 재정의</strong>를 해줘야 하지만, 일반 가상 함수는 재정의를 하지 않아도 되기 때문에 프로그램에서 오류로 보지 않습니다.</p>
+                    <p class="key-point">인터페이스처럼 "이 함수는 반드시 구현해라"라는 강제 계약이 필요할 때 순수 가상 함수를 사용합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>&#x1F4CC; 핵심 정리</h3>
+            <ul>
+                <li>순수 가상 함수는 <code>= 0</code>으로 선언하며, 구현 없이 선언만 존재</li>
+                <li>순수 가상 함수가 있는 클래스는 <strong>추상 클래스</strong>가 되어 객체 생성 불가</li>
+                <li>자식 클래스는 순수 가상 함수를 <strong>반드시 override</strong> 해야 함</li>
+                <li>일반 가상 함수는 재정의가 선택이지만, 순수 가상 함수는 <strong>필수</strong></li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

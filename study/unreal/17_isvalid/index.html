@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IsValid vs nullptr vs check | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unreal.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>nullptr 체크만으로 충분할까?</h1>
+            <p class="subtitle">언리얼 엔진의 IsValid, == nullptr, check의 차이와 올바른 사용법</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: IsValid 함수</h2>
+            <div class="conversation">
+                <div class="q">IsValid는 단순한 null 체크인가요?</div>
+                <div class="a">
+                    <p>아닙니다. <code>IsValid</code>는 단순 nullptr 체크뿐 아니라 <strong>내부 플래그도 검사</strong>하는 작업을 거칩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C++ - IsValid 구현</div>
+                        <pre><code>FORCEINLINE bool IsValid(const UObject *Test)
+{
+    return Test &amp;&amp;
+        FInternalUObjectBaseUtilityIsValidFlagsChecker
+            ::CheckObjectValidBasedOnItsFlags(Test);
+}</code></pre>
+                    </div>
+                    <p class="highlight">IsValid는 세 가지를 검사합니다: nullptr인지, 가비지(Garbage)인지, PendingKill인지.</p>
+                </div>
+
+                <div class="q">내부 플래그 검사는 구체적으로 뭘 확인하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C++ - 플래그 검사 Functor</div>
+                        <pre><code>struct FInternalUObjectBaseUtilityIsValidFlagsChecker
+{
+    FORCEINLINE static bool CheckObjectValidBasedOnItsFlags(
+        const UObject* Test)
+    {
+        return !Test-&gt;HasAnyFlags(
+            RF_InternalPendingKill | RF_InternalGarbage);
+    }
+};</code></pre>
+                    </div>
+                    <p><code>PendingKill</code>과 <code>InternalGarbage</code> 플래그를 확인합니다. GC에 의해 수거 대기 중인 객체도 걸러내는 것이죠.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: == nullptr과의 차이</h2>
+            <div class="conversation">
+                <div class="q">그럼 == nullptr은 뭐가 부족한 건가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>== nullptr</th>
+                                <th>IsValid</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>nullptr 검사</td>
+                                <td>O</td>
+                                <td>O</td>
+                            </tr>
+                            <tr>
+                                <td>PendingKill 검사</td>
+                                <td>X</td>
+                                <td>O</td>
+                            </tr>
+                            <tr>
+                                <td>Garbage 검사</td>
+                                <td>X</td>
+                                <td>O</td>
+                            </tr>
+                            <tr>
+                                <td>안전성</td>
+                                <td>낮음</td>
+                                <td>높음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">== nullptr만으로는 GC가 수거 예정인 객체를 잡아내지 못합니다. UObject를 다룰 때는 IsValid를 사용하는 것이 안전합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: check, ensure 등의 Assert</h2>
+            <div class="conversation">
+                <div class="q">check와 ensure는 어떤 함수인가요?</div>
+                <div class="a">
+                    <p>이런 Assert 함수들은 <strong>에디터에서만 동작</strong>하는 함수로, 내부 조건이 true/false인지에 따라 동작이 달라집니다.</p>
+                    <p>이들은 포인터의 <code>operator bool()</code> 연산에 기반하므로, 결론적으로는 <strong>nullptr과 비교하는 것과 동일한 결과</strong>를 냅니다.</p>
+                    <p class="key-point">중요: 빌드(Shipping)를 하게 되면 check/ensure 코드는 사라집니다. 따라서 런타임 안전성 검사로 사용해서는 안 됩니다.</p>
+                </div>
+
+                <div class="q">정리하면 언제 어떤 걸 써야 하나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>함수</th>
+                                <th>용도</th>
+                                <th>빌드 포함 여부</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>IsValid()</td>
+                                <td>UObject 유효성 검사 (nullptr + GC 상태)</td>
+                                <td>O (항상 포함)</td>
+                            </tr>
+                            <tr>
+                                <td>== nullptr</td>
+                                <td>단순 포인터 null 체크</td>
+                                <td>O (항상 포함)</td>
+                            </tr>
+                            <tr>
+                                <td>check()</td>
+                                <td>개발 중 디버깅용 Assert</td>
+                                <td>X (빌드 시 제거)</td>
+                            </tr>
+                            <tr>
+                                <td>ensure()</td>
+                                <td>개발 중 경고용 Assert</td>
+                                <td>X (빌드 시 제거)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>IsValid는 nullptr 체크 + PendingKill + Garbage 플래그까지 검사하는 가장 안전한 방법이다</li>
+                <li>== nullptr은 단순 포인터 비교만 수행하므로, GC 대기 중인 UObject를 잡아내지 못한다</li>
+                <li>check/ensure는 에디터 전용 Assert로, Shipping 빌드에서는 코드가 제거된다</li>
+                <li>UObject를 다룰 때는 반드시 IsValid를 사용하는 것이 권장된다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

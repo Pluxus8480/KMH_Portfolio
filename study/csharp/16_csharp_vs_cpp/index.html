@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C# vs C++ | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp.html" class="back-link">← 목록으로</a>
+        <header class="content-header">
+            <h1>C#이 정말 C++보다 느릴까?</h1>
+            <p class="subtitle">C# vs C++ 성능 비교 - GC, VM, TMP와 리플렉션의 진실</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: GC - 가비지 컬렉션의 오버헤드</h2>
+            <div class="conversation">
+                <div class="q">C#이 C++보다 느린 이유가 GC 때문이라는데, 정말인가요?</div>
+                <div class="a">
+                    <p>흔히 "C#은 GC가 있어서 C++보다 느리다"라고 말하지만, 이는 완벽한 답이 아닙니다. C++도 <code>delete</code>를 통해 메모리를 해제하므로 사실상 비슷한 작업을 수행합니다.</p>
+                    <p class="highlight">C#의 GC는 Mark and Sweep 알고리즘에 기반하여 힙에 할당된 객체에 대한 포인터 추적을 실행합니다. 이로 인해 C++의 생성-소멸 주기보다 오버헤드가 발생하는 것은 맞습니다.</p>
+                    <p>수많은 객체를 생성한 후 나중에 GC를 돌리면 더 많은 시간이 소요되어 속도가 느려질 수 있습니다.</p>
+                </div>
+
+                <div class="q">그러면 C#은 이 문제를 그냥 방치하나요?</div>
+                <div class="a">
+                    <p>아닙니다. C#은 <strong>세대 기반 알고리즘</strong>을 도입하여 '살아 있을 가능성이 높은 객체'를 상위 세대로 이동시켜 GC 시간을 줄이는 최적화를 수행합니다.</p>
+                    <p class="key-point">이런 최적화 덕분에 GC로 인한 성능 차이를 측정하는 것 자체가 무의미하다는 의견도 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 가상 머신(VM) - 정말 느린가?</h2>
+            <div class="conversation">
+                <div class="q">VM을 사용하면 무조건 느린 거 아닌가요?</div>
+                <div class="a">
+                    <p>"VM을 사용하면 느리다"라는 말의 주된 이유는 초기 구동 시 <strong>JIT 컴파일러</strong>를 위해 대기하는 과정이 있기 때문입니다.</p>
+                    <p class="highlight">하지만 한번 실행되면 이후에는 여러 번 재사용할 수 있기에 이 오버헤드를 단순 비교하기 어렵습니다. 대부분의 언어 벤치마크가 비판받는 이유이기도 합니다.</p>
+                </div>
+
+                <div class="q">JIT이 오히려 장점이 되는 경우도 있나요?</div>
+                <div class="a">
+                    <p>네, 있습니다. C++로 작성된 프로그램은 대부분 32비트 코드로 컴파일되며, 64비트 프로세서에서도 32비트로 동작합니다.</p>
+                    <p class="key-point">JIT을 사용하는 C#은 타겟 플랫폼을 이해할 수 있어서 64비트에 맞춰 컴파일이 가능합니다. C++로 이 작업을 하려면 훨씬 복잡해집니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: C++의 TMP vs C#의 리플렉션</h2>
+            <div class="conversation">
+                <div class="q">C++의 템플릿 메타프로그래밍(TMP)이 C#보다 빠른 이유는 무엇인가요?</div>
+                <div class="a">
+                    <p>C++의 TMP는 <strong>컴파일 시간</strong>에 계산을 수행하는 정적 프로그래밍입니다. 예를 들어 TMP로 팩토리얼을 O(1)로 계산할 수 있습니다.</p>
+                    <p class="warning">하지만 이는 컴파일 타임에만 가능하며, 사용자 입력에 따른 유동적인 계산은 불가능합니다. 런타임에 수행될 수 없다는 명확한 단점이 있습니다.</p>
+                </div>
+
+                <div class="q">C#의 리플렉션은 어떤 차이가 있나요?</div>
+                <div class="a">
+                    <p>C#은 <strong>런타임에 리플렉션</strong>을 통해 타입 정보를 조회하고 동적으로 작업을 수행합니다. 런타임이라는 특성 때문에 느릴 수 있지만, 유연성 면에서는 확실한 장점이 있습니다.</p>
+                    <p class="highlight">이는 명확한 Trade-off입니다. 컴파일 타임 성능 vs 런타임 유연성 사이의 선택인 것이죠.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 결론 - 무엇이 더 빠른가?</h2>
+            <div class="conversation">
+                <div class="q">면접에서 "C#과 C++ 중 무엇이 더 빠르나요?"라고 물으면 어떻게 답해야 하나요?</div>
+                <div class="a">
+                    <p>대부분의 경우에서 C++이 속도적으로 우세하다는 것이 일반적인 견해입니다. 하지만 이는 '대부분'이지 '100%'가 아닙니다.</p>
+                    <p class="highlight">단순한 벤치마크 결과를 맹신하기보다는, 본인의 환경에서 본인의 코드를 기준으로 성능을 비교하는 것이 중요합니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>C++</th>
+                                <th>C#</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>메모리 관리</td>
+                                <td>수동 (new/delete)</td>
+                                <td>자동 (GC, Mark &amp; Sweep)</td>
+                            </tr>
+                            <tr>
+                                <td>컴파일</td>
+                                <td>네이티브 코드 직접 컴파일</td>
+                                <td>JIT 컴파일 (플랫폼 최적화 가능)</td>
+                            </tr>
+                            <tr>
+                                <td>메타프로그래밍</td>
+                                <td>TMP (컴파일 타임)</td>
+                                <td>리플렉션 (런타임)</td>
+                            </tr>
+                            <tr>
+                                <td>일반적 성능</td>
+                                <td>대부분 우세</td>
+                                <td>특정 상황에서 경쟁력 있음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>C#의 GC는 Mark and Sweep 기반이며 세대별 최적화로 오버헤드를 줄이고 있다</li>
+                <li>JIT 컴파일은 초기 구동 비용이 있지만, 플랫폼 최적화 등의 이점이 있다</li>
+                <li>C++의 TMP는 컴파일 타임 성능, C#의 리플렉션은 런타임 유연성이라는 Trade-off</li>
+                <li>대부분의 경우 C++이 빠르지만, 100%는 아니므로 실제 환경에서의 벤치마크가 중요하다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

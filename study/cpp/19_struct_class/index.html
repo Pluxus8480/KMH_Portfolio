@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>struct vs class | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>같은 듯 다른 두 얼굴</h1>
+            <p class="subtitle">C++에서 struct와 class의 차이점</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 기본 접근 지정자의 차이</h2>
+            <div class="conversation">
+                <div class="q">struct와 class는 어떤 차이가 있나요?</div>
+                <div class="a">
+                    <p>C++에서 struct와 class의 가장 큰 차이는 <strong>기본 접근 지정자</strong>입니다.</p>
+                    <p class="highlight">class는 기본 접근 지정자가 <code>private</code>이고, struct는 기본 접근 지정자가 <code>public</code>입니다.</p>
+                    <p>즉, 접근 지정자를 명시하지 않으면 class의 멤버는 외부에서 접근할 수 없고, struct의 멤버는 외부에서 자유롭게 접근할 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 초기화 방식의 차이</h2>
+            <div class="conversation">
+                <div class="q">초기화 방식에서도 차이가 있나요?</div>
+                <div class="a">
+                    <p>네, struct는 중괄호 초기화(aggregate initialization)가 가능하지만, class는 기본 접근 지정자가 private이기 때문에 동일한 방식의 초기화가 불가능합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>struct SomeStruct
+{
+    int var;
+    int varPrivate;
+};
+
+class SomeClass
+{
+    int var;
+    int varPrivate;
+};
+
+int main(){
+    SomeStruct someS = {1, 2};   // OK - public이므로 가능
+    SomeClass  someC = {1, 2};   // ERROR - private이므로 불가능
+}</code></pre>
+                    </div>
+
+                    <p class="key-point">struct는 모든 멤버가 기본적으로 public이기 때문에 중괄호 초기화가 바로 가능하지만, class는 멤버가 private이므로 외부에서 직접 값을 넣을 수 없습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 실무에서의 사용 관례</h2>
+            <div class="conversation">
+                <div class="q">그러면 언제 struct를 쓰고 언제 class를 쓰나요?</div>
+                <div class="a">
+                    <p>문법적으로는 접근 지정자 외에 거의 동일하지만, 실무에서는 다음과 같은 관례가 있습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>struct</th>
+                                <th>class</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>기본 접근 지정자</td>
+                                <td>public</td>
+                                <td>private</td>
+                            </tr>
+                            <tr>
+                                <td>주 용도</td>
+                                <td>단순 데이터 묶음 (POD)</td>
+                                <td>캡슐화가 필요한 객체</td>
+                            </tr>
+                            <tr>
+                                <td>관례</td>
+                                <td>멤버 함수가 거의 없는 경우</td>
+                                <td>멤버 함수와 은닉이 필요한 경우</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">struct와 class는 기본 접근 지정자 외에는 기능적으로 동일합니다. 상속, 가상함수, 템플릿 등 모든 기능을 둘 다 사용할 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>&#x1F4CC; 핵심 정리</h3>
+            <ul>
+                <li>struct의 기본 접근 지정자는 <strong>public</strong>, class는 <strong>private</strong></li>
+                <li>struct는 중괄호 초기화가 바로 가능하지만, class는 멤버가 private이라 불가능</li>
+                <li>기능적으로는 동일하며, 관례적으로 struct는 단순 데이터, class는 캡슐화된 객체에 사용</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>얕은 복사와 깊은 복사 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>복사했는데 왜 원본이 바뀌지?</h1>
+            <p class="subtitle">C++의 얕은 복사(Shallow Copy)와 깊은 복사(Deep Copy)</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 얕은 복사와 깊은 복사의 정의</h2>
+            <div class="conversation">
+                <div class="q">얕은 복사와 깊은 복사는 무엇인가요?</div>
+                <div class="a">
+                    <p class="highlight"><strong>얕은 복사(Shallow Copy)</strong>: 멤버의 값들만 그대로 복사합니다.</p>
+                    <p class="highlight"><strong>깊은 복사(Deep Copy)</strong>: 얕은 복사 + 객체가 가리키고 있는 포인터가 참조하는 <strong>대상까지 함께</strong> 복사합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>&#x1F3AF; 비유로 이해하기</strong>
+                        <p>얕은 복사는 "집 열쇠를 복사하는 것"과 같습니다. 열쇠(포인터)는 두 개가 되지만 열리는 집(데이터)은 같은 집입니다.</p>
+                        <p>깊은 복사는 "집 자체를 똑같이 하나 더 짓는 것"입니다. 각자 자기 집을 가지게 됩니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: C++에서의 동작</h2>
+            <div class="conversation">
+                <div class="q">C++에서 얕은 복사가 문제가 되는 경우는?</div>
+                <div class="a">
+                    <p>멤버 변수에 <strong>포인터</strong>가 있을 때 얕은 복사를 하면, 두 객체가 같은 메모리를 가리키게 됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++ - 얕은 복사의 문제</div>
+                        <pre><code>class MyArray {
+    int* data;
+    int size;
+public:
+    MyArray(int s) : size(s), data(new int[s]) {}
+    ~MyArray() { delete[] data; }
+};
+
+MyArray a(10);
+MyArray b = a;  // 얕은 복사! data 포인터만 복사됨
+
+// a와 b의 data가 같은 메모리를 가리킴
+// a가 소멸되면 data가 해제됨
+// b가 소멸될 때 이미 해제된 메모리를 다시 해제 -&gt; 크래시!</code></pre>
+                    </div>
+
+                    <p class="warning">얕은 복사로 인해 <strong>이중 해제(double free)</strong>가 발생하면 프로그램이 크래시됩니다. 포인터 멤버가 있는 클래스에서는 반드시 깊은 복사를 구현해야 합니다.</p>
+                </div>
+
+                <div class="q">깊은 복사는 어떻게 구현하나요?</div>
+                <div class="a">
+                    <p>복사 생성자와 복사 대입 연산자를 직접 정의하여 포인터가 가리키는 데이터까지 새로 할당하고 복사합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++ - 깊은 복사 구현</div>
+                        <pre><code>class MyArray {
+    int* data;
+    int size;
+public:
+    MyArray(int s) : size(s), data(new int[s]) {}
+
+    // 깊은 복사 - 복사 생성자
+    MyArray(const MyArray&amp; other) : size(other.size) {
+        data = new int[size];  // 새 메모리 할당
+        for (int i = 0; i &lt; size; i++) {
+            data[i] = other.data[i];  // 값 복사
+        }
+    }
+
+    // 깊은 복사 - 복사 대입 연산자
+    MyArray&amp; operator=(const MyArray&amp; other) {
+        if (this != &amp;other) {
+            delete[] data;  // 기존 메모리 해제
+            size = other.size;
+            data = new int[size];  // 새 메모리 할당
+            for (int i = 0; i &lt; size; i++) {
+                data[i] = other.data[i];
+            }
+        }
+        return *this;
+    }
+
+    ~MyArray() { delete[] data; }
+};</code></pre>
+                    </div>
+
+                    <p class="key-point">포인터 멤버가 있는 클래스에서는 <strong>복사 생성자, 복사 대입 연산자, 소멸자</strong>를 함께 정의해야 합니다. 이를 <strong>Rule of Three</strong>라고 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: C#과의 차이점</h2>
+            <div class="conversation">
+                <div class="q">C#에서의 얕은/깊은 복사는 다른가요?</div>
+                <div class="a">
+                    <p>C#을 경험한 개발자라면 헷갈릴 수 있는 부분입니다. C++과 C#에서의 정의가 다릅니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>C++</th>
+                                <th>C#</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>얕은 복사</td>
+                                <td>멤버 값만 복사 (포인터 주소 복사)</td>
+                                <td>객체에 대한 참조만 생성 (같은 힙 메모리 참조)</td>
+                            </tr>
+                            <tr>
+                                <td>깊은 복사</td>
+                                <td>포인터가 가리키는 대상까지 복사</td>
+                                <td>힙 메모리에 새로 할당하여 완전 다른 객체 생성</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="warning">C#의 "얕은 복사"는 C++의 관점에서 보면 "참조 복사"에 가깝고, C++의 "얕은 복사"는 C#에서는 존재하지 않는 개념입니다. 두 언어를 함께 다룰 때 혼동하지 않도록 주의하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>&#x1F4CC; 핵심 정리</h3>
+            <ul>
+                <li><strong>얕은 복사</strong>: 멤버 값만 복사 - 포인터가 같은 메모리를 가리키게 됨</li>
+                <li><strong>깊은 복사</strong>: 포인터가 가리키는 데이터까지 새로 할당하여 복사</li>
+                <li>포인터 멤버가 있으면 얕은 복사로 인해 <strong>이중 해제(double free)</strong> 위험</li>
+                <li>복사 생성자, 복사 대입 연산자, 소멸자를 함께 정의하라 (<strong>Rule of Three</strong>)</li>
+                <li>C++과 C#의 얕은/깊은 복사 정의가 다르므로 혼동 주의</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

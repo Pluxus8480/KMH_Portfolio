@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FString, FName, FText | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unreal.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>문자열이 세 종류나 필요한 이유</h1>
+            <p class="subtitle">언리얼 엔진의 FString, FName, FText - 상황별 올바른 문자열 클래스 선택</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 세 가지 문자열 클래스</h2>
+            <div class="conversation">
+                <div class="q">왜 언리얼에는 문자열 클래스가 세 가지나 있나요?</div>
+                <div class="a">
+                    <p>각각의 문자열 클래스는 <strong>사용 목적과 성능 특성이 다릅니다.</strong> 상황에 맞는 클래스를 선택해야 최적의 성능을 낼 수 있습니다.</p>
+                    <div class="analogy-box">
+                        <strong>비유로 이해하기</strong>
+                        <p>FName은 "이름표" - 한번 붙이면 바꾸지 않고 빠르게 비교할 수 있습니다.</p>
+                        <p>FString은 "메모장" - 자유롭게 쓰고 지우고 수정할 수 있지만 무겁습니다.</p>
+                        <p>FText는 "번역가" - 다국어 지원을 위한 전문 도구입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: FName</h2>
+            <div class="conversation">
+                <div class="q">FName의 특징은?</div>
+                <div class="a">
+                    <ul>
+                        <li><strong>가벼움</strong> - 주어진 문자열이 재사용되어도 데이터 테이블에 한 번만 저장</li>
+                        <li><strong>대소문자 구별 없음</strong> (Case-Insensitive)</li>
+                        <li><strong>한번 지정 후 변경 불가능</strong> (Immutable)</li>
+                    </ul>
+                    <p class="highlight">이런 특징들로 인해 FName을 키(Key)로 지정해 찾는 연산에 많이 사용됩니다. 에셋 이름, 테이블 검색 등에 적합합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>// FName 사용 예시
+FName AssetName = FName(TEXT("MyAsset"));
+FName SameName = FName(TEXT("myasset")); // 대소문자 구별 없음
+
+// 빠른 비교 가능 (내부적으로 인덱스 비교)
+if (AssetName == SameName) // true</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: FString</h2>
+            <div class="conversation">
+                <div class="q">FString은 어떤 경우에 쓰나요?</div>
+                <div class="a">
+                    <p>다른 두 클래스와 달리 <strong>여러 조작이 가능한</strong> 문자열 클래스입니다.</p>
+                    <ul>
+                        <li>검색, 텍스트 조작, SubString 추출 등 다양한 기능 제공</li>
+                        <li>문자열 합치기, 수정, 포맷팅 가능</li>
+                        <li>다른 두 클래스보다 <strong>상대적으로 무거움</strong></li>
+                    </ul>
+                    <p class="key-point">C++의 std::string과 가장 유사한 역할을 합니다. 문자열을 자유롭게 조작해야 할 때 사용합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>// FString 사용 예시
+FString Greeting = TEXT("Hello");
+Greeting += TEXT(" World"); // 문자열 합치기 가능
+FString Sub = Greeting.Mid(0, 5); // SubString 추출
+int32 Idx = Greeting.Find(TEXT("World")); // 검색</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: FText</h2>
+            <div class="conversation">
+                <div class="q">FText는 왜 따로 있나요?</div>
+                <div class="a">
+                    <p><strong>로컬라이징(다국어 지원)을 위한</strong> 문자열 클래스입니다.</p>
+                    <p>UMG 등 여러 가지 유저들에게 보이는 텍스트들은 이 클래스를 사용합니다.</p>
+                    <p class="highlight">UI에 표시되는 모든 텍스트는 FText를 사용해야 합니다. 이렇게 해야 나중에 다국어 번역이 가능해집니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: 비교 정리</h2>
+            <div class="conversation">
+                <div class="q">세 가지를 한눈에 비교해주세요.</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>FName</th>
+                                <th>FString</th>
+                                <th>FText</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>용도</td>
+                                <td>에셋 이름, 키 검색</td>
+                                <td>문자열 조작</td>
+                                <td>UI 표시, 로컬라이징</td>
+                            </tr>
+                            <tr>
+                                <td>수정 가능</td>
+                                <td>X (Immutable)</td>
+                                <td>O (Mutable)</td>
+                                <td>X (Immutable)</td>
+                            </tr>
+                            <tr>
+                                <td>대소문자</td>
+                                <td>구별 안함</td>
+                                <td>구별함</td>
+                                <td>구별함</td>
+                            </tr>
+                            <tr>
+                                <td>성능</td>
+                                <td>가벼움 (해시 비교)</td>
+                                <td>무거움</td>
+                                <td>중간</td>
+                            </tr>
+                            <tr>
+                                <td>다국어 지원</td>
+                                <td>X</td>
+                                <td>X</td>
+                                <td>O</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>FName: 가볍고, 대소문자 구별 없으며, 변경 불가. 에셋 이름이나 키 검색에 사용</li>
+                <li>FString: 자유로운 문자열 조작이 가능하지만 상대적으로 무거움. std::string과 유사</li>
+                <li>FText: 로컬라이징을 위한 클래스. UI에 표시되는 텍스트에 사용</li>
+                <li>상황에 맞는 문자열 클래스를 선택하는 것이 성능 최적화의 기본이다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

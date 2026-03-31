@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스테이트 패턴 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>좀비는 지금 무슨 상태인가?</h1>
+            <p class="subtitle">스테이트 패턴(State Pattern)과 FSM 구현</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 스테이트 패턴이란?</h2>
+            <div class="conversation">
+                <div class="q">스테이트 패턴은 왜 필요한가요?</div>
+                <div class="a">
+                    <p class="highlight">한 번에 한 상태만 가질 수 있는 FSM(유한 상태 기계)을 구현할 때 많이 사용하는 패턴입니다.</p>
+                    <p>중첩 switch/case 문으로도 구현할 수 있지만, 상태가 많아질수록 확장성이 떨어지기 때문에 스테이트 패턴으로 구현합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>좀비를 예로 들면 - 좀비는 순찰, 추격, 공격 상태를 가집니다.</p>
+                        <p>각 상태에서 할 수 있는 행동이 다르고, 조건에 따라 상태가 전환됩니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">어떻게 구현하나요?</div>
+                <div class="a">
+                    <p>상위 인터페이스(State)에 관련 기능들의 함수를 준비하고, 파생 State에서 해당 상태에서 할 수 있는 기능을 구현합니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">IState 인터페이스</div>
+                                <div class="flow-box__items">Enter() / Update() / Exit()</div>
+                            </div>
+                        </div>
+                        <div class="flow-row" style="margin-top: 10px;">
+                            <div class="flow-box">
+                                <div class="flow-box__title">PatrolState</div>
+                                <div class="flow-box__items">순찰 로직</div>
+                            </div>
+                            <div class="flow-arrow">&harr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">ChaseState</div>
+                                <div class="flow-box__items">추격 로직</div>
+                            </div>
+                            <div class="flow-arrow">&harr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">AttackState</div>
+                                <div class="flow-box__items">공격 로직</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 전략 패턴과의 차이</h2>
+            <div class="conversation">
+                <div class="q">스테이트 패턴과 전략 패턴은 비슷해 보이는데, 차이점은?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>스테이트 패턴</th>
+                                <th>전략 패턴</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>유래</td>
+                                <td>조건문(switch/case)을 대체</td>
+                                <td>상속을 대체</td>
+                            </tr>
+                            <tr>
+                                <td>Context 참조</td>
+                                <td>파생 클래스가 Context를 참조</td>
+                                <td>Context 참조 없음</td>
+                            </tr>
+                            <tr>
+                                <td>상태 전환</td>
+                                <td>State가 스스로 다음 상태를 결정</td>
+                                <td>외부에서 전략을 교체</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="highlight">스테이트 패턴은 전부 전략 패턴이 될 수 있지만, 전략 패턴이 전부 스테이트 패턴이 될 수는 없습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>스테이트 패턴은 FSM 구현에 사용되는 패턴, switch/case의 확장성 문제를 해결</li>
+                <li>상위 인터페이스(State)를 두고, 각 상태별 파생 클래스로 구현</li>
+                <li>전략 패턴과 유사하지만, State가 Context를 참조하고 스스로 상태 전환 가능</li>
+                <li>스테이트 패턴은 전략 패턴의 상위 호환이 아님 - 용도와 관계가 다름</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

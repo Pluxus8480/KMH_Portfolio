@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unity 생명주기 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+        <header class="content-header">
+            <h1>MonoBehaviour의 일생을 따라가 보자</h1>
+            <p class="subtitle">Unity 생명주기(Lifecycle) - 이벤트 함수의 실행 순서 전체 흐름</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Unity 생명주기 전체 흐름</h2>
+            <div class="conversation">
+                <div class="q">Unity 생명주기의 전체 흐름을 설명해 주세요.</div>
+                <div class="a">
+                    <p>Unity의 MonoBehaviour는 정해진 순서에 따라 이벤트 함수들이 호출됩니다. 면접에서는 각 단계의 호출 순서와 용도를 아는 것이 중요합니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">초기화 단계</div>
+                                <div class="flow-box__items">Awake → OnEnable → Start</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">물리 단계</div>
+                                <div class="flow-box__items">FixedUpdate → 물리 연산</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">게임 로직 단계</div>
+                                <div class="flow-box__items">Update → LateUpdate</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">렌더링 단계</div>
+                                <div class="flow-box__items">OnGUI → 렌더링</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 단계별 상세</h2>
+            <div class="conversation">
+                <div class="q">초기화 단계에서 각 함수의 역할은?</div>
+                <div class="a">
+                    <p><strong>Awake</strong>: 스크립트 인스턴스가 로드될 때 호출. 자기 자신의 컴포넌트 참조를 잡는 데 사용합니다.</p>
+                    <p><strong>OnEnable</strong>: 오브젝트가 활성화될 때마다 호출. 오브젝트 풀링 등에서 활용됩니다.</p>
+                    <p><strong>Start</strong>: 첫 번째 프레임 업데이트 전 한 번만 호출. 다른 오브젝트 참조를 통한 초기화에 사용합니다.</p>
+                </div>
+
+                <div class="q">물리/로직 단계에서의 호출 순서는?</div>
+                <div class="a">
+                    <p><strong>FixedUpdate</strong>: 고정 시간 간격으로 호출. 물리 연산(Rigidbody)은 반드시 여기서 처리합니다.</p>
+                    <p><strong>Update</strong>: 매 프레임 호출. 일반 게임 로직과 입력 처리에 사용합니다.</p>
+                    <p><strong>LateUpdate</strong>: Update 이후 호출. 카메라 추적 등 다른 오브젝트의 이동이 완료된 후 처리가 필요한 로직에 사용합니다.</p>
+                    <p class="highlight">한 프레임 내에서 FixedUpdate는 여러 번 호출될 수 있고, Update와 LateUpdate는 한 번씩 호출됩니다.</p>
+                </div>
+
+                <div class="q">소멸 단계는 어떻게 되나요?</div>
+                <div class="a">
+                    <p><strong>OnDisable</strong>: 오브젝트가 비활성화될 때 호출됩니다.</p>
+                    <p><strong>OnDestroy</strong>: 오브젝트가 파괴될 때 호출됩니다.</p>
+                    <p class="key-point">OnDisable은 비활성화/파괴 시 모두 호출되지만, OnDestroy는 파괴 시에만 호출됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 면접 포인트</h2>
+            <div class="conversation">
+                <div class="q">면접에서 자주 나오는 생명주기 관련 질문은?</div>
+                <div class="a">
+                    <ul>
+                        <li><strong>Awake vs Start 차이</strong>: 호출 시점, 비활성 상태에서의 동작, 사용 용도</li>
+                        <li><strong>Update vs FixedUpdate</strong>: 호출 간격, 물리 연산과의 관계</li>
+                        <li><strong>전체 호출 순서</strong>: Awake → OnEnable → Start → FixedUpdate → Update → LateUpdate</li>
+                    </ul>
+                    <p class="highlight">유니티 공식 문서의 생명주기 플로우차트를 한 번 읽어보는 것을 강력히 권장합니다.</p>
+                    <p>참고: <a href="https://docs.unity3d.com/kr/2019.4/Manual/ExecutionOrder.html" target="_blank">Unity 공식 Docs - 이벤트 함수 실행 순서</a></p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>Unity 생명주기: 초기화 → 물리 → 게임 로직 → 렌더링 → 소멸</li>
+                <li>초기화 순서: Awake → OnEnable → Start</li>
+                <li>매 프레임: FixedUpdate(여러 번 가능) → Update → LateUpdate</li>
+                <li>소멸 순서: OnDisable → OnDestroy</li>
+                <li>각 함수의 호출 시점과 용도를 정확히 구분할 수 있어야 한다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

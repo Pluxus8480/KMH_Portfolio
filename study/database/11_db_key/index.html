@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>데이터베이스 키 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../database.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>데이터를 구분짓는 열쇠, Key의 모든 것</h1>
+            <p class="subtitle">데이터베이스 키(Key) - 후보키, 기본키, 대체키, 슈퍼키, 외래키의 개념과 관계</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 키의 종류</h2>
+            <div class="conversation">
+                <div class="q">후보키(Candidate Key)란?</div>
+                <div class="a">
+                    <p>기본키가 될 수 있는 키들을 의미하며, 아래 <strong>2가지 조건</strong>을 만족해야 합니다.</p>
+                    <ul>
+                        <li><strong>유일성</strong> - 이 Key로 하나의 튜플을 유일하게 식별할 수 있습니다.</li>
+                        <li><strong>최소성</strong> - 필요한 속성만으로 구성되어 있습니다.</li>
+                    </ul>
+                    <p class="highlight">후보키는 "기본키 후보"입니다. 유일성과 최소성을 모두 만족하는 키의 집합이죠.</p>
+                </div>
+
+                <div class="q">기본키(Primary Key)는?</div>
+                <div class="a">
+                    <p>후보키 중에서 <strong>선택된 Main 키</strong>입니다.</p>
+                    <ul>
+                        <li>중복될 수 없습니다.</li>
+                        <li>NULL 값을 가질 수 없습니다.</li>
+                    </ul>
+                    <p class="key-point">기본키는 테이블에서 각 행(튜플)을 유일하게 식별하는 대표 키입니다.</p>
+                </div>
+
+                <div class="q">대체키(Alternate Key)는?</div>
+                <div class="a">
+                    <p>후보키 집합에서 <strong>기본키를 제외한 나머지</strong>를 의미합니다. 기본키로 선택되지 않았지만 기본키가 될 자격이 있는 키들입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 슈퍼키와 외래키</h2>
+            <div class="conversation">
+                <div class="q">슈퍼키(Super Key)란?</div>
+                <div class="a">
+                    <p><strong>유일성은 만족하지만 최소성은 만족하지 못한</strong> 키들을 말합니다.</p>
+                    <div class="analogy-box">
+                        <strong>비유로 이해하기</strong>
+                        <p>예를 들어, "이름 + 나이"를 묶어서 릴레이션에서 사람을 구분할 수 있다고 합시다. 이 경우 "이름 + 나이"는 슈퍼키이지만, "이름"만으로도 구분이 가능하다면 최소성을 만족하지 못하는 것입니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">외래키(Foreign Key)란?</div>
+                <div class="a">
+                    <p>릴레이션 A, B의 관계에서 <strong>A 릴레이션이 참조하는 B 릴레이션의 기본키</strong>(하지만 A 릴레이션에 있는)를 의미합니다.</p>
+                    <p class="highlight">외래키는 릴레이션 간의 관계를 나타내는 데 사용됩니다. 다른 테이블의 기본키를 참조하여 두 테이블을 연결하는 다리 역할을 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 키의 관계 정리</h2>
+            <div class="conversation">
+                <div class="q">키들의 관계를 한눈에 보여주세요.</div>
+                <div class="a">
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">슈퍼키 (유일성 O, 최소성 X)</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item hierarchy-item--root">후보키 (유일성 O, 최소성 O)</div>
+                            <div class="hierarchy-children">
+                                <div class="hierarchy-item">기본키 (선택된 대표 키)</div>
+                                <div class="hierarchy-item">대체키 (선택되지 않은 후보키)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>외래키는 별도로, 다른 테이블의 기본키를 참조하는 키입니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>키 종류</th>
+                                <th>유일성</th>
+                                <th>최소성</th>
+                                <th>특징</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>슈퍼키</td>
+                                <td>O</td>
+                                <td>X</td>
+                                <td>가장 넓은 범위</td>
+                            </tr>
+                            <tr>
+                                <td>후보키</td>
+                                <td>O</td>
+                                <td>O</td>
+                                <td>기본키 후보</td>
+                            </tr>
+                            <tr>
+                                <td>기본키</td>
+                                <td>O</td>
+                                <td>O</td>
+                                <td>NULL 불가, 대표 키</td>
+                            </tr>
+                            <tr>
+                                <td>대체키</td>
+                                <td>O</td>
+                                <td>O</td>
+                                <td>기본키 제외 후보키</td>
+                            </tr>
+                            <tr>
+                                <td>외래키</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>다른 테이블 참조</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>후보키는 유일성 + 최소성을 만족하는 키들의 집합이다</li>
+                <li>기본키는 후보키 중 선택된 대표 키로, 중복과 NULL이 불가하다</li>
+                <li>슈퍼키는 유일성만 만족하고 최소성은 만족하지 못하는 키이다</li>
+                <li>외래키는 다른 테이블의 기본키를 참조하여 릴레이션 간 관계를 나타낸다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>퍼사드 패턴 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>복잡한 건 뒤에 숨기고, 버튼 하나만 보여줘라</h1>
+            <p class="subtitle">퍼사드 패턴(Facade Pattern) - 복잡한 서브시스템을 단순한 인터페이스로 감싸는 기법</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 퍼사드 패턴이란?</h2>
+            <div class="conversation">
+                <div class="q">퍼사드 패턴은 어떤 패턴인가요?</div>
+                <div class="a">
+                    <p>퍼사드 패턴의 주 사용처는 <strong>'객체 그룹에 간단하지만 구체적인 인터페이스'</strong>를 제공하는 경우입니다.</p>
+                    <p class="highlight">복잡한 서브시스템들을 하나의 간단한 인터페이스 뒤에 숨겨서, 클라이언트가 쉽게 사용할 수 있도록 만드는 구조 패턴입니다.</p>
+                </div>
+
+                <div class="q">쉽게 비유하면?</div>
+                <div class="a">
+                    <div class="analogy-box">
+                        <strong>비유로 이해하기</strong>
+                        <p>온라인 쇼핑몰에서 "물건 구매" 버튼을 누르면, 내부적으로는 창고에서 물건 꺼내기, 송장번호 붙이기, 발송지로 보내기, 배달 등의 복잡한 과정이 진행됩니다.</p>
+                        <p>하지만 사용자는 단순히 "구매" 버튼만 누르면 됩니다. 이 "구매" 버튼이 바로 퍼사드입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 퍼사드 패턴의 구조</h2>
+            <div class="conversation">
+                <div class="q">구조를 그림으로 보면 어떻게 되나요?</div>
+                <div class="a">
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Client</div>
+                                <div class="flow-box__items">간단한 인터페이스 호출</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Facade</div>
+                                <div class="flow-box__items">물건구매() 인터페이스</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">서브시스템들</div>
+                                <div class="flow-box__items">창고 / 송장 / 발송 / 배달</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>퍼사드는 내부의 하위 클래스들을 조합해서, 사용자가 알 수 없게 복잡한 과정을 처리합니다.</p>
+                </div>
+
+                <div class="q">코드 예시를 보여주세요.</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>// 서브시스템 클래스들
+class Warehouse {
+public:
+    void PickItem(const std::string&amp; item) { /* 창고에서 물건 꺼내기 */ }
+};
+
+class Shipping {
+public:
+    void AttachInvoice(int orderId) { /* 송장번호 붙이기 */ }
+    void SendToDestination() { /* 발송지로 보내기 */ }
+};
+
+class Delivery {
+public:
+    void Deliver() { /* 배달 수행 */ }
+};
+
+// 퍼사드 클래스 - 단순한 인터페이스 제공
+class ShopFacade {
+private:
+    Warehouse warehouse;
+    Shipping shipping;
+    Delivery delivery;
+public:
+    void Purchase(const std::string&amp; item, int orderId) {
+        warehouse.PickItem(item);
+        shipping.AttachInvoice(orderId);
+        shipping.SendToDestination();
+        delivery.Deliver();
+    }
+};
+
+// 클라이언트는 이것만 호출하면 됨
+ShopFacade shop;
+shop.Purchase("GamePad", 12345);</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 장단점과 면접 포인트</h2>
+            <div class="conversation">
+                <div class="q">퍼사드 패턴의 장단점은?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>내용</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>장점</td>
+                                <td>복잡한 시스템으로부터 간단한 인터페이스를 만들 수 있다. 인터페이스 분리를 통해 클라이언트와 실제 역할을 하는 클래스 간 결합도를 낮출 수 있다.</td>
+                            </tr>
+                            <tr>
+                                <td>단점</td>
+                                <td>퍼사드 클래스가 지나치게 비대해질 경우 유지보수가 어려워진다. 사용자에게 하위 클래스(일을 하는 클래스)를 완전히 숨길 수는 없다.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">퍼사드가 너무 많은 책임을 지면 "God Object"가 될 수 있으므로, 적절한 크기를 유지하는 것이 중요합니다.</p>
+                </div>
+
+                <div class="q">어댑터 패턴과는 뭐가 다른가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>어댑터 패턴</th>
+                                <th>퍼사드 패턴</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>목적</td>
+                                <td>인터페이스 변환</td>
+                                <td>인터페이스 단순화</td>
+                            </tr>
+                            <tr>
+                                <td>대상</td>
+                                <td>하나의 클래스</td>
+                                <td>여러 서브시스템</td>
+                            </tr>
+                            <tr>
+                                <td>핵심</td>
+                                <td>호환성 확보</td>
+                                <td>복잡도 감소</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>퍼사드 패턴은 복잡한 서브시스템들을 하나의 간단한 인터페이스로 감싸는 구조 패턴이다</li>
+                <li>클라이언트와 서브시스템 간의 결합도를 낮추고, 사용 편의성을 높인다</li>
+                <li>퍼사드 클래스가 비대해지지 않도록 주의해야 한다</li>
+                <li>어댑터 패턴은 "인터페이스 변환", 퍼사드 패턴은 "인터페이스 단순화"가 목적이다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

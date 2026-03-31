@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오버로딩 vs 오버라이딩 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>같은 이름, 다른 운명</h1>
+            <p class="subtitle">C++ 오버로딩(Overloading)과 오버라이딩(Overriding)의 차이</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 오버로딩과 오버라이딩, 뭐가 다른가?</h2>
+            <div class="conversation">
+                <div class="q">오버로딩과 오버라이딩을 간단히 설명해주세요.</div>
+                <div class="a">
+                    <p class="highlight"><strong>오버로딩(Overloading)</strong>: 같은 이름의 함수에 인자를 다르게 해서 다른 함수가 실행되게 하는 것</p>
+                    <p class="highlight"><strong>오버라이딩(Overriding)</strong>: 상속 관계에서 부모 클래스의 가상 함수를 자식 클래스에서 재정의하는 것</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 오버로딩의 조건</h2>
+            <div class="conversation">
+                <div class="q">오버로딩이 가능하려면 어떤 조건이 필요한가요?</div>
+                <div class="a">
+                    <p>오버로딩이 가능한 조건은 다음과 같습니다:</p>
+                    <ul>
+                        <li><strong>함수명</strong>이 같아야 합니다.</li>
+                        <li><strong>리턴 타입</strong>이 같아야 합니다.</li>
+                        <li>인자의 <strong>종류나 개수</strong>가 달라서 구분이 되어야 합니다.</li>
+                    </ul>
+                    <p class="warning">인자의 이름만 다른 경우에는 오버로딩이 불가능합니다. 같은 함수로 처리되어 컴파일 에러가 발생합니다.</p>
+                </div>
+
+                <div class="q">인자의 const 여부로도 오버로딩이 가능한가요?</div>
+                <div class="a">
+                    <p class="key-point">인자의 const성으로 오버로딩을 구분하는 것은 <strong>포인터와 참조 타입</strong>에서만 가능합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>void Func(int&amp; a)       { cout &lt;&lt; "normal reference a"; }
+void Func(const int&amp; a) { cout &lt;&lt; "const reference a"; }
+void Func(int* a)       { cout &lt;&lt; "normal pointer a"; }
+void Func(const int* a) { cout &lt;&lt; "const pointer a"; }
+void Func(int a)        { cout &lt;&lt; "just a"; }
+// void Func(const int a) { } // ERROR!</code></pre>
+                    </div>
+                    <p>일반 변수로 들어온 경우에는 const 유무에 상관없이 <strong>복사</strong>가 이루어지기 때문에 함수 외부의 변수에 영향을 줄 수 없습니다. 따라서 const로 받는지 판단할 이유가 없습니다.</p>
+                    <p>반면 포인터나 참조의 경우에는 const인지 아닌지에 따라 함수 외부 값이 변경될 우려가 있기 때문에 const 유무에 따른 오버로딩을 지원합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 오버라이딩의 함정들</h2>
+            <div class="conversation">
+                <div class="q">오버라이딩 시 const를 추가할 수 있나요?</div>
+                <div class="a">
+                    <p class="warning">함수 자체에 없던 const성(멤버 함수의 const)을 파생 클래스에서 추가할 수 없습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C++ - 컴파일 에러</div>
+                        <pre><code>class Base {
+public:
+    virtual void Print(int a) { cout &lt;&lt; a; }
+};
+
+class Derived : public Base {
+public:
+    // ERROR! 함수에 const를 추가할 수 없음
+    virtual void Print(const int a) const override { cout &lt;&lt; a; }
+};</code></pre>
+                    </div>
+                    <p class="key-point">단, 파생 클래스에서 <strong>인자에만</strong> const를 붙이는 것은 가능합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C++ - 정상 동작</div>
+                        <pre><code>class Base {
+public:
+    virtual void Print(int a) { cout &lt;&lt; "Base\n"; }
+};
+
+class Derived : public Base {
+public:
+    virtual void Print(const int a) override { cout &lt;&lt; "Derived\n"; }
+};</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">기본값(default argument)은 파생 클래스에서 바꿀 수 있나요?</div>
+                <div class="a">
+                    <p class="warning">함수 인자의 기본값은 파생 클래스에서 재정의할 수 없습니다. 기본값은 <strong>정적 타입</strong>에 의해 결정됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>class Base {
+public:
+    virtual void Print(int a = 1) { cout &lt;&lt; a; }
+};
+
+class Derived : public Base {
+public:
+    virtual void Print(const int a = 3) override { cout &lt;&lt; a; }
+};
+
+int main() {
+    Base* b1 = new Base();
+    Base* b2 = new Derived();
+    b1-&gt;Print(); // 출력: 1
+    b2-&gt;Print(); // 출력: 1 (3이 아님!)
+}</code></pre>
+                    </div>
+                    <p><code>b2</code>는 <code>Derived</code> 객체를 가리키지만, 포인터 타입이 <code>Base*</code>이므로 기본값은 Base의 기본값인 1이 사용됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>오버로딩</strong>은 같은 이름 + 다른 인자로 여러 함수를 정의하는 것 (컴파일 타임)</li>
+                <li><strong>오버라이딩</strong>은 부모의 가상 함수를 자식이 재정의하는 것 (런타임 다형성)</li>
+                <li>const에 의한 오버로딩 구분은 포인터/참조 타입에서만 가능</li>
+                <li>오버라이딩 시 멤버 함수에 새로운 const성을 추가할 수 없음</li>
+                <li>기본값(default argument)은 정적 타입 기준으로 결정되므로 오버라이딩으로 변경 불가</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

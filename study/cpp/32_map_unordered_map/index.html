@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>map vs unordered_map | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>정렬할 것인가, 속도를 택할 것인가</h1>
+            <p class="subtitle">C++ map과 unordered_map의 내부 구조와 성능 차이</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 두 컨테이너의 근본적 차이</h2>
+            <div class="conversation">
+                <div class="q">map과 unordered_map은 뭐가 다른가요?</div>
+                <div class="a">
+                    <p>둘 다 key-value 쌍으로 되어 있지만 내부 자료구조가 완전히 다릅니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>map</th>
+                                <th>unordered_map</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>내부 구조</td>
+                                <td>레드-블랙 트리</td>
+                                <td>해시 테이블</td>
+                            </tr>
+                            <tr>
+                                <td>정렬</td>
+                                <td>key에 따라 자동 정렬</td>
+                                <td>정렬 없음</td>
+                            </tr>
+                            <tr>
+                                <td>평균 시간 복잡도</td>
+                                <td>O(log N)</td>
+                                <td>O(1)</td>
+                            </tr>
+                            <tr>
+                                <td>최악 시간 복잡도</td>
+                                <td>O(log N)</td>
+                                <td>O(N)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 해시 충돌과 체이닝</h2>
+            <div class="conversation">
+                <div class="q">unordered_map에서 최악의 경우 O(N)이 나오는 이유는?</div>
+                <div class="a">
+                    <p>해시 함수를 통과한 뒤 값이 같은 경우(해시 충돌)가 발생할 수 있습니다.</p>
+                    <p class="highlight">이런 경우 <strong>체이닝(Chaining)</strong>을 통해 같은 버킷에 리스트처럼 연결하여 관리합니다. 이로 인해 최악의 시간 복잡도가 O(N)이 될 수 있습니다.</p>
+                    <p class="key-point">참고로 해시 함수는 역함수가 존재하지 않습니다.</p>
+                </div>
+
+                <div class="q">체이닝 외에 충돌을 해결하는 방법이 있나요?</div>
+                <div class="a">
+                    <p><strong>Open Addressing</strong> 방식이 있습니다. 충돌 발생 시 다른 빈 자리에 저장하는 방법입니다.</p>
+                    <ul>
+                        <li><strong>Linear Probing</strong>: hash(n), hash(n)+1, hash(n)+2 순서로 빈 슬롯 탐색. 테이블 끝에 도달하면 처음으로 돌아옴</li>
+                        <li><strong>Quadratic Probing</strong>: +1&sup2;, +2&sup2;, +3&sup2; 방식으로 간격을 넓혀가며 탐색</li>
+                        <li><strong>Double Hashing</strong>: 서로 다른 두 해시 함수를 사용</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 좋은 해시 함수란?</h2>
+            <div class="conversation">
+                <div class="q">좋은 해시 함수의 기준은 무엇인가요?</div>
+                <div class="a">
+                    <p class="highlight"><strong>SUHA (Simple Uniform Hashing Assumption)</strong>: 각 해시 Key가 균등하게 분배되는 것을 의미합니다.</p>
+                    <p>해싱 충돌을 최대한 줄여 모든 버킷에 고르게 데이터가 분산되는 것이 좋은 해시 함수의 조건입니다.</p>
+                    <p class="key-point">SUHA는 이론적인 가정으로, 실제로는 해시 함수의 성능 분석 시 기준으로 사용됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>map</strong>: 레드-블랙 트리 기반, 정렬 보장, O(log N)</li>
+                <li><strong>unordered_map</strong>: 해시 테이블 기반, 정렬 없음, 평균 O(1) / 최악 O(N)</li>
+                <li>해시 충돌 해결 방법: 체이닝(Chaining), Open Addressing(Linear/Quadratic Probing, Double Hashing)</li>
+                <li>좋은 해시 함수는 키를 균등하게 분배하여 충돌을 최소화 (SUHA)</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>싱글톤 패턴 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>세상에 단 하나뿐인 인스턴스</h1>
+            <p class="subtitle">싱글톤 패턴(Singleton Pattern)의 구현과 멀티스레드 이슈</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 싱글톤 패턴이란?</h2>
+            <div class="conversation">
+                <div class="q">싱글톤 패턴의 정의는?</div>
+                <div class="a">
+                    <p class="highlight">싱글톤 패턴(Singleton Pattern)은 클래스의 인스턴스를 <strong>한 개만</strong> 가지게 하는 디자인 패턴입니다.</p>
+                </div>
+
+                <div class="q">C#(유니티)에서는 어떻게 구현하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C# (Unity)</div>
+                        <pre><code>public SingletonClass : MonoBehaviour
+{
+    public static SingletonClass instance;
+
+    private void Awake()
+    {
+        if (instance == null)
+        {
+            instance = this;
+        }
+        else
+        {
+            Destroy(this);
+        }
+    }
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">C++에서는 어떻게 구현하나요?</div>
+                <div class="a">
+                    <p>생성자를 private에 넣고, 대입/복사 관련 연산을 삭제합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>class SingletonClass
+{
+public:
+    static Singleton&amp; GetInstance() {
+        static Singleton* singleton = new Singleton();
+        return *singleton;
+    }
+
+private:
+    SingletonClass() = default;
+
+    SingletonClass(const SingletonClass&amp;) = delete;
+    SingletonClass&amp; operator=(const SingletonClass&amp;) = delete;
+    SingletonClass(SingletonClass&amp;&amp;) = delete;
+    SingletonClass&amp; operator=(SingletonClass&amp;&amp;) = delete;
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 장점과 사용 이유</h2>
+            <div class="conversation">
+                <div class="q">왜 싱글톤 패턴을 사용하나요?</div>
+                <div class="a">
+                    <ul>
+                        <li>프로그램의 생명주기와 동일하게 메모리에 올라가고 사라짐</li>
+                        <li>메모리에 한 번만 올라가므로 여러 인스턴스 생성에 의한 메모리 낭비 방지</li>
+                        <li>전역으로 올라가기 때문에 다른 인스턴스들에서 자유롭게 접근 가능</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 단점과 주의사항</h2>
+            <div class="conversation">
+                <div class="q">싱글톤 패턴의 문제점은?</div>
+                <div class="a">
+                    <ul>
+                        <li>사용하지 않을 때도 계속 메모리를 점유</li>
+                        <li>C++에서 소멸이 정의되지 않아 소멸된 객체의 역참조 문제 발생 가능</li>
+                        <li>인스턴스가 null인지 항상 체크해야 하는 비효율성</li>
+                    </ul>
+                    <p class="warning"><strong>가장 큰 문제는 동시성 문제입니다.</strong> 멀티스레드 환경에서 인스턴스가 2개 생기는 경우도 있고, 여러 스레드에서 참조할 때 동기화 처리를 해줘야 하는 번거로움이 있습니다.</p>
+                    <p class="key-point">면접에서 싱글톤을 언급하면 "멀티스레드 환경에서 어떻게 활용했나요?"라는 질문이 높은 확률로 따라옵니다. 자신 있게 답할 수 없다면, 다른 디자인 패턴으로 질문을 유도하는 것이 좋습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>싱글톤은 클래스 인스턴스를 하나만 생성하는 패턴</li>
+                <li>전역 접근이 가능하고 메모리 효율적이지만, 사용하지 않을 때도 메모리 점유</li>
+                <li>C++에서는 생성자 private + 복사/대입 삭제로 구현</li>
+                <li>멀티스레드 환경에서 동기화 처리가 핵심 이슈</li>
+                <li>면접 시 멀티스레드 관련 경험 질문에 대비 필수</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

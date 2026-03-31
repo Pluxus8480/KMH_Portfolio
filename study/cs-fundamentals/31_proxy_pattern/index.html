@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프록시 패턴 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>직접 만나지 말고, 대리인을 통해 말해라</h1>
+            <p class="subtitle">프록시 패턴(Proxy Pattern) - 객체 접근을 제어하는 대리인 클래스</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 프록시 패턴이란?</h2>
+            <div class="conversation">
+                <div class="q">프록시 패턴은 어떤 패턴인가요?</div>
+                <div class="a">
+                    <p><strong>Proxy</strong>는 "대리인, 대리권, 대리"라는 뜻입니다. 프록시 클래스는 실제 클래스를 이어주는 <strong>대리인 역할</strong>을 합니다.</p>
+                    <p class="highlight">객체를 직접 호출하는 것이 아닌, 프록시 클래스를 통해 간접적으로 접근하는 구조 패턴입니다.</p>
+                </div>
+
+                <div class="q">비유로 설명해주세요.</div>
+                <div class="a">
+                    <div class="analogy-box">
+                        <strong>비유로 이해하기</strong>
+                        <p>연예인에게 직접 연락하는 대신 <strong>매니저(프록시)</strong>를 통해 연락하는 것과 같습니다.</p>
+                        <p>매니저는 스케줄 확인, 접근 제어, 사전 준비 등의 역할을 하고, 실제 업무는 연예인이 수행합니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 프록시 패턴의 구조</h2>
+            <div class="conversation">
+                <div class="q">구조는 어떻게 되나요?</div>
+                <div class="a">
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Client</div>
+                                <div class="flow-box__items">Subject 인터페이스 사용</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Proxy</div>
+                                <div class="flow-box__items">접근 제어 + RealSubject 호출</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">RealSubject</div>
+                                <div class="flow-box__items">실제 기능 수행</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>클라이언트는 Proxy를 통해 RealSubject에 접근하며, Proxy가 접근 제어, 캐싱, 지연 로딩 등의 부가 기능을 수행합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 장단점</h2>
+            <div class="conversation">
+                <div class="q">프록시 패턴의 장단점은?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>내용</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>장점</td>
+                                <td>실제 일을 하는 클래스와 구분 지을 수 있음. 사이즈가 큰 객체가 있을 시 로딩 전에 프록시 객체를 통해 참조 가능.</td>
+                            </tr>
+                            <tr>
+                                <td>단점</td>
+                                <td>로직이 복잡해지면서 코드 읽기가 좋지 않을 수 있음. 객체 생성 시 단계가 늘어나 빈번한 생성/삭제에서 메모리 부담 증가.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">가급적 다른 해결법이 있다면 프록시 패턴보다 단순한 방법을 먼저 고려하는 것이 좋습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: C++에서의 프록시 패턴 사례</h2>
+            <div class="conversation">
+                <div class="q">C++ 표준 라이브러리에도 프록시 패턴이 있나요?</div>
+                <div class="a">
+                    <p>네, 대표적으로 두 가지가 있습니다.</p>
+                    <p><strong>1. vector&lt;bool&gt;</strong></p>
+                    <p><code>vector&lt;bool&gt;</code>은 일반 vector와 달리 비트 단위로 저장하기 때문에, <code>operator[]</code>가 실제 bool 참조가 아닌 <strong>프록시 객체</strong>를 반환합니다.</p>
+
+                    <p><strong>2. 스마트 포인터</strong></p>
+                    <p>스마트 포인터는 일반 포인터의 인터페이스를 유지하면서(<code>operator-&gt;</code>, <code>operator*</code>) 내부적으로 참조 카운팅, 메모리 해제 등의 부가 작업을 수행합니다.</p>
+                    <p class="key-point">스마트 포인터는 실제 포인터의 "대리인"으로, 메모리 관리라는 부가 기능을 투명하게 제공하는 프록시 패턴의 대표적 사례입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++ - 스마트 포인터가 프록시 패턴인 이유</div>
+                        <pre><code>// 일반 포인터처럼 사용하지만 내부적으로 메모리 관리 수행
+std::shared_ptr&lt;GameObject&gt; obj = std::make_shared&lt;GameObject&gt;();
+
+// operator-&gt; 를 통해 실제 객체에 접근 (프록시 패턴)
+obj-&gt;Update();
+
+// 스코프를 벗어나면 자동으로 메모리 해제 (부가 기능)</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>프록시 패턴은 실제 객체에 대한 접근을 제어하는 대리인 클래스를 사용하는 구조 패턴이다</li>
+                <li>접근 제어, 지연 로딩, 캐싱 등의 부가 기능을 투명하게 추가할 수 있다</li>
+                <li>C++의 스마트 포인터와 vector&lt;bool&gt;이 프록시 패턴의 대표적 사례이다</li>
+                <li>로직이 복잡해질 수 있으므로, 단순한 대안이 있다면 먼저 고려해야 한다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>상등성과 동등성 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>"같다"에도 두 가지 의미가 있다</h1>
+            <p class="subtitle">C++ 상등성(Equality)과 동등성(Equivalence)의 차이</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 상등성과 동등성의 정의</h2>
+            <div class="conversation">
+                <div class="q">상등성과 동등성은 어떻게 다른가요?</div>
+                <div class="a">
+                    <p class="highlight"><strong>상등성(Equality)</strong>: <code>operator ==</code>에 기반을 둡니다. "두 값이 정확히 같은가?"</p>
+                    <p class="highlight"><strong>동등성(Equivalence)</strong>: <code>operator &lt;</code>에 기반을 둡니다. "두 값 사이에 순서 차이가 없는가?"</p>
+                    <div class="code-block">
+                        <div class="code-header">C++ - 동등성 판별</div>
+                        <pre><code>// 동등성: 어느 쪽도 다른 쪽보다 "작지 않다"면 동등하다
+if (!(var1 &lt; var2) &amp;&amp; !(var2 &lt; var1))
+{
+    cout &lt;&lt; "이건 동등하다";
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">표준 컨테이너는 어떤 방식을 사용하나요?</div>
+                <div class="a">
+                    <p class="key-point">표준의 연관 컨테이너들(map, set 등)은 <strong>동등성(Equivalence)</strong>에 기반을 두고 있습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p><strong>상등성</strong>: "이 두 사람은 같은 사람인가?" - 주민등록번호까지 모두 일치해야 "같다"</p>
+                        <p><strong>동등성</strong>: "이 두 사람은 같은 등수인가?" - 점수 기준으로 순위가 같으면 "같다" (이름이 달라도)</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 왜 연관 컨테이너는 동등성을 쓰는가?</h2>
+            <div class="conversation">
+                <div class="q">map이나 set이 == 대신 &lt;를 사용하는 이유가 있나요?</div>
+                <div class="a">
+                    <p>연관 컨테이너는 내부적으로 <strong>정렬된 상태</strong>를 유지합니다 (레드-블랙 트리). 정렬을 위해 이미 <code>operator &lt;</code>를 사용하고 있으므로, 별도로 <code>operator ==</code>를 요구하지 않고 <code>&lt;</code>만으로 동등성을 판별합니다.</p>
+                    <p class="key-point">이 덕분에 사용자 정의 타입을 키로 사용할 때 <code>operator &lt;</code>만 정의하면 됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>struct MyKey {
+    int id;
+    // operator &lt; 만 정의하면 map/set에서 사용 가능
+    bool operator&lt;(const MyKey&amp; other) const {
+        return id &lt; other.id;
+    }
+};
+
+std::map&lt;MyKey, std::string&gt; myMap; // OK</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>상등성(Equality)</strong>: <code>operator ==</code> 기반 - "정확히 같은가?"</li>
+                <li><strong>동등성(Equivalence)</strong>: <code>operator &lt;</code> 기반 - "순서상 차이가 없는가?"</li>
+                <li>표준 연관 컨테이너(map, set)는 동등성에 기반</li>
+                <li>동등성 판별: <code>!(a &lt; b) &amp;&amp; !(b &lt; a)</code>이면 a와 b는 동등</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

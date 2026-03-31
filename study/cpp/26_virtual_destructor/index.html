@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가상 소멸자 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>소멸할 때 빠뜨리는 것은 없는가?</h1>
+            <p class="subtitle">상속 관계에서 가상 소멸자가 필요한 이유</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 왜 가상 소멸자가 필요한가?</h2>
+            <div class="conversation">
+                <div class="q">상속 관계에서 소멸자를 virtual로 선언해야 하는 이유가 무엇인가요?</div>
+                <div class="a">
+                    <p>상속 관계에서 소멸자가 <strong>비가상(non-virtual)</strong>으로 되어 있으면 심각한 문제가 발생할 수 있습니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>&#x1F3AF; 비유로 이해하기</strong>
+                        <p>건물을 철거할 때, 2층(자식)만 철거하고 1층(부모)의 내부 시설은 그대로 방치하는 것과 같습니다. 1층에 있는 장비(동적 할당된 자원)가 해제되지 않아 자원 낭비가 발생합니다.</p>
+                    </div>
+
+                    <p>부모 클래스에서 동적으로 할당한 자원을 소멸자에서 해제하기로 되어 있다고 합시다. 소멸자가 비가상이면, 자식 클래스의 인스턴스가 부모 포인터를 통해 소멸할 때 <strong>자식 클래스의 소멸자만 호출</strong>되므로 부모 클래스의 동적 할당 자원이 해제되지 않습니다.</p>
+
+                    <p class="warning">이는 <strong>메모리 누수</strong>의 직접적인 원인이 됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++ - 잘못된 예 (비가상 소멸자)</div>
+                        <pre><code>class Base {
+    int* data;
+public:
+    Base() : data(new int[100]) {}
+    ~Base() { delete[] data; }  // 비가상 소멸자!
+};
+
+class Derived : public Base {
+    int* extra;
+public:
+    Derived() : extra(new int[200]) {}
+    ~Derived() { delete[] extra; }
+};
+
+Base* ptr = new Derived();
+delete ptr;  // Base의 소멸자만 호출! Derived::extra 메모리 누수!</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 올바른 가상 소멸자 선언</h2>
+            <div class="conversation">
+                <div class="q">어떻게 해결하나요?</div>
+                <div class="a">
+                    <p class="highlight">상속 관계에서 소멸자는 <code>virtual</code> 선언을 해주는 것이 좋습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++ - 올바른 예 (가상 소멸자)</div>
+                        <pre><code>class Base {
+    int* data;
+public:
+    Base() : data(new int[100]) {}
+    virtual ~Base() { delete[] data; }  // 가상 소멸자!
+};
+
+class Derived : public Base {
+    int* extra;
+public:
+    Derived() : extra(new int[200]) {}
+    ~Derived() override { delete[] extra; }  // 자동으로 virtual
+};
+
+Base* ptr = new Derived();
+delete ptr;  // Derived::~Derived() 호출 후 Base::~Base() 호출 - 안전!</code></pre>
+                    </div>
+
+                    <p class="key-point">부모 클래스에 <code>virtual</code> 키워드를 붙이면 자식 클래스의 소멸자는 <strong>자동으로 virtual</strong>이 됩니다.</p>
+                </div>
+
+                <div class="q">소멸자가 호출되는 순서는 어떻게 되나요?</div>
+                <div class="a">
+                    <p class="highlight">소멸자는 <strong>자식 -> 부모</strong> 순서로 호출됩니다.</p>
+                    <p>이는 생성자가 부모 -> 자식 순서로 호출되는 것과 정반대입니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">생성 순서</div>
+                                <div class="flow-box__items">Base() -> Derived()</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">소멸 순서</div>
+                                <div class="flow-box__items">~Derived() -> ~Base()</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>&#x1F4CC; 핵심 정리</h3>
+            <ul>
+                <li>상속 관계에서 소멸자가 비가상이면 <strong>메모리 누수</strong> 위험이 있다</li>
+                <li>부모 클래스의 소멸자에 <code>virtual</code>을 붙이면 자식도 자동으로 virtual</li>
+                <li>소멸자 호출 순서는 <strong>자식 -> 부모</strong> (생성의 역순)</li>
+                <li>상속 관계에서는 항상 가상 소멸자를 선언하는 것이 안전하다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,1663 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>패킷은 어디로 흘러가는가 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unreal.html" class="back-link">← Unreal Engine 목록으로</a>
+
+        <header class="content-header">
+            <h1>패킷은 어디로 흘러가는가</h1>
+            <p class="subtitle">언리얼 서버 네트워크 내부 코드: 패킷 수신부터 RPC 디스패치, 보이스/대용량 데이터 전송까지</p>
+        </header>
+
+        <!-- ============================================================ -->
+        <!-- Part 1: 네트워크 스택 전체 그림 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 1: 언리얼 네트워크 스택 — 전체 그림</h2>
+
+            <div class="conversation">
+                <div class="q">언리얼 서버에서 패킷이 들어오고 나가는 전체 흐름을 먼저 보여줄 수 있나요?</div>
+                <div class="a">
+                    <p>언리얼의 네트워크 스택은 크게 <span class="highlight">NetDriver → NetConnection → Channel → Actor/RPC</span> 4계층으로 구성됩니다. 소켓(UDP)에서 읽은 원시 바이트가 이 파이프라인을 따라 올라가면서 의미 있는 게임 데이터로 변환됩니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <div class="pipeline">
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">OS Socket (UDP)</div>
+                        <div class="pipeline-bar pb-gbuffer">
+                            <span>recvfrom()</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">NetDriver (UIpNetDriver)</div>
+                        <div class="pipeline-bar pb-gbuffer">
+                            <span>TickDispatch()</span>
+                            <span>패킷 수신</span>
+                            <span>Connection 라우팅</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">NetConnection (UNetConnection)</div>
+                        <div class="pipeline-bar pb-light">
+                            <span>ReceivedPacket()</span>
+                            <span>Bunch 분리</span>
+                            <span>시퀀스/ACK 처리</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">Channel (UChannel)</div>
+                        <div class="pipeline-bar pb-post">
+                            <span>ReceivedBunch()</span>
+                            <span>ActorChannel</span>
+                            <span>ControlChannel</span>
+                            <span>VoiceChannel</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">게임 로직</div>
+                        <div class="pipeline-bar pb-shadow">
+                            <span>RPC 실행</span>
+                            <span>Property 복제</span>
+                            <span>보이스 재생</span>
+                        </div>
+                    </div>
+                </div>
+                <p class="diagram-caption">수신 경로: 소켓 → NetDriver → Connection → Channel → 게임 로직</p>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>우체국(NetDriver)이 우편물(패킷)을 받아서, 수신자 주소(IP:Port)로 사서함(NetConnection)을 찾고, 봉투를 열어 내용물 종류(Channel)별로 분류한 뒤, 최종 수신자(Actor)에게 전달하는 구조입니다.</p>
+            </div>
+
+            <div class="conversation">
+                <div class="q">송신은 반대로 진행되나요?</div>
+                <div class="a">
+                    <p>네, <span class="highlight">정확히 역순</span>입니다. 게임 로직이 RPC를 호출하거나 Property가 변경되면, Channel이 Bunch(번치)를 만들고, Connection이 Bunch들을 하나의 패킷으로 묶어 NetDriver를 통해 소켓으로 전송합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 2: 패킷 수신 — 소켓에서 Connection까지 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 2: 패킷 수신 — 소켓에서 Bunch까지</h2>
+
+            <div class="conversation">
+                <div class="q">서버에서 패킷 수신이 시작되는 정확한 지점은 어디인가요?</div>
+                <div class="a">
+                    <p>매 틱마다 엔진이 <span class="highlight">UNetDriver::TickDispatch()</span>를 호출합니다. 이 함수 안에서 소켓의 <code>recvfrom()</code>을 반복 호출하여 수신된 모든 UDP 패킷을 읽어들입니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — UIpNetDriver::TickDispatch() 핵심 흐름</div>
+                <pre><code>void UIpNetDriver::TickDispatch(float DeltaTime)
+{
+    Super::TickDispatch(DeltaTime);
+
+    // 소켓에서 패킷을 계속 읽음
+    while (Socket != nullptr)
+    {
+        uint8 Data[MAX_PACKET_SIZE];  // 보통 1024~1200 바이트
+        int32 BytesRead = 0;
+        FInternetAddr FromAddr;
+
+        // 논블로킹 recvfrom
+        if (!Socket->RecvFrom(Data, sizeof(Data), BytesRead, *FromAddr))
+            break;  // 더 이상 읽을 패킷 없음
+
+        if (BytesRead > 0)
+        {
+            // 1) 주소로 기존 Connection 찾기
+            UNetConnection* Connection = FindConnectionForAddr(FromAddr);
+
+            if (Connection)
+            {
+                // 2) 해당 Connection에 패킷 전달
+                Connection->ReceivedRawPacket(Data, BytesRead);
+            }
+            else
+            {
+                // 3) 새 연결 시도 (핸드셰이크)
+                ProcessConnectionlessPacket(FromAddr, Data, BytesRead);
+            }
+        }
+    }
+}</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">ReceivedRawPacket() 이후에는 어떤 일이 벌어지나요?</div>
+                <div class="a">
+                    <p>패킷 헤더를 파싱하고, <span class="highlight">시퀀스 번호</span> 확인, <span class="highlight">ACK 처리</span>, 그리고 패킷 내부의 <span class="key-point">Bunch(번치)</span>들을 분리합니다. 하나의 패킷 안에 여러 Bunch가 담길 수 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — UNetConnection::ReceivedPacket() 핵심 로직</div>
+                <pre><code>void UNetConnection::ReceivedPacket(FBitReader& Reader)
+{
+    // 1) 패킷 헤더 읽기
+    int32 PacketSequence = MakeRelative(Reader.ReadInt(MAX_PACKETID), InPacketId);
+
+    // 2) 시퀀스 확인 — 중복/순서 어긋남 감지
+    if (PacketSequence <= InPacketId)
+    {
+        // 이미 처리했거나 순서가 어긋난 패킷 → 버림
+        return;
+    }
+
+    InPacketId = PacketSequence;
+
+    // 3) ACK 정보 읽기 — 상대가 내 패킷을 받았는지 확인
+    ReadPacketHeader_ACK(Reader);
+
+    // 4) 패킷 안의 Bunch들을 하나씩 분리
+    while (!Reader.AtEnd())
+    {
+        FInBunch Bunch(this);
+
+        // Bunch 헤더: ChIndex(채널), bReliable, bPartial, ...
+        Bunch.ChIndex   = Reader.ReadInt(MAX_CHANNELS);    // 어떤 채널인지
+        Bunch.bReliable = Reader.ReadBit();                 // 신뢰성 여부
+        Bunch.bPartial  = Reader.ReadBit();                 // 분할 Bunch 여부
+
+        // Bunch 데이터 읽기
+        int32 BunchDataBits = Reader.ReadInt(MAX_BUNCH_DATA_BITS);
+        Bunch.SetData(Reader, BunchDataBits);
+
+        // 5) 해당 채널로 전달
+        UChannel* Channel = Channels[Bunch.ChIndex];
+        if (Channel)
+        {
+            Channel->ReceivedBunch(Bunch);
+        }
+    }
+}</code></pre>
+            </div>
+
+            <div class="visual-section">
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">UDP 패킷</div>
+                            <div class="flow-box__items">
+                                <p>Header + Bunch A + Bunch B + Bunch C</p>
+                            </div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">ReceivedPacket()</div>
+                            <div class="flow-box__items">
+                                <p>시퀀스 확인</p>
+                                <p>ACK 처리</p>
+                                <p>Bunch 분리</p>
+                            </div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">각 Channel</div>
+                            <div class="flow-box__items">
+                                <p>Bunch A → Ch[0]</p>
+                                <p>Bunch B → Ch[3]</p>
+                                <p>Bunch C → Ch[7]</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="diagram-caption">하나의 패킷 안에 여러 채널의 Bunch가 담김</p>
+            </div>
+
+            <div class="conversation">
+                <div class="q">Bunch가 정확히 뭔가요? 패킷과 뭐가 다른 건가요?</div>
+                <div class="a">
+                    <p><span class="highlight">패킷(Packet)</span>은 네트워크로 전송되는 물리적 단위(UDP 데이터그램)이고, <span class="highlight">번치(Bunch)</span>는 하나의 채널이 주고받는 논리적 데이터 단위입니다.</p>
+                    <p>패킷은 여러 채널의 Bunch를 하나로 묶어서 보냅니다. 이렇게 하면 <span class="key-point">작은 데이터를 채널마다 따로 보내는 낭비를 줄입니다</span>.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 3: Channel 시스템 — 데이터 종류별 통로 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 3: Channel 시스템 — 데이터 종류별 통로</h2>
+
+            <div class="conversation">
+                <div class="q">채널이 여러 종류가 있다고 했는데, 어떤 것들이 있나요?</div>
+                <div class="a">
+                    <p>언리얼은 데이터 성격에 따라 다른 채널을 사용합니다. 각 채널은 <span class="highlight">UChannel</span>의 서브클래스입니다.</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>채널 타입</th>
+                        <th>클래스</th>
+                        <th>채널 인덱스</th>
+                        <th>역할</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Control</td>
+                        <td>UControlChannel</td>
+                        <td>0 (고정)</td>
+                        <td>연결 핸드셰이크, 로그인, 맵 전환</td>
+                    </tr>
+                    <tr>
+                        <td>Actor</td>
+                        <td>UActorChannel</td>
+                        <td>동적 할당</td>
+                        <td>Actor 복제, Property 동기화, RPC 전송</td>
+                    </tr>
+                    <tr>
+                        <td>Voice</td>
+                        <td>UVoiceChannel</td>
+                        <td>동적 할당</td>
+                        <td>음성 채팅 데이터 전송</td>
+                    </tr>
+                    <tr>
+                        <td>DataStream</td>
+                        <td>UDataStreamChannel</td>
+                        <td>동적 할당</td>
+                        <td>대용량 파일/데이터 스트리밍</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="conversation">
+                <div class="q">ActorChannel이 RPC도 처리하고 Property 복제도 처리한다고요?</div>
+                <div class="a">
+                    <p>맞습니다. <span class="highlight">ActorChannel은 하나의 Actor에 대한 모든 네트워크 통신을 담당</span>합니다. Actor가 서버에서 복제 대상이 되면 해당 클라이언트의 Connection에 ActorChannel이 열립니다. 이 채널을 통해:</p>
+                    <p>1) Actor 스폰 정보 전달<br>
+                    2) Replicated Property 동기화<br>
+                    3) 해당 Actor의 RPC 송수신</p>
+                    <p>이 모든 것이 같은 채널을 통해 이루어집니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — UActorChannel::ReceivedBunch() 핵심 분기</div>
+                <pre><code>void UActorChannel::ReceivedBunch(FInBunch& Bunch)
+{
+    // Actor가 아직 없으면 스폰 정보를 읽어 생성
+    if (Actor == nullptr)
+    {
+        if (!ProcessSpawnBunch(Bunch))
+            return;
+    }
+
+    // Bunch 내용을 읽으며 처리
+    while (!Bunch.AtEnd())
+    {
+        // 서브오브젝트/컴포넌트 식별
+        UObject* RepObj = ReadContentBlockHeader(Bunch);
+
+        if (RepObj)
+        {
+            // Property 복제 데이터인지, RPC인지 판별
+            FObjectReplicator& Replicator = FindOrCreateReplicator(RepObj);
+
+            // ▼ 이 안에서 Property vs RPC 분기가 일어남
+            Replicator.ReceivedBunch(Bunch);
+        }
+    }
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>ActorChannel은 "전용 우편함"입니다. 서버의 각 Actor마다 클라이언트 쪽에 하나의 우편함이 열리고, 그 Actor에 관한 모든 편지(Property 변경, RPC 호출)가 이 우편함을 통해 배달됩니다.</p>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 4: RPC 내부 — 바인딩부터 큐, 디스패치까지 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 4: RPC 내부 — 바인딩부터 큐, 디스패치까지</h2>
+
+            <div class="conversation">
+                <div class="q">UFUNCTION(Server, Reliable)을 선언하면 내부적으로 어떻게 바인딩되나요?</div>
+                <div class="a">
+                    <p>UHT(Unreal Header Tool)가 빌드 시점에 코드를 생성합니다. 핵심은 <span class="highlight">3개의 함수</span>가 만들어진다는 것입니다:</p>
+                    <p>1) <code>Server_Fire()</code> — 호출자가 부르는 함수 (Thunk)<br>
+                    2) <code>Server_Fire_Validate()</code> — 서버 측 유효성 검사 (WithValidation 옵션 시)<br>
+                    3) <code>Server_Fire_Implementation()</code> — 실제 로직 (개발자가 구현)</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — UHT가 자동 생성하는 코드 (개념적 재현)</div>
+                <pre><code>// ===== 개발자가 작성하는 코드 =====
+UFUNCTION(Server, Reliable, WithValidation)
+void Server_Fire(FVector Location, float Damage);
+
+// ===== UHT가 .generated.h / .gen.cpp에 생성하는 코드 =====
+
+// 1) Thunk — 호출 시 진입점
+void AMyCharacter::Server_Fire(FVector Location, float Damage)
+{
+    // 파라미터를 직렬화용 구조체에 담음
+    AMyCharacter_Server_Fire_Parms Parms;
+    Parms.Location = Location;
+    Parms.Damage = Damage;
+
+    // UFunction 메타데이터에서 RPC 정보 가져옴
+    UFunction* Function = FindFunctionChecked(TEXT("Server_Fire"));
+
+    // ▼ 핵심: ProcessEvent()가 네트워크 전송을 트리거
+    ProcessEvent(Function, &Parms);
+}
+
+// 2) 파라미터 직렬화 구조체
+struct AMyCharacter_Server_Fire_Parms
+{
+    FVector Location;
+    float Damage;
+};
+
+// 3) FRepLayout에 RPC 함수 등록 — 리플리케이션 시스템이 알 수 있게
+static FName NAME_Server_Fire = FName(TEXT("Server_Fire"));
+// → ClassReps 배열에 UFunction 포인터가 인덱스와 함께 등록됨</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">ProcessEvent()가 호출되면 패킷으로 어떻게 변환되나요?</div>
+                <div class="a">
+                    <p>여기서부터가 핵심입니다. <span class="highlight">AActor::ProcessEvent()</span>는 해당 UFunction이 RPC 플래그를 갖고 있는지 확인하고, RPC라면 <span class="key-point">CallRemoteFunction()</span>을 호출합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — RPC 호출 체인: ProcessEvent → 패킷 전송</div>
+                <pre><code>// [1단계] AActor::ProcessEvent()
+bool AActor::ProcessEvent(UFunction* Function, void* Parms)
+{
+    // RPC 플래그 확인
+    if (Function->HasAnyFunctionFlags(FUNC_Net))
+    {
+        // 이 함수가 로컬에서 실행되어야 하는지, 원격으로 보내야 하는지 판단
+        ERemoteMode RemoteMode = GetFunctionCallspace(Function);
+
+        if (RemoteMode == ERF_Remote)
+        {
+            // 원격 전송!
+            return CallRemoteFunction(Function, Parms);
+        }
+    }
+    // 로컬 실행인 경우 일반 함수 호출
+    return CallFunction(Function, Parms);
+}
+
+// [2단계] CallRemoteFunction() → FRepLayout::SendRPC()
+bool AActor::CallRemoteFunction(UFunction* Function, void* Parms)
+{
+    UNetDriver* NetDriver = GetNetDriver();
+    if (!NetDriver) return false;
+
+    // 이 Actor의 ActorChannel을 찾음
+    UActorChannel* Channel = Connection->FindActorChannel(this);
+
+    // ▼ RPC를 Bunch로 직렬화
+    FOutBunch Bunch(Channel, /* bReliable */ Function->HasFlag(FUNC_NetReliable));
+
+    // RPC 함수 인덱스 기록 (수신 측에서 어떤 함수인지 식별)
+    uint32 FunctionIndex = GetFunctionIndex(Function);
+    Bunch.WriteIntWrapped(FunctionIndex, MaxRPCIndex);
+
+    // 파라미터 직렬화
+    FRepLayout& RepLayout = NetDriver->GetFunctionRepLayout(Function);
+    RepLayout.SendPropertiesForRPC(Function, Bunch, Parms);
+
+    // ▼ Bunch를 Connection의 송신 큐에 추가
+    Channel->SendBunch(&Bunch, /* bMerge */ true);
+    return true;
+}
+
+// [3단계] UChannel::SendBunch() — 큐잉
+void UChannel::SendBunch(FOutBunch* Bunch, bool bMerge)
+{
+    if (Bunch->bReliable)
+    {
+        // Reliable Bunch는 ACK 받을 때까지 보관
+        Bunch->ChSequence = ++Connection->OutReliable[ChIndex];
+        OutRec.push_back(Bunch);  // 재전송 버퍼에 저장
+    }
+
+    // Connection의 SendBuffer에 Bunch 데이터 기록
+    Connection->WriteBitsToSendBuffer(Bunch);
+
+    // 여러 Bunch가 모여 하나의 패킷이 됨
+    // → FlushNet()이 호출될 때 실제 전송
+}</code></pre>
+            </div>
+
+            <div class="visual-section">
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Server_Fire()</div>
+                            <div class="flow-box__items"><p>UHT 생성 Thunk</p></div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">ProcessEvent()</div>
+                            <div class="flow-box__items"><p>RPC 플래그 확인</p></div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">CallRemoteFunction()</div>
+                            <div class="flow-box__items"><p>직렬화 + Bunch 생성</p></div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">SendBunch()</div>
+                            <div class="flow-box__items"><p>큐잉 + 전송 버퍼</p></div>
+                        </div>
+                    </div>
+                </div>
+                <p class="diagram-caption">RPC 호출 → 패킷 전송까지의 전체 체인</p>
+            </div>
+
+            <div class="conversation">
+                <div class="q">그러면 수신 측에서 RPC는 어떻게 실행되나요?</div>
+                <div class="a">
+                    <p>수신 측은 Bunch에서 <span class="highlight">함수 인덱스</span>를 읽고, 해당 UFunction을 찾아 <span class="key-point">_Implementation()</span> 함수를 호출합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — RPC 수신 및 디스패치</div>
+                <pre><code>// FObjectReplicator::ReceivedBunch()에서 RPC 감지 시:
+bool FObjectReplicator::ReceivedRPC(FInBunch& Bunch)
+{
+    // 1) 함수 인덱스 읽기
+    uint32 FunctionIndex;
+    Bunch.ReadIntWrapped(FunctionIndex, MaxRPCIndex);
+
+    // 2) 인덱스로 UFunction 조회
+    //    ClassReps 테이블에서 매핑된 함수 찾기
+    UFunction* Function = ClassReps[FunctionIndex];
+
+    // 3) 파라미터 역직렬화
+    FRepLayout& RepLayout = OwningChannel->Connection->Driver
+                            ->GetFunctionRepLayout(Function);
+    void* Parms = FMemory_Alloca(Function->ParmsSize);
+    RepLayout.ReceivePropertiesForRPC(Function, Bunch, Parms);
+
+    // 4) Validation (WithValidation인 경우)
+    if (Function->HasFlag(FUNC_NetValidate))
+    {
+        if (!Object->CallFunctionByNameWithArguments(
+                TEXT("Server_Fire_Validate"), Parms))
+        {
+            // 유효성 검사 실패 → 연결 끊기
+            Connection->Close();
+            return false;
+        }
+    }
+
+    // 5) 실제 실행! — _Implementation() 호출
+    Object->ProcessEvent(Function, Parms);
+    // → Server_Fire_Implementation(Location, Damage) 실행됨!
+
+    return true;
+}</code></pre>
+            </div>
+
+            <p class="warning">주의: Reliable RPC가 순서대로 도착해야 하므로, 중간 시퀀스가 빠지면 뒤따르는 Reliable Bunch들은 큐에 쌓여 대기합니다. 이것이 "Reliable Buffer Overflow"의 원인이 됩니다.</p>
+
+            <div class="conversation">
+                <div class="q">Reliable Bunch의 큐잉과 재전송은 어떻게 작동하나요?</div>
+                <div class="a">
+                    <p>각 채널은 <span class="highlight">OutReliable 시퀀스 번호</span>를 관리합니다. Reliable Bunch를 보낼 때마다 시퀀스를 1 증가시키고, ACK를 받을 때까지 <span class="key-point">재전송 버퍼(OutRec)</span>에 보관합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — Reliable Bunch 재전송 메커니즘</div>
+                <pre><code>// 수신 측: Reliable Bunch 순서 보장
+void UChannel::ReceivedBunch(FInBunch& Bunch)
+{
+    if (Bunch.bReliable)
+    {
+        int32 ExpectedSequence = InReliable[ChIndex] + 1;
+
+        if (Bunch.ChSequence == ExpectedSequence)
+        {
+            // 예상 순서와 일치 → 즉시 처리
+            InReliable[ChIndex] = Bunch.ChSequence;
+            ProcessBunch(Bunch);
+
+            // 큐에 쌓여있던 후속 Bunch도 순서대로 처리
+            while (PendingBunches.Num() > 0 &&
+                   PendingBunches[0].ChSequence == InReliable[ChIndex] + 1)
+            {
+                InReliable[ChIndex]++;
+                ProcessBunch(PendingBunches[0]);
+                PendingBunches.RemoveAt(0);
+            }
+        }
+        else if (Bunch.ChSequence > ExpectedSequence)
+        {
+            // 중간 Bunch가 빠짐 → 큐에 보관하고 대기
+            PendingBunches.InsertSorted(Bunch);
+        }
+        // else: 이미 처리한 시퀀스 → 무시
+    }
+    else
+    {
+        // Unreliable → 즉시 처리, 순서 보장 없음
+        ProcessBunch(Bunch);
+    }
+}
+
+// 송신 측: ACK 타임아웃 시 재전송
+void UChannel::TickReliableResend(float DeltaTime)
+{
+    for (FOutBunch* Bunch : OutRec)
+    {
+        Bunch->TimeSinceSend += DeltaTime;
+
+        if (Bunch->TimeSinceSend > ResendTimeout)
+        {
+            // 재전송
+            Connection->WriteBitsToSendBuffer(Bunch);
+            Bunch->TimeSinceSend = 0.0f;
+            Bunch->ResendCount++;
+
+            if (Bunch->ResendCount > MaxResendCount)
+            {
+                // 너무 많은 재전송 → 연결 문제로 판단
+                Connection->Close();
+            }
+        }
+    }
+}</code></pre>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 5: 패킷 송신 — FlushNet과 대역폭 제어 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 5: 패킷 송신 — FlushNet과 대역폭 제어</h2>
+
+            <div class="conversation">
+                <div class="q">SendBunch()를 호출하면 바로 전송되나요?</div>
+                <div class="a">
+                    <p>아닙니다. Bunch는 <span class="highlight">Connection의 SendBuffer에 쌓이기만</span> 합니다. 실제 전송은 틱 끝에 <span class="key-point">UNetConnection::FlushNet()</span>이 호출될 때 일괄로 이루어집니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — 서버 틱에서의 네트워크 처리 순서</div>
+                <pre><code>// UWorld::Tick() 내부에서의 네트워크 관련 호출 순서
+
+void UNetDriver::TickFlush(float DeltaTime)
+{
+    // 1) ServerReplicateActors — Property 변경 감지 & Bunch 생성
+    if (IsServer())
+    {
+        ServerReplicateActors(DeltaTime);
+        // 내부에서:
+        //   - 각 Connection에 대해 Relevant Actor 목록 결정
+        //   - 우선순위(NetPriority) 기반 정렬
+        //   - 변경된 Property를 Bunch로 직렬화
+        //   - ActorChannel::SendBunch() 호출
+    }
+
+    // 2) 각 Connection의 SendBuffer를 실제 전송
+    for (UNetConnection* Connection : ClientConnections)
+    {
+        // 대역폭 제한 확인
+        if (Connection->IsNetReady(/* bAutoFlush */ false))
+        {
+            Connection->FlushNet();
+            // → SendBuffer의 내용을 UDP 패킷으로 묶어서 sendto() 호출
+        }
+    }
+}</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">대역폭 제어는 어떻게 이루어지나요?</div>
+                <div class="a">
+                    <p>Connection마다 <span class="highlight">대역폭 버짓(QueuedBits / NetSpeed)</span>이 있습니다. 한 틱에 보낼 수 있는 데이터양이 제한되며, 초과하면 다음 틱으로 밀립니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — 대역폭 쓰로틀링</div>
+                <pre><code>bool UNetConnection::IsNetReady(bool bAutoFlush)
+{
+    // QueuedBits: 아직 보내지 못한 비트 수
+    // 매 틱마다 NetSpeed만큼 감소 (보냈으니까)
+    QueuedBits -= FMath::Max(DeltaTime * CurrentNetSpeed, 0.0f);
+
+    if (QueuedBits > 0)
+    {
+        // 아직 이전 데이터도 다 못 보냄 → 대기
+        return false;
+    }
+
+    return true;
+}
+
+void UNetConnection::FlushNet(bool bIgnoreSimulation)
+{
+    if (SendBuffer.GetNumBits() > 0)
+    {
+        // 패킷 헤더 붙이기 (시퀀스, ACK 정보)
+        WritePacketHeader(SendBuffer);
+
+        // 실제 소켓 전송
+        LowLevelSend(SendBuffer.GetData(), SendBuffer.GetNumBits());
+
+        // 보낸 만큼 QueuedBits에 더함
+        QueuedBits += SendBuffer.GetNumBits();
+
+        // 버퍼 리셋
+        SendBuffer.Reset();
+    }
+}</code></pre>
+            </div>
+
+            <div class="visual-section">
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">RPC/Property 변경</div>
+                            <div class="flow-box__items"><p>Bunch 생성</p></div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">SendBuffer</div>
+                            <div class="flow-box__items"><p>Bunch 축적</p></div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">FlushNet()</div>
+                            <div class="flow-box__items"><p>대역폭 체크</p><p>헤더 부착</p></div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">sendto()</div>
+                            <div class="flow-box__items"><p>UDP 전송</p></div>
+                        </div>
+                    </div>
+                </div>
+                <p class="diagram-caption">송신: Bunch 축적 → 틱 끝에 일괄 전송</p>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 6: Property 복제의 내부 — 변경 감지와 직렬화 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 6: Property 복제의 내부 — 변경 감지와 직렬화</h2>
+
+            <div class="conversation">
+                <div class="q">서버가 Property 변경을 어떻게 감지하나요? 매번 전체를 보내나요?</div>
+                <div class="a">
+                    <p>아닙니다. 언리얼은 <span class="highlight">FRepLayout</span>이라는 구조로 각 Actor의 복제 대상 Property 목록과 <span class="key-point">Shadow State(이전 전송값의 복사본)</span>를 관리합니다. 매 틱마다 현재값과 Shadow를 비교해서 <span class="highlight">변경된 Property만</span> 전송합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — Property 변경 감지 및 델타 직렬화</div>
+                <pre><code>// ServerReplicateActors() 내부에서 각 Actor에 대해:
+
+void FObjectReplicator::ReplicateProperties(FOutBunch& Bunch)
+{
+    FRepLayout& RepLayout = *RepLayoutPtr;
+
+    // 1) Shadow State와 현재 값 비교
+    TArray&lt;uint16&gt; ChangedProperties;
+    RepLayout.CompareProperties(
+        /* ShadowData  */ ShadowBuffer.GetData(),
+        /* CurrentData */ (uint8*)Object,
+        ChangedProperties   // 변경된 Property 인덱스 목록
+    );
+
+    if (ChangedProperties.Num() == 0)
+        return;  // 변경 없음 → 아무것도 안 보냄
+
+    // 2) 변경된 Property만 직렬화
+    for (uint16 PropIndex : ChangedProperties)
+    {
+        const FRepLayoutCmd& Cmd = RepLayout.Cmds[PropIndex];
+
+        // Property 식별자 기록
+        Bunch.WriteInt(PropIndex, RepLayout.Cmds.Num());
+
+        // Property 값 직렬화 — 타입별 처리
+        switch (Cmd.Type)
+        {
+            case ERepLayoutCmdType::PropertyFloat:
+                Bunch.WriteFloat(*(float*)(CurrentPtr + Cmd.Offset));
+                break;
+            case ERepLayoutCmdType::PropertyVector:
+                WritePackedVector(Bunch, *(FVector*)(CurrentPtr + Cmd.Offset));
+                break;
+            case ERepLayoutCmdType::PropertyObject:
+                // UObject*는 NetworkGUID로 변환하여 전송
+                FNetworkGUID NetGUID = GuidCache->GetOrAssignNetGUID(ObjectPtr);
+                Bunch.Write(NetGUID);
+                break;
+            // ... 각 타입별 직렬화
+        }
+    }
+
+    // 3) Shadow State 업데이트 — 다음 비교를 위해
+    RepLayout.CopyShadowState(ShadowBuffer.GetData(), (uint8*)Object);
+}
+
+// CompareProperties 내부 — 메모리 직접 비교
+void FRepLayout::CompareProperties(
+    const uint8* Shadow, const uint8* Current,
+    TArray&lt;uint16&gt;& OutChanged) const
+{
+    for (int32 i = 0; i < Cmds.Num(); i++)
+    {
+        const FRepLayoutCmd& Cmd = Cmds[i];
+        const uint8* ShadowPtr  = Shadow  + Cmd.ShadowOffset;
+        const uint8* CurrentPtr = Current + Cmd.Offset;
+
+        // 메모리 비교 — 값이 다르면 변경된 것
+        if (!FMemory::Memcmp(ShadowPtr, CurrentPtr, Cmd.ElementSize) != 0)
+        {
+            OutChanged.Add(i);
+        }
+    }
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>Shadow State는 "지난번에 보낸 사진"입니다. 매번 현재 사진과 비교해서 달라진 부분만 빨간 동그라미를 치고, 그 부분만 보내는 겁니다. 전체 사진을 매번 보내면 낭비니까요.</p>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 7: 보이스 데이터 전송 — UVoiceChannel -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 7: 보이스 데이터 전송 — 음성이 흘러가는 경로</h2>
+
+            <div class="conversation">
+                <div class="q">게임에서 보이스 채팅을 하면 음성 데이터는 어떤 경로로 전달되나요?</div>
+                <div class="a">
+                    <p>보이스 데이터는 일반 RPC나 Property 복제와 <span class="highlight">완전히 다른 전용 파이프라인</span>을 탑니다. 핵심은 <span class="key-point">UVoiceChannel</span>이라는 별도 채널을 사용한다는 것입니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <div class="pipeline">
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">마이크 입력</div>
+                        <div class="pipeline-bar pb-gbuffer">
+                            <span>IVoiceCapture</span>
+                            <span>PCM Raw Audio</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">인코딩</div>
+                        <div class="pipeline-bar pb-light">
+                            <span>IVoiceEncoder (Opus)</span>
+                            <span>압축: ~6KB/s</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">네트워크 전송</div>
+                        <div class="pipeline-bar pb-post">
+                            <span>UVoiceChannel</span>
+                            <span>Unreliable Bunch</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">디코딩 & 재생</div>
+                        <div class="pipeline-bar pb-shadow">
+                            <span>IVoiceDecoder (Opus)</span>
+                            <span>USoundWaveProcedural</span>
+                        </div>
+                    </div>
+                </div>
+                <p class="diagram-caption">보이스: 캡처 → Opus 인코딩 → VoiceChannel → 디코딩 → 재생</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — 보이스 캡처 및 전송 흐름</div>
+                <pre><code>// ===== 송신 측: 보이스 캡처 & 인코딩 =====
+
+void UOnlineVoiceImpl::ProcessLocalVoicePackets()
+{
+    IVoiceCapture* VoiceCapture = GetVoiceCapture();
+    IVoiceEncoder* VoiceEncoder = GetVoiceEncoder();
+
+    // 1) 마이크에서 PCM 데이터 읽기
+    uint32 BytesAvailable = 0;
+    EVoiceCaptureState::Type CaptureState =
+        VoiceCapture->GetCaptureState(BytesAvailable);
+
+    if (CaptureState == EVoiceCaptureState::Ok && BytesAvailable > 0)
+    {
+        TArray&lt;uint8&gt; RawVoiceData;
+        RawVoiceData.SetNumUninitialized(BytesAvailable);
+        VoiceCapture->GetVoiceData(RawVoiceData.GetData(), BytesAvailable);
+
+        // 2) Opus 코덱으로 압축
+        //    48kHz 16bit PCM → ~6KB/s compressed
+        TArray&lt;uint8&gt; CompressedData;
+        uint32 CompressedSize = 0;
+        VoiceEncoder->Encode(
+            RawVoiceData.GetData(), BytesAvailable,
+            CompressedData.GetData(), CompressedSize);
+
+        // 3) 로컬 패킷 큐에 추가
+        FVoicePacket Packet;
+        Packet.Data = CompressedData;
+        Packet.Length = CompressedSize;
+        Packet.Sender = LocalPlayerUniqueId;
+        LocalVoicePackets.Add(Packet);
+    }
+}
+
+// ===== 서버: VoiceChannel을 통해 릴레이 =====
+
+void UVoiceChannel::Tick()
+{
+    // 서버가 수신한 보이스 패킷을 다른 클라이언트에게 전달
+    for (FVoicePacket& Packet : PendingVoicePackets)
+    {
+        FOutBunch Bunch(this, /* bReliable */ false);
+        // ▲ Unreliable! 음성은 늦게 도착하면 버리는 게 나음
+
+        // 송신자 ID
+        Bunch.Write(Packet.Sender);
+        // 압축된 음성 데이터
+        Bunch.Write(Packet.Data.GetData(), Packet.Length);
+
+        SendBunch(&Bunch, /* bMerge */ false);
+    }
+}
+
+// ===== 수신 측: 디코딩 & 오디오 재생 =====
+
+void UVoiceChannel::ReceivedBunch(FInBunch& Bunch)
+{
+    // 1) 송신자 ID 읽기
+    FUniqueNetIdRepl SenderId;
+    Bunch.Read(SenderId);
+
+    // 2) 압축 데이터 읽기
+    TArray&lt;uint8&gt; CompressedData;
+    Bunch.Read(CompressedData);
+
+    // 3) Opus 디코딩 → PCM
+    IVoiceDecoder* Decoder = GetVoiceDecoder(SenderId);
+    TArray&lt;uint8&gt; DecompressedData;
+    Decoder->Decode(CompressedData.GetData(), CompressedData.Num(),
+                    DecompressedData.GetData(), DecompressedSize);
+
+    // 4) USoundWaveProcedural에 PCM 데이터 주입 → 스피커 재생
+    USoundWaveProcedural* VoiceSound = GetOrCreateVoiceSound(SenderId);
+    VoiceSound->QueueAudio(DecompressedData.GetData(), DecompressedSize);
+}</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">왜 보이스는 Unreliable로 보내나요?</div>
+                <div class="a">
+                    <p><span class="highlight">실시간 음성에서 지연은 품질 저하보다 나쁩니다.</span> 0.5초 전 음성을 재전송받아 재생하면 대화 흐름이 깨집니다. 패킷이 유실되면 그냥 무시하고 다음 패킷을 재생하는 것이 훨씬 자연스럽습니다.</p>
+                    <p class="key-point">Opus 코덱은 패킷 손실에 대한 PLC(Packet Loss Concealment) 기능이 내장되어 있어, 빠진 구간을 추정하여 매끄럽게 이어줍니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 8: 대용량 데이터 전송 — 이미지/파일 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 8: 대용량 데이터 전송 — 이미지와 파일이 전달되는 방법</h2>
+
+            <div class="conversation">
+                <div class="q">만약 게임 중에 이미지(텍스처)나 큰 바이너리 데이터를 보내야 한다면 어떻게 하나요?</div>
+                <div class="a">
+                    <p>UDP 패킷 하나의 최대 크기는 보통 <span class="highlight">1200바이트 내외</span>입니다. 이미지는 수십 KB~수 MB이므로 하나의 패킷에 담을 수 없습니다. 언리얼은 두 가지 메커니즘을 제공합니다:</p>
+                    <p>1) <span class="key-point">Partial Bunch</span> — 큰 Bunch를 여러 조각으로 분할<br>
+                    2) <span class="key-point">HTTP 기반 다운로드</span> — 정말 큰 에셋은 별도 HTTP 서버에서</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — Partial Bunch: 큰 데이터를 쪼개서 전송</div>
+                <pre><code>// UChannel::SendBunch() 내부 — Bunch가 너무 크면 분할
+
+void UChannel::SendBunch(FOutBunch* Bunch, bool bMerge)
+{
+    const int32 MAX_BUNCH_SIZE = 1024 * 64;  // 64KB (Reliable 최대)
+
+    if (Bunch->GetNumBits() > MAX_SINGLE_BUNCH_SIZE)
+    {
+        // ▼ Partial Bunch로 분할
+        TArray&lt;FOutBunch*&gt; Parts;
+
+        int32 Offset = 0;
+        while (Offset < Bunch->GetNumBits())
+        {
+            FOutBunch* Part = new FOutBunch(this, Bunch->bReliable);
+            Part->bPartial = true;
+            Part->bPartialInitial = (Offset == 0);         // 첫 조각
+            Part->bPartialFinal  = (Remaining <= ChunkSize); // 마지막 조각
+
+            // 데이터 복사
+            int32 ChunkBits = FMath::Min(MAX_SINGLE_BUNCH_SIZE,
+                                         Bunch->GetNumBits() - Offset);
+            Part->SerializeBits(Bunch->GetData() + Offset, ChunkBits);
+            Offset += ChunkBits;
+
+            Parts.Add(Part);
+        }
+
+        // 각 조각을 순서대로 전송
+        for (FOutBunch* Part : Parts)
+        {
+            Connection->WriteBitsToSendBuffer(Part);
+        }
+    }
+    else
+    {
+        // 일반 전송
+        Connection->WriteBitsToSendBuffer(Bunch);
+    }
+}
+
+// ===== 수신 측: Partial Bunch 재조합 =====
+
+void UChannel::ReceivedBunch(FInBunch& Bunch)
+{
+    if (Bunch.bPartial)
+    {
+        if (Bunch.bPartialInitial)
+        {
+            // 새 부분 번치 시작
+            PartialBunch = new FInBunch(Bunch);
+        }
+        else if (PartialBunch)
+        {
+            // 기존에 모으던 데이터에 추가
+            PartialBunch->AppendDataFromChecked(Bunch);
+
+            if (Bunch.bPartialFinal)
+            {
+                // ▼ 모든 조각이 모임 → 완성된 Bunch로 처리
+                ProcessBunch(*PartialBunch);
+                delete PartialBunch;
+                PartialBunch = nullptr;
+            }
+        }
+    }
+    else
+    {
+        ProcessBunch(Bunch);
+    }
+}</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">실제로 게임에서 이미지를 전송하는 구체적인 예시를 보여줄 수 있나요?</div>
+                <div class="a">
+                    <p>예를 들어, 플레이어가 게임 내에서 스크린샷을 공유하거나, 커스텀 엠블럼/스프레이를 다른 플레이어에게 보여주는 경우를 생각해봅시다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — 이미지 데이터를 RPC로 전송하는 실전 패턴</div>
+                <pre><code>// ===== 방법 1: Reliable RPC + TArray&lt;uint8&gt; (작은 이미지용, ~64KB 이하) =====
+
+UFUNCTION(Server, Reliable)
+void Server_SendCustomEmblem(const TArray&lt;uint8&gt;& CompressedImageData);
+
+void AMyPlayerState::Server_SendCustomEmblem_Implementation(
+    const TArray&lt;uint8&gt;& CompressedImageData)
+{
+    // 크기 검증 — 악의적인 대용량 전송 방지
+    if (CompressedImageData.Num() > MAX_EMBLEM_SIZE)  // e.g., 64KB
+    {
+        UE_LOG(LogNet, Warning, TEXT("Emblem too large: %d bytes"),
+               CompressedImageData.Num());
+        return;
+    }
+
+    // 서버에 저장
+    SavedEmblemData = CompressedImageData;
+
+    // 다른 클라이언트들에게 전파
+    Multicast_ReceiveEmblem(CompressedImageData);
+}
+
+// 내부적으로 TArray&lt;uint8&gt;는 이렇게 직렬화됨:
+// → FRepLayout이 배열 길이 + 바이트 데이터를 Bunch에 기록
+// → Bunch가 64KB 넘으면 자동으로 Partial Bunch로 분할
+// → 수신 측에서 재조합 후 TArray&lt;uint8&gt;로 역직렬화
+
+
+// ===== 방법 2: 청크 단위 수동 전송 (큰 이미지용) =====
+
+UFUNCTION(Server, Reliable)
+void Server_SendImageChunk(int32 ImageId, int32 ChunkIndex,
+                           int32 TotalChunks,
+                           const TArray&lt;uint8&gt;& ChunkData);
+
+UFUNCTION(Client, Reliable)
+void Client_ReceiveImageChunk(int32 ImageId, int32 ChunkIndex,
+                              int32 TotalChunks,
+                              const TArray&lt;uint8&gt;& ChunkData);
+
+void AMyPlayerController::SendLargeImage(const TArray&lt;uint8&gt;& FullImageData)
+{
+    const int32 CHUNK_SIZE = 16 * 1024;  // 16KB per chunk
+    int32 TotalChunks = FMath::CeilToInt(
+        (float)FullImageData.Num() / CHUNK_SIZE);
+    int32 ImageId = FMath::Rand();
+
+    for (int32 i = 0; i < TotalChunks; i++)
+    {
+        int32 Offset = i * CHUNK_SIZE;
+        int32 Size = FMath::Min(CHUNK_SIZE,
+                                FullImageData.Num() - Offset);
+
+        TArray&lt;uint8&gt; Chunk;
+        Chunk.Append(FullImageData.GetData() + Offset, Size);
+
+        Server_SendImageChunk(ImageId, i, TotalChunks, Chunk);
+    }
+}
+
+// 수신 측에서 모든 청크가 도착하면 재조립
+void AMyPlayerController::Client_ReceiveImageChunk_Implementation(
+    int32 ImageId, int32 ChunkIndex,
+    int32 TotalChunks, const TArray&lt;uint8&gt;& ChunkData)
+{
+    FPendingImage& Pending = PendingImages.FindOrAdd(ImageId);
+    Pending.TotalChunks = TotalChunks;
+    Pending.ReceivedChunks.Add(ChunkIndex, ChunkData);
+
+    if (Pending.ReceivedChunks.Num() == TotalChunks)
+    {
+        // 모든 청크 도착! 이미지 재조립
+        TArray&lt;uint8&gt; FullData;
+        for (int32 i = 0; i < TotalChunks; i++)
+        {
+            FullData.Append(Pending.ReceivedChunks[i]);
+        }
+
+        // 텍스처 생성 및 사용
+        UTexture2D* Texture = CreateTextureFromCompressedData(FullData);
+        ApplyEmblemTexture(Texture);
+
+        PendingImages.Remove(ImageId);
+    }
+}
+
+
+// ===== 방법 3: HTTP 다운로드 (최적 — 매우 큰 파일용) =====
+
+UFUNCTION(Client, Reliable)
+void Client_DownloadImageFromURL(const FString& ImageURL);
+
+void AMyPlayerController::Client_DownloadImageFromURL_Implementation(
+    const FString& ImageURL)
+{
+    // HTTP 모듈로 비동기 다운로드
+    FHttpModule& Http = FHttpModule::Get();
+    TSharedRef&lt;IHttpRequest&gt; Request = Http.CreateRequest();
+    Request->SetURL(ImageURL);
+    Request->SetVerb(TEXT("GET"));
+    Request->OnProcessRequestComplete()
+        .BindUObject(this, &AMyPlayerController::OnImageDownloaded);
+    Request->ProcessRequest();
+
+    // → 게임 서버의 대역폭을 사용하지 않음!
+    // → CDN/별도 서버에서 직접 다운로드
+}</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>방법</th>
+                        <th>최대 크기</th>
+                        <th>전송 경로</th>
+                        <th>장점</th>
+                        <th>단점</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Reliable RPC + TArray</td>
+                        <td>~64KB</td>
+                        <td>게임 서버 (UDP)</td>
+                        <td>간단, 자동 분할</td>
+                        <td>서버 대역폭 사용, Reliable 큐 부하</td>
+                    </tr>
+                    <tr>
+                        <td>청크 수동 분할</td>
+                        <td>~수 MB</td>
+                        <td>게임 서버 (UDP)</td>
+                        <td>진행률 추적 가능</td>
+                        <td>구현 복잡, 서버 대역폭 사용</td>
+                    </tr>
+                    <tr>
+                        <td>HTTP 다운로드</td>
+                        <td>무제한</td>
+                        <td>별도 HTTP/CDN</td>
+                        <td>서버 부하 없음</td>
+                        <td>별도 인프라 필요</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p class="warning">주의: Reliable RPC로 대용량 데이터를 보내면 Reliable Buffer에 부하가 걸려 다른 중요한 RPC(이동, 사격 등)가 지연될 수 있습니다. 64KB를 넘는 데이터는 반드시 HTTP 방식을 고려하세요.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 9: NetDriver 레벨 — 핸드셰이크와 연결 수립 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 9: 연결 수립 — 핸드셰이크 과정</h2>
+
+            <div class="conversation">
+                <div class="q">클라이언트가 서버에 처음 연결할 때 어떤 과정을 거치나요?</div>
+                <div class="a">
+                    <p>언리얼의 연결 수립은 <span class="highlight">StatelessConnectHandlerComponent</span>를 통한 핸드셰이크로 시작합니다. DDoS 방어를 위해 쿠키 기반 검증을 사용합니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Client</div>
+                            <div class="flow-box__items"><p>Initial Packet</p></div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Server</div>
+                            <div class="flow-box__items"><p>Challenge (Cookie)</p></div>
+                        </div>
+                        <div class="flow-arrow">&larr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Client</div>
+                            <div class="flow-box__items"><p>Cookie 응답</p></div>
+                        </div>
+                    </div>
+                    <div class="flow-row" style="margin-top: 16px;">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Server</div>
+                            <div class="flow-box__items"><p>Cookie 검증 OK</p></div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">ControlChannel[0]</div>
+                            <div class="flow-box__items"><p>NMT_Hello → NMT_Welcome</p></div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">게임 진입</div>
+                            <div class="flow-box__items"><p>NMT_Join → 로딩</p></div>
+                        </div>
+                    </div>
+                </div>
+                <p class="diagram-caption">핸드셰이크: Challenge-Response → ControlChannel 로그인 → 게임 진입</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — ControlChannel 메시지 시퀀스</div>
+                <pre><code>// ControlChannel(채널 인덱스 0)을 통한 연결 시퀀스:
+
+// [1] 클라이언트 → 서버: Hello
+// - 클라이언트 버전, 인증 토큰 전송
+struct FNetControlMessage_Hello
+{
+    uint32 ProtocolVersion;
+    FString AuthToken;
+    FString PlatformId;
+};
+
+// [2] 서버 → 클라이언트: Welcome
+// - 맵 이름, GameMode 정보 전송
+struct FNetControlMessage_Welcome
+{
+    FString MapName;        // "/Game/Maps/MainLevel"
+    FString GameModeName;   // "/Script/MyGame.AMyGameMode"
+    FString RedirectURL;    // 패키지 다운로드 URL (있을 경우)
+};
+
+// [3] 클라이언트: 맵 로딩 시작
+//     로딩 완료 후 →
+
+// [4] 클라이언트 → 서버: Join
+struct FNetControlMessage_Join
+{
+    // 플레이어 닉네임, 옵션 등
+};
+
+// [5] 서버: AGameModeBase::Login() 호출
+//     → PlayerController 생성
+//     → PlayerState 생성
+//     → Pawn 스폰
+//     → 해당 클라이언트에게 Actor Replication 시작!</code></pre>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 10: 우선순위와 Actor 복제 스케줄링 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 10: 복제 스케줄링 — 누구를 먼저 보낼 것인가</h2>
+
+            <div class="conversation">
+                <div class="q">서버에 Actor가 수백 개 있을 때, 매 틱마다 전부 복제하나요?</div>
+                <div class="a">
+                    <p>아닙니다. 대역폭이 제한되어 있으므로 <span class="highlight">우선순위 기반 스케줄링</span>으로 "이번 틱에 어떤 Actor를 복제할지" 결정합니다. 이것이 <span class="key-point">ServerReplicateActors()</span>의 핵심 로직입니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — 복제 우선순위 결정</div>
+                <pre><code>void UNetDriver::ServerReplicateActors(float DeltaTime)
+{
+    for (UNetConnection* Connection : ClientConnections)
+    {
+        // 1) 이 클라이언트에게 보여야 할 Actor 목록 수집
+        TArray&lt;FActorPriority&gt; PriorityList;
+
+        for (AActor* Actor : ReplicatedActors)
+        {
+            // Relevancy 체크 — 이 클라이언트에게 관련 있는 Actor만
+            if (!Actor->IsNetRelevantFor(Connection->ViewTarget))
+                continue;
+
+            // 우선순위 계산
+            float Priority = Actor->GetNetPriority(
+                Connection->ViewTarget->GetActorLocation(),
+                Connection->ViewTarget->GetViewRotation(),
+                Connection);
+
+            // 마지막 복제 이후 경과 시간 반영
+            float TimeSinceLastRep = World->TimeSeconds -
+                                     Actor->LastReplicationTime;
+            Priority *= TimeSinceLastRep;
+
+            PriorityList.Add({Actor, Priority});
+        }
+
+        // 2) 우선순위로 정렬 — 높은 것부터
+        PriorityList.Sort([](const FActorPriority& A,
+                             const FActorPriority& B)
+        {
+            return A.Priority > B.Priority;
+        });
+
+        // 3) 대역폭이 허용하는 만큼 복제
+        int32 BitsWritten = 0;
+        int32 MaxBits = Connection->GetMaxBitsPerTick();
+
+        for (const FActorPriority& Entry : PriorityList)
+        {
+            if (BitsWritten >= MaxBits)
+                break;  // 이번 틱 대역폭 소진
+
+            UActorChannel* Channel = Connection->FindOrCreateActorChannel(
+                Entry.Actor);
+
+            int32 Written = Channel->ReplicateActor();
+            BitsWritten += Written;
+        }
+    }
+}
+
+// Actor별 기본 우선순위 설정
+float AActor::GetNetPriority(...)
+{
+    float Priority = NetPriority;  // 기본값: 1.0
+
+    // 플레이어가 보고 있는 방향의 Actor에 가중치
+    if (IsInViewCone(ViewLocation, ViewRotation))
+        Priority *= 2.0f;
+
+    // 가까운 Actor에 가중치
+    float DistSq = FVector::DistSquared(GetActorLocation(), ViewLocation);
+    if (DistSq < CloseDistanceSq)
+        Priority *= 3.0f;
+
+    return Priority;
+}</code></pre>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>제한된 택배 트럭(대역폭)에 모든 소포(Actor)를 실을 수 없을 때, "긴급(우선순위 높음)" 소포를 먼저 싣고, 나머지는 다음 트럭(다음 틱)에 싣는 것입니다. 오래 기다린 소포(마지막 복제 이후 경과 시간)는 우선순위가 올라갑니다.</p>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 11: 전체 흐름 통합 예시 — 총 쏘기 RPC -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 11: 전체 흐름 통합 — "총 쏘기" 하나에 일어나는 모든 것</h2>
+
+            <div class="conversation">
+                <div class="q">플레이어가 총을 쏘는 순간, 코드 레벨에서 패킷이 나가고 들어오는 전체 흐름을 처음부터 끝까지 보여줄 수 있나요?</div>
+                <div class="a">
+                    <p>좋습니다. 클라이언트 A가 마우스 클릭 → 서버 검증 → 모든 클라이언트에 이펙트 표시까지의 <span class="highlight">전체 여정</span>을 추적해봅시다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <div class="pipeline">
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">① Client A: 입력</div>
+                        <div class="pipeline-bar pb-gbuffer">
+                            <span>마우스 클릭</span>
+                            <span>Server_Fire() 호출</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">② Client A → Server: RPC 전송</div>
+                        <div class="pipeline-bar pb-gbuffer">
+                            <span>ProcessEvent()</span>
+                            <span>Bunch 직렬화</span>
+                            <span>SendBuffer</span>
+                            <span>FlushNet()</span>
+                            <span>UDP sendto()</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">③ Server: 패킷 수신</div>
+                        <div class="pipeline-bar pb-light">
+                            <span>TickDispatch()</span>
+                            <span>recvfrom()</span>
+                            <span>ReceivedPacket()</span>
+                            <span>Bunch 분리</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">④ Server: RPC 실행</div>
+                        <div class="pipeline-bar pb-light">
+                            <span>ActorChannel</span>
+                            <span>ReceivedBunch()</span>
+                            <span>ReceivedRPC()</span>
+                            <span>Server_Fire_Implementation()</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">⑤ Server: 결과 전파</div>
+                        <div class="pipeline-bar pb-post">
+                            <span>Ammo-- (Property 변경)</span>
+                            <span>Multicast_PlayEffect()</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">⑥ Server → All Clients: 송신</div>
+                        <div class="pipeline-bar pb-post">
+                            <span>ServerReplicateActors()</span>
+                            <span>Ammo delta + Multicast Bunch</span>
+                            <span>FlushNet()</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">⑦ All Clients: 수신 & 적용</div>
+                        <div class="pipeline-bar pb-shadow">
+                            <span>OnRep_Ammo() → UI 갱신</span>
+                            <span>Multicast_PlayEffect_Impl() → 총구 화염</span>
+                        </div>
+                    </div>
+                </div>
+                <p class="diagram-caption">"총 쏘기" 하나에 일어나는 전체 네트워크 흐름</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">C++ — 통합 예시 전체 코드</div>
+                <pre><code>// ===== MyCharacter.h =====
+
+UCLASS()
+class AMyCharacter : public ACharacter
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(ReplicatedUsing = OnRep_Ammo)
+    int32 Ammo = 30;
+
+    UFUNCTION()
+    void OnRep_Ammo();
+
+    // ① 로컬 입력 처리
+    void HandleFireInput();
+
+    // ② Client → Server RPC
+    UFUNCTION(Server, Reliable, WithValidation)
+    void Server_Fire(FVector_NetQuantize MuzzleLocation,
+                     FVector_NetQuantize AimDirection);
+
+    // ⑤ Server → All Clients RPC
+    UFUNCTION(NetMulticast, Unreliable)
+    void Multicast_PlayFireEffect(FVector_NetQuantize MuzzleLocation);
+
+    virtual void GetLifetimeReplicatedProps(
+        TArray&lt;FLifetimeProperty&gt;& OutLifetimeProps) const override;
+};
+
+// ===== MyCharacter.cpp =====
+
+void AMyCharacter::GetLifetimeReplicatedProps(
+    TArray&lt;FLifetimeProperty&gt;& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+    DOREPLIFETIME_CONDITION(AMyCharacter, Ammo, COND_OwnerOnly);
+}
+
+// ① 클라이언트: 마우스 클릭 시 호출
+void AMyCharacter::HandleFireInput()
+{
+    if (!HasAuthority())
+    {
+        // 클라이언트 → Server RPC 호출
+        // 내부적으로:
+        //   ProcessEvent() → CallRemoteFunction()
+        //   → Bunch 생성 → SendBuffer에 추가
+        //   → 틱 끝에 FlushNet()으로 UDP 전송
+        Server_Fire(GetMuzzleLocation(), GetAimDirection());
+
+        // 로컬 예측: 즉시 이펙트 재생 (반응성)
+        PlayLocalFireEffect();
+    }
+}
+
+// ② 유효성 검사 (서버에서 자동 호출)
+bool AMyCharacter::Server_Fire_Validate(
+    FVector_NetQuantize MuzzleLocation,
+    FVector_NetQuantize AimDirection)
+{
+    // 치트 방지: 비정상적 방향이나 위치 검증
+    if (AimDirection.IsNearlyZero())
+        return false;  // → false 반환 시 클라이언트 강제 접속 해제
+
+    return true;
+}
+
+// ④ 서버에서 실행되는 실제 로직
+void AMyCharacter::Server_Fire_Implementation(
+    FVector_NetQuantize MuzzleLocation,
+    FVector_NetQuantize AimDirection)
+{
+    if (Ammo <= 0) return;
+
+    // 서버에서 히트 판정
+    FHitResult Hit;
+    FVector TraceEnd = MuzzleLocation + AimDirection * 10000.f;
+    GetWorld()->LineTraceSingleByChannel(
+        Hit, MuzzleLocation, TraceEnd, ECC_Visibility);
+
+    if (Hit.bBlockingHit)
+    {
+        if (AMyCharacter* Target = Cast&lt;AMyCharacter&gt;(Hit.GetActor()))
+        {
+            // 데미지 처리 (서버 권한)
+            Target->TakeDamage(25.f, ...);
+        }
+    }
+
+    // ⑤ Property 변경 → 다음 복제 틱에 자동 전송
+    Ammo--;
+    // → Shadow State와 비교 → 변경 감지 → 델타 직렬화
+    // → Owner 클라이언트에게만 전송 (COND_OwnerOnly)
+
+    // ⑤ Multicast RPC → 모든 클라이언트에 이펙트
+    Multicast_PlayFireEffect(MuzzleLocation);
+    // → 모든 Connection의 ActorChannel에 Unreliable Bunch 추가
+}
+
+// ⑦ 모든 클라이언트에서 실행
+void AMyCharacter::Multicast_PlayFireEffect_Implementation(
+    FVector_NetQuantize MuzzleLocation)
+{
+    // 자기 자신은 이미 로컬 예측으로 재생했으므로 스킵
+    if (IsLocallyControlled()) return;
+
+    // 총구 화염 파티클
+    UGameplayStatics::SpawnEmitterAtLocation(
+        GetWorld(), FireEffectParticle, MuzzleLocation);
+
+    // 총소리
+    UGameplayStatics::PlaySoundAtLocation(
+        GetWorld(), FireSound, MuzzleLocation);
+}
+
+// ⑦ Owner 클라이언트: Ammo 복제 수신 시
+void AMyCharacter::OnRep_Ammo()
+{
+    // HUD 탄약 표시 업데이트
+    if (AMyHUD* HUD = GetHUD())
+    {
+        HUD->UpdateAmmoDisplay(Ammo);
+    }
+}</code></pre>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 12: 디버깅과 프로파일링 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 12: 네트워크 디버깅 — 패킷을 눈으로 보는 방법</h2>
+
+            <div class="conversation">
+                <div class="q">네트워크 문제가 발생했을 때 어떻게 디버깅하나요?</div>
+                <div class="a">
+                    <p>언리얼은 강력한 네트워크 디버깅 도구들을 제공합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">콘솔 명령어 — 네트워크 디버깅</div>
+                <pre><code>// 네트워크 통계 표시
+stat net              // 대역폭, 패킷 수, 채널 수 등
+stat netactor         // Actor별 복제 비용
+
+// 패킷 로스/지연 시뮬레이션 (테스트용)
+net PktLoss=5         // 5% 패킷 로스
+net PktLag=100        // 100ms 지연 추가
+net PktLagVariance=20 // ±20ms 지터
+net PktDup=2          // 2% 패킷 중복
+net PktOrder=1        // 패킷 순서 뒤섞기 활성화
+
+// 네트워크 로그 상세 출력
+log LogNet Verbose
+log LogNetTraffic Verbose    // 모든 Bunch 송수신 로그
+log LogRep Verbose           // Property 복제 로그
+log LogNetPlayerMovement Verbose  // 이동 동기화 로그
+
+// Network Profiler (패킷 캡처 파일 생성)
+net start              // 네트워크 프로파일링 시작
+net stop               // 종료 → NetworkProfiling.nprof 생성
+// → UnrealFrontend의 Network Profiler로 분석</code></pre>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>도구</th>
+                        <th>용도</th>
+                        <th>확인 가능 정보</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>stat net</td>
+                        <td>실시간 대역폭 모니터링</td>
+                        <td>In/Out Bytes, Packets, Bunches 수</td>
+                    </tr>
+                    <tr>
+                        <td>Network Profiler</td>
+                        <td>패킷 내용 분석</td>
+                        <td>Actor별, Property별 트래픽 비중</td>
+                    </tr>
+                    <tr>
+                        <td>net PktLoss/Lag</td>
+                        <td>열악한 네트워크 시뮬레이션</td>
+                        <td>패킷 로스/지연 시 게임 동작 검증</td>
+                    </tr>
+                    <tr>
+                        <td>LogNetTraffic</td>
+                        <td>Bunch 레벨 추적</td>
+                        <td>어떤 채널에 무슨 데이터가 오갔는지</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- 핵심 정리 -->
+        <!-- ============================================================ -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>네트워크 스택 4계층</strong>: NetDriver(소켓) → NetConnection(패킷/ACK) → Channel(Bunch) → Actor/RPC(게임 로직)</li>
+                <li><strong>패킷과 번치</strong>: 패킷은 물리적 UDP 데이터그램, Bunch는 채널 단위의 논리적 데이터 블록. 여러 Bunch가 하나의 패킷에 담김</li>
+                <li><strong>RPC 바인딩</strong>: UHT가 Thunk/Parms 구조체를 자동 생성 → ProcessEvent()가 RPC 플래그 감지 → CallRemoteFunction()으로 Bunch 직렬화 → SendBunch()로 큐잉</li>
+                <li><strong>Property 복제</strong>: FRepLayout이 Shadow State와 현재값을 메모리 비교 → 변경분만 델타 직렬화하여 전송</li>
+                <li><strong>보이스</strong>: 전용 VoiceChannel + Opus 코덱 + Unreliable 전송. 실시간성 우선, 손실 허용</li>
+                <li><strong>대용량 데이터</strong>: Partial Bunch(자동 분할), 청크 RPC(수동 분할), HTTP 다운로드(최적) 세 가지 전략</li>
+                <li><strong>복제 스케줄링</strong>: NetPriority × 경과시간으로 우선순위 산정 → 대역폭 한도 내에서 높은 순서부터 복제</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

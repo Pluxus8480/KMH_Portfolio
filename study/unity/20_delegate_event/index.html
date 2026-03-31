@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>delegate와 event | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+        <header class="content-header">
+            <h1>함수를 변수처럼 다룰 수 있다면?</h1>
+            <p class="subtitle">delegate와 event - C#의 함수 타입화와 안전한 이벤트 시스템</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: delegate(델리게이트)란?</h2>
+            <div class="conversation">
+                <div class="q">delegate는 무엇인가요?</div>
+                <div class="a">
+                    <p>C#에서 델리게이트는 <strong>함수를 타입화</strong>한 것입니다. C++의 함수 포인터와 비슷한 개념입니다.</p>
+                    <p class="highlight">파라미터와 리턴 타입을 통해 정의하며, 동일한 시그니처를 가진 메서드들과 호환되어 참조를 가질 수 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>public delegate void VoidAndIntEx(int i);
+
+public class ExampleClass
+{
+    public void DoSomething(VoidAndIntEx exFunc)
+    {
+        // 인자로 받은 함수를 호출한다
+        exFunc(1);
+    }
+}</code></pre>
+                    </div>
+
+                    <p>델리게이트를 활용하면 메서드를 담아두거나, 함수 인자로 넘겨서 <strong>콜백 패턴</strong>을 구현하는 등 다양한 곳에 사용할 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: event란?</h2>
+            <div class="conversation">
+                <div class="q">event와 delegate의 차이점은?</div>
+                <div class="a">
+                    <p>event는 delegate와 비슷한 일을 하지만 한 가지 큰 차이점이 있습니다.</p>
+                    <p class="highlight">이벤트를 호출(Invoke)할 수 있는 것은 해당 이벤트를 소유한 클래스만 가능합니다. 외부에서는 구독(+=)과 구독 해제(-=)만 할 수 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>class ExampleClass
+{
+    public event Action ExampleEvent;
+
+    public void TriggerEvent()
+    {
+        if (ExampleEvent != null)
+        {
+            ExampleEvent(); // 내부에서만 호출 가능
+        }
+    }
+}
+
+// 외부 코드
+var obj = new ExampleClass();
+obj.ExampleEvent += MyHandler;  // 구독 O
+// obj.ExampleEvent();          // 컴파일 에러! 외부 호출 X</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Action, Func, Predicate</h2>
+            <div class="conversation">
+                <div class="q">매번 delegate를 선언해야 하나요?</div>
+                <div class="a">
+                    <p>자주 사용하는 패턴은 이미 <strong>제네릭 델리게이트</strong>로 제공됩니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>키워드</th>
+                                <th>파라미터</th>
+                                <th>반환값</th>
+                                <th>용도</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>Action&lt;T&gt;</code></td>
+                                <td>T</td>
+                                <td>void</td>
+                                <td>반환 없는 함수</td>
+                            </tr>
+                            <tr>
+                                <td><code>Func&lt;T, TResult&gt;</code></td>
+                                <td>T</td>
+                                <td>TResult</td>
+                                <td>반환 있는 함수</td>
+                            </tr>
+                            <tr>
+                                <td><code>Predicate&lt;T&gt;</code></td>
+                                <td>T</td>
+                                <td>bool</td>
+                                <td>조건 판별 함수</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: null 조건부 연산자 (?.)</h2>
+            <div class="conversation">
+                <div class="q">delegate나 event가 null일 때 호출하면 어떻게 되나요?</div>
+                <div class="a">
+                    <p class="warning">null인 delegate를 호출하면 NullReferenceException이 발생합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 위험한 코드</div>
+                        <pre><code>if (ExampleEvent != null) // 여기서는 null이 아니었는데
+{
+    // 다른 스레드가 구독을 취소해서 null이 됨!
+    ExampleEvent(); // NullReferenceException!
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">멀티스레드에서 안전하게 호출하는 방법은?</div>
+                <div class="a">
+                    <p>전통적으로는 "복사 후 실행" 패턴을 사용했습니다:</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - 복사 후 실행</div>
+                        <pre><code>var copiedEvent = ExampleEvent;
+if (copiedEvent != null)
+{
+    copiedEvent(); // ExampleEvent 구독 취소해도 안전
+}</code></pre>
+                    </div>
+
+                    <p>하지만 더 간결한 방법이 있습니다.</p>
+                    <p class="highlight"><code>?.</code> (null 조건부 연산자)를 사용하면 한 줄로 안전하게 호출할 수 있습니다. 이 연산자는 원자적으로 수행되므로 멀티스레드에서도 안전합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C# - null 조건부 연산자</div>
+                        <pre><code>ExampleEvent?.Invoke(); // null이면 호출 안 함, 원자적 실행</code></pre>
+                    </div>
+
+                    <p class="key-point"><code>?.</code> 연산자는 원자적(atomic)으로 수행되어 연산 도중 다른 스레드가 개입할 여지가 없습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>delegate는 C#에서 함수를 타입화한 것으로 C++의 함수 포인터와 유사하다</li>
+                <li>event는 delegate에 접근 제한을 추가하여, 소유 클래스만 호출 가능하다</li>
+                <li>Action, Func, Predicate는 자주 사용하는 delegate 패턴의 제네릭 버전이다</li>
+                <li><code>?.</code> 연산자로 null 안전하고 스레드 안전한 호출이 가능하다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

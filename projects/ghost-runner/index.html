@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ghost Runner DX11 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../css/project-detail.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x2694;</text></svg>">
+</head>
+<body>
+    <header class="header" id="header">
+        <nav class="nav container">
+            <a href="../../index.html" class="nav__logo">
+                <span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span>
+            </a>
+        </nav>
+    </header>
+
+    <div class="project-container">
+        <a href="../../index.html#projects" class="back-link">&larr; 포트폴리오</a>
+
+        <!-- Hero -->
+        <div class="project-hero">
+            <span class="project-hero__emoji">&#x2694;</span>
+            <h1>Ghost Runner</h1>
+            <p class="project-hero__subtitle">DirectX 11 기반 FPS 근접 액션 게임 개인 포트폴리오</p>
+            <div class="project-links">
+                <a href="https://github.com/KMH-Portfolio/Portfolio_Dx11_GR" target="_blank" class="project-links__github">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                    GitHub
+                </a>
+                <a href="https://www.youtube.com/watch?v=e-euy_yL7h0" target="_blank" class="project-links__demo">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                    데모 영상
+                </a>
+            </div>
+        </div>
+
+        <!-- 프로젝트 정보 -->
+        <div class="project-meta">
+            <div class="meta-card">
+                <span class="meta-card__label">기간</span>
+                <span class="meta-card__value">2024.06 ~ 08</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-card__label">유형</span>
+                <span class="meta-card__value meta-card__value--accent">개인 프로젝트</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-card__label">담당</span>
+                <span class="meta-card__value">엔진 / 렌더링 / 물리 / 전투 / AI</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-card__label">규모</span>
+                <span class="meta-card__value">267+ 파일</span>
+            </div>
+        </div>
+
+        <!-- 기술 스택 -->
+        <div class="tech-stack">
+            <span class="tech-badge tech-badge--primary">DirectX 11</span>
+            <span class="tech-badge tech-badge--primary">HLSL</span>
+            <span class="tech-badge tech-badge--primary">C++</span>
+            <span class="tech-badge">PhysX 5.3</span>
+            <span class="tech-badge">Effects11</span>
+            <span class="tech-badge">Assimp</span>
+            <span class="tech-badge">ImGui</span>
+            <span class="tech-badge">FMOD</span>
+            <span class="tech-badge">DLL</span>
+        </div>
+
+        <!-- 핵심 수치 -->
+        <div class="stat-box">
+            <div class="stat-item">
+                <span class="stat-item__number stat-item__number--blue">7</span>
+                <span class="stat-item__label">렌더 그룹</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-item__number stat-item__number--purple">13</span>
+                <span class="stat-item__label">HLSL 셰이더</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-item__number stat-item__number--yellow">10+</span>
+                <span class="stat-item__label">보스 상태</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-item__number stat-item__number--green">5</span>
+                <span class="stat-item__label">게임 레벨</span>
+            </div>
+        </div>
+
+        <!-- 목차 -->
+        <nav class="toc">
+            <div class="toc__title">목차</div>
+            <ol class="toc__list">
+                <li><a href="#arch"><span class="toc__number">01</span>엔진 아키텍처</a></li>
+                <li><a href="#rendering"><span class="toc__number">02</span>디퍼드 렌더링</a></li>
+                <li><a href="#postprocess"><span class="toc__number">03</span>포스트 프로세싱</a></li>
+                <li><a href="#physics"><span class="toc__number">04</span>PhysX 물리 &amp; 충돌</a></li>
+                <li><a href="#combat"><span class="toc__number">05</span>전투 시스템</a></li>
+                <li><a href="#boss"><span class="toc__number">06</span>보스 AI</a></li>
+                <li><a href="#grapple"><span class="toc__number">07</span>와이어 액션</a></li>
+                <li><a href="#animation"><span class="toc__number">08</span>애니메이션 &amp; 트레일</a></li>
+                <li><a href="#optimize"><span class="toc__number">09</span>최적화</a></li>
+            </ol>
+        </nav>
+
+        <!-- ===== 01. 엔진 아키텍처 ===== -->
+        <section class="detail-section" id="arch">
+            <h2 class="detail-section__title"><span class="sec-num">01</span> 엔진 아키텍처</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">Engine DLL / Client EXE 분리 구조</h3>
+                <div class="feature-card__desc">
+                    <p>상용 엔진 없이 DirectX 11로 엔진을 직접 설계했습니다. 엔진 코어를 DLL로 분리하여 렌더링, 물리, 충돌, 사운드 등 핵심 시스템을 독립 모듈로 관리하고, 게임 로직은 Client EXE에서 처리하는 구조입니다.</p>
+                </div>
+
+                <div class="flow-diagram">
+                    <div class="flow-row" style="margin-bottom: 8px;">
+                        <div class="flow-box" style="flex:1;">
+                            <div class="flow-box__title">Client (EXE)</div>
+                            <div class="flow-box__items">레벨 / 플레이어 / 적 AI / 무기 / UI / 이펙트 (70+ 파일)</div>
+                        </div>
+                    </div>
+                    <div style="text-align:center; color: var(--accent-primary); font-size: 0.9rem; margin: 4px 0;">DLL Import</div>
+                    <div class="flow-row">
+                        <div class="flow-box flow-box--highlight" style="flex:1;">
+                            <div class="flow-box__title">Engine (DLL)</div>
+                            <div class="flow-box__items">렌더러 / PhysX / 충돌 / 애니메이션 / 사운드 / 리소스 관리 (135+ 파일)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>GameInstance.h - 엔진 싱글턴 핵심 <span class="code-lang">C++</span></summary>
+                    <pre><code>class CGameInstance final : public CBase
+{
+    DECLARE_SINGLETON(CGameInstance)
+
+public:
+    HRESULT Initialize_Engine(_uint iNumLevels, const ENGINE_DESC&amp; EngineDesc,
+        _Out_ ID3D11Device** ppDevice, _Out_ ID3D11DeviceContext** ppContext);
+    void Tick_Engine(_float fTimeDelta);
+    HRESULT Draw();
+
+    // 프로토타입-클론 패턴 기반 오브젝트 관리
+    HRESULT Add_Prototype(const wstring&amp; strPrototypeTag, class CGameObject* pPrototype);
+    HRESULT Add_Clone(_uint iLevelIndex, const wstring&amp; strLayerTag,
+        const wstring&amp; strPrototypeTag, void* pArg = nullptr);
+    CGameObject* Clone_GameObject(const wstring&amp; strPrototypeTag, void* pArg = nullptr);
+
+    // 렌더링
+    HRESULT Add_RenderObjects(CRenderer::RENDERGROUP eRenderGroup, class CGameObject* pRenderObject);
+
+    // 유틸리티
+    _float Random_Float(_float _fMin, _float _fMax);
+    _int Random_Int(_int _iMin, _int _iMax);
+};</code></pre>
+                </details>
+
+                <ul class="feature-list">
+                    <li><strong>프로토타입-클론 패턴:</strong> 게임 오브젝트를 프로토타입으로 등록하고, 필요 시 Clone하여 인스턴스를 생성</li>
+                    <li><strong>컴포넌트 기반 설계:</strong> Transform, Collider, Shader, Texture, Model 등을 컴포넌트로 조합</li>
+                    <li><strong>매니저 시스템:</strong> Renderer, PhysX, Collision, Sound, Camera, UI, Input을 독립 매니저로 관리</li>
+                    <li><strong>레벨 시스템:</strong> Logo, Loading, GamePlay, Lab, Boss, Tool 등 다수의 레벨을 동적 전환</li>
+                </ul>
+
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">이미지: 엔진 아키텍처 다이어그램</div>
+                    Visual Studio 솔루션 구조 (Engine DLL + Client EXE)
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 02. 디퍼드 렌더링 ===== -->
+        <section class="detail-section" id="rendering">
+            <h2 class="detail-section__title"><span class="sec-num">02</span> 디퍼드 렌더링</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">G-Buffer 기반 Deferred Rendering</h3>
+                <div class="feature-card__desc">
+                    <p>G-Buffer(Normal, Diffuse, Depth, Specular)에 기하 정보를 먼저 기록하고, 라이팅 패스에서 <span class="hl">Directional / Point / Spot Light</span>를 개수 제한 없이 계산하는 디퍼드 렌더링 파이프라인을 구현했습니다.</p>
+                </div>
+
+                <div class="pipeline">
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">G-Buffer</div>
+                        <div class="pipeline-bar pb-gbuffer"><span>Normal</span><span>Diffuse</span><span>Depth</span><span>Specular</span></div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">라이팅</div>
+                        <div class="pipeline-bar pb-light"><span>Directional</span><span>Point</span><span>Spot</span></div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">후처리</div>
+                        <div class="pipeline-bar pb-post"><span>Glow</span><span>Blur</span><span>Glitch</span><span>Red Screen</span></div>
+                    </div>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Renderer.h - 렌더 그룹 열거형 <span class="code-lang">C++</span></summary>
+                    <pre><code>enum RENDERGROUP {
+    RENDER_PRIORITY,   // 우선 렌더링 (배경 등)
+    RENDER_NONBLEND,   // 불투명 오브젝트
+    RENDER_NONLIGHT,   // 라이팅 미적용
+    RENDER_BLEND,      // 반투명 오브젝트
+    RENDER_GLOW,       // 발광 효과
+    RENDER_UI,         // UI 요소
+    RENDER_END
+};</code></pre>
+                </details>
+
+                <details class="code-toggle">
+                    <summary>Shader_Deferred.hlsl - Directional Light <span class="code-lang">HLSL</span></summary>
+                    <pre><code>PS_OUT_LIGHT PS_MAIN_DIRECTIONAL(PS_IN In)
+{
+    PS_OUT_LIGHT Out = (PS_OUT_LIGHT) 0;
+
+    vector vDepthDesc = g_DepthTexture.Sample(PointSampler, In.vTexcoord);
+    vector vNormalDesc = g_NormalTexture.Sample(PointSampler, In.vTexcoord);
+    vector vNormal = vector(vNormalDesc.xyz * 2.f - 1.f, 0.f);
+
+    // Diffuse 라이팅
+    Out.vShade = g_vLightDiffuse * saturate(max(dot(normalize(g_vLightDir) * -1.f,
+        normalize(vNormal)), 0.f) + (g_vLightAmbient * g_vMtrlAmbient));
+
+    // 월드 좌표 복원 (Depth &rarr; World Position)
+    vector vWorldPos;
+    vWorldPos.x = In.vTexcoord.x * 2.f - 1.f;
+    vWorldPos.y = In.vTexcoord.y * -2.f + 1.f;
+    vWorldPos.z = vDepthDesc.x;
+    vWorldPos.w = 1.f;
+    vWorldPos = vWorldPos * (vDepthDesc.y * 3000.f);
+    vWorldPos = mul(vWorldPos, g_ProjMatrixInv);
+    vWorldPos = mul(vWorldPos, g_ViewMatrixInv);
+
+    // Specular 반사
+    vector vReflect = reflect(normalize(g_vLightDir), normalize(vNormal));
+    vector vLook = vWorldPos - g_vCamPosition;
+    Out.vSpecular = (g_vLightSpecular * g_vMtrlSpecular) *
+        pow(max(dot(normalize(vLook) * -1.f, normalize(vReflect)), 0.f), 30.f);
+
+    return Out;
+}</code></pre>
+                </details>
+
+                <details class="code-toggle">
+                    <summary>Shader_Deferred.hlsl - Point Light (거리 감쇠) <span class="code-lang">HLSL</span></summary>
+                    <pre><code>PS_OUT_LIGHT PS_MAIN_POINT(PS_IN In)
+{
+    PS_OUT_LIGHT Out = (PS_OUT_LIGHT) 0;
+
+    // G-Buffer에서 월드 좌표 복원
+    vector vDepthDesc = g_DepthTexture.Sample(PointSampler, In.vTexcoord);
+    vector vWorldPos;
+    vWorldPos.x = In.vTexcoord.x * 2.f - 1.f;
+    vWorldPos.y = In.vTexcoord.y * -2.f + 1.f;
+    vWorldPos.z = vDepthDesc.x;
+    vWorldPos.w = 1.f;
+    vWorldPos = vWorldPos * (vDepthDesc.y * 3000.f);
+    vWorldPos = mul(vWorldPos, g_ProjMatrixInv);
+    vWorldPos = mul(vWorldPos, g_ViewMatrixInv);
+
+    // 거리 기반 감쇠 (Attenuation)
+    vector vLightDir = vWorldPos - g_vLightPos;
+    float fDistance = length(vLightDir);
+    float fAtt = saturate((g_fLightRange - fDistance) / g_fLightRange);
+
+    Out.vShade = g_vLightDiffuse * saturate(max(dot(normalize(vLightDir) * -1.f,
+        normalize(vNormal)), 0.f) + (g_vLightAmbient * g_vMtrlAmbient)) * fAtt;
+
+    return Out;
+}</code></pre>
+                </details>
+
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">이미지: G-Buffer 디버그 뷰</div>
+                    Normal / Diffuse / Depth / Specular 렌더 타겟
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 03. 포스트 프로세싱 ===== -->
+        <section class="detail-section" id="postprocess">
+            <h2 class="detail-section__title"><span class="sec-num">03</span> 포스트 프로세싱</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">사이버펑크 글리치 이펙트</h3>
+                <div class="feature-card__desc">
+                    <p>고스트 러너의 사이버펑크 세계관을 표현하기 위해 <span class="hl">블록 노이즈 + 색수차(Chromatic Aberration) + 레드 글리치</span>를 조합한 커스텀 글리치 셰이더를 구현했습니다. 피격, 스킬 사용, 특수 상황에서 활성화됩니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Shader_Deferred.hlsl - 글리치 셰이더 <span class="code-lang">HLSL</span></summary>
+                    <pre><code>PS_OUT PS_MAIN_GLITCH(PS_IN In)
+{
+    PS_OUT Out = (PS_OUT) 0;
+
+    // 블록 단위 랜덤 흔들림
+    float enable_shift = (random(float2(floor(TIME * shake_speed), 0.0))
+        &lt; shake_rate) ? 1.0f : 0.0f;
+
+    float2 fixed_uv = In.vTexcoord;
+    fixed_uv.x += (random(float2(floor(In.vTexcoord.y * shake_block_size)
+        / shake_block_size, TIME)) - 0.5f) * shake_power * enable_shift;
+
+    float4 pixel_color = g_DeferredTexture.SampleLevel(LinearSampler, fixed_uv, 0.0f);
+
+    // 색수차 (Chromatic Aberration) - R/B 채널 분리
+    pixel_color.r = lerp(pixel_color.r, g_DeferredTexture.SampleLevel(LinearSampler,
+        fixed_uv + float2(shake_color_rate, 0.0f), 0.0f).r, enable_shift);
+    pixel_color.b = lerp(pixel_color.b, g_DeferredTexture.SampleLevel(LinearSampler,
+        fixed_uv + float2(-shake_color_rate, 0.0f), 0.0f).b, enable_shift);
+
+    // 레드 글리치 블록 오버레이
+    if (g_bUseRedGlitch == true) {
+        for (int i = 0; i &lt; 36; ++i) {
+            float2 center = float2(random(float2(TIME, i * 0.1f)) * g_ScreenSize.x,
+                i * red_block_height * 1.5f * g_ScreenSize.y / 720.f);
+            float rect_width = red_block_min_length + (red_block_max_length
+                - red_block_min_length) * random(float2(TIME, i * 0.3f));
+            // ... 사각형 영역 내 빨간색 혼합
+            pixel_color.rgb = lerp(pixel_color.rgb,
+                float3(1.0f, 0.0f, 0.0f), red_mix_rate);
+        }
+    }
+
+    Out.vColor = pixel_color;
+    return Out;
+}</code></pre>
+                </details>
+
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">GIF: 글리치 이펙트 동작 장면</div>
+                    피격 시 화면 글리치 + 색수차 효과
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">방사형 블러 (Radial Blur)</h3>
+                <div class="feature-card__desc">
+                    <p>대시, 와이어 액션 등 고속 이동 시 <span class="hl">화면 중심에서 바깥으로 퍼지는 방사형 블러</span>를 적용합니다. 샘플 수와 블러 강도를 실시간으로 조절할 수 있습니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Shader_Deferred.hlsl - 방사형 블러 <span class="code-lang">HLSL</span></summary>
+                    <pre><code>PS_OUT PS_MAIN_BLUR(PS_IN In)
+{
+    PS_OUT Out = (PS_OUT) 0;
+    float4 pixel_color = g_DeferredTexture.Sample(LinearSampler, In.vTexcoord);
+
+    float2 direction = In.vTexcoord - g_Center;
+    float distance = length(direction);
+
+    int adjustedNumSamples = max(8, (int)(numSamples * g_BlurStrength));
+    float totalWeight = 0.0f;
+    float4 blurredColor = float4(0, 0, 0, 0);
+
+    for (int i = 0; i &lt; adjustedNumSamples; ++i) {
+        float sampleOffset = (float(i) / float(adjustedNumSamples)) * distance;
+        float2 sampleCoord = In.vTexcoord + normalize(direction) * sampleOffset;
+        float weight = 1.0f - (sampleOffset / distance);
+        blurredColor += g_DeferredTexture.Sample(LinearSampler, sampleCoord) * weight;
+        totalWeight += weight;
+    }
+
+    blurredColor /= totalWeight;
+    Out.vColor = lerp(pixel_color, blurredColor, distance);
+    return Out;
+}</code></pre>
+                </details>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">Glow / Bloom</h3>
+                <div class="feature-card__desc">
+                    <p>가우시안 가중치 기반의 2-Pass 블러(수평 + 수직)로 발광 오브젝트에 Bloom 효과를 적용합니다. 무기 트레일, 그래플링 포인트, 적 공격 이펙트 등에 사용됩니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Shader_Deferred.hlsl - Glow 가우시안 블러 <span class="code-lang">HLSL</span></summary>
+                    <pre><code>PS_OUT PS_MAIN_GLOW(PS_IN In)
+{
+    PS_OUT Out = (PS_OUT) 0;
+
+    float2 texelSize = 1.0 / g_ScreenSize * 2.f;
+    float4 Horizon_color = g_GlowTexture.Sample(LinearSampler, In.vTexcoord) * weights[0];
+
+    for (int i = 1; i &lt; 7; ++i) {
+        Horizon_color += g_GlowTexture.Sample(LinearSampler,
+            In.vTexcoord + float2(i * texelSize.x, 0.0)) * weights[i];
+        Horizon_color += g_GlowTexture.Sample(LinearSampler,
+            In.vTexcoord - float2(i * texelSize.x, 0.0)) * weights[i];
+    }
+
+    Out.vColor = Horizon_color;
+    return Out;
+}</code></pre>
+                </details>
+            </div>
+        </section>
+
+        <!-- ===== 04. 물리 & 충돌 ===== -->
+        <section class="detail-section" id="physics">
+            <h2 class="detail-section__title"><span class="sec-num">04</span> PhysX 물리 &amp; 충돌</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">NVIDIA PhysX 5.3 통합</h3>
+                <div class="feature-card__desc">
+                    <p>캐릭터 이동, 중력, 지형 충돌을 위해 <span class="hl">PhysX 5.3을 엔진에 직접 통합</span>했습니다. Character Controller로 안정적인 지형 위 이동을 처리하고, 커스텀 이벤트 콜백으로 충돌 반응을 관리합니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>PhysX_Manager.h - 물리 엔진 관리자 <span class="code-lang">C++</span></summary>
+                    <pre><code>class CPhysX_Manager final : public CBase
+{
+public:
+    void Initialize();
+    void Tick(_float fTimeDelta);
+    void Simulate_CurrentScene(_float fTimeDelta);
+
+    PxFoundation*          Get_Foundation();
+    PxPhysics*             Get_Physics();
+    PxDefaultCpuDispatcher* Get_Dispatcher();
+    PxScene*               Get_Scene();
+    PxControllerManager*   Get_ControllerManager();
+};</code></pre>
+                </details>
+
+                <details class="code-toggle">
+                    <summary>PhysXCollider.h - 동적 액터 &amp; 캐릭터 컨트롤러 <span class="code-lang">C++</span></summary>
+                    <pre><code>class CPhysXCollider final : public CComponent
+{
+public:
+    PxRigidDynamic* createDynamicActor(const char* PhysXTag);
+    PxController* createCharacterController(
+        PxControllerManager* manager, const PxVec3&amp; position);
+    void Synchronize_Transform(CTransform* pTransform, _fvector In_vOffset);
+};</code></pre>
+                </details>
+
+                <ul class="feature-list">
+                    <li><strong>캐릭터 컨트롤러:</strong> 캡슐 기반 CCT로 경사면 이동 + 중력 처리</li>
+                    <li><strong>Rigid Body:</strong> 질량/속도/각속도 제어, 그랩(와이어) 상태 전환</li>
+                    <li><strong>이벤트 콜백:</strong> PhysX_EventCallBack / PhysX_Hitreport로 충돌 이벤트 처리</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">멀티 타입 충돌 시스템</h3>
+                <div class="feature-card__desc">
+                    <p>AABB, OBB, Sphere, Ray 4가지 충돌 타입을 지원하며, <span class="hl">레이어 기반 충돌 매트릭스</span>로 불필요한 충돌 검사를 건너뜁니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Collision_Manager.h - 충돌 레이어 시스템 <span class="code-lang">C++</span></summary>
+                    <pre><code>class CCollision_Manager final : public CBase
+{
+public:
+    enum COLLIDER_TYPE {
+        COLLISION_PLAYER,
+        COLLISION_MONSTER,
+        COLLISION_PROJECTILE,
+        COLLISION_END
+    };
+
+    void Add_Collider(COLLIDER_TYPE _colliderType, class CCollider* pCollider);
+    void CollisionAccessBoth(COLLIDER_TYPE eDst, COLLIDER_TYPE eSrc);
+    void Collision_Check();
+};
+
+// Collider.h - 충돌 타입
+enum TYPE { TYPE_AABB, TYPE_OBB, TYPE_SPHERE, TYPE_RAY, TYPE_END };
+
+_bool Intersect(CCollider* pTargetCollider);
+_bool RayIntersect(XMVECTOR vRayPos, XMVECTOR vRayDir, _float&amp; Dist);</code></pre>
+                </details>
+
+                <table class="compare-table">
+                    <thead>
+                        <tr><th>충돌 타입</th><th>특성</th><th>용도</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>AABB</td><td>축 정렬, 가장 빠름</td><td>환경 오브젝트, 트리거</td></tr>
+                        <tr><td>OBB (SAT)</td><td>회전 지원, 정밀</td><td>무기 충돌, 적 히트박스</td></tr>
+                        <tr><td>Sphere</td><td>방향 무관, 고속</td><td>범위 판정, 탄환</td></tr>
+                        <tr><td>Ray</td><td>직선 교차 검출</td><td>그래플링 포인트 피킹</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ===== 05. 전투 시스템 ===== -->
+        <section class="detail-section" id="combat">
+            <h2 class="detail-section__title"><span class="sec-num">05</span> 전투 시스템</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">플레이어 상태 머신</h3>
+                <div class="feature-card__desc">
+                    <p>이동, 점프, 공격, 가드, 와이어 액션, 벽타기, 스킬까지 <span class="hl">다중 상태 머신</span>으로 관리합니다. 각 상태는 독립적인 서브 상태를 가지며, PhysX RigidBody와 연동됩니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>PlayerManager.h - 플레이어 상태 열거형 <span class="code-lang">C++</span></summary>
+                    <pre><code>class CPlayer_Manager : public CBase
+{
+public:
+    enum PLAYER_STATE {
+        PLAYER_IDLE, PLAYER_MOVE, PLAYER_JUMP,
+        PLAYER_ATTACK, PLAYER_GUARD, PLAYER_DIE,
+        PLAYER_WIREACTION, PLAYER_END
+    };
+    enum JUMP_STATE  { JUMP_START, JUMP_LOOP, JUMP_FINISH, JUMP_NO, JUMP_END };
+    enum WIRE_STATE  { WIRE_START, WIRE_LOOP, WIRE_ATTACH, WIRE_END };
+    enum WALLRUN_STATE { WALLRUN_LEFT, WALLRUN_RIGHT, WALLRUN_NO, WALLRUN_END };
+    enum SKILL_ENUM  { SKILL_DASH, SKILL_SERGE, SKILL_MINDCONTROL, SKILL_END };
+
+private:
+    _float m_fSkillGauge = 0.f;
+    _float m_fSkillGaugeMax = 83.f;
+    _bool  m_bIsAttack = false;
+    _bool  m_bDash = false;
+};</code></pre>
+                </details>
+
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">IDLE / MOVE</div>
+                            <div class="flow-box__items">기본 이동</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">ATTACK</div>
+                            <div class="flow-box__items">카타나 콤보</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">WIREACTION</div>
+                            <div class="flow-box__items">그래플링</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">SKILL</div>
+                            <div class="flow-box__items">대시 / 서지</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">카타나 &amp; 무기 시스템</h3>
+                <div class="feature-card__desc">
+                    <p>카타나와 권총 두 가지 무기를 구현했습니다. 카타나는 <span class="hl">본(Bone)에 부착</span>되어 애니메이션과 동기화되며, 공격 시 트레일 이펙트가 활성화됩니다. 권총은 탄환 풀링 시스템으로 발사체를 관리합니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Katana.cpp - 본 부착 &amp; 트레일 활성화 <span class="code-lang">C++</span></summary>
+                    <pre><code>void CKatana::Tick(_float fTimeDelta)
+{
+    m_pTrailCom-&gt;Set_TrailOn(false);
+
+    // 공격 중일 때만 트레일 활성화
+    if ((PLAYER-&gt;Get_IsAttack() == true || m_bOn))
+        m_pTrailCom-&gt;Set_TrailOn(true);
+
+    // 본 매트릭스에서 무기 위치 동기화
+    _matrix BoneMatrix = XMLoadFloat4x4(m_pBoneMatrix);
+    for (size_t i = 0; i &lt; 3; i++)
+        BoneMatrix.r[i] = XMVector3Normalize(BoneMatrix.r[i]);
+
+    SetUp_WorldMatrix(m_pTransformCom-&gt;Get_WorldMatrix() * BoneMatrix);
+}</code></pre>
+                </details>
+
+                <ul class="feature-list">
+                    <li><strong>카타나:</strong> 근접 공격, 트레일 이펙트, 본 동기화, 패리 판정</li>
+                    <li><strong>권총:</strong> 원거리 공격, 탄환/빔 오브젝트 풀링</li>
+                    <li><strong>오브젝트 풀:</strong> Bullet, Beam, ShockWave를 사전 할당하여 재사용</li>
+                </ul>
+
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">GIF: 카타나 전투 + 트레일 이펙트</div>
+                    근접 공격 콤보와 칼날 궤적 효과
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 06. 보스 AI ===== -->
+        <section class="detail-section" id="boss">
+            <h2 class="detail-section__title"><span class="sec-num">06</span> 보스 AI</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">다단계 보스 상태 머신</h3>
+                <div class="feature-card__desc">
+                    <p>보스는 <span class="hl">10가지 메인 상태 + 4가지 공격 패턴</span>으로 구성된 복합 FSM으로 동작합니다. 플레이어와의 거리/방향에 따라 패턴을 선택하고, 패턴 페이즈가 진행될수록 더 공격적인 행동을 보입니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Boss.h - 보스 상태 머신 <span class="code-lang">C++</span></summary>
+                    <pre><code>class CBoss final : public CGameObject
+{
+public:
+    enum BOSS_STATE {
+        BOSS_IDLE, BOSS_SEARCH, BOSS_AIRSTRIKE, BOSS_FLY,
+        BOSS_GUARD, BOSS_DASH, BOSS_STUN, BOSS_PATTERN,
+        BOSS_ATTACK, BOSS_DIE, BOSS_END
+    };
+    enum BOSS_PATTERN_STATE {
+        DASH_PATTERN, BULLET_PATTERN,
+        SLASH_PATTERN, EXTEND_PATTERN, PATTERN_END
+    };
+    enum DASH_STATE { DASH_START, DASH_LOOP, DASH_END };
+    enum FLY_STATE  { FLY_START, FLY_LOOP, FLY_END };
+
+private:
+    BOSS_STATE         m_eBossState = BOSS_IDLE;
+    BOSS_PATTERN_STATE m_eBossPattern = DASH_PATTERN;
+    _int   m_iHp = 200;
+    _float m_fDashTime = 0.f;
+    _float m_fParryTime = 0.f;
+    _uint  m_iPatternPhase = 0;
+};</code></pre>
+                </details>
+
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">IDLE</div>
+                            <div class="flow-box__items">대기</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">SEARCH</div>
+                            <div class="flow-box__items">플레이어 탐색</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">PATTERN</div>
+                            <div class="flow-box__items">Dash / Bullet / Slash / Extend</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">STUN</div>
+                            <div class="flow-box__items">그로기</div>
+                        </div>
+                    </div>
+                </div>
+
+                <table class="compare-table">
+                    <thead><tr><th>패턴</th><th>설명</th><th>서브 상태</th></tr></thead>
+                    <tbody>
+                        <tr><td>Dash Pattern</td><td>플레이어 방향으로 고속 돌진</td><td>START &rarr; LOOP &rarr; END</td></tr>
+                        <tr><td>Bullet Pattern</td><td>원거리 탄막 발사</td><td>조준 &rarr; 연사 &rarr; 쿨타임</td></tr>
+                        <tr><td>Slash Pattern</td><td>근접 범위 슬래시 공격</td><td>준비 &rarr; 실행 &rarr; 후딜</td></tr>
+                        <tr><td>Extend Pattern</td><td>확장형 범위 공격</td><td>차징 &rarr; 폭발 &rarr; 복귀</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">적 AI 유형</h3>
+                <div class="feature-card__desc">
+                    <p>보스 외에도 Samurai, PistolGunner, Shifter 등 다양한 적 유형을 구현했습니다. 각 적은 독립적인 상태 머신을 가지며, 패리/가드/스턴 등의 상호작용을 지원합니다.</p>
+                </div>
+                <ul class="feature-list">
+                    <li><strong>Samurai:</strong> IDLE &rarr; SEARCH &rarr; GUARD &rarr; DASH &rarr; ATTACK, 패리 메카닉</li>
+                    <li><strong>PistolGunner:</strong> 원거리 사격, 위치 기반 사격 판정</li>
+                    <li><strong>Shifter:</strong> 특수 이동 패턴, 페이즈 전환</li>
+                    <li><strong>EnemyManager:</strong> 적 스폰/관리 중앙 제어</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- ===== 07. 와이어 액션 ===== -->
+        <section class="detail-section" id="grapple">
+            <h2 class="detail-section__title"><span class="sec-num">07</span> 와이어 액션</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">그래플링 후크 시스템</h3>
+                <div class="feature-card__desc">
+                    <p>고스트 러너의 핵심 이동 메카닉인 와이어 액션을 구현했습니다. <span class="hl">Ray Casting으로 그래플링 포인트를 감지</span>하고, 3축 방향 속도를 물리 기반으로 계산하여 플레이어를 이동시킵니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>PlayerManager.cpp - 와이어 액션 구현 <span class="code-lang">C++</span></summary>
+                    <pre><code>void CPlayer_Manager::State_WireAction(_float fTimeDelta)
+{
+    switch(eWireState) {
+    case WIRE_START: {
+        m_pRigidBody-&gt;Set_Grab(CRigidbody::WIRE_START);
+        m_fWireTime = m_fMaxWireTime;
+
+        // 타겟 방향으로 3축 속도 계산
+        m_pRigidBody-&gt;Set_VelocityZ(
+            XMVectorGetZ(m_vGrabTargetDir) * fabs(m_fGrabZDistance) * 0.04f);
+        m_pRigidBody-&gt;Set_VelocityX(
+            XMVectorGetX(m_vGrabTargetDir) * fabs(m_fGrabXDistance) * 0.04f);
+        m_pRigidBody-&gt;Set_VelocityY(
+            XMVectorGetY(m_vGrabTargetDir) * fabs(m_fGrabYDistance) * 0.1f);
+        m_pRigidBody-&gt;Set_Ground(false);
+
+        eWireState = WIRE_LOOP;
+        break;
+    }
+    case WIRE_LOOP: {
+        m_fWireTime -= fTimeDelta;
+        // 타겟 근처 도달 또는 시간 초과 시 ATTACH로 전환
+        if (m_fWireTime &lt;= 0.f ||
+            fabs(Get_PlayerToTargetXZDistance(...)) &lt; 8.f) {
+            eWireState = WIRE_ATTACH;
+        }
+        break;
+    }
+    }
+}</code></pre>
+                </details>
+
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Ray Pick</div>
+                            <div class="flow-box__items">포인트 감지</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">WIRE_START</div>
+                            <div class="flow-box__items">속도 계산 + 발사</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">WIRE_LOOP</div>
+                            <div class="flow-box__items">물리 이동</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">WIRE_ATTACH</div>
+                            <div class="flow-box__items">도착 / 착지</div>
+                        </div>
+                    </div>
+                </div>
+
+                <ul class="feature-list">
+                    <li><strong>GraplingPoint:</strong> 시각적 인디케이터 (Dot + Frame + OuterRing) + Sphere 충돌체</li>
+                    <li><strong>Ray Picking:</strong> 카메라 Ray와 그래플링 포인트 Sphere 교차 판정</li>
+                    <li><strong>물리 연동:</strong> RigidBody의 Grab 상태 전환으로 중력/속도 제어</li>
+                    <li><strong>벽타기 (Wall Run):</strong> 좌/우 벽면 감지 후 중력 감소 상태로 횡 이동</li>
+                </ul>
+
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">GIF: 와이어 액션 &amp; 벽타기</div>
+                    그래플링 포인트 이동 + 벽타기 장면
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 08. 애니메이션 & 트레일 ===== -->
+        <section class="detail-section" id="animation">
+            <h2 class="detail-section__title"><span class="sec-num">08</span> 애니메이션 &amp; 트레일</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">FBX 스켈레탈 애니메이션</h3>
+                <div class="feature-card__desc">
+                    <p>Assimp을 통해 FBX에서 본 계층과 애니메이션 채널을 로드하고, <span class="hl">GPU Skinning (Linear Blend Skinning)</span>으로 정점 셰이더에서 본 변환을 처리합니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Animation.h - 애니메이션 시스템 <span class="code-lang">C++</span></summary>
+                    <pre><code>class CAnimation final : public CBase
+{
+public:
+    HRESULT Initialize(shared_ptr&lt;ANIMATION_DATA&gt; pAIAnimation,
+        const vector&lt;class CBone*&gt;&amp; Bones);
+    void Update_TransformationMatrix(_float fTimeDelta,
+        const vector&lt;class CBone*&gt;&amp; Bones, _bool isLoop);
+
+    _float Get_Aperture() const { return m_fAperture; }
+    void Set_AnimationMultiplier(_float fAnimationMultiplier);
+
+private:
+    _float m_fDuration;             // 총 길이
+    _float m_fTickPerSecond;        // 재생 속도
+    _float m_fCurrentTrackPosition; // 현재 트랙 위치
+};</code></pre>
+                </details>
+
+                <ul class="feature-list">
+                    <li><strong>커스텀 바이너리 포맷:</strong> FBX를 파싱 후 필요한 데이터만 추출하여 이진 직렬화</li>
+                    <li><strong>애니메이션 제어:</strong> 속도 배율, 루프/원샷, 완료 콜백</li>
+                    <li><strong>본 매트릭스 접근:</strong> 무기, 이펙트 등을 특정 본에 부착</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">동적 트레일 시스템</h3>
+                <div class="feature-card__desc">
+                    <p>카타나의 궤적을 시각화하는 트레일 시스템입니다. <span class="hl">두 개의 본 위치(상/하)를 추적</span>하여 deque에 저장하고, 매 프레임 동적 정점 버퍼를 갱신합니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>VIBuffer_Trail.h - 트레일 정점 버퍼 <span class="code-lang">C++</span></summary>
+                    <pre><code>class CVIBuffer_Trail final : public CVIBuffer
+{
+public:
+    struct TRAIL_DESC {
+        _uint iMaxRect = 0;  // 최대 사각형 수
+    };
+
+    void Start(_float4x4* pUpper, _float4x4* pDown);
+    void Tick(_float fTimeDelta);
+    void SetTarget(_float4x4* pTarget) { m_pTarget = pTarget; }
+
+private:
+    deque&lt;_float3&gt; m_vecUpperPositions;  // 칼날 상단 궤적
+    deque&lt;_float3&gt; m_vecDownPositions;   // 칼날 하단 궤적
+    _float m_fTimer = 0.f;
+};</code></pre>
+                </details>
+
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">GIF: 카타나 트레일 이펙트</div>
+                    공격 모션에 따른 칼날 궤적 시각화
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 09. 최적화 ===== -->
+        <section class="detail-section" id="optimize">
+            <h2 class="detail-section__title"><span class="sec-num">09</span> 최적화</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">바이너리 직렬화 &amp; 로딩 최적화</h3>
+                <div class="feature-card__desc">
+                    <p>Assimp으로 FBX를 파싱한 뒤 커스텀 구조체로 변환하여 이진 파일로 저장합니다. 이후 로드 시 Assimp 파싱을 건너뛰고 바이너리에서 직접 읽어, 로딩 시간을 대폭 단축했습니다.</p>
+                </div>
+                <ul class="feature-list">
+                    <li><strong>Model Converter:</strong> FBX &rarr; 커스텀 바이너리 포맷 변환기</li>
+                    <li><strong>텍스처 캐싱:</strong> 중복 텍스처 로드 방지</li>
+                    <li><strong>멀티스레드 로딩:</strong> 별도 스레드에서 리소스 비동기 로드</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">프러스텀 컬링 &amp; Octree</h3>
+                <div class="feature-card__desc">
+                    <p><span class="hl">Octree 기반 공간 분할</span>로 카메라 시야(Frustum) 밖의 오브젝트를 빠르게 걸러냅니다. 충돌 검사에서도 Octree를 활용하여 후보군을 줄입니다.</p>
+                </div>
+                <ul class="feature-list">
+                    <li><strong>Octree:</strong> 3D 공간을 8분할하여 오브젝트 쿼리 최적화</li>
+                    <li><strong>Frustum Culling:</strong> 카메라 6개 평면으로 가시 오브젝트만 렌더링</li>
+                    <li><strong>오브젝트 풀:</strong> Bullet, Beam, ShockWave 등 빈번한 생성/소멸 오버헤드 제거</li>
+                    <li><strong>레이어 기반 충돌:</strong> 충돌 매트릭스로 불필요한 쌍 비교 건너뜀</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">네비게이션 메시</h3>
+                <div class="feature-card__desc">
+                    <p>Cell 기반 네비게이션 메시로 적 AI의 이동 경로를 제한합니다. 삼각형 셀 단위로 이동 가능 영역을 정의하고, 인접 셀 탐색으로 경로를 결정합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 핵심 정리 ===== -->
+        <section class="summary-box">
+            <h3>핵심 성과</h3>
+            <ul>
+                <li><strong>커스텀 DX11 엔진</strong> - Engine DLL / Client EXE 분리, 프로토타입-클론 패턴, 컴포넌트 기반 아키텍처</li>
+                <li><strong>Deferred Rendering</strong> - G-Buffer 기반 멀티 라이트 + Directional / Point / Spot Light</li>
+                <li><strong>사이버펑크 포스트 프로세싱</strong> - 글리치 + 색수차 + 방사형 블러 + Glow/Bloom</li>
+                <li><strong>PhysX 5.3 통합</strong> - CCT 기반 캐릭터 이동, 다중 충돌 타입, 레이어 충돌 매트릭스</li>
+                <li><strong>와이어 액션</strong> - Ray Picking + 물리 기반 3축 속도 계산 + 벽타기</li>
+                <li><strong>복합 AI 시스템</strong> - 보스 10상태 FSM + 4패턴, 다양한 적 유형 (Samurai/Gunner/Shifter)</li>
+            </ul>
+        </section>
+
+        <!-- 링크 -->
+        <div class="project-links" style="margin-top: 40px; margin-bottom: 24px;">
+            <a href="https://github.com/KMH-Portfolio/Portfolio_Dx11_GR" target="_blank" class="project-links__github">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                GitHub
+            </a>
+            <a href="https://www.youtube.com/watch?v=e-euy_yL7h0" target="_blank" class="project-links__demo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                데모 영상
+            </a>
+        </div>
+    </div>
+
+    <footer style="text-align:center; padding:20px; color:var(--text-muted); font-size:var(--fs-small); border-top:1px solid var(--border-default);">
+        <p>&copy; 2024 KMH Portfolio</p>
+    </footer>
+</body>
+</html>

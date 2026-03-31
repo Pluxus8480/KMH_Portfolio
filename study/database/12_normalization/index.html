@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>정규형 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../database.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>테이블을 쪼개야 할 때는 언제인가?</h1>
+            <p class="subtitle">정규화(Normalization) - 이상현상을 제거하고 바른 릴레이션을 만드는 과정</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 정규화란?</h2>
+            <div class="conversation">
+                <div class="q">정규화가 뭔가요?</div>
+                <div class="a">
+                    <p>함수 종속성을 이용해 릴레이션을 연관성이 있는 속성들로만 구성되도록 <strong>분해하는 작업</strong>으로, 이상현상이 없는 바른 릴레이션을 만드는 것이 목표입니다.</p>
+                    <p class="highlight">정규화를 한 후 릴레이션은 손실 없이 분해되어야 하며, 분해된 릴레이션들은 자연조인(Natural Join)을 했을 시 분해 전으로 복원 가능해야 합니다.</p>
+                    <p>기본 정규형(1, 2, 3, 보이스/코드)과 고급 정규형(4, 5)이 있으며, 대부분의 실무에서는 기본 정규형까지 다룹니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 제 1 정규형 (1NF)</h2>
+            <div class="conversation">
+                <div class="q">제 1 정규형이란?</div>
+                <div class="a">
+                    <p><strong>각 칼럼이 하나의 속성만을 가져야</strong> 합니다.</p>
+                    <p class="warning">아래처럼 하나의 칼럼에 여러 값이 들어가면 제 1 정규형을 위반합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>ID</th><th>EVENTNUM</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Wow</td><td>1, 2, 4</td></tr>
+                        </tbody>
+                    </table>
+                    <p>이를 다음과 같이 분리해야 합니다:</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>ID</th><th>EVENTNUM</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Wow</td><td>1</td></tr>
+                            <tr><td>Wow</td><td>2</td></tr>
+                            <tr><td>Wow</td><td>4</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 제 2 정규형 (2NF)</h2>
+            <div class="conversation">
+                <div class="q">제 2 정규형은 뭐가 추가되나요?</div>
+                <div class="a">
+                    <p>제 1 정규형에 속하면서, <strong>기본키가 아닌 모든 속성이 기본키에 완전 종속</strong>되는 경우입니다. 즉, <strong>부분 함수 종속성을 제거</strong>해야 합니다.</p>
+                    <p>아래 테이블에서 GRADE와 PERCENT는 ID에만 종속되지 EVENTNUM에는 종속되지 않습니다:</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>ID</th><th>EVENTNUM</th><th>GRADE</th><th>PERCENT</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Wow</td><td>1</td><td>P</td><td>20%</td></tr>
+                            <tr><td>Wow</td><td>2</td><td>P</td><td>20%</td></tr>
+                            <tr><td>Great</td><td>7</td><td>G</td><td>10%</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">분리 후:</p>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <table class="compare-table" style="flex: 1;">
+                            <thead><tr><th>ID</th><th>EVENTNUM</th></tr></thead>
+                            <tbody>
+                                <tr><td>Wow</td><td>1</td></tr>
+                                <tr><td>Wow</td><td>2</td></tr>
+                                <tr><td>Great</td><td>7</td></tr>
+                            </tbody>
+                        </table>
+                        <table class="compare-table" style="flex: 1;">
+                            <thead><tr><th>ID</th><th>GRADE</th><th>PERCENT</th></tr></thead>
+                            <tbody>
+                                <tr><td>Wow</td><td>P</td><td>20%</td></tr>
+                                <tr><td>Great</td><td>G</td><td>10%</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 제 3 정규형 (3NF)</h2>
+            <div class="conversation">
+                <div class="q">제 3 정규형은?</div>
+                <div class="a">
+                    <p>제 2 정규형에서 <strong>이행적 함수 종속을 제거</strong>한 것입니다.</p>
+                    <div class="analogy-box">
+                        <strong>이행적 함수 종속이란?</strong>
+                        <p>속성 X, Y, Z에서 X &rarr; Y, Y &rarr; Z이면 X &rarr; Z가 되는데, 이 경우 Z가 X에 이행적으로 함수 종속되었다고 합니다.</p>
+                    </div>
+                    <p>위 2NF 결과에서 ID &rarr; GRADE, GRADE &rarr; PERCENT 관계가 있으므로:</p>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <table class="compare-table" style="flex: 1;">
+                            <thead><tr><th>ID</th><th>GRADE</th></tr></thead>
+                            <tbody>
+                                <tr><td>Wow</td><td>P</td></tr>
+                                <tr><td>Great</td><td>G</td></tr>
+                            </tbody>
+                        </table>
+                        <table class="compare-table" style="flex: 1;">
+                            <thead><tr><th>GRADE</th><th>PERCENT</th></tr></thead>
+                            <tbody>
+                                <tr><td>P</td><td>20%</td></tr>
+                                <tr><td>G</td><td>10%</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="highlight">이제 ID로 GRADE만을 알 수 있고, GRADE로 PERCENT를 알 수 있어 이행적 종속이 제거되었습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: BCNF (보이스 코드 정규형)</h2>
+            <div class="conversation">
+                <div class="q">BCNF는 뭔가요?</div>
+                <div class="a">
+                    <p>제 3 정규형에서 더 나아가 <strong>모든 결정자가 후보키</strong>라면 BCNF를 만족합니다.</p>
+                    <table class="compare-table">
+                        <thead><tr><th>ID</th><th>SHOP</th><th>SHOP MANAGER</th></tr></thead>
+                        <tbody>
+                            <tr><td>Wow</td><td>GS35</td><td>Tom</td></tr>
+                            <tr><td>Great</td><td>FU</td><td>Hardy</td></tr>
+                        </tbody>
+                    </table>
+                    <p>SHOP MANAGER가 SHOP을 결정하지만 후보키가 아니므로 BCNF 위반입니다. 분리하면:</p>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <table class="compare-table" style="flex: 1;">
+                            <thead><tr><th>ID</th><th>SHOP</th></tr></thead>
+                            <tbody>
+                                <tr><td>Wow</td><td>GS35</td></tr>
+                                <tr><td>Great</td><td>FU</td></tr>
+                            </tbody>
+                        </table>
+                        <table class="compare-table" style="flex: 1;">
+                            <thead><tr><th>SHOP MANAGER</th><th>SHOP</th></tr></thead>
+                            <tbody>
+                                <tr><td>Tom</td><td>GS35</td></tr>
+                                <tr><td>Hardy</td><td>FU</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 제 4, 5 정규형</h2>
+            <div class="conversation">
+                <div class="q">고급 정규형도 있나요?</div>
+                <div class="a">
+                    <ul>
+                        <li><strong>제 4 정규형</strong> - BCNF를 만족하면서 함수 종속이 아닌 <strong>다치 종속을 제거</strong>하면 만족</li>
+                        <li><strong>제 5 정규형</strong> - 제 4 정규형을 만족하면서 후보키를 통하지 않는 <strong>조인 종속을 제거</strong>하면 만족</li>
+                    </ul>
+                    <p class="key-point">실무에서는 보통 BCNF까지만 적용하며, 4NF와 5NF는 이론적으로 알아두는 수준이면 충분합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>정규화는 이상현상을 제거하기 위해 릴레이션을 분해하는 작업이다</li>
+                <li>1NF: 각 칼럼이 하나의 속성만 가질 것 (원자값)</li>
+                <li>2NF: 부분 함수 종속 제거 (모든 속성이 기본키에 완전 종속)</li>
+                <li>3NF: 이행적 함수 종속 제거 (X &rarr; Y &rarr; Z 관계 분리)</li>
+                <li>BCNF: 모든 결정자가 후보키일 것</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

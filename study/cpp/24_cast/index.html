@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C++ 캐스팅 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>타입을 바꾸는 네 가지 무기</h1>
+            <p class="subtitle">C++ 캐스팅 연산자 static_cast, const_cast, reinterpret_cast, dynamic_cast</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 왜 C++ 캐스팅이 필요한가?</h2>
+            <div class="conversation">
+                <div class="q">C 스타일 캐스팅 대신 왜 C++ 캐스팅을 사용하나요?</div>
+                <div class="a">
+                    <p>캐스팅은 <strong>명시적 캐스팅</strong>과 <strong>묵시적 캐스팅</strong>으로 나뉩니다.</p>
+                    <p>묵시적 캐스팅은 다른 표기 없이 호환되는 타입으로 변환하지만, 데이터 손실이 발생할 수 있고 유지보수 측면에서도 알아내기 어렵습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C 스타일 캐스팅</div>
+                        <pre><code>float f = 1.1f;
+int a = (int)f;  // C 스타일 - 코드 분간이 어려움</code></pre>
+                    </div>
+
+                    <p class="warning">C 스타일 캐스팅은 어떤 종류의 변환이 일어나는지 명확하지 않고, 위험한 변환도 아무런 경고 없이 허용합니다. C++의 캐스팅 연산자들은 용도별로 구분되어 의도를 명확하게 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: static_cast</h2>
+            <div class="conversation">
+                <div class="q">static_cast는 언제 사용하나요?</div>
+                <div class="a">
+                    <p class="highlight">기존 C 스타일의 형변환을 대체합니다. 형변환 가능 여부를 <strong>컴파일 타임</strong>에 검사합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>float f = 1.1f;
+int a = static_cast&lt;int&gt;(f);  // 안전한 형변환</code></pre>
+                    </div>
+
+                    <p>가장 일반적으로 사용되는 캐스팅으로, 기본 타입 간 변환이나 상속 관계의 업캐스팅에 사용됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: const_cast</h2>
+            <div class="conversation">
+                <div class="q">const_cast는 무엇을 하나요?</div>
+                <div class="a">
+                    <p class="highlight">const를 <strong>제거하거나 부여</strong>하는 데 사용됩니다. 주로 const 제거 용도로 사용됩니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>void NonConstFunc(Some s);
+
+// ...
+const Some s;
+NonConstFunc(s);                      // ERROR!
+NonConstFunc(const_cast&lt;Some&gt;(s));    // OK - const 제거</code></pre>
+                    </div>
+
+                    <p class="warning">const_cast로 const를 제거한 뒤 실제로 값을 수정하면 정의되지 않은 동작(UB)이 발생할 수 있습니다. 레거시 API 호환 등 불가피한 경우에만 사용하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: reinterpret_cast</h2>
+            <div class="conversation">
+                <div class="q">reinterpret_cast는 어떤 캐스팅인가요?</div>
+                <div class="a">
+                    <p class="highlight">모든 포인터 유형을 다른 포인터 방식으로 변경할 수 있으며, 포인터 타입을 정수로 바꾸는 것도 가능합니다.</p>
+                    <p>메모리 단위로 분해, 재조립을 하는 <strong>가장 강력한 캐스팅</strong>입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>int* p = new int(42);
+
+// 포인터를 정수로 변환
+uintptr_t addr = reinterpret_cast&lt;uintptr_t&gt;(p);
+
+// 완전히 다른 포인터 타입으로 변환
+char* cp = reinterpret_cast&lt;char*&gt;(p);</code></pre>
+                    </div>
+
+                    <p class="warning">매우 강력하지만 그만큼 위험합니다. 메모리 레이아웃에 대한 이해가 필요하며, 일반적인 코드에서는 거의 사용하지 않습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: dynamic_cast</h2>
+            <div class="conversation">
+                <div class="q">dynamic_cast는 언제 사용하나요?</div>
+                <div class="a">
+                    <p class="highlight">클래스의 <strong>포인터나 참조</strong>에만 사용할 수 있으며, <strong>런타임</strong>에 캐스팅을 진행합니다.</p>
+                    <p>RTTI(Runtime Type Information)를 활용하여 안전한 다운캐스팅을 지원합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>class Base { virtual void foo() {} };
+class Derived : public Base {};
+
+Base* base = new Derived();
+Derived* derived = dynamic_cast&lt;Derived*&gt;(base);
+
+if (derived != nullptr) {
+    // 캐스팅 성공 - 안전하게 사용 가능
+}</code></pre>
+                    </div>
+
+                    <p class="key-point">dynamic_cast는 클래스에 <strong>virtual 함수가 있어야</strong> 사용 가능합니다. 다형성이 없는 객체 간 캐스팅에서는 컴파일 에러가 발생합니다.</p>
+                    <p>캐스팅이 실패하면 포인터의 경우 <code>nullptr</code>을, 참조의 경우 <code>std::bad_cast</code> 예외를 반환합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 비교 정리</h2>
+            <div class="conversation">
+                <div class="q">네 가지 캐스팅을 한눈에 비교해 주세요.</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>캐스팅</th>
+                                <th>검사 시점</th>
+                                <th>주 용도</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>static_cast</td>
+                                <td>컴파일 타임</td>
+                                <td>일반적인 형변환 (C 스타일 대체)</td>
+                            </tr>
+                            <tr>
+                                <td>const_cast</td>
+                                <td>컴파일 타임</td>
+                                <td>const 제거/부여</td>
+                            </tr>
+                            <tr>
+                                <td>reinterpret_cast</td>
+                                <td>없음 (강제)</td>
+                                <td>포인터/정수 간 저수준 변환</td>
+                            </tr>
+                            <tr>
+                                <td>dynamic_cast</td>
+                                <td>런타임</td>
+                                <td>다형성 객체의 안전한 다운캐스팅</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>&#x1F4CC; 핵심 정리</h3>
+            <ul>
+                <li><strong>static_cast</strong>: 컴파일 타임 검사, 가장 일반적인 형변환에 사용</li>
+                <li><strong>const_cast</strong>: const 제거/부여 전용, 불가피한 경우에만 사용</li>
+                <li><strong>reinterpret_cast</strong>: 가장 강력하고 위험한 저수준 캐스팅</li>
+                <li><strong>dynamic_cast</strong>: 런타임 RTTI 기반, 다형성 객체의 안전한 다운캐스팅 (virtual 필수)</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

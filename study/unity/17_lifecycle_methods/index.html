@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Awake, Start, Update 비교 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unity.html" class="back-link">← 목록으로</a>
+        <header class="content-header">
+            <h1>Awake에서 초기화했는데 왜 null이 뜰까?</h1>
+            <p class="subtitle">Awake, Start, Update, FixedUpdate, LateUpdate - 호출 시점과 차이 완전 정리</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Awake vs Start</h2>
+            <div class="conversation">
+                <div class="q">Awake와 Start는 둘 다 초기화용인데, 무엇이 다른가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>Awake</th>
+                                <th>Start</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>호출 시점</td>
+                                <td>GameObject 인스턴스화 또는 스크립트 로드 시</td>
+                                <td>컴포넌트 활성화 시 (첫 Update 전)</td>
+                            </tr>
+                            <tr>
+                                <td>비활성 상태</td>
+                                <td>호출됨 (오브젝트가 비활성이어도)</td>
+                                <td>호출 안 됨</td>
+                            </tr>
+                            <tr>
+                                <td>주 용도</td>
+                                <td>자기 자신의 참조 생성</td>
+                                <td>다른 오브젝트 참조를 통한 접근</td>
+                            </tr>
+                            <tr>
+                                <td>호출 순서</td>
+                                <td>무작위</td>
+                                <td>Awake 이후</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="warning">Awake의 호출 순서는 무작위입니다! Awake에서 다른 스크립트의 참조를 통해 접근하면 NullReferenceException이 발생할 수 있습니다.</p>
+                    <p class="key-point">따라서 Awake에서는 자기 자신의 컴포넌트 참조를 잡고, Start에서 다른 오브젝트에 접근하는 패턴을 사용합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: OnEnable vs Start</h2>
+            <div class="conversation">
+                <div class="q">OnEnable과 Start 모두 "활성화 시 호출"인데, 차이점은?</div>
+                <div class="a">
+                    <p class="highlight">Start는 <strong>한 번만</strong> 호출되지만, OnEnable은 <strong>활성화될 때마다</strong> 호출됩니다.</p>
+                    <p class="warning">초기화 작업에 OnEnable을 사용하면 안 됩니다! OnEnable은 오브젝트 풀링 등에서 재활성화 시 처리할 로직에 적합합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Update vs FixedUpdate vs LateUpdate</h2>
+            <div class="conversation">
+                <div class="q">세 가지 Update의 차이점은?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>함수</th>
+                                <th>호출 주기</th>
+                                <th>주 용도</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Update</td>
+                                <td>프레임 단위 (가변)</td>
+                                <td>일반 게임 로직, 입력 처리</td>
+                            </tr>
+                            <tr>
+                                <td>FixedUpdate</td>
+                                <td>고정 간격 (물리 엔진 기반)</td>
+                                <td>Rigidbody 조작, 물리 연산</td>
+                            </tr>
+                            <tr>
+                                <td>LateUpdate</td>
+                                <td>Update 후</td>
+                                <td>카메라 추적, 후처리</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="highlight">FixedUpdate의 '고정 단위'는 물리 엔진에 의해 결정됩니다. 컴퓨터 성능에 따라 프레임이 달라지는 Update와 달리 항상 일정한 간격으로 호출됩니다.</p>
+                    <p class="key-point">Rigidbody를 조작할 때는 반드시 FixedUpdate를 사용해야 합니다. Update에서 물리 조작을 하면 프레임 드랍 시 물리 시뮬레이션이 불안정해집니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 호출 순서 정리</h2>
+            <div class="conversation">
+                <div class="q">전체 호출 순서를 정리해 주세요.</div>
+                <div class="a">
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">Awake</div>
+                                <div class="flow-box__items">인스턴스화 시</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">OnEnable</div>
+                                <div class="flow-box__items">활성화 시</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Start</div>
+                                <div class="flow-box__items">첫 프레임 전</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">FixedUpdate</div>
+                                <div class="flow-box__items">물리 틱</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Update</div>
+                                <div class="flow-box__items">매 프레임</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">LateUpdate</div>
+                                <div class="flow-box__items">Update 후</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>Awake는 무작위 순서로 호출되므로 자기 자신의 초기화에만 사용한다</li>
+                <li>Start는 Awake 이후 호출되므로 다른 오브젝트 참조에 안전하다</li>
+                <li>OnEnable은 활성화될 때마다 호출되므로 초기화가 아닌 재활성화 로직에 사용한다</li>
+                <li>FixedUpdate는 물리 엔진 기반 고정 간격으로 호출되며, Rigidbody 조작에 필수이다</li>
+                <li>LateUpdate는 Update 이후 호출되며, 카메라 추적 등 후처리에 사용한다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

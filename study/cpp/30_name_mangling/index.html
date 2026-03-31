@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Name Mangling | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>컴파일러는 함수 이름을 난도질한다</h1>
+            <p class="subtitle">C++ Name Mangling(Decoration)의 원리와 extern "C"</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: Name Mangling이란?</h2>
+            <div class="conversation">
+                <div class="q">Name Mangling이 뭔가요?</div>
+                <div class="a">
+                    <p class="highlight"><strong>Name Mangling</strong>은 컴파일러가 함수나 변수의 이름을 임의로 변경하는 작업입니다.</p>
+                    <p>C++에서 이런 작업이 일어나는 이유는 <strong>함수 오버로딩</strong> 때문입니다. 같은 이름의 함수들이 있고 시그니처가 다를 때, 컴파일러는 이들의 이름을 내부적으로 다르게 변환합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Name Mangling 예시</div>
+                        <pre><code>SomeFunc()          -&gt; 컴파일러 내부: SomeFunc_
+SomeFunc(int some)  -&gt; 컴파일러 내부: SomeFunc_i</code></pre>
+                    </div>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>학교에 "김민수"가 3명 있으면, 선생님이 "1반 김민수", "2반 김민수"처럼 구분하는 것과 같습니다. 컴파일러도 같은 이름의 함수를 인자 정보를 붙여 구분합니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: C에서도 Name Mangling이 있는가?</h2>
+            <div class="conversation">
+                <div class="q">C 언어에서도 Name Mangling이 발생하나요?</div>
+                <div class="a">
+                    <p>C에서는 함수 오버로딩이 없기 때문에 C++ 수준의 Name Mangling이 필요 없습니다.</p>
+                    <p>다만 컴파일러에 따라 앞에 <code>_</code>를 붙이는 등의 간단한 변환을 하기도 합니다.</p>
+                    <p class="key-point">대부분의 경우 <strong>"C는 간단한 Name Mangling을 한다"</strong>라는 의견이 주류입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: extern "C"</h2>
+            <div class="conversation">
+                <div class="q">extern "C"는 무엇이고 왜 사용하나요?</div>
+                <div class="a">
+                    <p class="highlight"><code>extern "C"</code>는 C++ 코드를 C 스타일의 Name Mangling으로 컴파일하도록 지시하는 명령어입니다.</p>
+                    <p>이를 통해 C++에서 작성한 함수를 C에서도 사용할 수 있게 됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>extern "C" int Some(int a)
+{
+    // C 링커가 이 함수를 찾을 수 있게 됨
+    return a * 2;
+}
+
+// 여러 함수를 묶을 수도 있음
+extern "C" {
+    void Func1();
+    void Func2(int x);
+}</code></pre>
+                    </div>
+                    <p class="key-point">C/C++ 혼용 프로젝트나 DLL 라이브러리 제작 시 필수적으로 사용됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Name Mangling</strong>은 컴파일러가 오버로딩된 함수를 구분하기 위해 이름을 변경하는 작업</li>
+                <li>C++은 함수 오버로딩 때문에 복잡한 Name Mangling을 수행</li>
+                <li>C는 오버로딩이 없어 간단한 수준의 Mangling만 수행</li>
+                <li><code>extern "C"</code>를 사용하면 C 스타일 Mangling으로 컴파일하여 C와의 호환성 확보</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>널 오브젝트 패턴 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cs-fundamentals.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>null 체크 지옥에서 벗어나는 법</h1>
+            <p class="subtitle">널 오브젝트 패턴(Null Object Pattern) - "아무것도 안 하는 객체"로 코드를 깔끔하게</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 문제 상황</h2>
+            <div class="conversation">
+                <div class="q">왜 널 오브젝트 패턴이 필요한가요?</div>
+                <div class="a">
+                    <p>객체를 활용하는 경우, 어디선가 객체를 구해오면 항상 <strong>null인지 아닌지를 체크</strong>할 필요가 있습니다. 이 경우 코드가 상당히 지저분해집니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - null 체크가 필요한 기존 방식</div>
+                        <pre><code>Exp exp = DB.GetMonsterExp("MonsterName");
+if (exp != null)
+{
+    exp.GiveExpToPlayer(player);
+}</code></pre>
+                    </div>
+                    <p class="warning">이런 null 체크가 코드 곳곳에 퍼지면, 가독성이 떨어지고 하나라도 빠뜨리면 NullReferenceException이 발생합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 널 오브젝트 패턴의 해결책</h2>
+            <div class="conversation">
+                <div class="q">널 오브젝트 패턴은 어떻게 이 문제를 해결하나요?</div>
+                <div class="a">
+                    <p>객체를 반환하는 함수에서 null을 반환하는 대신, <strong>null과 의미가 유사한 "널 오브젝트"</strong>를 반환합니다.</p>
+                    <p class="highlight">이 널 오브젝트는 실제로 null이 아닌 객체이지만, 하는 일은 없는 객체입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C# - 널 오브젝트 패턴 적용 후</div>
+                        <pre><code>Exp exp = DB.GetMonsterExp("MonsterName");
+// NullExp 객체는 아무 일도 안 하기에 플레이어에게 경험치를 주지 않는다
+exp.GiveExpToPlayer(player);</code></pre>
+                    </div>
+                    <p>null 여부를 검사하지 않는 깔끔한 코드를 만들 수 있습니다.</p>
+                </div>
+
+                <div class="q">비유로 설명해줄 수 있나요?</div>
+                <div class="a">
+                    <div class="analogy-box">
+                        <strong>비유로 이해하기</strong>
+                        <p>택배 기사가 배달할 물건이 없을 때, "물건 없음"이라고 보고하는 대신 <strong>빈 상자를 들고 배달 루트를 도는 것</strong>과 같습니다.</p>
+                        <p>빈 상자를 열어봐도 아무것도 없지만, 배달 시스템은 정상적으로 동작합니다. "물건이 없다"는 예외 상황을 처리할 필요가 없어지는 것이죠.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 구현 예시</h2>
+            <div class="conversation">
+                <div class="q">C++로 구현하면 어떻게 되나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">C++</div>
+                        <pre><code>// 기본 인터페이스
+class IExp {
+public:
+    virtual void GiveExpToPlayer(Player* player) = 0;
+    virtual ~IExp() = default;
+};
+
+// 실제 경험치 객체
+class MonsterExp : public IExp {
+    int amount;
+public:
+    MonsterExp(int amt) : amount(amt) {}
+    void GiveExpToPlayer(Player* player) override {
+        player-&gt;AddExp(amount);
+    }
+};
+
+// 널 오브젝트 - 아무 일도 하지 않음
+class NullExp : public IExp {
+public:
+    void GiveExpToPlayer(Player* player) override {
+        // 아무것도 하지 않는다
+    }
+};
+
+// DB에서 경험치를 가져오는 함수
+IExp* GetMonsterExp(const std::string&amp; name) {
+    auto it = expTable.find(name);
+    if (it != expTable.end()) {
+        return it-&gt;second;
+    }
+    // null 대신 NullExp 반환
+    static NullExp nullExp;
+    return &amp;nullExp;
+}</code></pre>
+                    </div>
+                    <p class="key-point">이제 호출하는 쪽에서는 null 체크 없이 바로 GiveExpToPlayer()를 호출할 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 면접 포인트</h2>
+            <div class="conversation">
+                <div class="q">널 오브젝트 패턴의 장단점은?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>내용</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>장점</td>
+                                <td>null 체크 코드 제거로 가독성 향상. NullReferenceException 방지. 다형성을 활용한 깔끔한 설계.</td>
+                            </tr>
+                            <tr>
+                                <td>단점</td>
+                                <td>널 오브젝트가 "진짜 null"인 상황을 감출 수 있음. 버그가 발생해도 조용히 넘어갈 위험. 클래스 수가 늘어남.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">널 오브젝트 패턴을 남용하면, 실제 오류 상황이 무시되어 디버깅이 어려워질 수 있으므로 적절한 상황에서만 사용해야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>핵심 정리</h3>
+            <ul>
+                <li>널 오브젝트 패턴은 null 대신 "아무것도 안 하는 객체"를 반환하여 null 체크를 제거하는 패턴이다</li>
+                <li>다형성을 활용하여 인터페이스를 동일하게 유지하면서 "아무 동작도 하지 않는" 구현체를 만든다</li>
+                <li>코드 가독성과 안정성이 향상되지만, 실제 오류를 감출 수 있으므로 주의가 필요하다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

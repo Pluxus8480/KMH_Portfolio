@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>malloc/free vs new/delete | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../cpp.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>메모리를 할당하는 두 가지 철학</h1>
+            <p class="subtitle">C의 malloc/free와 C++의 new/delete 비교</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: 함수 vs 연산자</h2>
+            <div class="conversation">
+                <div class="q">malloc/free와 new/delete의 가장 큰 차이는 무엇인가요?</div>
+                <div class="a">
+                    <p class="highlight">malloc/free는 <strong>함수</strong>이고, new/delete는 <strong>연산자</strong>입니다. 이것이 가장 근본적인 차이입니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>&#x1F3AF; 비유로 이해하기</strong>
+                        <p>malloc/free는 "빈 땅을 사서 직접 건물을 지어야 하는 것"과 같고, new/delete는 "건설사에 의뢰하면 설계도(생성자)대로 건물을 지어주는 것"과 같습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: 상세 비교</h2>
+            <div class="conversation">
+                <div class="q">구체적으로 어떤 차이들이 있나요?</div>
+                <div class="a">
+                    <h3>malloc/free</h3>
+                    <ul>
+                        <li><code>#include "stdlib.h"</code>를 해줘야 사용 가능</li>
+                        <li>malloc은 <code>void*</code>를 반환하기 때문에 해당 타입의 포인터로 <strong>형변환</strong>을 해줘야 합니다</li>
+                        <li>생성자를 호출할 수단이 없기에 <strong>초기값을 줄 수 없다</strong>는 단점이 있습니다</li>
+                        <li>free 역시 소멸자를 호출하지 않고 단순히 메모리를 해제합니다</li>
+                        <li><code>realloc</code>을 사용해 메모리 크기를 조정할 수 있습니다</li>
+                    </ul>
+
+                    <h3>new/delete</h3>
+                    <ul>
+                        <li>C++ 내장 키워드로 별도 include가 필요 없습니다</li>
+                        <li>반환값이 해당 타입의 포인터로 <strong>자동 반환</strong>됩니다</li>
+                        <li><strong>생성자를 호출</strong>해 초기값을 줄 수 있습니다</li>
+                        <li>delete는 <strong>소멸자를 호출</strong>해 줍니다</li>
+                        <li>직접적으로 메모리 크기를 조정할 수 없습니다</li>
+                    </ul>
+
+                    <div class="code-block">
+                        <div class="code-header">C++ - malloc/free</div>
+                        <pre><code>#include &lt;cstdlib&gt;
+
+// malloc: void* 반환 -&gt; 형변환 필요
+int* p1 = (int*)malloc(sizeof(int) * 10);
+// 생성자 호출 불가, 초기화 불가
+free(p1);  // 소멸자 호출 안 됨
+
+// realloc으로 크기 조정 가능
+p1 = (int*)realloc(p1, sizeof(int) * 20);</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C++ - new/delete</div>
+                        <pre><code>// new: 타입에 맞는 포인터 자동 반환
+int* p2 = new int[10];         // 형변환 불필요
+MyClass* obj = new MyClass();  // 생성자 호출됨!
+delete[] p2;
+delete obj;  // 소멸자 호출됨!</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: 비교 정리</h2>
+            <div class="conversation">
+                <div class="q">한눈에 비교할 수 있게 정리해 주세요.</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>malloc/free</th>
+                                <th>new/delete</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>분류</td>
+                                <td>함수 (stdlib.h)</td>
+                                <td>연산자 (내장 키워드)</td>
+                            </tr>
+                            <tr>
+                                <td>반환 타입</td>
+                                <td>void* (형변환 필요)</td>
+                                <td>해당 타입 포인터 (자동)</td>
+                            </tr>
+                            <tr>
+                                <td>생성자/소멸자</td>
+                                <td>호출 안 됨</td>
+                                <td>호출됨</td>
+                            </tr>
+                            <tr>
+                                <td>크기 재조정</td>
+                                <td>realloc 가능</td>
+                                <td>불가능</td>
+                            </tr>
+                            <tr>
+                                <td>초기화</td>
+                                <td>불가능</td>
+                                <td>가능</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="key-point">재할당이 빈번하게 필요한 경우에는 realloc을 사용할 수 있는 malloc이 더 나은 선택이 될 수도 있습니다.</p>
+                    <p class="warning">malloc으로 할당한 메모리는 반드시 free로, new로 할당한 메모리는 반드시 delete로 해제해야 합니다. 혼용하면 정의되지 않은 동작(UB)이 발생합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>&#x1F4CC; 핵심 정리</h3>
+            <ul>
+                <li>malloc/free는 <strong>함수</strong>, new/delete는 <strong>연산자</strong></li>
+                <li>new/delete는 <strong>생성자/소멸자를 호출</strong>하지만, malloc/free는 하지 않음</li>
+                <li>malloc은 void*를 반환해 형변환이 필요하고, new는 해당 타입 포인터를 자동 반환</li>
+                <li>malloc은 realloc으로 크기 조정이 가능하지만, new는 불가능</li>
+                <li>할당/해제 방식을 혼용하면 안 된다 (malloc-free, new-delete 짝을 맞출 것)</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>
