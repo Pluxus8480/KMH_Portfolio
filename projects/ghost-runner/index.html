@@ -106,6 +106,7 @@
                 <li><a href="#grapple"><span class="toc__number">07</span>와이어 액션</a></li>
                 <li><a href="#animation"><span class="toc__number">08</span>애니메이션 &amp; 트레일</a></li>
                 <li><a href="#optimize"><span class="toc__number">09</span>최적화</a></li>
+                <li><a href="#troubleshoot"><span class="toc__number">10</span>트러블슈팅 &amp; 회고</a></li>
             </ol>
         </nav>
 
@@ -289,9 +290,53 @@ public:
             <h2 class="detail-section__title"><span class="sec-num">03</span> 포스트 프로세싱</h2>
 
             <div class="feature-card">
-                <h3 class="feature-card__title">사이버펑크 글리치 이펙트</h3>
+                <h3 class="feature-card__title">모듈러 글리치 렌즈 아키텍처</h3>
                 <div class="feature-card__desc">
-                    <p>고스트 러너의 사이버펑크 세계관을 표현하기 위해 <span class="hl">블록 노이즈 + 색수차(Chromatic Aberration) + 레드 글리치</span>를 조합한 커스텀 글리치 셰이더를 구현했습니다. 피격, 스킬 사용, 특수 상황에서 활성화됩니다.</p>
+                    <p>"글리치 셰이더"를 하나의 거대한 블롭으로 만들지 않고, <span class="hl">파워 / 발생률 / 속도 / 색수차 강도 / 레드블록 혼합률</span>을 각각 독립 파라미터로 분리해서 GameInstance 가 노출하도록 설계했습니다. 호출부에서 상황에 맞게 강도만 조절하면, 같은 셰이더가 피격 / 스킬 / 컷씬 / 죽음 직전 등 다른 표현을 만들어 냅니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>GameInstance.h &mdash; 독립 파라미터 인터페이스 <span class="code-lang">C++</span></summary>
+                    <pre><code>// 글리치 렌즈 ON/OFF
+void Set_UseGlitchLens(_bool _bUseGlitchLens);
+
+// 블록 흔들림 강도와 발생률 분리
+void Set_GlitchPower(_float _fPower);
+void Set_GlitchRate(_float _fRate);
+void Set_GlitchSpeed(_float _fSpeed);
+
+// 색수차 (R/B 채널 분리 폭)
+void Set_GlitchColorRate(_float _fColorRate);
+
+// 레드 블록 오버레이 혼합률
+void Set_RedBlockMixRate(_float _fMixRate);
+
+// 카메라 셰이크와도 연동
+void Set_ShakePower(_float _fPower);
+void Set_ShakeTime(_float _fTime);</code></pre>
+                </details>
+
+                <table class="compare-table">
+                    <thead>
+                        <tr><th>상황</th><th>Power</th><th>ColorRate</th><th>RedBlock</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>일반 피격</td><td>약</td><td>약</td><td>OFF</td></tr>
+                        <tr><td>스킬 발동</td><td>중</td><td>강</td><td>OFF</td></tr>
+                        <tr><td>저체력 경고</td><td>강</td><td>중</td><td>ON (높음)</td></tr>
+                        <tr><td>죽음 직전</td><td>최대</td><td>최대</td><td>ON (최대)</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="feature-card__desc" style="margin-top: 16px;">
+                    <p class="key-point"><strong>이렇게 분리한 이유:</strong> 게임 디자이너 / QA 가 "피격 시 화면 흔들림이 너무 강해요" 라고 했을 때, 셰이더 코드를 수정하는 게 아니라 호출부 한 줄 ( <code>Set_GlitchPower(0.5f)</code> )만 바꾸면 됩니다. 결과적으로 셰이더는 한 번만 만들고 사이버펑크 비주얼의 모든 변주가 가능해졌습니다.</p>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">글리치 셰이더 본체</h3>
+                <div class="feature-card__desc">
+                    <p>위 파라미터들이 실제로 들어가는 셰이더입니다. <span class="hl">블록 노이즈 + 색수차 + 레드 글리치 36개 오버레이</span>를 하나의 픽셀 셰이더에서 합성합니다.</p>
                 </div>
 
                 <details class="code-toggle">
@@ -588,6 +633,41 @@ private:
                     근접 공격 콤보와 칼날 궤적 효과
                 </div>
             </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">충돌 이펙트 &mdash; ShockWave 와 Spark</h3>
+                <div class="feature-card__desc">
+                    <p>적 사격 / 슬래시 / 패리 순간에 스폰되는 임팩트 이펙트입니다. 모두 <span class="hl">컨테이너 풀(CONTAIN_ACTIVE / SLEEP)</span>에서 꺼내 쓰고, 라이프 타임이 끝나면 풀로 돌아갑니다. 사망 직전 보스가 마구잡이로 휘두를 때처럼 이펙트가 폭증하는 구간에서도 할당 지연이 없습니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>ShockWave.cpp &mdash; Activate 시 회전 무작위화 + Glow 그룹 등록 <span class="code-lang">C++</span></summary>
+                    <pre><code>void CShockWave::Activate(void* pArg)
+{
+    SHOCKWAVE_DESC desc = *reinterpret_cast&lt;SHOCKWAVE_DESC*&gt;(pArg);
+    m_pTransformCom-&gt;Set_State(CTransform::STATE_POSITION, desc.vPosition);
+    m_pTransformCom-&gt;LookAt(m_vDirection);
+
+    // 방향축 기준 0 ~ π 사이로 회전을 무작위화 → 매번 다른 모양
+    m_pTransformCom-&gt;PureTurn(m_vNormalDirection,
+        GAMEINSTANCE-&gt;Random_Float(0.f, 3.14f));
+
+    Set_ContainState(CONTAIN_ACTIVE);
+    m_eShockWaveState = SHOCKWAVE_FIRE;
+}
+
+void CShockWave::LateTick(_float fTimeDelta)
+{
+    if (SHOCKWAVE_SLEEP != m_eShockWaveState)
+        m_pGameInstance-&gt;Add_RenderObjects(CRenderer::RENDER_GLOW, this);
+        //  └ Glow 그룹에 등록 → 자동으로 Bloom 후처리가 적용됨
+}</code></pre>
+                </details>
+
+                <div class="feature-card__desc" style="margin-top: 16px;">
+                    <p class="key-point"><strong>RENDER_GLOW 자동 연동:</strong> ShockWave 와 Spark 가 <code>RENDER_GLOW</code> 그룹에 자기 자신을 등록하기만 하면, 별도 셰이더 작업 없이 <strong>후처리 파이프라인의 Bloom 패스가 자동으로 발광 효과를 입혀줍니다</strong>. 이펙트 클래스와 포스트 프로세싱이 렌더 그룹이라는 한 줄짜리 계약으로만 연결되어 있어, 새 이펙트를 추가할 때 셰이더는 한 번도 건드릴 필요가 없습니다.</p>
+                </div>
+            </div>
         </section>
 
         <!-- ===== 06. 보스 AI ===== -->
@@ -658,6 +738,77 @@ private:
                         <tr><td>Bullet Pattern</td><td>원거리 탄막 발사</td><td>조준 &rarr; 연사 &rarr; 쿨타임</td></tr>
                         <tr><td>Slash Pattern</td><td>근접 범위 슬래시 공격</td><td>준비 &rarr; 실행 &rarr; 후딜</td></tr>
                         <tr><td>Extend Pattern</td><td>확장형 범위 공격</td><td>차징 &rarr; 폭발 &rarr; 복귀</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">패리 윈도우 &mdash; 특정 페이즈에서만 받아치기 가능</h3>
+                <div class="feature-card__desc">
+                    <p>고스트 러너의 핵심 재미는 "보스 공격을 정확한 타이밍에 받아쳐서 카운터를 넣는" 패리 전투입니다. 단순히 "공격 중이면 패리 가능" 으로 만들면 너무 쉬워서, <span class="hl">보스 패턴의 특정 페이즈(<code>m_iPatternPhase == 2</code>)에서만</span> 패리가 성립하도록 충돌 콜백에서 4개 조건을 동시에 검사합니다.</p>
+                </div>
+
+                <details class="code-toggle" open>
+                    <summary>Boss.cpp &mdash; 패리 조건 4중 검사 + 결과 처리 <span class="code-lang">C++</span></summary>
+                    <pre><code>void CBoss::Collision_Enter(CGameObject* pOpponent)
+{
+    // 조건: 상대=플레이어 / 플레이어=공격중 / 보스=패턴중 / 대시패턴 / 페이즈2
+    if (pOpponent-&gt;Get_MainTag() == "Player"
+        &amp;&amp; PLAYER-&gt;Get_IsAttack()
+        &amp;&amp; m_eBossState == BOSS_PATTERN
+        &amp;&amp; m_eBossPattern == DASH_PATTERN
+        &amp;&amp; m_iPatternPhase == 2)
+    {
+        // 1. 스파크 이펙트를 카메라 정면에 스폰
+        CSpark* Spark = dynamic_cast&lt;CSpark*&gt;(
+            m_pGameInstance-&gt;Add_Clone_Return(LEVEL_STATIC,
+                TEXT("Layer_Effect"), TEXT("Prototype_GameObject_Spark")));
+
+        // 2. 카메라 셰이크 (강도 1.5, 1초)
+        GAMEINSTANCE-&gt;Set_ShakePower(1.5f);
+        GAMEINSTANCE-&gt;Set_ShakeTime(1.f);
+
+        // 3. 보스 데미지 + 7종 패리 사운드 중 랜덤 재생
+        m_iHp -= 5;
+        // ... Sound_Player_Katana_Parry_01 ~ 07 랜덤
+    }
+
+    // BULLET_PATTERN 페이즈2 → 보스 스턴 + 15 데미지
+    // SLASH_PATTERN  페이즈2 → 카운터 슬래시
+}</code></pre>
+                </details>
+
+                <table class="compare-table">
+                    <thead>
+                        <tr><th>패턴</th><th>페이즈2 패리 결과</th><th>데미지</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Dash Pattern</td><td>스파크 + 50% 확률로 플레이어 모션 분기</td><td>5</td></tr>
+                        <tr><td>Bullet Pattern</td><td>보스 STUN 전이 + 패턴 리셋</td><td>15</td></tr>
+                        <tr><td>Slash Pattern</td><td>카운터 슬래시 트리거</td><td>가변</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="feature-card__desc" style="margin-top: 16px;">
+                    <p class="key-point"><strong>왜 4중 조건인가:</strong> "공격 중 + 충돌" 만으로 패리를 허용하면, 플레이어가 무작정 칼을 휘두르며 들이대도 카운터가 들어갑니다. 보스의 패턴 종류 / 페이즈까지 같이 봐야 <strong>"이 공격, 이 타이밍에 받아쳐야 한다"</strong> 는 고스트 러너 특유의 리듬이 살아납니다.</p>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">파라메트릭 카메라 셰이크</h3>
+                <div class="feature-card__desc">
+                    <p>화면 흔들림을 <code>Set_ShakePower(강도)</code> 와 <code>Set_ShakeTime(지속시간)</code> 두 파라미터로 분리해서, 호출부가 상황별로 자유롭게 튜닝할 수 있게 만들었습니다. 위 패리 처리에서 패턴마다 같은 1.5/1.0 을 쓰지만, <strong>대시 충돌 / 보스 사망 / 와이어 도착</strong> 같은 다른 이벤트는 각각 다른 강도를 줍니다.</p>
+                </div>
+
+                <table class="compare-table">
+                    <thead>
+                        <tr><th>이벤트</th><th>Power</th><th>Time</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>일반 피격</td><td>0.5</td><td>0.3s</td></tr>
+                        <tr><td>패리 성공</td><td>1.5</td><td>1.0s</td></tr>
+                        <tr><td>보스 처치</td><td>3.0</td><td>2.0s</td></tr>
+                        <tr><td>와이어 도착</td><td>0.8</td><td>0.4s</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -796,29 +947,100 @@ private:
             </div>
 
             <div class="feature-card">
-                <h3 class="feature-card__title">동적 트레일 시스템</h3>
+                <h3 class="feature-card__title">동적 트레일 시스템 &mdash; 16ms 고정 샘플링 + 링 버퍼</h3>
                 <div class="feature-card__desc">
-                    <p>카타나의 궤적을 시각화하는 트레일 시스템입니다. <span class="hl">두 개의 본 위치(상/하)를 추적</span>하여 deque에 저장하고, 매 프레임 동적 정점 버퍼를 갱신합니다.</p>
+                    <p>카타나가 휘둘러질 때마다 따라오는 칼날 궤적입니다. 단순히 "매 프레임 정점 추가"로 만들면 <span class="warning">프레임이 안 나오는 순간 트레일이 끊기거나 듬성듬성해지는</span> 문제가 있어, <span class="hl">고정 16ms 간격으로 샘플링하고 deque 링 버퍼로 오래된 점을 잘라내는</span> 방식으로 풀었습니다.</p>
+                </div>
+
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">칼날 상/하 본 매트릭스</div>
+                            <div class="flow-box__items">두 개의 본 위치 추적</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">16ms 누적 타이머</div>
+                            <div class="flow-box__items">시간 차면 deque 에 push_back</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">링 버퍼</div>
+                            <div class="flow-box__items">최대 크기 초과 시 pop_front</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">동적 정점 버퍼</div>
+                            <div class="flow-box__items">NO_OVERWRITE 로 GPU 스트리밍</div>
+                        </div>
+                    </div>
+                </div>
+
+                <details class="code-toggle" open>
+                    <summary>VIBuffer_TrailRect.cpp &mdash; 16ms 샘플링 + deque 링 버퍼 <span class="code-lang">C++</span></summary>
+                    <pre><code>m_fTimer += fTimeDelta;
+if (m_fTimer &gt;= 0.016f)
+{
+    m_fTimer -= 0.016f;                 // 60Hz 고정 샘플링
+    ++m_iStartingPoint;
+
+    _float3 vUpperPos = { resultUpper._41, resultUpper._42, resultUpper._43 };
+    _float3 vDownPos  = { resultDown._41,  resultDown._42,  resultDown._43  };
+
+    if (m_iStartingPoint &gt;= m_iMaxRect)
+    {
+        m_iStartingPoint = m_iMaxRect;
+        m_vecUpperPositions.pop_front();   // 오래된 점은 잘라내고
+        m_vecDownPositions.pop_front();
+        m_vecUpperPositions.push_back(vUpperPos);  // 새 점은 뒤에 추가
+        m_vecDownPositions.push_back(vDownPos);
+    }
+    else
+    {
+        m_vecUpperPositions[m_iStartingPoint] = vUpperPos;
+        m_vecDownPositions[m_iStartingPoint] = vDownPos;
+    }
+    Update_Buffer();
+}</code></pre>
+                </details>
+
+                <details class="code-toggle">
+                    <summary>Update_Buffer &mdash; D3D11_MAP_WRITE_NO_OVERWRITE 로 스톨 회피 <span class="code-lang">C++</span></summary>
+                    <pre><code>void CVIBuffer_TrailRect::Update_Buffer()
+{
+    D3D11_MAPPED_SUBRESOURCE SubResource{};
+    m_pContext-&gt;Map(m_pVB, 0, D3D11_MAP_WRITE_NO_OVERWRITE, 0, &amp;SubResource);
+    // ... 정점 데이터 갱신
+    m_pContext-&gt;Unmap(m_pVB, 0);
+}</code></pre>
+                </details>
+
+                <div class="feature-card__desc" style="margin-top: 16px;">
+                    <p class="key-point"><strong>핵심 디테일 &mdash; NO_OVERWRITE 의 의미:</strong> <code>D3D11_MAP_WRITE_DISCARD</code> 는 GPU 가 쓰던 버퍼를 통째로 버리고 새 메모리를 할당하지만, <code>WRITE_NO_OVERWRITE</code> 는 "GPU 가 지금 안 읽는 영역에만 덮어쓴다"고 약속하는 모드입니다. 매 프레임 정점 일부만 갱신하는 트레일에 가장 적합하고, 드라이버 동기화 비용이 거의 없습니다.</p>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">본 매트릭스 비균등 스케일 보정</h3>
+                <div class="feature-card__desc">
+                    <p>스켈레탈 모델의 본 매트릭스는 부모 본에서 <strong>비균등 스케일(non-uniform scale)</strong>이 누적될 수 있습니다. 그 상태로 무기를 본에 부착하면 트레일이 늘어지거나 찌그러지는 현상이 나타납니다.</p>
+                    <p>이를 막기 위해 무기 매트릭스의 <span class="hl">회전 행 3개를 매 프레임 정규화</span>해서, 스케일이 1.0 으로 강제된 회전만 추출합니다. 단순한 처리 같지만 트레일 품질을 결정적으로 좌우합니다.</p>
                 </div>
 
                 <details class="code-toggle">
-                    <summary>VIBuffer_Trail.h - 트레일 정점 버퍼 <span class="code-lang">C++</span></summary>
-                    <pre><code>class CVIBuffer_Trail final : public CVIBuffer
+                    <summary>Katana.cpp &mdash; 본 매트릭스 회전 행 정규화 <span class="code-lang">C++</span></summary>
+                    <pre><code>void CKatana::Tick(_float fTimeDelta)
 {
-public:
-    struct TRAIL_DESC {
-        _uint iMaxRect = 0;  // 최대 사각형 수
-    };
+    m_pTrailCom-&gt;Set_TrailOn(PLAYER-&gt;Get_IsAttack() || m_bOn);
 
-    void Start(_float4x4* pUpper, _float4x4* pDown);
-    void Tick(_float fTimeDelta);
-    void SetTarget(_float4x4* pTarget) { m_pTarget = pTarget; }
+    _matrix BoneMatrix = XMLoadFloat4x4(m_pBoneMatrix);
 
-private:
-    deque&lt;_float3&gt; m_vecUpperPositions;  // 칼날 상단 궤적
-    deque&lt;_float3&gt; m_vecDownPositions;   // 칼날 하단 궤적
-    _float m_fTimer = 0.f;
-};</code></pre>
+    // 회전 행만 정규화 &rarr; 부모 본의 비균등 스케일 제거
+    for (size_t i = 0; i &lt; 3; i++)
+        BoneMatrix.r[i] = XMVector3Normalize(BoneMatrix.r[i]);
+
+    SetUp_WorldMatrix(m_pTransformCom-&gt;Get_WorldMatrix() * BoneMatrix);
+}</code></pre>
                 </details>
 
                 <div class="img-placeholder">
@@ -862,6 +1084,51 @@ private:
                 <div class="feature-card__desc">
                     <p>Cell 기반 네비게이션 메시로 적 AI의 이동 경로를 제한합니다. 삼각형 셀 단위로 이동 가능 영역을 정의하고, 인접 셀 탐색으로 경로를 결정합니다.</p>
                 </div>
+            </div>
+        </section>
+
+        <!-- ===== 10. 트러블슈팅 ===== -->
+        <section class="detail-section" id="troubleshoot">
+            <h2 class="detail-section__title"><span class="sec-num">10</span> 트러블슈팅 &amp; 회고</h2>
+
+            <div class="troubleshoot-card">
+                <div class="troubleshoot-card__problem">프레임 변동에 따라 트레일이 끊기거나 듬성듬성해지는 문제</div>
+                <div class="troubleshoot-card__solution">
+                    매 프레임 정점을 추가하던 방식을 16ms 고정 샘플링 + deque 링 버퍼로 바꿨습니다. 동시에 동적 정점 버퍼 갱신에 D3D11_MAP_WRITE_NO_OVERWRITE 플래그를 사용해 드라이버 동기화 비용을 제거했습니다.
+                </div>
+                <div class="troubleshoot-card__result">프레임이 30 이든 144 든 트레일이 항상 일정한 매끄러움을 유지하고, 매 프레임 GPU 스톨 없이 정점을 갱신할 수 있게 되었습니다.</div>
+            </div>
+
+            <div class="troubleshoot-card">
+                <div class="troubleshoot-card__problem">본에 부착한 무기 트레일이 늘어지거나 찌그러지는 현상</div>
+                <div class="troubleshoot-card__solution">
+                    부모 본에서 누적된 비균등 스케일이 무기 매트릭스에 섞여 들어오는 것이 원인이었습니다. 본 매트릭스의 회전 행 3개를 매 프레임 XMVector3Normalize 로 정규화해서 스케일 성분을 제거하는 처리를 추가했습니다.
+                </div>
+                <div class="troubleshoot-card__result">한 줄짜리 정규화로 트레일이 항상 일정한 폭으로 깨끗하게 그려지게 되었습니다. 외부에서 보이지 않는 디테일이지만 영상 퀄리티의 마지막 5% 를 결정합니다.</div>
+            </div>
+
+            <div class="troubleshoot-card">
+                <div class="troubleshoot-card__problem">"패리가 너무 쉽거나 너무 어렵다" 는 피드백</div>
+                <div class="troubleshoot-card__solution">
+                    "공격 중 + 충돌" 만으로 패리를 허용하던 초기 구현을 폐기하고, 보스의 PatternState + PatternType + PatternPhase 까지 4중 검사로 좁혔습니다. 페이즈2 라는 짧은 윈도우에서만 받아치기가 성립하도록 만들어, 보스의 모션을 읽어야 패리가 가능해졌습니다.
+                </div>
+                <div class="troubleshoot-card__result">전투 템포가 "들이대기" 에서 "관찰 후 받아치기" 로 바뀌어, 고스트 러너 특유의 리듬감이 살아났습니다.</div>
+            </div>
+
+            <div class="troubleshoot-card">
+                <div class="troubleshoot-card__problem">화면 흔들림과 글리치 이펙트가 어디서나 똑같이 보여서 단조로움</div>
+                <div class="troubleshoot-card__solution">
+                    글리치 셰이더의 모든 파라미터(파워 / 발생률 / 색수차 / 레드블록 혼합률 / 셰이크 강도 / 지속시간)를 GameInstance 인터페이스로 분리해서, 호출부가 상황별로 자유롭게 조합할 수 있게 만들었습니다.
+                </div>
+                <div class="troubleshoot-card__result">셰이더는 하나만 유지하면서 피격 / 스킬 / 저체력 / 죽음 직전 등이 모두 다른 시각 표현을 갖게 되었고, 디자이너가 코드를 건드리지 않고 톤 조절이 가능해졌습니다.</div>
+            </div>
+
+            <div class="troubleshoot-card">
+                <div class="troubleshoot-card__problem">이펙트가 폭증하는 구간에서 발생하는 할당 지연</div>
+                <div class="troubleshoot-card__solution">
+                    Bullet / Beam / ShockWave / Spark 같은 빈번하게 생성/소멸되는 오브젝트들을 컨테이너 풀로 묶고, CONTAIN_ACTIVE / CONTAIN_SLEEP 상태로만 토글하도록 변경했습니다. 사망 직전 보스의 마구잡이 공격 같은 폭증 구간에서도 새 할당이 발생하지 않습니다.
+                </div>
+                <div class="troubleshoot-card__result">전투 클라이맥스에서도 프레임이 일정하게 유지되고, 메모리 단편화로 인한 후반부 성능 저하가 사라졌습니다.</div>
             </div>
         </section>
 

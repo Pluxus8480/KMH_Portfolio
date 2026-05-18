@@ -162,18 +162,61 @@ void Example() {
 </table>
 ```
 
-#### 2.7 시각적 다이어그램 (ASCII Art)
+#### 2.7 시각적 다이어그램 (HTML/CSS 기반)
 
+**중요: ASCII Art(┌─│└ 등 박스 드로잉 문자)는 절대 사용하지 않습니다.**
+폰트/인코딩 문제로 깨질 수 있으므로, 반드시 HTML/CSS 기반 다이어그램을 사용합니다.
+
+**플로우 다이어그램 (가로 흐름):**
 ```html
-<div class="visual-section">
-    <pre class="diagram">
-┌─────────────┐     ┌─────────────┐
-│   Client    │────▶│   Server    │
-└─────────────┘     └─────────────┘
-    </pre>
-    <p class="diagram-caption">[다이어그램 설명]</p>
+<div class="flow-diagram">
+    <div class="flow-row">
+        <div class="flow-box">
+            <div class="flow-box__title">단계 1</div>
+            <div class="flow-box__items">설명</div>
+        </div>
+        <div class="flow-arrow">&rarr;</div>
+        <div class="flow-box flow-box--highlight">
+            <div class="flow-box__title">단계 2</div>
+            <div class="flow-box__items">설명</div>
+        </div>
+    </div>
 </div>
 ```
+
+**파이프라인 다이어그램 (라벨 + 바):**
+```html
+<div class="pipeline">
+    <div class="pipeline-stage">
+        <div class="pipeline-label">단계명</div>
+        <div class="pipeline-bar pb-gbuffer">
+            <span>항목1</span><span>항목2</span><span>항목3</span>
+        </div>
+    </div>
+</div>
+```
+파이프라인 바 색상: `pb-gbuffer`(파랑), `pb-light`(초록), `pb-post`(보라), `pb-shadow`(노랑)
+
+**계층 구조 다이어그램:**
+```html
+<div class="hierarchy-diagram">
+    <div class="hierarchy-item hierarchy-item--root">루트</div>
+    <div class="hierarchy-children">
+        <div class="hierarchy-item">자식 1</div>
+        <div class="hierarchy-item">자식 2</div>
+    </div>
+</div>
+```
+
+**접을 수 있는 코드 블록 (긴 코드용):**
+```html
+<details class="code-toggle">
+    <summary>파일명 - 설명 <span class="code-lang">언어</span></summary>
+    <pre><code>// 코드</code></pre>
+</details>
+```
+
+**비교 테이블, 하이라이트 등 기존 형식은 그대로 사용합니다.**
 
 ### 3. 콘텐츠 작성 원칙
 

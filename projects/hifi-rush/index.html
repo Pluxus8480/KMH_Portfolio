@@ -101,11 +101,13 @@
                 <li><a href="#rendering"><span class="toc__number">02</span>렌더링 파이프라인</a></li>
                 <li><a href="#cel"><span class="toc__number">03</span>셀 셰이딩 &amp; NPR</a></li>
                 <li><a href="#effect"><span class="toc__number">04</span>이펙트 시스템</a></li>
-                <li><a href="#boss"><span class="toc__number">05</span>케일 보스전</a></li>
-                <li><a href="#physics"><span class="toc__number">06</span>물리 &amp; 충돌</a></li>
-                <li><a href="#optimize"><span class="toc__number">07</span>최적화</a></li>
-                <li><a href="#stage"><span class="toc__number">08</span>스테이지 &amp; 카메라</a></li>
-                <li><a href="#troubleshoot"><span class="toc__number">09</span>트러블슈팅</a></li>
+                <li><a href="#beat"><span class="toc__number">05</span>비트 동기화 시스템</a></li>
+                <li><a href="#boss"><span class="toc__number">06</span>케일 보스전</a></li>
+                <li><a href="#physics"><span class="toc__number">07</span>물리 &amp; 충돌</a></li>
+                <li><a href="#optimize"><span class="toc__number">08</span>최적화</a></li>
+                <li><a href="#stage"><span class="toc__number">09</span>스테이지 &amp; 카메라</a></li>
+                <li><a href="#tools"><span class="toc__number">10</span>개발 도구</a></li>
+                <li><a href="#troubleshoot"><span class="toc__number">11</span>트러블슈팅</a></li>
             </ol>
         </nav>
 
@@ -359,11 +361,246 @@ if (vNoise.r &lt; lifetime_ratio) discard; // 수명에 따른 디졸브</code><
                     화염 / 슬래시 / 충격파 / 빔 등 다양한 이펙트
                 </div>
             </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">애니메이션 키프레임 콜백 &mdash; 이펙트/사운드 동기화</h3>
+                <div class="feature-card__desc">
+                    <p>각 애니메이션 클립이 자기 안에 <span class="hl">"이 프레임에서 이 이펙트를 스폰하고, 이 사운드를 재생하고, 이 콜백을 호출하라"</span> 는 정보를 함께 들고 다니도록 만들었습니다. 코드에서 <code>if (animFrame == 23) PlayEffect(...)</code> 같은 하드코딩을 하지 않고, AnimTool 에서 에디터로 키프레임을 찍으면 데이터가 애니메이션 바이너리 안에 박힙니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>AnimationData.h &mdash; 애니메이션이 들고 다니는 키프레임 데이터 <span class="code-lang">C++</span></summary>
+                    <pre><code>struct ENGINE_DLL ANIMATION_DATA
+{
+    vector&lt;shared_ptr&lt;CHANNEL_DATA&gt;&gt; Channel_Datas;
+    _float fDuration, fTickPerSecond;
+
+    // 일반 콜백 프레임 (애니메이션 종료, 페이즈 전환 등)
+    vector&lt;_float&gt; Callback_Frames;
+
+    // 프레임별 이펙트 트리거
+    vector&lt;_float&gt;      Frame_Effects;
+    vector&lt;string&gt;      EffectList;
+    vector&lt;_float4x4&gt;   Effect_Trans_List;     // 스폰 위치 오프셋
+    vector&lt;_bool&gt;       Effect_IsFollow_List;  // 본을 따라다닐지
+    vector&lt;_bool&gt;       Effect_IsBillBoard_List;
+
+    // 프레임별 사운드 트리거
+    vector&lt;_float&gt;   Frame_Sounds;
+    vector&lt;wstring&gt;  SoundList;
+    vector&lt;_float&gt;   Sound_Volume_List;
+
+    void Bake_Binary(const string&amp; strModelFilePath);
+    void Load_FromBinary(ifstream&amp; is, ...);
+};</code></pre>
+                </details>
+
+                <div class="feature-card__desc" style="margin-top: 16px;">
+                    <p class="key-point"><strong>왜 이렇게 분리했나:</strong> 보스의 <strong>한 콤보 모션 안에 슬래시 사운드 3개 + 충격파 이펙트 + 화면 셰이크 콜백</strong> 이 들어가는 경우가 흔합니다. 이걸 게임 로직 코드에서 프레임 체크로 처리하면, 애니메이터가 모션을 수정할 때마다 프로그래머가 코드를 따라 수정해야 합니다. 데이터로 분리한 덕분에 <strong>모션 변경이 프로그래머와 독립</strong>되고, AnimTool 한 곳에서 모든 키프레임을 시각 편집할 수 있게 되었습니다.</p>
+                </div>
+            </div>
         </section>
 
-        <!-- ===== 05. 케일 보스전 ===== -->
+        <!-- ===== 05. 비트 동기화 시스템 ===== -->
+        <section class="detail-section" id="beat">
+            <h2 class="detail-section__title"><span class="sec-num">05</span> 비트 동기화 시스템</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">왜 비트 매니저가 필요했나</h3>
+                <div class="feature-card__desc">
+                    <p>Hi-Fi Rush 의 모든 게임플레이는 BPM 에 맞춰 동작합니다. 적의 공격이 비트에 맞춰 들어오고, 플레이어의 공격이 비트 위에서 강해지고, 환경 오브젝트가 비트마다 움직입니다. 이걸 구현하려면 <span class="warning">"지금이 한 비트의 몇 % 지점인지", "다음 비트까지 몇 초 남았는지", "이번 비트에 입력했는지"</span> 같은 정보를 어디서든 한 줄로 가져올 수 있어야 합니다.</p>
+                    <p>그래서 <code>CBeat_Manager</code> 싱글톤이 게임 전체의 비트 시간을 추적하고, 8개의 미래 비트를 미리 계산해두며, BGM 시퀀스 전이까지 자동으로 처리합니다.</p>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">핵심 인터페이스 &mdash; 어디서든 비트 정보 조회</h3>
+                <div class="feature-card__desc">
+                    <p>호출부 입장에서 가장 자주 쓰는 두 함수는 <code>Get_BeatRate()</code> 와 <code>Beat_Move(fRate)</code> 입니다. 전자는 비주얼 보간에, 후자는 비트 판정에 씁니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Beat_Manager.h &mdash; 외부 인터페이스 <span class="code-lang">C++</span></summary>
+                    <pre><code>// 현재 비트 진행도 0~1 (UI 애니메이션, 환경 펄스 등에 사용)
+_float Get_BeatRate() { return m_fTimer / m_fBeat; }
+
+// 누적 비트 카운트 (콤보/시퀀스 진행 판정)
+_uint Get_BeatCount() const { return m_iBeatCount; }
+
+// N 번째 미래 비트까지 남은 시간 (조준선/마커 룩어헤드)
+_float Get_N_Beats(_uint iN) { return m_fNextBeats[iN]; }
+
+// 비트 입력 판정 — 1비트당 1회만 true 반환
+_bool Beat_Move(_float fRate);
+
+// BGM 시퀀스 큐잉 (다음 비트에서 자동 전이)
+void Queue_Sequence(const _wstring&amp; strSeqTag);</code></pre>
+                </details>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">8 비트 룩어헤드 &mdash; "미래" 를 미리 안다</h3>
+                <div class="feature-card__desc">
+                    <p>매 프레임 <code>m_fNextBeats[8]</code> 8개 카운터를 줄여나가며, <span class="hl">하나가 0이 되면 곧바로 +8 비트를 더해서 다시 미래로 보냅니다</span>. 결과적으로 어느 순간에 봐도 앞으로 1, 2, 3 ... 8 번째 비트가 정확히 언제 오는지 알 수 있습니다.</p>
+                    <p>이 룩어헤드 덕분에 UI 의 <strong>비트 마커가 화면을 가로질러 들어오는 애니메이션</strong>이 가능해집니다 (마커가 "도착 1초 전" 부터 미리 보여야 함). 또 적 AI 가 <strong>"3비트 후에 공격하겠다"</strong> 같은 예측 행동을 할 수도 있습니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Beat_Manager.cpp &mdash; Tick 에서 룩어헤드 갱신 <span class="code-lang">C++</span></summary>
+                    <pre><code>void CBeat_Manager::Tick(_float fTimeDelta)
+{
+    m_fSuperTimer += fTimeDelta;
+    m_fTimer += fTimeDelta;
+
+    for (_uint i = 0; i &lt; 8; ++i)
+    {
+        m_fNextBeats[i] -= fTimeDelta;
+        if (m_fNextBeats[i] &lt;= 0.f)
+        {
+            // 0이 된 비트는 +8 비트 미래로 재배치 → 항상 8개 미래가 유효
+            m_fNextBeats[i] += m_fBeat * 8.f;
+        }
+    }
+
+    // 한 비트가 끝나면 카운트 증가 + BGM 시퀀스 검사
+    if (m_fTimer &gt;= m_fBeat)
+    {
+        ++m_iBeatCount;
+        m_fTimer -= m_fBeat;
+
+        if (m_bSequenceChange) Start_Sequence();
+        if (m_pCurrSequence &amp;&amp; m_iBeatCount &gt;= (_uint)m_pCurrSequence-&gt;iBeat)
+            Proceed();   // 다음 BGM 세그먼트로 전이
+    }
+}</code></pre>
+                </details>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">비트 판정 (Perfect / Good / Miss)</h3>
+                <div class="feature-card__desc">
+                    <p>플레이어가 공격 키를 눌렀을 때, <code>Beat_Move(fRate)</code> 가 "이 입력이 비트와 얼마나 가까운가" 를 판정합니다. <span class="hl">비트 경계까지의 최소 거리</span>를 계산하고, 허용 비율 안에 들면 true 를 리턴합니다. 더불어 <strong>한 비트당 한 번만 true</strong> 가 나오도록 <code>m_iBeatMoved</code> 로 잠가서, 키를 연타해도 동일 비트에서 중복 판정이 안 됩니다.</p>
+                </div>
+
+                <details class="code-toggle" open>
+                    <summary>Beat_Manager.cpp &mdash; Beat_Move 판정 로직 <span class="code-lang">C++</span></summary>
+                    <pre><code>_bool CBeat_Manager::Beat_Move(_float fRate)
+{
+    // 이번 비트에서 이미 판정한 경우 false
+    if (m_iBeatCount == m_iBeatMoved)
+        return false;
+
+    // 비트 경계까지 최단 거리: 직전 비트까지 거리 vs 다음 비트까지 거리
+    _float fDiff = min(m_fBeat - m_fTimer, m_fTimer);
+
+    // 허용 비율(fRate) 안에 들지 않으면 false
+    if (abs(fDiff) &gt; m_fBeat * fRate)
+        return false;
+
+    // 비트의 후반부에 입력 → 다음 비트에 귀속
+    if (m_fTimer &gt; m_fBeat * 0.5f) m_iBeatMoved = m_iBeatCount + 1;
+    else                            m_iBeatMoved = m_iBeatCount;
+
+    return true;
+}</code></pre>
+                </details>
+
+                <table class="compare-table">
+                    <thead><tr><th>판정</th><th>fRate</th><th>실효 윈도우 (BPM 120 기준)</th></tr></thead>
+                    <tbody>
+                        <tr><td>Perfect</td><td>0.10</td><td>약 ±50ms</td></tr>
+                        <tr><td>Good</td><td>0.25</td><td>약 ±125ms</td></tr>
+                        <tr><td>Miss</td><td>0.25 초과</td><td>그 외</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">BGM 시퀀스 트리 &mdash; 보스전 음악이 단계별 전이</h3>
+                <div class="feature-card__desc">
+                    <p>케일 보스전의 음악은 단일 트랙이 아니라 <strong>Intro → Verse1 → PreChor → Chor1 → PostChor1 → Verse2 → PreChor2 → Chor2 → PostChor2 → DrumBridge → Outro</strong> 의 11개 세그먼트로 쪼개져 있습니다. 각 세그먼트는 자기 길이(비트 수)를 알고, <code>pNext</code> 포인터로 다음 세그먼트를 가리킵니다. 비트 카운트가 현재 세그먼트의 길이를 넘으면 <code>Proceed()</code> 가 자동으로 다음 트랙을 재생합니다.</p>
+                    <p>덕분에 보스 페이즈가 바뀌면 음악이 <span class="hl">비트 경계에서 정확히 다음 단계로 전이</span>되고, 페이즈 전환과 음악 빌드업이 동기화됩니다.</p>
+                </div>
+
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Intro</div>
+                            <div class="flow-box__items">64 비트</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Verse1</div>
+                            <div class="flow-box__items">64 비트</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Chor1</div>
+                            <div class="flow-box__items">32 비트 (페이즈2 트리거)</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Verse2 / Chor2 / ...</div>
+                            <div class="flow-box__items">128 / 80 / 64 비트</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Outro</div>
+                            <div class="flow-box__items">128 비트</div>
+                        </div>
+                    </div>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Beat_Manager.cpp &mdash; 시퀀스 트리 구성 (Kale 보스) <span class="code-lang">C++</span></summary>
+                    <pre><code>// 11개 세그먼트를 vector 에 등록 (태그, 길이 in beats)
+m_vecBGMSequence.push_back(BGM_SEQUENCE{ L"PD_Intro",       64 });
+m_vecBGMSequence.push_back(BGM_SEQUENCE{ L"PD_Verse1",      64 });
+m_vecBGMSequence.push_back(BGM_SEQUENCE{ L"PD_PreChor1",    32 });
+m_vecBGMSequence.push_back(BGM_SEQUENCE{ L"PD_Chor1",       32 });
+m_vecBGMSequence.push_back(BGM_SEQUENCE{ L"PD_PostChor1",   16 });
+// ...
+
+// pNext 포인터로 트리 연결
+m_vecBGMSequence[2].pNext = &amp;m_vecBGMSequence[3];   // PreChor → Chor
+m_vecBGMSequence[3].pNext = &amp;m_vecBGMSequence[4];   // Chor   → PostChor
+m_vecBGMSequence[5].pNext = &amp;m_vecBGMSequence[5];   // Verse2 → (자기 자신, 무한 루프)
+
+// 태그로 진입점 등록 → 호출부에서 Queue_Sequence(L"Kale_Chor2") 한 줄로 점프
+m_mapBGM.insert({ L"Kale_Chor2", &amp;m_vecBGMSequence[7] });</code></pre>
+                </details>
+
+                <div class="feature-card__desc" style="margin-top: 16px;">
+                    <p class="key-point"><strong>왜 자기 자신을 pNext 로 가리키나:</strong> 마지막 세그먼트가 자기 자신을 가리키면 그 구간이 무한 루프합니다. 보스가 페이즈2 에서 멈춰 있는 동안 Verse2 가 계속 반복되다가, 페이즈3 트리거 시 <code>Queue_Sequence(L"Kale_Bridge")</code> 한 줄로 다음 트리에 점프합니다.</p>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">비트 판정 UI &mdash; BeatMarker / BeatJudge / BeatMeter</h3>
+                <div class="feature-card__desc">
+                    <p>비트 매니저의 룩어헤드 정보를 시각화하는 전용 UI 시스템입니다. <code>CUi_BeatMarkerSystem</code> 이 8개 마커를 관리하고, <code>CUi_BeatMarker</code> 가 화면을 가로질러 비트 라인에 도달하는 애니메이션을 그리고, <code>CUi_BeatJudge</code> 가 Perfect/Good/Miss 결과 텍스트를 띄우고, <code>CUi_BeatMeter</code> 가 콤보 미터를 표시합니다.</p>
+                </div>
+
+                <div class="hierarchy-diagram">
+                    <div class="hierarchy-item hierarchy-item--root">CBeat_Manager (싱글톤)</div>
+                    <div class="hierarchy-children">
+                        <div class="hierarchy-item">CUi_BeatMarkerSystem &mdash; 8 마커 풀 관리</div>
+                        <div class="hierarchy-item">CUi_BeatMarker &mdash; Get_N_Beats(i) 기반 이동</div>
+                        <div class="hierarchy-item">CUi_BeatJudge &mdash; Beat_Move(fRate) 결과 표시</div>
+                        <div class="hierarchy-item">CUi_BeatMeter &mdash; 콤보 / 비트 게이지</div>
+                    </div>
+                </div>
+
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">GIF: 비트 판정 UI 동작</div>
+                    비트 마커가 도달하는 순간 입력 → Perfect/Good 판정 표시
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 06. 케일 보스전 ===== -->
         <section class="detail-section" id="boss">
-            <h2 class="detail-section__title"><span class="sec-num">05</span> 케일 보스전</h2>
+            <h2 class="detail-section__title"><span class="sec-num">06</span> 케일 보스전</h2>
 
             <div class="feature-card">
                 <h3 class="feature-card__title">4단계 페이즈 보스 AI (80+ 상태)</h3>
@@ -419,9 +656,9 @@ if (vNoise.r &lt; lifetime_ratio) discard; // 수명에 따른 디졸브</code><
             </div>
         </section>
 
-        <!-- ===== 06. 물리 & 충돌 ===== -->
+        <!-- ===== 07. 물리 & 충돌 ===== -->
         <section class="detail-section" id="physics">
-            <h2 class="detail-section__title"><span class="sec-num">06</span> 물리 &amp; 충돌</h2>
+            <h2 class="detail-section__title"><span class="sec-num">07</span> 물리 &amp; 충돌</h2>
 
             <div class="feature-card">
                 <h3 class="feature-card__title">PhysX 5.3 통합</h3>
@@ -438,9 +675,9 @@ if (vNoise.r &lt; lifetime_ratio) discard; // 수명에 따른 디졸브</code><
             </div>
         </section>
 
-        <!-- ===== 07. 최적화 ===== -->
+        <!-- ===== 08. 최적화 ===== -->
         <section class="detail-section" id="optimize">
-            <h2 class="detail-section__title"><span class="sec-num">07</span> 최적화</h2>
+            <h2 class="detail-section__title"><span class="sec-num">08</span> 최적화</h2>
 
             <div class="feature-card">
                 <h3 class="feature-card__title">모델 로딩 최적화 (30분 &rarr; 2분)</h3>
@@ -482,11 +719,46 @@ if (vNoise.r &lt; lifetime_ratio) discard; // 수명에 따른 디졸브</code><
 };</code></pre>
                 </details>
             </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">Octree &mdash; 공간 분할 + 노드별 Frustum 캐시</h3>
+                <div class="feature-card__desc">
+                    <p>케일 보스 아레나처럼 큰 공간에서 매 프레임 모든 오브젝트의 Frustum 검사를 하면 비용이 누적됩니다. 그래서 공간을 <strong>최대 10단계 8 분할 트리</strong>로 나누고, 각 노드가 자신의 <code>bInFrustum</code> 플래그를 캐시합니다. 카메라 컬링이 통과한 노드 안의 오브젝트만 다음 단계로 진행됩니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Octree.h &mdash; 8 분할 재귀 + Frustum 플래그 <span class="code-lang">C++</span></summary>
+                    <pre><code>struct ENGINE_DLL Node
+{
+    enum SIDE {
+        N_N_N, N_N_P, P_N_P, P_N_N,
+        N_P_N, N_P_P, P_P_P, P_P_N,
+    };
+
+    _int    iTopology;             // 현재 깊이
+    _bool   bInFrustum = true;     // 이 노드가 Frustum 안인지 캐시
+    _bool   bInFull    = true;     // 완전히 포함되는지 (자식 검사 생략 가능)
+    _float3 Center;
+    _float  fRadius;
+    _float  fOuterRadius;          // sqrt(r² × 3) — 외접구 반지름
+
+    shared_ptr&lt;Node&gt; Children[8];  // 8 분할 자식
+    vector&lt;shared_ptr&lt;COctComp&gt;&gt; vecObjects;
+
+    void Initialize(_float fUnitScale, _int iTopology, const _float3&amp; vCenter);
+    void Update(_bool _bInFrustum, _bool _bInFull);
+};</code></pre>
+                </details>
+
+                <div class="feature-card__desc" style="margin-top: 16px;">
+                    <p class="key-point"><strong>bInFull 플래그의 의미:</strong> 노드가 Frustum 에 <strong>완전히</strong> 포함되면(부분 교차가 아니라) 그 안의 모든 자식은 무조건 보인다고 가정하고 더 이상 재귀하지 않습니다. 이게 컬링 비용을 한 자리수 줄이는 핵심 트릭입니다. 외접구(<code>fOuterRadius</code>) 와 내접 반지름을 둘 다 들고 있는 이유가 이 검사를 위해서입니다.</p>
+                </div>
+            </div>
         </section>
 
-        <!-- ===== 08. 스테이지 & 카메라 ===== -->
+        <!-- ===== 09. 스테이지 & 카메라 ===== -->
         <section class="detail-section" id="stage">
-            <h2 class="detail-section__title"><span class="sec-num">08</span> 스테이지 &amp; 카메라</h2>
+            <h2 class="detail-section__title"><span class="sec-num">09</span> 스테이지 &amp; 카메라</h2>
 
             <div class="feature-card">
                 <h3 class="feature-card__title">터널 맵 &amp; 무대 연출</h3>
@@ -515,9 +787,84 @@ if (vNoise.r &lt; lifetime_ratio) discard; // 수명에 따른 디졸브</code><
             </div>
         </section>
 
-        <!-- ===== 09. 트러블슈팅 ===== -->
+        <!-- ===== 10. 개발 도구 ===== -->
+        <section class="detail-section" id="tools">
+            <h2 class="detail-section__title"><span class="sec-num">10</span> 개발 도구</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">3종 인하우스 ImGui 툴 &mdash; 클라이언트 EXE 안에 통합</h3>
+                <div class="feature-card__desc">
+                    <p>외부 에디터를 만들면 게임과 데이터 포맷이 어긋나기 쉽고 빌드 사이클도 길어집니다. 그래서 모든 툴을 <span class="hl">레벨(Level) 단위로 게임 자체에 내장</span>해서, 실제 게임 코드와 같은 매니저 / 리소스 / 셰이더를 그대로 쓰고, 에디터에서 저장한 데이터를 바로 다른 레벨에서 로드할 수 있게 만들었습니다.</p>
+                </div>
+
+                <div class="hierarchy-diagram">
+                    <div class="hierarchy-item hierarchy-item--root">Client (EXE)</div>
+                    <div class="hierarchy-children">
+                        <div class="hierarchy-item">Level_AnimTool &mdash; 애니메이션 / 본 디버그 뷰어</div>
+                        <div class="hierarchy-item">Level_MapTool &mdash; 기즈모 기반 오브젝트 배치 + 다중 레이어</div>
+                        <div class="hierarchy-item">Level_CineTool &mdash; 시네마틱 시퀀스 / Bezier 카메라 키프레임 에디터</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">Level_CineTool &mdash; 컷씬 시퀀스 에디터</h3>
+                <div class="feature-card__desc">
+                    <p>케일 보스전의 등장 컷씬, 808 이벤트, 피니시 시퀀스 등을 <span class="hl">에디터 안에서 액터 / 액션 / 카메라 / 이펙트 / 사운드 / 대사 콜백</span>을 키프레임 단위로 배치하고 JSON 으로 저장합니다. 트래시 모드와 기즈모 렌더링을 직접 구현했고, 저장한 시나리오는 게임 빌드에서 바로 재생됩니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Level_CineTool.h &mdash; 시나리오 에디터 구조 <span class="code-lang">C++</span></summary>
+                    <pre><code>class CLevel_CineTool : public CLevel
+{
+private:
+    void  Imgui_GizmoRender();        // 트랜스폼 기즈모 (위치/회전/스케일)
+    void  Imgui_Trash_GizmoRender();  // 삭제 모드 기즈모
+
+    void  OptionTool();   // 시나리오 옵션
+    void  CineTool();     // 시퀀스/액터/콜백 편집
+    void  CameraTool();   // Bezier 키프레임 카메라
+
+private:
+    CCine_Scenario  m_CurScenario;
+    _int  m_iActionSelect      = -1;
+    _int  m_iCamSelect         = -1;
+    _int  m_iEffectSelect      = -1;
+    _int  m_iCallbackSelect    = -1;
+    _int  m_iConversationSelect= -1;
+
+    // JSON / 사운드 파일 다이얼로그
+    ImGui::FileBrowser m_fileDialog_Sound;
+    ImGui::FileBrowser m_fileDialog_Json;
+    ImGui::FileBrowser m_fileDialog_Save_Scenario;
+};</code></pre>
+                </details>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">Level_AnimTool / Level_MapTool</h3>
+                <div class="feature-card__desc">
+                    <p><strong>AnimTool</strong> 은 FBX 임포트 결과를 즉시 재생하고 본 계층 / 콜백 키프레임을 디버그 시각화합니다. <strong>MapTool</strong> 은 기즈모로 오브젝트를 배치하고, 레이어 단위로 가시성 / 충돌 / 조명을 따로 토글할 수 있어서 큰 맵을 작업할 때 다른 팀원과 충돌 없이 자기 레이어만 편집할 수 있습니다.</p>
+                </div>
+
+                <table class="compare-table">
+                    <thead><tr><th>툴</th><th>주요 기능</th><th>저장 포맷</th></tr></thead>
+                    <tbody>
+                        <tr><td>AnimTool</td><td>FBX 임포트, 본 디버그, 키프레임 콜백 미리보기</td><td>커스텀 바이너리</td></tr>
+                        <tr><td>MapTool</td><td>기즈모 배치, 레이어 토글, 조명 / 충돌 편집</td><td>JSON</td></tr>
+                        <tr><td>CineTool</td><td>시퀀스 / 액터 / Bezier 카메라 / 콜백 편집</td><td>JSON</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="feature-card__desc" style="margin-top: 16px;">
+                    <p class="key-point"><strong>왜 인게임 툴인가:</strong> 외부 에디터로 만들면 "에디터 빌드 / 게임 빌드 / 데이터 임포트" 3단 분리가 필요하지만, 게임 EXE 안에 레벨로 두면 같은 매니저 / 리소스 / 셰이더 / 충돌 시스템을 그대로 씁니다. 결과적으로 <strong>에디터에서 본 모습 = 게임에서 본 모습</strong> 이 보장되고, 빌드 사이클이 한 번으로 단축됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 11. 트러블슈팅 ===== -->
         <section class="detail-section" id="troubleshoot">
-            <h2 class="detail-section__title"><span class="sec-num">09</span> 트러블슈팅</h2>
+            <h2 class="detail-section__title"><span class="sec-num">11</span> 트러블슈팅</h2>
 
             <div class="troubleshoot-card">
                 <div class="troubleshoot-card__problem">스마트 포인터 전환</div>

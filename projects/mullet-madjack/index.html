@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mullet MadJack DX9 | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../css/project-detail.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F52B;</text></svg>">
+</head>
+<body>
+    <header class="header" id="header">
+        <nav class="nav container">
+            <a href="../../index.html" class="nav__logo">
+                <span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span>
+            </a>
+        </nav>
+    </header>
+
+    <div class="project-container">
+        <a href="../../index.html#projects" class="back-link">&larr; 포트폴리오</a>
+
+        <!-- Hero -->
+        <div class="project-hero">
+            <span class="project-hero__emoji">&#x1F52B;</span>
+            <h1>Mullet MadJack</h1>
+            <p class="project-hero__subtitle">DirectX 9 기반 FPS 슈팅 액션 게임 팀 포트폴리오</p>
+            <div class="project-links">
+                <a href="https://www.youtube.com/watch?v=bjkQE7ARzns" target="_blank" class="project-links__demo">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                    데모 영상
+                </a>
+            </div>
+        </div>
+
+        <!-- 프로젝트 정보 -->
+        <div class="project-meta">
+            <div class="meta-card">
+                <span class="meta-card__label">기간</span>
+                <span class="meta-card__value">2024.04 ~ 05</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-card__label">유형</span>
+                <span class="meta-card__value meta-card__value--accent">팀 프로젝트</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-card__label">담당</span>
+                <span class="meta-card__value">카메라 / 물리 / ActiveUI / 최종 보스 / 자동화</span>
+            </div>
+            <div class="meta-card">
+                <span class="meta-card__label">규모</span>
+                <span class="meta-card__value">420+ 파일</span>
+            </div>
+        </div>
+
+        <!-- 기술 스택 -->
+        <div class="tech-stack">
+            <span class="tech-badge tech-badge--primary">DirectX 9</span>
+            <span class="tech-badge tech-badge--primary">C++</span>
+            <span class="tech-badge tech-badge--primary">OpenCV</span>
+            <span class="tech-badge">FMOD</span>
+            <span class="tech-badge">D3DX9</span>
+            <span class="tech-badge">DLL</span>
+            <span class="tech-badge">Python</span>
+        </div>
+
+        <!-- 핵심 수치 -->
+        <div class="stat-box">
+            <div class="stat-item">
+                <span class="stat-item__number stat-item__number--blue">3</span>
+                <span class="stat-item__label">보스 페이즈</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-item__number stat-item__number--purple">12</span>
+                <span class="stat-item__label">보스 공격 패턴</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-item__number stat-item__number--yellow">5</span>
+                <span class="stat-item__label">UI 컨테이너 계층</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-item__number stat-item__number--green">2주&rarr;0초</span>
+                <span class="stat-item__label">이미지 가공 자동화</span>
+            </div>
+        </div>
+
+        <!-- 목차 -->
+        <nav class="toc">
+            <div class="toc__title">목차</div>
+            <ol class="toc__list">
+                <li><a href="#overview"><span class="toc__number">01</span>프로젝트 개요</a></li>
+                <li><a href="#arch"><span class="toc__number">02</span>엔진 아키텍처</a></li>
+                <li><a href="#activeui"><span class="toc__number">03</span>ActiveUI 트리 시스템</a></li>
+                <li><a href="#camera"><span class="toc__number">04</span>FPS 카메라</a></li>
+                <li><a href="#physics"><span class="toc__number">05</span>커스텀 물리</a></li>
+                <li><a href="#boss"><span class="toc__number">06</span>비홀더 최종 보스</a></li>
+                <li><a href="#lissajous"><span class="toc__number">07</span>리사주 커브 응용</a></li>
+                <li><a href="#opencv"><span class="toc__number">08</span>OpenCV 이미지 자동화</a></li>
+                <li><a href="#animation"><span class="toc__number">09</span>유사 스켈레톤 애니메이션</a></li>
+                <li><a href="#troubleshoot"><span class="toc__number">10</span>트러블슈팅 &amp; 회고</a></li>
+            </ol>
+        </nav>
+
+        <!-- ===== 01. 프로젝트 개요 ===== -->
+        <section class="detail-section" id="overview">
+            <h2 class="detail-section__title"><span class="sec-num">01</span> 프로젝트 개요</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">2주 만에 완성한 80년대 사이버펑크 FPS 모작</h3>
+                <div class="feature-card__desc">
+                    <p>인디 슈터 <strong>Mullet MadJack</strong>을 DirectX 9로 모작한 팀 프로젝트입니다. 원작의 핵심인 <span class="highlight">10초 카운트다운 안에 적을 처치해 시간을 벌어가는</span> 빠른 템포 슈팅과 비주얼을 재현했습니다.</p>
+                    <p>저는 <strong>카메라 / 커스텀 물리 / 플레이어 제어 / ActiveUI 시스템 / 최종 보스(비홀더)</strong>를 담당했고, 추가로 팀 전체의 작업 속도를 가로막던 <strong>이미지 사이즈 정규화 문제</strong>를 OpenCV 자동화 툴로 해결했습니다.</p>
+                </div>
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">이미지: 비홀더 등장 컷씬</div>
+                    비홀더와 처음 마주치는 장면 GIF
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 02. 엔진 아키텍처 ===== -->
+        <section class="detail-section" id="arch">
+            <h2 class="detail-section__title"><span class="sec-num">02</span> 엔진 아키텍처</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">Engine DLL / Client EXE 분리 구조</h3>
+                <div class="feature-card__desc">
+                    <p>엔진 코어를 DLL로 분리해서 클라이언트와 독립적으로 빌드하고, Renderer / Object_Manager / Component_Manager / CUi_Manager / Sound_Manager / Camera_Manager 등의 매니저를 <span class="highlight">CGameInstance 싱글톤</span>이 일괄 제공하도록 설계했습니다.</p>
+                </div>
+
+                <div class="flow-diagram">
+                    <div class="flow-row" style="margin-bottom: 8px;">
+                        <div class="flow-box" style="flex:1;">
+                            <div class="flow-box__title">Client (EXE) &mdash; 348 파일</div>
+                            <div class="flow-box__items">Player / 비홀더 / 패턴 스폰 / 이펙트 / UI 위젯 / 레벨</div>
+                        </div>
+                    </div>
+                    <div style="text-align:center; color: var(--accent-primary); font-size: 0.9rem; margin: 4px 0;">CGameInstance 싱글톤</div>
+                    <div class="flow-row">
+                        <div class="flow-box flow-box--highlight" style="flex:1;">
+                            <div class="flow-box__title">Engine (DLL) &mdash; 76 파일</div>
+                            <div class="flow-box__items">Renderer / Object_Manager / Component_Manager / CUi_Manager / Sound / Camera / Collision / Timer / Key</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 03. ActiveUI 트리 시스템 ===== -->
+        <section class="detail-section" id="activeui">
+            <h2 class="detail-section__title"><span class="sec-num">03</span> ActiveUI 트리 시스템</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">왜 만들었나 &mdash; 매번 Clone 하는 비용</h3>
+                <div class="feature-card__desc">
+                    <p>처음에는 UI를 띄울 때마다 프로토타입을 Clone 해서 띄우고, 사라지면 Dead 처리하는 구조였습니다. 그런데 <span class="warning">상점 / HP바 / 콤보 / 보스HP / 크로스헤어처럼 자주 켜졌다 꺼지는 UI</span>까지 매번 Clone &rarr; Delete를 반복하니, 1초에 수십 번 토글되는 UI에서 메모리 단편화와 끊김이 발생했습니다.</p>
+                    <p class="key-point">해결: <strong>한 번 만들어둔 인스턴스를 활성/비활성 플래그로만 토글</strong>하는 ActiveUI 시스템을 추가했습니다.</p>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">5개 컨테이너로 분리된 UI 매니저</h3>
+                <div class="feature-card__desc">
+                    <p>UI 의 수명과 렌더 방식이 다르기 때문에, <code>CUi_Manager</code>는 5개의 컨테이너로 UI를 분리해서 관리합니다.</p>
+                </div>
+
+                <div class="hierarchy-diagram">
+                    <div class="hierarchy-item hierarchy-item--root">CUi_Manager</div>
+                    <div class="hierarchy-children">
+                        <div class="hierarchy-item">m_Ui_LifePrototypes &mdash; 원본 보관</div>
+                        <div class="hierarchy-item">m_Ui_LifeClonelist &mdash; 수명 있는 NonBlend (피격 데미지 등)</div>
+                        <div class="hierarchy-item">m_Ui_LifeBlendClonelist &mdash; 수명 있는 Blend (이펙트성 UI)</div>
+                        <div class="hierarchy-item">m_Ui_Active / m_Ui_ActiveBlend &mdash; 영구 인스턴스, 플래그 토글</div>
+                        <div class="hierarchy-item">m_Ui_ShopActive &mdash; 상점 전용 (별도 렌더 패스)</div>
+                    </div>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>CUi.h &mdash; Active 플래그가 바뀔 때마다 Initialize 호출 <span class="code-lang">C++</span></summary>
+                    <pre><code>void Set_Active(bool _isActive)
+{
+    if (_isActive == true && m_bActive == true)
+        return;
+
+    if (_isActive == true)
+        Initialize_Active();   // 켤 때만 호출되는 초기화
+    else
+        Initialize_InActive(); // 끌 때만 호출되는 정리
+
+    m_bActive = _isActive;
+}</code></pre>
+                </details>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">트리 구조 &mdash; 부모를 켜면 자식이 따라온다</h3>
+                <div class="feature-card__desc">
+                    <p>상점 UI를 예로 들면, <code>Ui_Shop</code> 하나를 켜는 순간 안에 있는 <strong>업그레이드 선택 슬롯</strong>, <strong>가격 표시</strong>, <strong>설명창</strong>, <strong>포커스 효과</strong> UI가 같이 활성화되어야 합니다.</p>
+                    <p>매번 호출부에서 <code>Set_Ui_ActiveState</code>를 10번씩 부르는 대신, <span class="highlight">부모 UI 가 Tick 안에서 자식 UI 를 직접 Active 토글</span>하도록 트리 구조를 만들었습니다. 호출부는 부모 한 번만 켜면 끝납니다.</p>
+                </div>
+
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">호출부</div>
+                            <div class="flow-box__items">Set_Ui_ActiveState(L"Ui_Shop", true) 1줄</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Ui_Shop (부모)</div>
+                            <div class="flow-box__items">Tick 안에서 자식 UI들 활성화</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">자식 UI 다발</div>
+                            <div class="flow-box__items">UpGrade_Select / Focus / 가격 표시 등 일괄 ON</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">이미지: 상점 UI 열기/닫기</div>
+                    한 번의 키 입력으로 여러 UI 가 묶여서 켜졌다 꺼지는 GIF
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 04. 카메라 ===== -->
+        <section class="detail-section" id="camera">
+            <h2 class="detail-section__title"><span class="sec-num">04</span> FPS 카메라</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">마우스 룩 + 수직 각도 제한 + 액션 FOV</h3>
+                <div class="feature-card__desc">
+                    <p>윈도우 중심으로 매 프레임 커서를 복귀시키고, 그 사이 움직인 픽셀 차이로 카메라를 회전시키는 전형적인 FPS 마우스 룩입니다. 단, 위/아래를 무한히 돌면 카메라가 뒤집히므로 <code>m_fVerticalAngle</code>로 <strong>수직 누적 각도를 추적</strong>해서 한계 이상은 입력을 무시합니다.</p>
+                    <p>대시 / 에어대시 / 슬로프 상태일 때는 <span class="highlight">FOV 를 80으로 확장</span>해서 속도감을 강조하고, 평상시에는 원래 FOV 로 돌아갑니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>FPS_Camera.cpp &mdash; 액션 상태에 따른 FOV 변화 <span class="code-lang">C++</span></summary>
+                    <pre><code>if (CPlayer_Manager::Get_Instance()->Get_Player_State() == CPlayer::PLAYER_STATE::DASH_STATE
+    || CPlayer_Manager::Get_Instance()->Get_Player_State() == CPlayer::PLAYER_STATE::AIRDASH_STATE
+    || CPlayer_Manager::Get_Instance()->Get_Player_State() == CPlayer::PLAYER_STATE::SLOPE_STATE) {
+    m_fFovY = 80.0f;
+}
+
+D3DXMatrixPerspectiveFovLH(&amp;m_ProjMatrix, To_Radian(m_fFovY),
+    g_iWinSizeX / (_float)g_iWinSizeY, m_CameraDesc.fNear, m_CameraDesc.fFar);</code></pre>
+                </details>
+
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">이미지: 대시 / 슬라이드 GIF</div>
+                    대시 진입 시 FOV 확장으로 속도감이 살아나는 장면
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">빌보드 매트릭스 &mdash; 카메라 회전을 따라가는 UI/이펙트</h3>
+                <div class="feature-card__desc">
+                    <p>피격 이펙트나 광원 같은 2D 스프라이트가 항상 카메라를 향하도록, 카메라 View 매트릭스에서 <strong>X/Z 회전 성분만 추출</strong>한 빌보드 매트릭스를 매 프레임 갱신합니다. Y축 회전(좌우)만 따라가게 되어, 위아래로 쳐다봐도 이펙트가 자연스럽게 보입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 05. 커스텀 물리 ===== -->
+        <section class="detail-section" id="physics">
+            <h2 class="detail-section__title"><span class="sec-num">05</span> 커스텀 물리</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">PhysX 없이 직접 만든 가벼운 Rigidbody</h3>
+                <div class="feature-card__desc">
+                    <p>이 프로젝트는 PhysX 같은 외부 물리 엔진을 쓰지 않고, FPS 에서 필요한 최소 기능만 가진 <code>CRigidbody</code> 컴포넌트를 직접 구현했습니다. 중력 / 속도 / 마찰 / 지면 판정만 다루지만, <strong>대시 / 슬라이드 / 슬로프 / 점프</strong>는 모두 이 위에서 만들어졌습니다.</p>
+                </div>
+
+                <details class="code-toggle" open>
+                    <summary>Rigidbody.cpp &mdash; XZ 평면 마찰만 분리해서 적용 <span class="code-lang">C++</span></summary>
+                    <pre><code>void CRigidbody::Update(_float fTimeDelta)
+{
+    if (false == m_bGround && true == m_bUseGravity)
+        m_vVelocity += m_vGravity * fTimeDelta;
+
+    if (m_fFriction != 0.f)
+    {
+        _float3 vInvVelocity = m_vVelocity;
+        vInvVelocity.y = 0.f;            // Y축 마찰 제외 (점프/낙하 영향 없음)
+        vInvVelocity *= m_fFriction * fTimeDelta;
+
+        _float3 vXZVelocity = m_vVelocity;
+        vXZVelocity.y = 0.f;
+
+        if (D3DXVec3Length(&amp;vXZVelocity) &lt; D3DXVec3Length(&amp;vInvVelocity)) {
+            m_vVelocity.x = 0.f;         // 마찰이 속도보다 크면 0으로 클램프
+            m_vVelocity.z = 0.f;
+        } else {
+            m_vVelocity -= vInvVelocity;
+        }
+    }
+
+    _float3 vOwnerPos = m_pOwnerTransform->Get_State(CTransform::STATE_POSITION);
+    vOwnerPos += m_vVelocity * fTimeDelta;
+    m_pOwnerTransform->Set_State(CTransform::STATE_POSITION, &amp;vOwnerPos);
+}</code></pre>
+                </details>
+
+                <div class="feature-card__desc">
+                    <p class="key-point"><strong>핵심 디테일:</strong> 마찰을 XZ 평면에만 적용하고 Y축은 제외했습니다. 이렇게 안 하면 점프해서 공중에 떠 있는 동안에도 마찰이 작용해 낙하 속도가 줄어드는 비현실적인 결과가 나옵니다. 또한 마찰이 현재 속도보다 크면 빼는 대신 <strong>0으로 클램프</strong>해서 부호가 뒤집혀 떨리는 현상을 막았습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 06. 비홀더 보스 ===== -->
+        <section class="detail-section" id="boss">
+            <h2 class="detail-section__title"><span class="sec-num">06</span> 비홀더 최종 보스</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">3계층 구조 &mdash; Phase / Pattern / AttackOrder</h3>
+                <div class="feature-card__desc">
+                    <p>비홀더의 행동 트리를 <strong>3계층</strong>으로 분리했습니다. 페이즈가 패턴 풀을 결정하고, 패턴이 공격 명령을 발행하고, 공격 명령이 실제 발사체(레이저 / 지뢰 / 폭격)를 만듭니다. 이렇게 분리해 두니 <span class="highlight">새로운 패턴을 만들 때 기존 공격 명령을 조합만 하면</span> 되어서 후반 작업이 빨라졌습니다.</p>
+                </div>
+
+                <div class="hierarchy-diagram">
+                    <div class="hierarchy-item hierarchy-item--root">CBeholder</div>
+                    <div class="hierarchy-children">
+                        <div class="hierarchy-item">Phase (7개) &mdash; WAIT / CHARGE / GROGGY / 1 / 2 / 3 / DEATH</div>
+                        <div class="hierarchy-item">Pattern (12개) &mdash; AllRoundLaser / RoundAirStrike / Boom / LandMine / Reverse...</div>
+                        <div class="hierarchy-item">AttackOrder (6개) &mdash; PlayerTracking / FreeTracking / LandMineSet / AirStrike / AirStrikeTracking / MonsterSpawn</div>
+                    </div>
+                </div>
+
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">이미지: 페이즈 전환 / 그로기 GIF</div>
+                    Phase1 &rarr; Phase2 &rarr; Phase3 전환 시 패턴 강도가 올라가는 흐름
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">원형 지뢰 링 &mdash; 360° / 12° 간격 30발</h3>
+                <div class="feature-card__desc">
+                    <p>가장 단순하지만 시각적 임팩트가 큰 패턴입니다. <code>cos(θ)·r, sin(θ)·r</code>로 원 둘레를 30분할해서 한 번에 30개의 지뢰를 깔아두고, 플레이어를 좁은 영역으로 밀어붙입니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Beholder.cpp &mdash; 360도 원형 지뢰 배치 <span class="code-lang">C++</span></summary>
+                    <pre><code>void CBeholder::RoundAirStrike()
+{
+    float f_radius = m_fRoundStrikeRadius;
+    for (int i = 0; i &lt; 360; i = i + 12)
+    {
+        float f_x = (float)(cos(deg2rad(i)) * f_radius);
+        float f_y = (float)(sin(deg2rad(i)) * f_radius);
+
+        _bool bExplode = true;
+        CGameObject* pObj = m_pGameInstance->Add_Clone(
+            m_pGameInstance->Get_CurrentLevelID(),
+            L"LandMine", L"Prototype_LandMine", &amp;bExplode);
+        pObj->Get_Transform()->Add_Pos(_float3(f_x, -0.3f, f_y + 10.f));
+    }
+}</code></pre>
+                </details>
+
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">이미지: 원형 지뢰 링 GIF</div>
+                    플레이어 주변 360도로 깔리는 지뢰
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">부위 판정 &mdash; HEAD / BODY / EGG, 카타나 분기</h3>
+                <div class="feature-card__desc">
+                    <p>비홀더는 머리 / 몸통 / <strong>약점(EGG)</strong> 3 부위로 피격 판정이 나뉘고, <span class="highlight">카타나로 맞췄는지 총으로 맞췄는지에 따라 데미지가 분기</span>됩니다. EGG 와 HEAD 는 10 데미지 고정, BODY 는 카타나 8 / 총 5 차등입니다.</p>
+                    <p>처치 시에는 5초의 <code>m_fDeathDelay</code> 동안 0.15초 간격으로 폭발 이펙트를 연쇄적으로 터뜨려 죽음 연출을 만들었습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 07. 리사주 ===== -->
+        <section class="detail-section" id="lissajous">
+            <h2 class="detail-section__title"><span class="sec-num">07</span> 리사주 커브 응용</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">왜 리사주 커브였나</h3>
+                <div class="feature-card__desc">
+                    <p>비홀더 패턴의 핵심 문제: <span class="warning">"같은 보스를 여러 번 잡아도 매번 다르게 느껴지게 하려면 어떻게 해야 할까?"</span></p>
+                    <p>처음에는 발사 위치만 랜덤하게 뽑았는데, 플레이어 입장에서는 결국 "어디서 날아올지 모르는 직선"일 뿐이었습니다. 그래서 <span class="highlight">궤적 자체가 매번 다른 곡선</span>으로 그려지도록 리사주 커브를 도입했습니다.</p>
+                </div>
+
+                <div class="analogy-box">
+                    <strong>&#x1F3AF; 비유로 이해하기</strong>
+                    <p>리사주 커브는 두 개의 사인파를 X / Y 축에 직교시켜 그린 도형입니다. 오실로스코프에서 자주 보이는 8자, 별모양, 나선 같은 패턴이 모두 같은 공식에서 <strong>주파수와 위상만 바꾼 결과</strong>입니다.</p>
+                    <p>비홀더는 레이저를 쏠 때마다 이 주파수/위상/속도를 새로 추첨해서, <strong>같은 공식이지만 매번 다른 곡선</strong>으로 플레이어를 추적합니다.</p>
+                </div>
+
+                <details class="code-toggle" open>
+                    <summary>MathManager.cpp &mdash; 리사주 커브 공식 <span class="code-lang">C++</span></summary>
+                    <pre><code>_float2 CMath_Manager::Lissajous_Curve(
+    _float fTimeDelta, _float&amp; fLissajousTime,
+    _float fWidth, _float fHeight,
+    _float fLagrangianX, _float fLagrangianY,
+    _float fPhaseDelta, _float fSpeed)
+{
+    fLissajousTime += fTimeDelta * fSpeed;
+
+    _float fPosX = fWidth  * sin(fLagrangianX * fLissajousTime + 3.14f / fPhaseDelta);
+    _float fPosY = fHeight * cos(fLagrangianY * fLissajousTime);
+
+    return { fPosX, fPosY };
+}</code></pre>
+                </details>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">응용 1 &mdash; 무작위 추적 레이저</h3>
+                <div class="feature-card__desc">
+                    <p><code>TrackingLaser</code>가 생성될 때, <strong>람다(주파수) X/Y, 위상차, 속도를 모두 난수로 뽑습니다</strong>. 그 결과 같은 보스가 같은 패턴을 발동해도 레이저마다 휘는 정도와 방향이 다 다릅니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>TrackingLaser.cpp &mdash; 레이저마다 다른 궤적 파라미터 추첨 <span class="code-lang">C++</span></summary>
+                    <pre><code>case CBeholder::FREETRACKING:
+    m_vMasterPos = pOrder->vMasterPos;
+    m_vTargetPos = pOrder->vLook;
+
+    m_fLissajousLagrangianX = (float)CMath_Manager::Get_Instance()->Random_Int(1, 5);
+    m_fLissajousLagrangianY = (float)CMath_Manager::Get_Instance()->Random_Int(1, 5);
+    m_fLissajousPhaseDelta  = (float)CMath_Manager::Get_Instance()->Random_Int(1, 4);
+    m_fLissajousSpeed       = CMath_Manager::Get_Instance()->Random_Float(0.5, 1);
+    break;</code></pre>
+                </details>
+
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">이미지: 무작위 추적 레이저 GIF</div>
+                    여러 발의 레이저가 각자 다른 곡선으로 플레이어를 추격
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">응용 2 &mdash; 리사주 나선 폭격</h3>
+                <div class="feature-card__desc">
+                    <p><code>RoundAirStrikeBoom</code>은 리사주 좌표를 따라가며 폭발을 연속 스폰하고, 동시에 <strong>반지름을 매 프레임 키워서</strong> 나선처럼 바깥으로 퍼지는 폭격을 만듭니다. <code>Reverse</code> 버전은 같은 공식에서 반지름만 줄여서 바깥에서 안으로 좁혀옵니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Beholder.cpp &mdash; 리사주 + 반지름 증가 = 나선 폭격 <span class="code-lang">C++</span></summary>
+                    <pre><code>void CBeholder::RoundAirStrikeBoom(float fTimeDelta)
+{
+    _float2 fLissajous = CMath_Manager::Get_Instance()->Lissajous_Curve(
+        fTimeDelta, m_fLissajousTime,
+        m_fRoundStrikeRadius, m_fRoundStrikeRadius,
+        1, 1, 1, 40);
+
+    m_fRoundStrikeRadius += 8 * fTimeDelta;   // 반지름이 시간에 따라 커진다
+
+    AirBoom({ fLissajous.x, 0.f, fLissajous.y + 10.f });
+}</code></pre>
+                </details>
+
+                <div class="img-placeholder">
+                    <div class="img-placeholder__label">이미지: 리사주 나선 폭격 GIF</div>
+                    중심에서 바깥으로 곡선을 그리며 퍼지는 폭격
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">응용 3 &mdash; 이펙트 산개 패턴</h3>
+                <div class="feature-card__desc">
+                    <p>같은 공식을 보스 패턴뿐 아니라 <strong>피격 혈흔 / 대시 잔상 / 카타나 슬래시 / 처형 연출</strong>의 파티클 산개에도 재사용했습니다. 한 번 만든 공식을 보스 / 무기 / 이펙트 3 영역에 모두 활용한 셈입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 08. OpenCV 자동화 ===== -->
+        <section class="detail-section" id="opencv">
+            <h2 class="detail-section__title"><span class="sec-num">08</span> OpenCV 이미지 자동화</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">팀이 2주째 묶여 있던 문제</h3>
+                <div class="feature-card__desc">
+                    <p>원본 에셋의 스프라이트는 크기가 제각각이었습니다. 같은 애니메이션 안에서도 프레임마다 가로세로 픽셀이 달라, 그대로 텍스처로 올리면 <span class="warning">크기 보정용 매트릭스를 매 프레임 다시 만들어야 하고, 로드 시간도 느려지고, 캐릭터가 프레임마다 떨려 보이는 현상</span>이 나타났습니다.</p>
+                    <p>기존 팀원들은 이걸 <strong>포토샵으로 한 장씩 캔버스 확장 후 가운데 정렬</strong>로 풀고 있었고, 이 작업에만 <strong>약 2주가 소요</strong>되었습니다. 게다가 새 에셋이 추가되면 다시 같은 작업을 반복해야 했습니다.</p>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">해결 &mdash; OpenCV 일괄 변환 + 게임 시작 시 자동 실행</h3>
+                <div class="feature-card__desc">
+                    <p>OpenCV 기반 파이썬 스크립트를 만들어 폴더를 통째로 훑게 했습니다. 각 이미지의 알파 채널과 콘텐츠 영역을 분석하고, <span class="highlight">애니메이션 그룹 내에서 가장 큰 크기를 기준 캔버스로 잡은 뒤, 모든 프레임을 같은 캔버스 안에서 위치를 보존하며 패딩</span>하는 방식입니다. 이렇게 하면 캐릭터의 발 위치나 무게중심이 프레임 사이에 흔들리지 않습니다.</p>
+                    <p>이 스크립트를 빌드 후처리 / 게임 부트 단계에 연결해서, <span class="highlight">새 에셋이 들어와도 사람이 손댈 필요 없이 자동 정규화</span>되도록 만들었습니다.</p>
+                </div>
+
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Before</div>
+                            <div class="flow-box__items">아티스트가 새 에셋 전달 &rarr; 프로그래머가 포토샵 수작업 &rarr; 빌드 (2주)</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">After</div>
+                            <div class="flow-box__items">아티스트가 새 에셋 전달 &rarr; 자동 정규화 &rarr; 빌드 (0분)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">부수 효과 &mdash; 로딩 시간과 런타임 안정성</h3>
+                <div class="feature-card__desc">
+                    <p class="key-point">크기를 통일하니까 같은 애니메이션 그룹의 텍스처들을 <strong>동일 사이즈 스프라이트 시트</strong>처럼 다룰 수 있게 되어, 매 프레임 크기 보정 매트릭스를 다시 만들 필요가 없어졌습니다. 결과적으로:</p>
+                    <ul style="margin-left: 24px; line-height: 2;">
+                        <li>레벨 로딩 시간 감소 (텍스처 로더가 크기를 추측하지 않아도 됨)</li>
+                        <li>애니메이션 프레임 사이 떨림 제거</li>
+                        <li>새 에셋 추가 시 프로그래머 개입 0</li>
+                        <li>아티스트의 작업 사이클이 짧아져 후반 폴리싱 시간 확보</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== 09. 유사 스켈레톤 애니메이션 ===== -->
+        <section class="detail-section" id="animation">
+            <h2 class="detail-section__title"><span class="sec-num">09</span> 유사 스켈레톤 애니메이션</h2>
+
+            <div class="feature-card">
+                <h3 class="feature-card__title">스프라이트 시트로 만든 가짜 본 애니메이션</h3>
+                <div class="feature-card__desc">
+                    <p>DX9 에 본 기반 스켈레탈 애니메이션을 도입할 시간이 없어, <strong>스프라이트 시트 프레임을 정해진 간격으로 넘기는 방식</strong>으로 캐릭터 애니메이션을 만들었습니다. 위에서 만든 OpenCV 정규화 덕분에 모든 프레임 크기가 같아서, 단순 인덱스만 바꿔주면 자연스러운 애니메이션이 재생됩니다.</p>
+                    <p><code>CAnimation</code> 컴포넌트는 태그별로 텍스처 배열을 보관하고, <code>Play_Animation(tag, fps, loop)</code> 한 줄로 애니메이션을 교체합니다. 보스 / 적 / 무기 / UI 가 전부 이 컴포넌트 위에서 동작합니다.</p>
+                </div>
+
+                <details class="code-toggle">
+                    <summary>Animation.cpp &mdash; 프레임 간격마다 인덱스 증가 <span class="code-lang">C++</span></summary>
+                    <pre><code>void CAnimation::Update(_float fTimeDelta)
+{
+    if (m_bAnimEnd) return;
+
+    m_fTimeAcc += fTimeDelta;
+
+    if (m_fTimeAcc &gt; m_fFrameGap)
+    {
+        if (m_iTextureNum &lt; m_iMaxTextureNum)
+            ++m_iTextureNum;
+        else if (m_bLoop)
+            m_iTextureNum = 0;
+        else if (m_iTextureNum == m_iMaxTextureNum)
+            m_bAnimEnd = true;
+
+        m_fTimeAcc = 0.f;
+    }
+}</code></pre>
+                </details>
+            </div>
+        </section>
+
+        <!-- ===== 10. 트러블슈팅 ===== -->
+        <section class="detail-section" id="troubleshoot">
+            <h2 class="detail-section__title"><span class="sec-num">10</span> 트러블슈팅 &amp; 회고</h2>
+
+            <div class="troubleshoot-card">
+                <div class="troubleshoot-card__problem">자주 토글되는 UI 에서 발생한 메모리 단편화</div>
+                <div class="troubleshoot-card__solution">
+                    매번 Clone &amp; Dead 처리하던 UI 중 자주 호출되는 것들을 영구 인스턴스로 분리하고, Active 플래그 토글로만 표시/숨김을 제어하는 ActiveUI 시스템을 도입했습니다. 또한 부모 UI 가 Tick 안에서 자식들을 직접 토글하는 트리 구조로 호출부 코드를 단순화했습니다.
+                </div>
+                <div class="troubleshoot-card__result">호출부에서 UI 한 번만 켜면 연관 UI 가 일괄 활성화되어, 보스전처럼 UI 가 격하게 바뀌는 상황에서도 안정적으로 동작합니다.</div>
+            </div>
+
+            <div class="troubleshoot-card">
+                <div class="troubleshoot-card__problem">팀의 작업 속도를 가로막던 이미지 정규화 수작업</div>
+                <div class="troubleshoot-card__solution">
+                    포토샵으로 한 장씩 처리하던 작업을 OpenCV 일괄 변환 스크립트로 대체했습니다. 애니메이션 그룹 단위로 최대 크기 캔버스를 잡고, 콘텐츠 위치를 보존하며 패딩하는 로직을 만들어 게임 시작 시 자동 실행되도록 연동했습니다.
+                </div>
+                <div class="troubleshoot-card__result">2주 분량의 수작업이 사라졌고, 새 에셋 추가 시에도 프로그래머 개입이 필요 없어졌습니다. 로딩 시간 단축과 프레임 떨림 제거는 덤이었습니다.</div>
+            </div>
+
+            <div class="troubleshoot-card">
+                <div class="troubleshoot-card__problem">같은 보스 패턴이 반복되며 단조롭게 느껴지는 문제</div>
+                <div class="troubleshoot-card__solution">
+                    레이저의 발사 위치만 랜덤화하던 방식에서, 리사주 커브의 주파수/위상/속도를 매 발사마다 난수로 추첨하는 방식으로 바꿨습니다. 같은 공식이 같은 패턴 안에서도 매번 다른 곡선을 그리게 됩니다.
+                </div>
+                <div class="troubleshoot-card__result">한 패턴 안에서 모든 레이저의 궤적이 달라져, 플레이어가 외워서 회피하는 것이 불가능해졌습니다. 동일 공식을 보스 / 무기 이펙트 / 처형 연출까지 재사용해 코드 중복도 줄였습니다.</div>
+            </div>
+
+            <div class="troubleshoot-card">
+                <div class="troubleshoot-card__problem">공중에서 마찰이 작용해 낙하 속도가 줄어드는 문제</div>
+                <div class="troubleshoot-card__solution">
+                    Rigidbody 마찰을 XZ 평면 속도에만 적용하고 Y 축은 분리했습니다. 또한 마찰값이 현재 속도보다 큰 경우 부호 반전으로 떨리는 현상을 막기 위해 0 으로 클램프하는 분기를 추가했습니다.
+                </div>
+                <div class="troubleshoot-card__result">점프 / 낙하 / 대시가 자연스럽게 연결되고, 정지 상태에서 떨리는 jitter 가 사라졌습니다.</div>
+            </div>
+        </section>
+
+    </div>
+</body>
+</html>

@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>100명이 한 서버에서 싸우려면? | KMH Portfolio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../../../css/study-content.css">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../unreal.html" class="back-link">&larr; Unreal Engine 목록으로</a>
+
+        <header class="content-header">
+            <h1>100명이 한 서버에서 싸우려면?</h1>
+            <p class="subtitle">Iris Replication System &mdash; 언리얼 차세대 네트워크 복제 시스템의 구조, 데이터 플로우, 마이그레이션 전략</p>
+        </header>
+
+        <!-- ============================================================ -->
+        <!-- Part 1: 왜 Iris가 필요한가 — 레거시 시스템의 한계 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 1: 왜 Iris가 필요한가 &mdash; 레거시 복제의 한계</h2>
+
+            <div class="conversation">
+                <div class="q">기존 언리얼 네트워크 복제가 대규모 게임에서 어떤 문제가 있었나요?</div>
+                <div class="a">
+                    <p>언리얼의 레거시 복제 시스템은 <span class="highlight">Pull 모델(폴링 방식)</span>로 동작합니다. 서버가 매 틱마다 <strong>모든 복제 대상 프로퍼티를 순회</strong>하면서 "이전 값과 달라졌는가?"를 비교합니다.</p>
+                    <p>플레이어가 10명이면 괜찮지만, 100명이 되면 문제가 폭발합니다:</p>
+                    <ul>
+                        <li>N명의 플레이어 &times; M개의 액터 = <span class="warning">N&times;M 번의 비교 연산</span>이 매 틱마다 발생</li>
+                        <li>각 클라이언트 커넥션마다 <strong>독립적으로</strong> 같은 작업을 반복 &mdash; 작업 공유 불가</li>
+                        <li>Relevancy 판정(<code>AActor::IsNetRelevantFor()</code>)도 커넥션마다 개별 호출</li>
+                    </ul>
+                    <p class="highlight">CPU 비용이 클라이언트 수의 제곱에 가깝게(~N&sup2;) 증가하는 구조적 문제입니다.</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <h3>레거시 복제: 매 틱 풀 스캔</h3>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">서버 틱</div>
+                            <div class="flow-box__items">매 프레임 실행</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">NetConnection::Tick()</div>
+                            <div class="flow-box__items">클라이언트마다 1회</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">모든 Actor 순회</div>
+                            <div class="flow-box__items">프로퍼티 비교<br>Relevancy 체크<br>우선순위 결정</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">패킷 전송</div>
+                            <div class="flow-box__items">변경분만 전송</div>
+                        </div>
+                    </div>
+                </div>
+                <p class="diagram-caption">문제: "모든 Actor 순회" 단계가 커넥션 수에 비례하여 반복됨</p>
+            </div>
+
+            <div class="analogy-box">
+                <strong>🎯 비유로 이해하기</strong>
+                <p>100명이 구독하는 신문사가 있다고 합시다. 레거시 방식은 <strong>구독자 한 명마다</strong> 기자가 "어떤 기사가 바뀌었지?" 하고 전체 기사를 처음부터 끝까지 다시 읽는 것과 같습니다.</p>
+                <p>Iris는 기자가 기사를 수정할 때 <strong>"이 기사 바뀌었어!"</strong>라고 깃발을 꽂아두고, 인쇄소는 깃발이 꽂힌 기사만 모아서 100명에게 공유하는 방식입니다.</p>
+            </div>
+
+            <div class="conversation">
+                <div class="q">ReplicationGraph로 해결할 수 없었나요?</div>
+                <div class="a">
+                    <p><code>UReplicationGraph</code>는 레거시 시스템 위에 얹힌 <strong>최적화 레이어</strong>입니다. 액터를 공간/그룹별로 나눠서 "이 커넥션에는 이 액터들만 고려해"라고 범위를 줄여주죠.</p>
+                    <p>하지만 근본적인 Pull 모델 자체는 바꾸지 못합니다:</p>
+                    <ul>
+                        <li>범위를 줄여도 여전히 <strong>매 틱마다 프로퍼티 비교</strong>가 필요</li>
+                        <li>커넥션 간 작업 공유가 불가능한 구조는 그대로</li>
+                        <li>대규모 게임에서는 결국 한계에 도달</li>
+                    </ul>
+                    <p class="key-point">Iris는 ReplicationGraph를 대체하는 것이 아니라, 복제 시스템 자체를 새로 설계한 것입니다. Iris는 자체 필터링 시스템을 갖추고 있어 ReplicationGraph와 함께 사용하지 않습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 2: Iris란 무엇인가 — 핵심 설계 철학 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 2: Iris란 무엇인가 &mdash; Push 모델의 탄생</h2>
+
+            <div class="conversation">
+                <div class="q">Iris가 정확히 무엇인가요?</div>
+                <div class="a">
+                    <p>Iris는 UE 5.0에서 Experimental로 처음 등장하고, <span class="highlight">UE 5.7에서 Beta로 승격</span>된 <strong>차세대 복제(Replication) 시스템</strong>입니다.</p>
+                    <p>독립된 서버 기술이 아니라, 기존 Dedicated Server 아키텍처 안에서 <strong>프로퍼티 복제 방식만 교체</strong>하는 opt-in 시스템입니다.</p>
+                    <p class="key-point">에픽이 Fortnite Battle Royale(100인 서버)를 운영하면서 직접 겪은 문제를 해결하기 위해 개발했고, 2022년에 Fortnite에 내부 적용 완료했습니다.</p>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <div class="q">Pull 모델 vs Push 모델 &mdash; 핵심 차이가 뭔가요?</div>
+                <div class="a">
+                    <p>가장 근본적인 차이는 <strong>"누가 변경을 감지하느냐"</strong>입니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>구분</th>
+                        <th>레거시 (Pull)</th>
+                        <th>Iris (Push)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>변경 감지</td>
+                        <td>서버가 매 틱 전체 프로퍼티 순회하여 비교</td>
+                        <td>프로퍼티 변경 시 개발자가 <code>MARK_PROPERTY_DIRTY</code>로 표시</td>
+                    </tr>
+                    <tr>
+                        <td>작업 공유</td>
+                        <td>커넥션마다 독립적으로 처리</td>
+                        <td>양자화된 상태 복사본을 커넥션 간 공유</td>
+                    </tr>
+                    <tr>
+                        <td>CPU 스케일링</td>
+                        <td>~O(N&sup2;) (플레이어 &times; 액터)</td>
+                        <td>~O(N) (변경된 프로퍼티만)</td>
+                    </tr>
+                    <tr>
+                        <td>필터링</td>
+                        <td>ReplicationGraph (외부 최적화)</td>
+                        <td>내장 Spatial/Group/Dynamic 필터</td>
+                    </tr>
+                    <tr>
+                        <td>SubObject 복제</td>
+                        <td>제한적</td>
+                        <td>UObject 단위 독립 복제 지원</td>
+                    </tr>
+                    <tr>
+                        <td>리플레이</td>
+                        <td>지원</td>
+                        <td>미지원 (Beta 기준)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="conversation">
+                <div class="q">"양자화된 상태 복사본"이 뭔가요?</div>
+                <div class="a">
+                    <p>Iris는 모든 복제 대상 데이터의 <span class="highlight">양자화(Quantized) 사본</span>을 하나 유지합니다. 이 사본은 네트워크로 전송될 때의 정밀도로 미리 변환되어 있습니다.</p>
+                    <p>예를 들어 <code>float</code> 위치 값이 있으면, 네트워크 전송 시 반올림될 정밀도로 미리 변환해 저장합니다. 그러면:</p>
+                    <ul>
+                        <li>변경 감지: 양자화된 값끼리 비교하면 됨 (빠름)</li>
+                        <li>델타 계산: 이전 양자화 값과 현재 양자화 값의 차이만 전송</li>
+                        <li>커넥션 간 공유: <strong>모든 커넥션이 같은 양자화 사본을 참조</strong> &mdash; 커넥션마다 별도 계산 불필요</li>
+                    </ul>
+                    <p class="key-point">이것이 Iris의 성능 향상 핵심입니다. 레거시에서는 커넥션마다 개별적으로 수행하던 비교/직렬화 작업을 한 번만 수행하고 결과를 공유합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 3: Iris 아키텍처 — 핵심 컴포넌트 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 3: Iris 내부 아키텍처 &mdash; 핵심 컴포넌트</h2>
+
+            <div class="conversation">
+                <div class="q">Iris를 구성하는 핵심 클래스들은 무엇인가요?</div>
+                <div class="a">
+                    <p>Iris는 레거시 복제 경로를 완전히 대체하는 새로운 컴포넌트 세트로 구성됩니다:</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <h3>Iris 핵심 컴포넌트 계층 구조</h3>
+                <div class="hierarchy-diagram">
+                    <div class="hierarchy-item hierarchy-item--root">UReplicationSystem</div>
+                    <div class="hierarchy-children">
+                        <div class="hierarchy-item">UActorReplicationBridge<br><small>(= UEngineReplicationBridge)</small></div>
+                        <div class="hierarchy-item">FReplicationWriter<br><small>커넥션당 1개</small></div>
+                        <div class="hierarchy-item">FNetRefHandle<br><small>복제 객체 식별자</small></div>
+                        <div class="hierarchy-item">Filtering System<br><small>Spatial / Group / Dynamic / Connection</small></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <div class="q">각 컴포넌트의 역할을 자세히 설명해주세요.</div>
+                <div class="a">
+                    <p><strong>1. UReplicationSystem</strong></p>
+                    <p>Iris의 <span class="highlight">중앙 제어 시스템</span>입니다. 필터링, 객체 추적, NetId 할당, 우선순위 관리를 총괄합니다. 기존 <code>UNetDriver</code>의 복제 관련 책임을 흡수합니다.</p>
+
+                    <p><strong>2. UActorReplicationBridge (UEngineReplicationBridge)</strong></p>
+                    <p><span class="highlight">액터 월드와 복제 시스템 사이의 다리</span> 역할입니다. 액터/컴포넌트가 복제 시스템에 등록되고 해제되는 생명주기를 관리합니다. 액터가 스폰되면 이 브릿지를 통해 Iris에 등록되고, 고유한 <code>FNetRefHandle</code>을 받습니다.</p>
+
+                    <p><strong>3. FReplicationWriter</strong></p>
+                    <p>각 클라이언트 커넥션마다 하나씩 존재하며, 실제 <span class="highlight">패킷 인코딩과 전송을 담당</span>합니다. 스케줄링 → 필터링 → 직렬화 → 패킷 생성의 파이프라인을 처리합니다.</p>
+
+                    <p><strong>4. FNetRefHandle</strong></p>
+                    <p>복제 대상 객체를 식별하는 <strong>참조 핸들</strong>입니다. 기존의 <code>FNetworkGUID</code>와 유사하지만, Iris의 내부 인덱싱 시스템에 최적화되어 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <div class="q">필터링 시스템은 어떻게 구성되나요?</div>
+                <div class="a">
+                    <p>Iris는 ReplicationGraph 대신 자체적인 <span class="highlight">다층 필터링 시스템</span>을 제공합니다:</p>
+
+                    <p><strong>Spatial Filter (공간 필터)</strong></p>
+                    <p>설정된 거리 내의 객체만 복제합니다. 대규모 오픈 월드에서 핵심적인 필터로, 멀리 있는 나무 1만 그루를 모든 클라이언트에 복제하지 않아도 됩니다.</p>
+
+                    <p><strong>Connection Filter (커넥션 필터)</strong></p>
+                    <p><code>TBitArray&lt;&gt;</code> 기반으로 특정 커넥션에 대해 객체의 복제를 허용/차단합니다. "이 팀원에게만 보이는 객체" 같은 시나리오에 적합합니다.</p>
+
+                    <p><strong>Group Filter (그룹 필터)</strong></p>
+                    <p>객체를 논리적 그룹으로 묶어 일괄 관리합니다.</p>
+
+                    <p><strong>Dynamic Filter (동적 필터)</strong></p>
+                    <p>런타임에 조건에 따라 필터링 규칙을 변경할 수 있습니다. <code>DefaultEngine.ini</code>에서 액터 클래스별로 어떤 필터를 적용할지 설정합니다.</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">DefaultEngine.ini &mdash; 필터 설정 예시</div>
+                <pre><code>[/Script/IrisCore.ReplicationSystem]
+; TreeActor 클래스에 공간 필터 적용 — 거리 밖의 나무는 복제하지 않음
++FilterConfigs=(ClassName=/Script/TheGame.TreeActor, DynamicFilterName=Spatial)
+
+; NPCActor에 그룹 필터 적용
++FilterConfigs=(ClassName=/Script/TheGame.NPCActor, DynamicFilterName=Group)
+
+; 팀 전용 객체에 커넥션 필터 적용
++FilterConfigs=(ClassName=/Script/TheGame.TeamOnlyActor, DynamicFilterName=Connection)</code></pre>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 4: 데이터 플로우 파이프라인 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 4: 데이터 플로우 파이프라인 &mdash; 틱 한 번의 여정</h2>
+
+            <div class="conversation">
+                <div class="q">서버 틱 한 번에 Iris가 수행하는 전체 파이프라인을 보여주세요.</div>
+                <div class="a">
+                    <p>Iris의 복제 파이프라인은 4단계로 구성됩니다. 각 단계는 <code>FReplicationWriter</code>의 메서드에 대응합니다:</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <h3>Iris 복제 파이프라인 (서버 틱 1회)</h3>
+                <div class="pipeline">
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">Phase 1: BeginWrite()</div>
+                        <div class="pipeline-bar pb-gbuffer">
+                            <span>스케줄링 버퍼 할당</span>
+                            <span>FScheduleObjectInfo 배열 준비</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">Phase 2: ScheduleObjects()</div>
+                        <div class="pipeline-bar pb-light">
+                            <span>우선순위 계산</span>
+                            <span>필터링 적용</span>
+                            <span>복제 대상 결정</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">Phase 3: Write()</div>
+                        <div class="pipeline-bar pb-post">
+                            <span>양자화 상태 비교</span>
+                            <span>델타 인코딩</span>
+                            <span>패킷 생성</span>
+                        </div>
+                    </div>
+                    <div class="pipeline-stage">
+                        <div class="pipeline-label">Phase 4: FinishWrite()</div>
+                        <div class="pipeline-bar pb-shadow">
+                            <span>리소스 해제</span>
+                            <span>패킷 배치 완료</span>
+                            <span>전송 큐 플러시</span>
+                        </div>
+                    </div>
+                </div>
+                <p class="diagram-caption">이 파이프라인이 각 클라이언트 커넥션마다 1사이클 실행됨</p>
+            </div>
+
+            <div class="conversation">
+                <div class="q">각 Phase를 상세하게 설명해주세요.</div>
+                <div class="a">
+                    <p><strong>Phase 1 &mdash; BeginWrite()</strong></p>
+                    <p>한 커넥션의 복제 사이클을 시작합니다. <code>FScheduleObjectInfo</code> 배열을 할당하여 "이번 틱에 어떤 객체를 어떤 우선순위로 처리할지" 담을 공간을 준비합니다.</p>
+                    <p class="warning">주의: 이 단계에서 MaxReplicatedObjectCount에 비례하는 메모리를 할당합니다. 기본값으로도 커넥션당 약 524KB, 101명이면 약 52.8MB의 메모리가 사용됩니다.</p>
+
+                    <p><strong>Phase 2 &mdash; ScheduleObjects()</strong></p>
+                    <p>복제 대상을 결정하는 핵심 단계입니다:</p>
+                    <ol>
+                        <li>등록된 모든 복제 객체 순회</li>
+                        <li>Spatial/Group/Dynamic/Connection 필터 적용</li>
+                        <li>통과한 객체에 우선순위 인덱스 할당</li>
+                        <li>대역폭 예산에 맞춰 상위 N개 선택</li>
+                    </ol>
+
+                    <p><strong>Phase 3 &mdash; Write()</strong></p>
+                    <p>실제 직렬화 단계입니다. 양자화된 상태 사본과 현재 값을 비교해 변경된 프로퍼티만 델타 인코딩합니다. <span class="highlight">이 비교는 양자화 사본을 커넥션 간 공유하므로, 같은 변경에 대해 한 번만 수행됩니다.</span></p>
+
+                    <p><strong>Phase 4 &mdash; FinishWrite()</strong></p>
+                    <p>사이클을 마무리합니다. 스케줄링 버퍼를 해제하고, 생성된 패킷 배치를 확정하여 전송 큐에 올립니다.</p>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <div class="q">레거시와 비교하면 파이프라인이 어떻게 달라졌나요?</div>
+                <div class="a">
+                    <p>핵심 차이를 나란히 비교해보겠습니다:</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <h3>레거시 vs Iris 파이프라인 비교</h3>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">레거시</div>
+                            <div class="flow-box__items">
+                                커넥션 A: 전체 Actor 순회 → 비교 → 전송<br>
+                                커넥션 B: 전체 Actor 순회 → 비교 → 전송<br>
+                                커넥션 C: 전체 Actor 순회 → 비교 → 전송<br>
+                                ...(N번 반복)
+                            </div>
+                        </div>
+                        <div class="flow-arrow" style="font-size: 1.5rem;">VS</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Iris</div>
+                            <div class="flow-box__items">
+                                1회: Dirty 프로퍼티 수집 + 양자화<br>
+                                커넥션 A: 필터 → 공유 결과에서 패킷 생성<br>
+                                커넥션 B: 필터 → 공유 결과에서 패킷 생성<br>
+                                커넥션 C: 필터 → 공유 결과에서 패킷 생성
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="diagram-caption">"비교" 작업이 N번에서 1번으로 줄어드는 것이 핵심</p>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 5: 코드 레벨 구현 상세 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 5: 코드 레벨 구현 &mdash; Iris 활성화부터 프로퍼티 복제까지</h2>
+
+            <div class="conversation">
+                <div class="q">프로젝트에서 Iris를 활성화하려면 어떻게 해야 하나요?</div>
+                <div class="a">
+                    <p>3가지 설정이 필요합니다:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">1. DefaultEngine.ini &mdash; Iris 활성화</div>
+                <pre><code>[SystemSettings]
+; SubObject 복제 목록 사용 (Iris 전제 조건)
+net.SubObjects.DefaultUseSubObjectReplicationList=1
+
+; Push 모델 활성화
+net.IsPushModelEnabled=1
+
+; Iris 복제 시스템 사용
+net.Iris.UseIrisReplication=1
+
+; Push 모델 모드 (1 = Iris Push)
+net.Iris.PushModelMode=1</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">2. YourGame.Build.cs &mdash; 모듈 의존성 추가</div>
+                <pre><code>public class YourGame : ModuleRules
+{
+    public YourGame(ReadOnlyTargetRules Target) : base(Target)
+    {
+        // Iris 모듈 지원 설정
+        SetupIrisSupport(Target);
+
+        // 기존 의존성...
+        PublicDependencyModuleNames.AddRange(new string[] {
+            "Core", "CoreUObject", "Engine", "InputCore"
+        });
+    }
+}</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">기존 UPROPERTY(Replicated) 코드는 어떻게 바뀌나요?</div>
+                <div class="a">
+                    <p>Iris에서는 <span class="highlight">Push 기반 Dirty 마킹</span>이 핵심입니다. 기존 코드에 <code>MARK_PROPERTY_DIRTY</code> 매크로를 추가해야 합니다:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">레거시 방식 (Pull)</div>
+                <pre><code>UCLASS()
+class AMyActor : public AActor
+{
+    GENERATED_BODY()
+
+    UPROPERTY(Replicated)
+    int32 Health;
+
+    // 값을 변경하면 서버가 알아서 감지 (매 틱 비교)
+    void TakeDamage(int32 Damage)
+    {
+        Health -= Damage;
+        // 끝. 서버가 다음 틱에 변경을 감지함
+    }
+
+    void GetLifetimeReplicatedProps(
+        TArray&lt;FLifetimeProperty&gt;&amp; OutLifetimeProps) const override
+    {
+        Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+        DOREPLIFETIME(AMyActor, Health);
+    }
+};</code></pre>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">Iris 방식 (Push)</div>
+                <pre><code>UCLASS()
+class AMyActor : public AActor
+{
+    GENERATED_BODY()
+
+    UPROPERTY(Replicated)
+    int32 Health;
+
+    void TakeDamage(int32 Damage)
+    {
+        Health -= Damage;
+
+        // ★ 핵심: 프로퍼티가 변경되었음을 명시적으로 알림
+        MARK_PROPERTY_DIRTY_FROM_NAME(AMyActor, Health, this);
+    }
+
+    void GetLifetimeReplicatedProps(
+        TArray&lt;FLifetimeProperty&gt;&amp; OutLifetimeProps) const override
+    {
+        Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+        // Push 기반 파라미터 설정
+        FDoRepLifetimeParams Params;
+        Params.bIsPushBased = true;  // ★ Push 모드 활성화
+        DOREPLIFETIME_WITH_PARAMS_FAST(AMyActor, Health, Params);
+    }
+};</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">MARK_PROPERTY_DIRTY를 빼먹으면 어떻게 되나요?</div>
+                <div class="a">
+                    <p class="warning">해당 프로퍼티의 변경이 클라이언트에 전파되지 않습니다. Iris는 Dirty 마킹된 프로퍼티만 처리하기 때문입니다. 이것이 Push 모델의 트레이드오프 &mdash; 성능을 얻는 대신 개발자에게 명시적 표시 책임이 생깁니다.</p>
+                    <p>다만, Push 모델이 아직 불안하다면 <code>bIsPushBased = false</code>로 개별 프로퍼티를 레거시 방식으로 남겨둘 수도 있습니다. 점진적 마이그레이션이 가능합니다.</p>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <div class="q">UObject SubObject 복제는 어떻게 하나요?</div>
+                <div class="a">
+                    <p>Iris의 강력한 기능 중 하나는 <span class="highlight">UObject 단위의 독립적인 SubObject 복제</span>입니다. 액터에 종속된 일반 UObject도 자체 NetId를 갖고 독립적으로 복제할 수 있습니다:</p>
+                </div>
+            </div>
+
+            <details class="code-toggle">
+                <summary>UObject SubObject 복제 전체 코드 <span class="code-lang">C++</span></summary>
+                <pre><code>// ---- SubObject 클래스 정의 ----
+UCLASS()
+class UMyReplicatedObject : public UObject
+{
+    GENERATED_BODY()
+
+public:
+    // 네트워크 지원 활성화
+    bool IsSupportedForNetworking() const override { return true; }
+
+    UPROPERTY(Replicated)
+    int32 MyRepValue;
+
+    UPROPERTY(Replicated)
+    FVector Position;
+
+    void SetMyRepValue(int32 NewValue)
+    {
+        MyRepValue = NewValue;
+        MARK_PROPERTY_DIRTY_FROM_NAME(UMyReplicatedObject, MyRepValue, this);
+    }
+
+    void GetLifetimeReplicatedProps(
+        TArray&lt;FLifetimeProperty&gt;&amp; OutLifetimeProps) const override
+    {
+        Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+        FDoRepLifetimeParams Params;
+        Params.bIsPushBased = true;
+
+        DOREPLIFETIME_WITH_PARAMS_FAST(
+            UMyReplicatedObject, MyRepValue, Params);
+        DOREPLIFETIME_WITH_PARAMS_FAST(
+            UMyReplicatedObject, Position, Params);
+    }
+};
+
+// ---- 소유 액터에서 SubObject 등록 ----
+UCLASS()
+class AMyOwnerActor : public AActor
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TObjectPtr&lt;UMyReplicatedObject&gt; SubObj;
+
+    void BeginPlay() override
+    {
+        Super::BeginPlay();
+
+        if (HasAuthority())
+        {
+            // SubObject 생성 및 복제 시스템에 등록
+            SubObj = NewObject&lt;UMyReplicatedObject&gt;(this);
+            AddReplicatedSubObject(SubObj);
+        }
+    }
+
+    void EndPlay(const EEndPlayReason::Type EndPlayReason) override
+    {
+        if (HasAuthority() &amp;&amp; SubObj)
+        {
+            // 복제 시스템에서 해제
+            RemoveReplicatedSubObject(SubObj);
+        }
+        Super::EndPlay(EndPlayReason);
+    }
+};</code></pre>
+            </details>
+
+            <div class="conversation">
+                <div class="q">GameInstance에서 Iris 설정을 오버라이드할 수 있나요?</div>
+                <div class="a">
+                    <p>네. <code>UGameInstance</code>에서 최대 복제 객체 수, 프리얼로케이션 버퍼 등을 커스터마이즈할 수 있습니다:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">GameInstance에서 Iris Config 오버라이드</div>
+                <pre><code>void UTheGameInstance::OverrideIrisReplicationSystemConfig(
+    FNetDriverReplicationSystemConfig&amp; OutConfig,
+    bool bIsServer) const
+{
+    // 최대 복제 객체 수: 131,072개
+    OutConfig.MaxReplicatedObjectCount = 1 &lt;&lt; 17;
+
+    // 초기 객체 리스트 크기
+    OutConfig.InitialNetObjectListCount =
+        OutConfig.MaxReplicatedObjectCount;
+
+    // 프리얼로케이션 메모리 버퍼 크기
+    OutConfig.PreAllocatedMemoryBuffersObjectCount =
+        OutConfig.MaxReplicatedObjectCount;
+}</code></pre>
+            </div>
+
+            <p class="warning">주의: PreAllocatedMemoryBuffersObjectCount를 200만처럼 과도하게 설정하면, 빈 맵에서도 ~40 FPS까지 성능이 떨어질 수 있습니다. 또한 한번 확장된 버퍼는 절대 축소되지 않아 영구적인 메모리 오버헤드가 됩니다.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 6: 성능 벤치마크 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 6: 실전 성능 벤치마크 &mdash; 진짜 빨라지나?</h2>
+
+            <div class="conversation">
+                <div class="q">레거시 대비 Iris의 실제 성능 차이는 어느 정도인가요?</div>
+                <div class="a">
+                    <p>BorMor의 100명 플레이어 테스트 결과를 바탕으로 한 실측 데이터입니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>측정 항목</th>
+                        <th>레거시 복제</th>
+                        <th>Iris (미최적화)</th>
+                        <th>Iris (패치 후)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>서버 FPS</td>
+                        <td>10&ndash;15</td>
+                        <td>15&ndash;20</td>
+                        <td>25&ndash;30</td>
+                    </tr>
+                    <tr>
+                        <td>전체 틱 시간</td>
+                        <td>83.9 ms</td>
+                        <td>60.1 ms</td>
+                        <td>45.5 ms</td>
+                    </tr>
+                    <tr>
+                        <td>Net 틱 시간</td>
+                        <td>13.3 ms</td>
+                        <td>10.2 ms</td>
+                        <td>&mdash;</td>
+                    </tr>
+                    <tr>
+                        <td>NetBroadcastTickTime</td>
+                        <td>66.2 ms</td>
+                        <td>45.8 ms</td>
+                        <td>29.5 ms</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p class="key-point">결과: 약 31% FPS 향상, 24% 프레임 타임 단축. "패치 후"는 BeginWrite()의 메모리 할당 비효율을 수정한 버전입니다.</p>
+
+            <div class="conversation">
+                <div class="q">대규모 액터 시나리오에서는요?</div>
+                <div class="a">
+                    <p>10,000개의 나무 액터를 복제하는 "만 그루의 숲" 테스트에서:</p>
+                    <ul>
+                        <li><strong>레거시</strong>: 약 7 FPS &mdash; 거의 플레이 불가</li>
+                        <li><strong>Iris + 공간 필터링</strong>: 약 40 FPS &mdash; 쾌적한 플레이 가능</li>
+                    </ul>
+                    <p class="highlight">5.7배의 성능 차이. 공간 필터가 거리 밖의 액터를 복제 대상에서 완전히 제외하기 때문입니다.</p>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <div class="q">대역폭 사용량은 어떤가요?</div>
+                <div class="a">
+                    <p>대역폭은 서버 틱 레이트에 선형 비례합니다:</p>
+                    <ul>
+                        <li>30 FPS 기준: 5분간 약 600 MB</li>
+                        <li>70+ FPS 기준: 5분간 900 MB 이상</li>
+                    </ul>
+                    <p>Iris 자체가 대역폭을 줄여주는 것은 아닙니다. CPU 효율 향상으로 <strong>같은 대역폭에서 더 많은 플레이어를 처리</strong>하거나, <strong>같은 플레이어 수에서 서버 비용을 줄이는</strong> 것이 목표입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 7: BeginWrite() 메모리 이슈 심화 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 7: 알려진 이슈 &mdash; BeginWrite() 메모리 할당 문제</h2>
+
+            <div class="conversation">
+                <div class="q">Iris에서 가장 큰 성능 병목은 어디인가요?</div>
+                <div class="a">
+                    <p>BorMor의 프로파일링에서 발견된 핵심 이슈는 <span class="highlight">FReplicationWriter::BeginWrite()의 과도한 메모리 할당</span>입니다:</p>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">문제 상황 분석</div>
+                <pre><code>// FReplicationWriter::BeginWrite() 내부에서 발생하는 할당
+
+// MaxReplicatedObjectCount가 기본 65,535일 때:
+// FScheduleObjectInfo 배열 크기 = 65,535 × 8 bytes = 524,280 bytes ≈ 512 KB
+
+// 이 할당이 매 틱, 매 커넥션마다 발생!
+// 101명 (서버 + 100 클라이언트):
+// 524,280 × 101 = 52,952,280 bytes ≈ 52.8 MB / tick
+
+// 프레임당 52.8 MB 할당 + 해제 반복
+// → GC 압박 + 캐시 미스 폭증</code></pre>
+            </div>
+
+            <div class="conversation">
+                <div class="q">이 문제를 어떻게 해결했나요?</div>
+                <div class="a">
+                    <p>두 가지 접근이 가능합니다:</p>
+                    <ol>
+                        <li><strong>버퍼 풀링/재사용</strong>: BeginWrite()에서 매번 새로 할당하지 않고, 커넥션별로 버퍼를 한 번 할당해서 재사용</li>
+                        <li><strong>MaxReplicatedObjectCount 적절히 설정</strong>: 게임에 실제 필요한 복제 객체 수에 맞춰 최소화</li>
+                    </ol>
+                    <p class="key-point">패치 후 벤치마크에서 프레임 타임이 60.1ms → 45.5ms로 약 24% 추가 개선되었습니다. 즉 Iris 자체의 개선(레거시 대비) + 메모리 최적화의 이중 효과를 얻을 수 있습니다.</p>
+                    <p>또한 한 가지 주의할 점은 확장된 버퍼가 <strong>절대 축소되지 않는다</strong>는 것입니다. 게임 도중 복제 객체가 대량 생성되었다가 파괴되어도, 메모리 풋프린트는 최고점에서 유지됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 8: 마이그레이션 전략 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 8: 레거시에서 Iris로 &mdash; 마이그레이션 전략</h2>
+
+            <div class="conversation">
+                <div class="q">기존 프로젝트를 Iris로 전환하려면 어떤 순서로 해야 하나요?</div>
+                <div class="a">
+                    <p>에픽이 권장하는 마이그레이션 단계입니다:</p>
+                </div>
+            </div>
+
+            <div class="visual-section">
+                <h3>Iris 마이그레이션 로드맵</h3>
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-box">
+                            <div class="flow-box__title">Step 1</div>
+                            <div class="flow-box__items">Build.cs에<br>SetupIrisSupport 추가<br>+ ini 설정</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Step 2</div>
+                            <div class="flow-box__items">DOREPLIFETIME →<br>DOREPLIFETIME_<br>WITH_PARAMS_FAST<br>+ bIsPushBased=true</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box">
+                            <div class="flow-box__title">Step 3</div>
+                            <div class="flow-box__items">프로퍼티 변경부에<br>MARK_PROPERTY<br>_DIRTY 추가</div>
+                        </div>
+                        <div class="flow-arrow">&rarr;</div>
+                        <div class="flow-box flow-box--highlight">
+                            <div class="flow-box__title">Step 4</div>
+                            <div class="flow-box__items">ReplicationGraph<br>→ Iris 필터로 전환</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <div class="q">한 번에 전부 바꿔야 하나요?</div>
+                <div class="a">
+                    <p>아닙니다. <span class="highlight">점진적 마이그레이션이 가능</span>합니다:</p>
+                    <ul>
+                        <li>개별 프로퍼티 단위로 <code>bIsPushBased</code> 플래그를 켤 수 있습니다</li>
+                        <li>Push 모드가 아닌 프로퍼티는 Iris 안에서도 레거시 방식(폴링)으로 동작합니다</li>
+                        <li>한 액터의 프로퍼티 중 일부만 Push, 나머지는 Pull로 혼용 가능</li>
+                    </ul>
+                    <p>권장 순서: <strong>가장 자주 변경되는 프로퍼티</strong>(위치, 체력, 상태 등)부터 Push로 전환하면 즉각적인 성능 향상을 볼 수 있습니다.</p>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <div class="q">마이그레이션 시 주의사항은?</div>
+                <div class="a">
+                    <p class="warning">가장 흔한 실수:</p>
+                    <ul>
+                        <li><strong>MARK_PROPERTY_DIRTY 누락</strong>: 프로퍼티 값은 바뀌지만 클라이언트에 전파 안 됨. 디버깅이 매우 어려움</li>
+                        <li><strong>ReplicationGraph 충돌</strong>: Iris와 ReplicationGraph를 동시에 사용하면 예기치 못한 동작 발생. Iris의 자체 필터링으로 전환 필요</li>
+                        <li><strong>리플레이 시스템 의존</strong>: 현재 Iris는 리플레이를 지원하지 않음. 킬캠, 데모 녹화 등이 필요하면 전환 보류</li>
+                        <li><strong>버퍼 과잉 설정</strong>: MaxReplicatedObjectCount를 너무 크게 잡으면 빈 맵에서도 성능 저하</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 9: 장단점 종합 분석 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 9: 장단점 종합 분석 &mdash; 우리 프로젝트에 맞는가?</h2>
+
+            <div class="conversation">
+                <div class="q">Iris를 도입해야 하는 경우와 아직 하지 말아야 하는 경우는?</div>
+                <div class="a">
+                    <p>프로젝트 특성에 따라 판단해야 합니다:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>구분</th>
+                        <th>장점</th>
+                        <th>단점 / 제약</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>성능</td>
+                        <td>대규모 플레이어/액터에서 CPU 30%+ 절약<br>Push 모델로 불필요한 비교 제거</td>
+                        <td>소규모(10명 이하)에서는 체감 효과 미미<br>메모리 할당 패턴에 주의 필요</td>
+                    </tr>
+                    <tr>
+                        <td>개발 편의성</td>
+                        <td>내장 Spatial 필터로 오픈 월드 쉽게 지원<br>SubObject 복제로 유연한 아키텍처</td>
+                        <td>MARK_PROPERTY_DIRTY 수동 관리 부담<br>마킹 누락 시 디버깅 난이도 높음</td>
+                    </tr>
+                    <tr>
+                        <td>안정성</td>
+                        <td>Fortnite에서 실전 검증됨<br>에픽이 활발하게 개발 중</td>
+                        <td>아직 Beta (UE 5.7 기준)<br>리플레이 미지원</td>
+                    </tr>
+                    <tr>
+                        <td>확장성</td>
+                        <td>커넥션 간 작업 공유로 선형 스케일링<br>서버 비용 절감 가능</td>
+                        <td>ReplicationGraph 대체 필요<br>기존 필터링 로직 재작성</td>
+                    </tr>
+                    <tr>
+                        <td>호환성</td>
+                        <td>점진적 마이그레이션 가능<br>Push/Pull 혼용 가능</td>
+                        <td>레거시와 완전 호환은 아님<br>일부 커스텀 넷코드 재작업 필요</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="analogy-box">
+                <strong>🎯 도입 판단 기준</strong>
+                <p><strong>도입 권장</strong>: 배틀로얄(50명+), MMO, 대규모 오픈 월드, 높은 액터 밀도 게임</p>
+                <p><strong>보류 권장</strong>: 소규모 PvP(1v1~4v4), 리플레이/킬캠 필수, 이미 안정화된 프로덕션 넷코드</p>
+                <p><strong>실험 권장</strong>: 신규 프로젝트에서 UE 5.7+ 사용 시 &mdash; 처음부터 Iris 기반으로 설계하면 마이그레이션 비용 없음</p>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 10: 타임라인과 미래 전망 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 10: Iris의 여정 &mdash; 타임라인과 미래</h2>
+
+            <div class="conversation">
+                <div class="q">Iris의 개발 히스토리는 어떻게 되나요?</div>
+                <div class="a">
+                    <p>Iris의 주요 마일스톤:</p>
+                </div>
+            </div>
+
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>시기</th>
+                        <th>마일스톤</th>
+                        <th>상태</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>UE 5.0</td>
+                        <td>Iris 최초 도입</td>
+                        <td>Experimental</td>
+                    </tr>
+                    <tr>
+                        <td>UE 5.1 ~ 5.3</td>
+                        <td>문서화 및 안정화 작업</td>
+                        <td>Experimental</td>
+                    </tr>
+                    <tr>
+                        <td>2022</td>
+                        <td>Fortnite Battle Royale에 내부 적용</td>
+                        <td>프로덕션 사용</td>
+                    </tr>
+                    <tr>
+                        <td>2022~2024</td>
+                        <td>Fortnite 기반 버그 수정 및 최적화</td>
+                        <td>지속 개선</td>
+                    </tr>
+                    <tr>
+                        <td>Unreal Fest Orlando 2025</td>
+                        <td>Iris 설계 철학 발표</td>
+                        <td>커뮤니티 공개</td>
+                    </tr>
+                    <tr>
+                        <td>UE 5.7</td>
+                        <td>Beta로 승격</td>
+                        <td>Beta</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="conversation">
+                <div class="q">앞으로 Iris는 어떻게 발전할까요?</div>
+                <div class="a">
+                    <p>에픽의 로드맵과 커뮤니티 투표(169+ 표)를 고려하면:</p>
+                    <ul>
+                        <li><strong>리플레이 지원</strong>: 현재 가장 큰 기능 갭. GA(정식 출시) 전에 해결될 가능성 높음</li>
+                        <li><strong>메모리 최적화</strong>: BeginWrite() 할당 패턴 개선</li>
+                        <li><strong>블루프린트 통합</strong>: Push 마킹의 BP 지원 강화</li>
+                        <li><strong>정식 출시(GA)</strong>: Beta에서 Production-Ready로 승격</li>
+                    </ul>
+                    <p class="key-point">Iris는 에픽이 Fortnite라는 자사 AAA 게임에 실전 투입한 기술이므로, 단순 실험이 아닌 장기적으로 레거시를 대체할 차세대 표준입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- 핵심 정리 -->
+        <!-- ============================================================ -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Iris는 Push 기반 복제 시스템</strong>으로, 레거시의 매 틱 전체 폴링을 "변경 시에만 알림"으로 대체하여 CPU 비용을 근본적으로 줄입니다.</li>
+                <li><strong>양자화된 상태 사본을 커넥션 간 공유</strong>하여, N명의 플레이어에 대해 비교/직렬화 작업을 1번만 수행합니다 (N번 &rarr; 1번).</li>
+                <li><strong>내장 필터링 시스템</strong>(Spatial/Group/Dynamic/Connection)이 ReplicationGraph를 대체하며, 특히 대규모 오픈 월드에서 강력합니다.</li>
+                <li><strong>100인 테스트에서 31% FPS 향상</strong>, 1만 액터 테스트에서 5.7배 성능 개선을 실측했습니다.</li>
+                <li><strong>점진적 마이그레이션 가능</strong>: Push/Pull 혼용으로 프로퍼티 단위 전환이 가능하지만, MARK_PROPERTY_DIRTY 누락에 주의해야 합니다.</li>
+                <li><strong>현재 Beta (UE 5.7)</strong>이며, 리플레이 미지원이 가장 큰 제약입니다. Fortnite에서 실전 검증되었으므로 장기적으로 레거시를 대체할 표준입니다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>
