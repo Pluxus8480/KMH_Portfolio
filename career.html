@@ -33,6 +33,7 @@
                 <li class="nav__item"><a href="#strengths" class="nav__link">Strengths</a></li>
                 <li class="nav__item"><a href="#skills" class="nav__link">Skills</a></li>
                 <li class="nav__item"><a href="#experience" class="nav__link">Experience</a></li>
+                <li class="nav__item"><a href="#ai-tools" class="nav__link">AI Tools</a></li>
                 <li class="nav__item"><a href="#projects" class="nav__link">Projects</a></li>
                 <li class="nav__item"><a href="#education" class="nav__link">Education</a></li>
             </ul>
@@ -175,7 +176,7 @@
                         <div class="strength-card__icon">📚</div>
                         <h3 class="strength-card__title">이론·실무 양립</h3>
                         <p class="strength-card__desc">
-                            국립안동대 컴공 학과 수석 졸업(전액장학금), 정보기술학회 학술 논문 2편 게재,
+                            국립안동대 컴공 학과 수석 입학(전액장학금) 후 학사 졸업, 정보기술학회 학술 논문 2편 게재,
                             영남대 심화창의융합캠프 대상 수상. 학부 시절부터 5년+ 회사 실무 병행.
                         </p>
                     </div>
@@ -466,6 +467,256 @@
             </div>
         </section>
 
+        <!-- ===== 5.5 AI Tools & Internal Software ===== -->
+        <section class="ai-tools section" id="ai-tools">
+            <div class="container">
+                <h2 class="section__title">
+                    <span class="section__title-accent">//</span> AI 활용 &amp; 자체 개발 툴
+                </h2>
+
+                <p class="ai-tools__lede">
+                    <strong>Claude · Codex 등 LLM 기반 페어 프로그래밍</strong>을 일상에 적극 도입하여
+                    운영·인프라·도메인 분석 영역의 자체 툴을 단시간에 다수 개발하고 있습니다.
+                    대표 결과물인 <strong>Project Panopticon</strong>은 <strong>9종의 모듈을 단일 Electron 데스크톱 앱으로 통합</strong>한 사내 운영 통합 툴로,
+                    GNISoft 서버팀이 일상 업무에 사용 중이며 <strong>클라이언트팀·QA 등 타 팀까지 확산 배포</strong>되었습니다.
+                </p>
+
+                <article class="flagship-card">
+                    <div class="flagship-card__head">
+                        <div class="flagship-card__title-block">
+                            <span class="flagship-card__eyebrow">Flagship Project · 사내 통합 운영 툴</span>
+                            <h3 class="flagship-card__title">🛡️ Project Panopticon</h3>
+                            <p class="flagship-card__sub">단일 Electron 앱에 9종 모듈을 통합한 사내 서버팀 통합 운영 데스크톱</p>
+                        </div>
+                        <div class="flagship-card__metrics">
+                            <div class="flagship-metric">
+                                <span class="flagship-metric__value">9</span>
+                                <span class="flagship-metric__label">통합 모듈</span>
+                            </div>
+                            <div class="flagship-metric">
+                                <span class="flagship-metric__value">3+</span>
+                                <span class="flagship-metric__label">사용 팀</span>
+                            </div>
+                            <div class="flagship-metric">
+                                <span class="flagship-metric__value">100%</span>
+                                <span class="flagship-metric__label">단독 개발</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flagship-card__tech">
+                        <span>Electron</span><span>Node.js</span><span>JavaScript</span><span>WebSocket</span><span>TCP / 커스텀 바이너리 프로토콜</span><span>MSSQL</span><span>basic-ftp</span><span>Roslyn (.NET 8)</span><span>LLVM clang</span><span>iconv-lite</span><span>electron-builder</span>
+                    </div>
+                </article>
+
+                <p class="tool-grid__hint">▸ 카드를 클릭하면 세부 기능이 펼쳐집니다.</p>
+                <div class="tool-grid">
+                    <details class="tool-tile">
+                        <summary class="tool-tile__summary">
+                            <span class="tool-tile__icon">🖥️</span>
+                            <span class="tool-tile__chevron" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </span>
+                            <h4 class="tool-tile__name">Server Monitor</h4>
+                            <p class="tool-tile__desc">C++ IOCP 게임 서버 실시간 모니터링. 커스텀 바이너리 프로토콜로 ToolServer 연결, CPU·메모리·네트워크·접속자 메트릭 수집.</p>
+                        </summary>
+                        <div class="tool-tile__detail">
+                            <h5 class="tool-tile__detail-label">주요 기능</h5>
+                            <ul>
+                                <li>C++ IOCP 게임 서버와 TCP로 통신, 자체 정의 <strong>바이너리 프로토콜</strong> (C++ <code>TIProtocolTool.h</code> 매칭)</li>
+                                <li>패킷 헤더 12바이트 (<code>wID[2] + dwSeq[4] + Extra[4]</code>), 서버 정보 구조체 <strong>160바이트</strong></li>
+                                <li>주요 패킷: <code>TCM_SERVER_LIST</code> (1502) 요청, <code>TSM_SERVER_LIST</code> (1503) 응답, <code>DSM_SERVER_INFO</code> (1500) 개별 업데이트</li>
+                                <li>서버 리스트 패킷 <strong>1676바이트</strong> 파싱 (헤더 + count + 10서버 + 10추가 정보)</li>
+                                <li>디스커넥트 시 <strong>5초 간격 자동 재연결</strong>, 10초마다 서버 상태 폴링</li>
+                                <li>오프라인 감지 시 UI 갱신, 실시간 메트릭 시각화</li>
+                            </ul>
+                        </div>
+                    </details>
+
+                    <details class="tool-tile">
+                        <summary class="tool-tile__summary">
+                            <span class="tool-tile__icon">🤖</span>
+                            <span class="tool-tile__chevron" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </span>
+                            <h4 class="tool-tile__name">Dummy Client</h4>
+                            <p class="tool-tile__desc">부하·시나리오 테스트용 더미 클라이언트. 연결 프리셋, autoConnect, interval, quickCommands 등 설정 기반 자동화.</p>
+                        </summary>
+                        <div class="tool-tile__detail">
+                            <h5 class="tool-tile__detail-label">주요 기능</h5>
+                            <ul>
+                                <li>게임 서버 부하·시나리오 테스트용 <strong>더미 클라이언트</strong> 도구</li>
+                                <li>연결 프리셋 (IP/port) 관리, <code>autoConnect</code> 자동 접속 옵션</li>
+                                <li>동작 주기(<code>interval</code>), 페이지 사이즈 등 시뮬레이션 파라미터 설정</li>
+                                <li><strong>QuickCommands</strong> 기능으로 자주 사용하는 패킷 시퀀스를 단축 실행</li>
+                                <li>설정은 별도 파일로 분리: <code>%APPDATA%/project_panopticon/00.Setting/02.DummyClient/</code></li>
+                                <li>기존 <code>presets.json</code>의 dummySettings는 초기화 시 <strong>자동 마이그레이션</strong></li>
+                            </ul>
+                        </div>
+                    </details>
+
+                    <details class="tool-tile">
+                        <summary class="tool-tile__summary">
+                            <span class="tool-tile__icon">💾</span>
+                            <span class="tool-tile__chevron" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </span>
+                            <h4 class="tool-tile__name">DB Restore</h4>
+                            <p class="tool-tile__desc">FTP 백업(.bak) 자동 다운로드 후 MSSQL <code>RESTORE DATABASE</code> 실행. 디스크 공간 체크, DB명/일시 자동 파싱 포함.</p>
+                        </summary>
+                        <div class="tool-tile__detail">
+                            <h5 class="tool-tile__detail-label">주요 기능</h5>
+                            <ul>
+                                <li>FTP 서버에서 <code>.bak</code> 백업 파일 목록 자동 조회 (<code>basic-ftp</code> 패키지)</li>
+                                <li>파일명에서 <strong>DB 이름과 백업 일시</strong>를 정규식으로 자동 파싱</li>
+                                <li>다운로드 → MSSQL에 <code>RESTORE DATABASE</code> 실행 (<code>mssql</code> 패키지)</li>
+                                <li>복원 전 <code>wmic</code>로 <strong>디스크 여유 공간 자동 체크</strong></li>
+                                <li>FTP / MSSQL 연결 테스트 기능, 진행 중 작업 취소 가능</li>
+                                <li>설정 분리 저장: <code>00.Setting/03.DbRestore/db-restore-settings.json</code></li>
+                            </ul>
+                        </div>
+                    </details>
+
+                    <details class="tool-tile">
+                        <summary class="tool-tile__summary">
+                            <span class="tool-tile__icon">🔍</span>
+                            <span class="tool-tile__chevron" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </span>
+                            <h4 class="tool-tile__name">Index Analyzer</h4>
+                            <p class="tool-tile__desc">DB 인덱스 사용 패턴 분석 및 시각화. 비효율적 인덱스 식별과 운영 의사결정 지원.</p>
+                        </summary>
+                        <div class="tool-tile__detail">
+                            <h5 class="tool-tile__detail-label">주요 기능</h5>
+                            <ul>
+                                <li>MSSQL <code>sys.dm_db_index_usage_stats</code> 기반 인덱스 사용 통계 수집</li>
+                                <li>스냅샷을 <strong>타임스탬프 JSON</strong>으로 저장 (<code>{프리셋}__{DB}__{timestamp}.json</code>)</li>
+                                <li>프리셋·DB별 과거 스냅샷 목록 및 비교 기능</li>
+                                <li>라이브 운영 중 인덱스 효용 변화를 <strong>시계열로 추적</strong></li>
+                                <li>비효율 인덱스 식별 → 삭제·재구성 판단 자료 제공</li>
+                                <li>커스텀 SQL 쿼리 파서로 추가 분석 확장 가능</li>
+                            </ul>
+                        </div>
+                    </details>
+
+                    <details class="tool-tile">
+                        <summary class="tool-tile__summary">
+                            <span class="tool-tile__icon">🔤</span>
+                            <span class="tool-tile__chevron" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </span>
+                            <h4 class="tool-tile__name">Encoding Converter</h4>
+                            <p class="tool-tile__desc">VS 프로젝트 텍스트 파일 인코딩 일괄 변환 (EUC-KR/UTF-16 → UTF-8). BOM·jschardet 기반 우선순위 감지, 원본 자동 백업.</p>
+                        </summary>
+                        <div class="tool-tile__detail">
+                            <h5 class="tool-tile__detail-label">주요 기능</h5>
+                            <ul>
+                                <li>Visual Studio 프로젝트 폴더를 재귀 스캔해 <strong>텍스트 파일 인코딩 감지</strong></li>
+                                <li>감지 우선순위: <strong>BOM → pure ASCII → strict UTF-8 검증 → jschardet</strong> (CP949/KSC5601 등은 EUC-KR로 정규화)</li>
+                                <li><code>iconv-lite</code>로 <strong>EUC-KR(cp949) / UTF-16 → UTF-8</strong> 일괄 변환</li>
+                                <li>변환 전 <code>{프로젝트}/{backup}/{상대경로}.bak</code> 형태로 원본 <strong>자동 백업</strong></li>
+                                <li>설정된 확장자(<code>.rc</code>, <code>.rc2</code>)에만 BOM 부착</li>
+                                <li>제외 폴더 기본값: <code>.git</code>, <code>.vs</code>, <code>bin</code>, <code>obj</code>, <code>x64</code>, <code>Debug</code>, <code>Release</code>, <code>packages</code>, <code>node_modules</code></li>
+                            </ul>
+                        </div>
+                    </details>
+
+                    <details class="tool-tile">
+                        <summary class="tool-tile__summary">
+                            <span class="tool-tile__icon">🚀</span>
+                            <span class="tool-tile__chevron" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </span>
+                            <h4 class="tool-tile__name">SQL Deploy</h4>
+                            <p class="tool-tile__desc">VS SQL 프로젝트 환경별(테스트·스테이징·라이브) 자동 배포. 객체 종류별 차분 분석, 전체 성공 시에만 <code>COMMIT</code>되는 트랜잭션 안전 적용.</p>
+                        </summary>
+                        <div class="tool-tile__detail">
+                            <h5 class="tool-tile__detail-label">주요 기능</h5>
+                            <ul>
+                                <li>VS SQL 프로젝트 하위 <code>.sql</code> 파일 재귀 스캔</li>
+                                <li>환경 프리셋(<strong>테스트 · 스테이징 · 라이브</strong>)별로 <code>(SQL 프로젝트 → 1+개의 DB)</code> 매핑 보관</li>
+                                <li>같은 SQL을 여러 DB에 일괄 적용 (예: <code>chosun2_game → game11/12/13</code>)</li>
+                                <li>프로시저·함수·뷰·트리거 → <code>CREATE OR ALTER</code>로 정규화 후 <code>sys.sql_modules.definition</code>과 diff</li>
+                                <li>테이블 → <code>sys.columns</code> 메타와 비교해 <code>ALTER TABLE ADD/ALTER</code> 자동 생성. <strong>위험 변경</strong>(컬럼 삭제·타입 축소·NOT NULL)은 사용자 동의 필요</li>
+                                <li>적용 순서: 테이블 → 함수 → 뷰 → 프로시저 → 트리거</li>
+                                <li><strong>전체 성공 시에만 <code>COMMIT</code></strong>, 한 곳이라도 실패하면 모든 타겟 DB <code>ROLLBACK</code></li>
+                            </ul>
+                        </div>
+                    </details>
+
+                    <details class="tool-tile">
+                        <summary class="tool-tile__summary">
+                            <span class="tool-tile__icon">🛒</span>
+                            <span class="tool-tile__chevron" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </span>
+                            <h4 class="tool-tile__name">WebShop Manager</h4>
+                            <p class="tool-tile__desc">웹 샵 상품·결제 데이터 관리. 라이브 운영 중 발생하는 즉각적 데이터 수정 요구를 안전하게 처리.</p>
+                        </summary>
+                        <div class="tool-tile__detail">
+                            <h5 class="tool-tile__detail-label">주요 기능</h5>
+                            <ul>
+                                <li>게임 웹샵 서버와 <strong>HTTP / HTTPS JSON API</strong> 통신</li>
+                                <li>프리셋별 base URL 보관, <code>currentPreset</code> 전환으로 환경 분리</li>
+                                <li>요청 응답시간(<code>elapsedMs</code>) 측정, 상태 코드 200~299 OK 판정</li>
+                                <li>라이브 운영 중 발생하는 <strong>즉각적 데이터 조회·수정 요구</strong>에 대응</li>
+                                <li>결제·아이템 데이터 검증 및 안전한 운영 처리</li>
+                                <li>대만 서버 런칭 시 결제 API 모니터링·연동의 핵심 도구로 활용</li>
+                            </ul>
+                        </div>
+                    </details>
+
+                    <details class="tool-tile">
+                        <summary class="tool-tile__summary">
+                            <span class="tool-tile__icon">📊</span>
+                            <span class="tool-tile__chevron" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </span>
+                            <h4 class="tool-tile__name">Call Graph</h4>
+                            <p class="tool-tile__desc">코드 호출 그래프 자동 분석. C# 솔루션은 자체 Roslyn 헬퍼(.NET 8), C++ 프로젝트는 LLVM clang 19.x로 추출.</p>
+                        </summary>
+                        <div class="tool-tile__detail">
+                            <h5 class="tool-tile__detail-label">주요 기능</h5>
+                            <ul>
+                                <li>코드의 함수 호출 그래프를 자동 추출하여 <strong>시각화</strong></li>
+                                <li>C# 프로젝트(<code>.csproj</code> / <code>.sln</code>): 자체 <strong>Roslyn 헬퍼</strong> (<code>.NET 8 SDK</code>) 빌드해 사용</li>
+                                <li>C++ 프로젝트(<code>.vcxproj</code>): <strong>LLVM clang 19.x</strong>로 파싱</li>
+                                <li>분석 결과 캐싱, <code>forceRefresh</code> 옵션으로 재분석 강제 가능</li>
+                                <li>진행률 이벤트(<code>call-graph-progress</code>) 실시간 표시, 중간 취소 지원</li>
+                                <li>패키징 시 Roslyn 파서(~40MB)는 <code>electron-builder</code> extraResources로 동봉</li>
+                            </ul>
+                        </div>
+                    </details>
+
+                    <details class="tool-tile">
+                        <summary class="tool-tile__summary">
+                            <span class="tool-tile__icon">📋</span>
+                            <span class="tool-tile__chevron" aria-hidden="true">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </span>
+                            <h4 class="tool-tile__name">Hex Editor</h4>
+                            <p class="tool-tile__desc">구조체 템플릿 기반 바이너리 파싱 헥스 에디터. 엔디안 변환, 자료형 분기, 템플릿 저장으로 패킷·바이너리 디버깅 효율화.</p>
+                        </summary>
+                        <div class="tool-tile__detail">
+                            <h5 class="tool-tile__detail-label">주요 기능</h5>
+                            <ul>
+                                <li><strong>구조체 템플릿 기반 바이너리 파싱</strong> 헥스 에디터</li>
+                                <li>자료형 분기: 정수형(8/16/32/64-bit signed/unsigned), float/double, char, custom struct</li>
+                                <li><strong>엔디안 변환</strong> (little/big-endian 양방향)</li>
+                                <li>템플릿 저장으로 동일 패킷·바이너리 포맷 <strong>반복 분석 가속</strong></li>
+                                <li>검색 · 이동 · 복사 · 붙여넣기 · 되돌리기 등 표준 에디터 기능</li>
+                                <li>단축키 모음, 실시간 미리보기, 별도 사용 가이드 문서 제공</li>
+                            </ul>
+                        </div>
+                    </details>
+                </div>
+
+                <p class="ai-tools__footer">
+                    각 모듈은 <strong>설정 서브탭 아키텍처</strong>로 일관되게 구조화되어 있어 신규 기능 추가 시
+                    설정 저장·IPC 핸들러·UI 탭을 동일한 패턴으로 확장 가능합니다.
+                </p>
+            </div>
+        </section>
+
         <!-- ===== 6. Major Projects (non-game) ===== -->
         <section class="major-projects section" id="projects">
             <div class="container">
@@ -607,7 +858,7 @@
                             <h3 class="edu-card__title">국립안동대학교 컴퓨터공학과 학사</h3>
                             <p class="edu-card__period">2017 – 2022</p>
                             <p class="edu-card__desc">
-                                ANU미래인재전형 <strong>전액장학금</strong> 입학 · <strong>학과 수석</strong>
+                                ANU미래인재전형 <strong>전액장학금 · 학과 수석 입학</strong>
                             </p>
                         </div>
                     </article>
