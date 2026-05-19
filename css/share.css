@@ -1,0 +1,100 @@
+/* ==========================================
+   share.html 전용 컴팩트 인트로
+   ========================================== */
+
+/* 메인 페이지의 hero가 가진 큰 여백을 share 페이지에선 줄임 */
+.share-body .main { padding-top: 0; }
+
+.share-intro {
+    padding-top: calc(var(--header-height, 72px) + 32px);
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border-default);
+}
+
+.share-intro__inner {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 32px;
+    align-items: center;
+}
+
+.share-intro__head { min-width: 0; }
+
+.share-intro__name {
+    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    margin: 0 0 8px;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+}
+
+.share-intro__role {
+    display: inline-block;
+    margin-left: 12px;
+    padding: 4px 10px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--accent-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-xs);
+    vertical-align: middle;
+}
+
+.share-intro__tagline {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin: 0;
+    max-width: 60ch;
+}
+
+.share-intro__contact {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.share-intro__contact li {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.share-intro__contact-label {
+    display: inline-block;
+    min-width: 52px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.share-intro__contact a {
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.share-intro__contact a:hover { color: var(--accent-primary); }
+
+@media screen and (max-width: 768px) {
+    .share-intro__inner {
+        grid-template-columns: 1fr;
+        gap: 20px;
+        align-items: stretch;
+    }
+
+    .share-intro__role {
+        display: inline-block;
+        margin-left: 0;
+        margin-top: 6px;
+    }
+
+    .share-intro__name { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+}

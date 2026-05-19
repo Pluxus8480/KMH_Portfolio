@@ -33,7 +33,8 @@
       "Bash(Get-ChildItem -Path \"E:\\\\Github\\\\Portfolio_Dx11_GR\" -Recurse -File)",
       "Bash(Select-Object FullName)",
       "PowerShell(Get-ChildItem -Path \"E:\\\\Github\\\\Portfolio_Dx11_GR\" -Recurse -File | Where-Object {$_.Name -match '\\(Glitch|Post|Distort|Cyber\\)' -and $_.Extension -match '\\\\.\\(cpp|h|hlsl\\)$'} | Select-Object -ExpandProperty FullName)",
-      "PowerShell($ProgressPreference = 'SilentlyContinue'; try { Invoke-WebRequest -Uri 'https://cdn.cloudflare.steamstatic.com/steam/apps/1817230/library_600x900_2x.jpg' -OutFile 'E:\\\\Github\\\\KMH_Portfolio\\\\assets\\\\images\\\\projects\\\\_hifi-portrait2x.jpg' -UseBasicParsing -ErrorAction Stop; \"OK\" } catch { \"FAILED: $\\($_.Exception.Message\\)\" })"
+      "PowerShell($ProgressPreference = 'SilentlyContinue'; try { Invoke-WebRequest -Uri 'https://cdn.cloudflare.steamstatic.com/steam/apps/1817230/library_600x900_2x.jpg' -OutFile 'E:\\\\Github\\\\KMH_Portfolio\\\\assets\\\\images\\\\projects\\\\_hifi-portrait2x.jpg' -UseBasicParsing -ErrorAction Stop; \"OK\" } catch { \"FAILED: $\\($_.Exception.Message\\)\" })",
+      "PowerShell($ProgressPreference='SilentlyContinue'; $hr = Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/Pluxus8480/Portfolio_Dx11_HR/main/README.md' -UseBasicParsing; $gr = Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/Pluxus8480/Portfolio_Dx11_GR/main/README.md' -UseBasicParsing; \"=== HR README length: $\\($hr.Content.Length\\) ===\"; $hr.Content; \"`n=== GR README length: $\\($gr.Content.Length\\) ===\"; $gr.Content)"
     ]
   }
 }
