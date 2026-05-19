@@ -35,7 +35,7 @@
 
     /* Typography */
     --font-primary: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
+    --font-mono: 'JetBrains Mono', 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, monospace;
 
     /* Font Sizes */
     --fs-hero: 3rem;
@@ -711,6 +711,7 @@ button {
 
 .project-card__links {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
 }
 
@@ -723,6 +724,8 @@ button {
     font-size: var(--fs-small);
     color: var(--text-secondary);
     border: 1px solid var(--border-default);
+    flex-shrink: 0;
+    white-space: nowrap;
     transition: all var(--transition-fast);
 }
 
