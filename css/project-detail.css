@@ -221,6 +221,8 @@
 .feature-list li::before { content: '\25B8'; position: absolute; left: 0; color: var(--accent-primary); }
 
 /* ===== Image Placeholder ===== */
+/* 실제 이미지/GIF를 채워 넣기 전까지 일괄 숨김. 다시 보이려면 아래 .img-placeholder { display: none; } 한 줄만 제거하면 원래 점선 박스로 복귀합니다. */
+.img-placeholder { display: none; }
 .img-placeholder {
     background: var(--bg-secondary); border: 2px dashed var(--border-default);
     border-radius: var(--radius-medium); padding: 40px 20px; text-align: center;

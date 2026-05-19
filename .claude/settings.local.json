@@ -32,7 +32,8 @@
       "Bash(Select-Object Name)",
       "Bash(Get-ChildItem -Path \"E:\\\\Github\\\\Portfolio_Dx11_GR\" -Recurse -File)",
       "Bash(Select-Object FullName)",
-      "PowerShell(Get-ChildItem -Path \"E:\\\\Github\\\\Portfolio_Dx11_GR\" -Recurse -File | Where-Object {$_.Name -match '\\(Glitch|Post|Distort|Cyber\\)' -and $_.Extension -match '\\\\.\\(cpp|h|hlsl\\)$'} | Select-Object -ExpandProperty FullName)"
+      "PowerShell(Get-ChildItem -Path \"E:\\\\Github\\\\Portfolio_Dx11_GR\" -Recurse -File | Where-Object {$_.Name -match '\\(Glitch|Post|Distort|Cyber\\)' -and $_.Extension -match '\\\\.\\(cpp|h|hlsl\\)$'} | Select-Object -ExpandProperty FullName)",
+      "PowerShell($ProgressPreference = 'SilentlyContinue'; try { Invoke-WebRequest -Uri 'https://cdn.cloudflare.steamstatic.com/steam/apps/1817230/library_600x900_2x.jpg' -OutFile 'E:\\\\Github\\\\KMH_Portfolio\\\\assets\\\\images\\\\projects\\\\_hifi-portrait2x.jpg' -UseBasicParsing -ErrorAction Stop; \"OK\" } catch { \"FAILED: $\\($_.Exception.Message\\)\" })"
     ]
   }
 }

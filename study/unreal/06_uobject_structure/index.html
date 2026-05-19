@@ -51,53 +51,34 @@
             </div>
 
             <div class="visual-section">
-                <div class="flow-diagram">
-                    <div class="flow-box flow-box--highlight" style="margin:0 auto; max-width:200px;">
-                        <div class="flow-box__title">UObject (최상위)</div>
-                    </div>
-                    <div class="flow-arrow">▼</div>
-                    <div class="flow-row">
-                        <div class="flow-diagram" style="flex:1;">
-                            <div class="flow-box">
-                                <div class="flow-box__title">AActor</div>
-                            </div>
-                            <div class="flow-arrow">▼</div>
-                            <div class="flow-row">
-                                <div class="flow-diagram" style="flex:1;">
-                                    <div class="flow-box">
-                                        <div class="flow-box__title">APawn</div>
-                                    </div>
-                                    <div class="flow-arrow">▼</div>
-                                    <div class="flow-box">
-                                        <div class="flow-box__title">ACharacter</div>
-                                    </div>
-                                    <div class="flow-arrow">▼</div>
-                                    <div class="flow-box">
-                                        <div class="flow-box__title">APlayerCharacter</div>
+                <div class="hierarchy-diagram" style="text-align:left;">
+                    <div class="hierarchy-item hierarchy-item--root">UObject (최상위)</div>
+                    <div class="hierarchy-children" style="flex-direction:column; align-items:flex-start;">
+                        <div style="margin-bottom: 12px; width:100%;">
+                            <div class="hierarchy-item" style="font-weight:600; margin-bottom:6px;">AActor</div>
+                            <div class="hierarchy-children" style="flex-direction:column; align-items:flex-start;">
+                                <div style="margin-bottom: 8px; width:100%;">
+                                    <div class="hierarchy-item" style="margin-bottom:6px;">APawn</div>
+                                    <div class="hierarchy-children" style="flex-direction:column; align-items:flex-start;">
+                                        <div style="margin-bottom: 6px; width:100%;">
+                                            <div class="hierarchy-item" style="margin-bottom:4px;">ACharacter</div>
+                                            <div class="hierarchy-children">
+                                                <div class="hierarchy-item">APlayerCharacter</div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="flow-box" style="align-self:flex-start;">
-                                    <div class="flow-box__title">AInfo</div>
-                                </div>
+                                <div class="hierarchy-item">AInfo</div>
                             </div>
                         </div>
-                        <div class="flow-diagram" style="flex:1;">
-                            <div class="flow-box">
-                                <div class="flow-box__title">UActorComponent</div>
-                            </div>
-                            <div class="flow-arrow">▼</div>
-                            <div class="flow-row">
-                                <div class="flow-box">
-                                    <div class="flow-box__title">USceneComponent</div>
-                                </div>
-                                <div class="flow-box">
-                                    <div class="flow-box__title">UMovementComponent</div>
-                                </div>
+                        <div style="margin-bottom: 12px; width:100%;">
+                            <div class="hierarchy-item" style="font-weight:600; margin-bottom:6px;">UActorComponent</div>
+                            <div class="hierarchy-children">
+                                <div class="hierarchy-item">USceneComponent</div>
+                                <div class="hierarchy-item">UMovementComponent</div>
                             </div>
                         </div>
-                        <div class="flow-box" style="align-self:flex-start;">
-                            <div class="flow-box__title">USubsystem</div>
-                        </div>
+                        <div class="hierarchy-item">USubsystem</div>
                     </div>
                 </div>
                 <p class="diagram-caption">언리얼 주요 클래스 계층</p>
@@ -340,66 +321,44 @@ public:
             </div>
 
             <div class="visual-section">
-                <div class="flow-diagram">
-                    <div class="flow-box flow-box--highlight">
-                        <div class="flow-box__title">월드에 배치되나요?</div>
-                    </div>
-                    <div class="flow-row">
-                        <div class="flow-diagram" style="flex:1;">
-                            <div class="flow-arrow">YES ▼</div>
-                            <div class="flow-box">
-                                <div class="flow-box__title">Transform이 필요한가요?</div>
-                            </div>
-                            <div class="flow-row">
-                                <div class="flow-diagram" style="flex:1;">
-                                    <div class="flow-arrow">YES ▼</div>
-                                    <div class="flow-box">
-                                        <div class="flow-box__title">AActor (대부분)</div>
-                                    </div>
-                                    <div class="flow-arrow">▼</div>
-                                    <div class="flow-box">
-                                        <div class="flow-box__title">캐릭터처럼 이동하나요?</div>
-                                    </div>
-                                    <div class="flow-row">
-                                        <div class="flow-diagram" style="flex:1;">
-                                            <div class="flow-arrow">YES ▼</div>
-                                            <div class="flow-box flow-box--highlight">
-                                                <div class="flow-box__title">APawn / ACharacter</div>
-                                            </div>
+                <div class="hierarchy-diagram" style="text-align:left;">
+                    <div class="hierarchy-item hierarchy-item--root">Q1. 월드에 배치되나요?</div>
+                    <div class="hierarchy-children" style="flex-direction:column; align-items:flex-start;">
+                        <div style="margin-bottom: 16px; width:100%;">
+                            <div class="flow-label" style="text-align:left;">YES &darr;</div>
+                            <div class="hierarchy-item" style="font-weight:600; margin-bottom:6px;">Q2. Transform이 필요한가요?</div>
+                            <div class="hierarchy-children" style="flex-direction:column; align-items:flex-start;">
+                                <div style="margin-bottom: 12px; width:100%;">
+                                    <div class="flow-label" style="text-align:left;">YES &darr;</div>
+                                    <div class="hierarchy-item" style="margin-bottom:6px;">Q3. 캐릭터처럼 이동하나요?</div>
+                                    <div class="hierarchy-children">
+                                        <div>
+                                            <div class="flow-label">YES &darr;</div>
+                                            <div class="hierarchy-item flow-box--highlight">APawn / ACharacter</div>
                                         </div>
-                                        <div class="flow-diagram" style="flex:1;">
-                                            <div class="flow-arrow">NO ▼</div>
-                                            <div class="flow-box">
-                                                <div class="flow-box__title">AActor</div>
-                                            </div>
+                                        <div>
+                                            <div class="flow-label">NO &darr;</div>
+                                            <div class="hierarchy-item">AActor</div>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="flow-diagram" style="flex:1;">
-                                    <div class="flow-arrow">NO ▼</div>
-                                    <div class="flow-box">
-                                        <div class="flow-box__title">AActor (AInfo류)</div>
-                                    </div>
+                                <div>
+                                    <div class="flow-label" style="text-align:left;">NO &darr;</div>
+                                    <div class="hierarchy-item">AActor (AInfo류)</div>
                                 </div>
                             </div>
                         </div>
-                        <div class="flow-diagram" style="flex:1;">
-                            <div class="flow-arrow">NO ▼</div>
-                            <div class="flow-box">
-                                <div class="flow-box__title">데이터/설정만 저장하나요?</div>
-                            </div>
-                            <div class="flow-row">
-                                <div class="flow-diagram" style="flex:1;">
-                                    <div class="flow-arrow">YES ▼</div>
-                                    <div class="flow-box">
-                                        <div class="flow-box__title">UObject (UDataAsset)</div>
-                                    </div>
+                        <div style="width:100%;">
+                            <div class="flow-label" style="text-align:left;">NO &darr;</div>
+                            <div class="hierarchy-item" style="font-weight:600; margin-bottom:6px;">Q4. 데이터/설정만 저장하나요?</div>
+                            <div class="hierarchy-children">
+                                <div>
+                                    <div class="flow-label">YES &darr;</div>
+                                    <div class="hierarchy-item">UObject (UDataAsset)</div>
                                 </div>
-                                <div class="flow-diagram" style="flex:1;">
-                                    <div class="flow-arrow">NO ▼</div>
-                                    <div class="flow-box">
-                                        <div class="flow-box__title">일반 C++ 클래스</div>
-                                    </div>
+                                <div>
+                                    <div class="flow-label">NO &darr;</div>
+                                    <div class="hierarchy-item">일반 C++ 클래스</div>
                                 </div>
                             </div>
                         </div>
