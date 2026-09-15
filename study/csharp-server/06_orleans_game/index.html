@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orleans로 게임 백엔드 설계 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp-server.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>플레이어 한 명이 곧 객체 하나라면?</h1>
+            <p class="subtitle">Orleans Grain으로 서브컬처 게임 도메인 설계 (Persistence · Stream · Reentrancy)</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 게임 도메인을 Grain으로 모델링하기</h2>
+            <div class="conversation">
+                <div class="q">Orleans 기본(가상 액터)은 안다고 칩시다. 가챠/길드/레이드 게임을 실제로 어떤 Grain으로 쪼개나요?</div>
+                <div class="a">
+                    <p>핵심 질문은 <strong>"무엇을 하나의 단일 스레드 직렬화 단위로 묶을 것인가"</strong>입니다. Grain 하나는 <strong>턴 기반으로 메시지를 한 번에 하나씩</strong> 처리합니다. 즉 Grain 경계는 곧 <strong>락(lock) 없이 일관성을 보장받는 경계</strong>입니다. 같이 변해야 하는 상태는 한 Grain에 모으고, 독립적으로 변하는 상태는 분리합니다.</p>
+                    <p>서브컬처 게임 도메인을 매핑하면 자연스럽게 다음과 같이 나뉩니다.</p>
+
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">게임 백엔드 (Orleans Cluster)</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">PlayerGrain (key: accountId)<br>계정·인벤토리·재화·스태미나</div>
+                            <div class="hierarchy-item">GuildGrain (key: guildId)<br>길드원 목록·길드 재화·채팅 허브</div>
+                            <div class="hierarchy-item">RaidGrain (key: raidInstanceId)<br>보스 HP·참가자·딜량 집계</div>
+                            <div class="hierarchy-item">MatchmakingGrain (key: queueId)<br>대기열·매칭 풀</div>
+                            <div class="hierarchy-item">RankingGrain (key: seasonId)<br>리더보드 집계</div>
+                        </div>
+                    </div>
+
+                    <div class="q">Grain 키(grain identity)는 무엇으로 잡아야 하나요?</div>
+                    <p><strong>키는 곧 도메인의 자연 식별자(natural ID)</strong>여야 합니다. PlayerGrain은 <code>Guid accountId</code>, GuildGrain은 <code>long guildId</code>, RaidGrain은 보스 인스턴스마다 새로 발급한 <code>Guid raidInstanceId</code>를 씁니다. 키를 잘못 잡으면 <strong>입도(granularity)</strong>가 망가집니다.</p>
+                    <p class="highlight">입도 선택의 황금률: "동시에 접근되는 빈도가 높고, 같이 변하는 상태"는 묶고, "독립적으로 스케일해야 하는 상태"는 쪼갭니다. 너무 잘게 쪼개면 Grain 간 호출(원격 메시지)이 폭증하고, 너무 크게 묶으면 그 Grain이 직렬화 병목이 됩니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>설계 후보</th>
+                                <th>장점</th>
+                                <th>단점 / 위험</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>인벤토리를 PlayerGrain 안에 통합</td>
+                                <td>아이템 획득과 재화 차감이 한 트랜잭션 단위. 가챠 정합성 보장 쉬움</td>
+                                <td>인벤토리가 수천 개면 활성화 시 상태 로드가 무거워짐</td>
+                            </tr>
+                            <tr>
+                                <td>InventoryGrain으로 분리</td>
+                                <td>플레이어 상태가 가벼워짐</td>
+                                <td>가챠 1회 = 재화 차감(Player) + 아이템 지급(Inventory) → 두 Grain 걸친 정합성 문제 발생</td>
+                            </tr>
+                            <tr>
+                                <td>RaidGrain을 보스 인스턴스 단위로</td>
+                                <td>한 레이드의 모든 딜 집계가 단일 직렬화 → 동시성 버그 없음</td>
+                                <td>인기 보스에 100명이 1초에 수백 번 공격 → 핫 Grain (Part 6에서 다룸)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="key-point">실전 결론: 서브컬처 게임은 "가챠 정합성"이 돈과 직결되므로 PlayerGrain에 인벤토리·재화를 통합하는 쪽이 보통 안전합니다. 분리는 정합성을 포기하고 성능을 사는 의사결정이며, 면접에서는 이 트레이드오프를 말로 설명할 수 있어야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: Grain Persistence — 상태를 어디에, 어떻게 저장하나</h2>
+            <div class="conversation">
+                <div class="q">Grain은 메모리에 살아있다가 사라지는데, 그럼 데이터는 어떻게 영속화하나요?</div>
+                <div class="a">
+                    <p>Orleans는 <strong>Grain Persistence</strong>를 1급 기능으로 제공합니다. Grain에 <code>IPersistentState&lt;T&gt;</code>를 주입하면, 활성화 시 자동으로 스토리지에서 상태를 읽어오고, 명시적으로 <code>WriteStateAsync()</code>를 호출하면 다시 저장합니다. 스토리지 백엔드는 <strong>스토리지 프로바이더(storage provider)</strong>로 갈아끼웁니다. PostgreSQL/SQL Server는 <code>AddAdoNetGrainStorage</code>, Redis는 <code>AddRedisGrainStorage</code>를 씁니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 직렬화 대상 상태는 [GenerateSerializer] + [Id]로 표시 (Orleans 7+ 코드젠 직렬화기)
+[GenerateSerializer]
+public class PlayerState
+{
+    [Id(0)] public long Gold { get; set; }
+    [Id(1)] public int Gems { get; set; }          // 가챠용 유료 재화
+    [Id(2)] public int Stamina { get; set; }
+    [Id(3)] public DateTimeOffset LastStaminaTick { get; set; }
+    [Id(4)] public List&lt;ItemEntry&gt; Inventory { get; set; } = new();
+}
+
+public interface IPlayerGrain : IGrainWithGuidKey
+{
+    Task&lt;GachaResult&gt; PullGachaAsync(int count);
+}
+
+public class PlayerGrain : Grain, IPlayerGrain
+{
+    private readonly IPersistentState&lt;PlayerState&gt; _state;
+
+    // "playerStore"는 호스트에서 등록한 스토리지 프로바이더 이름
+    public PlayerGrain(
+        [PersistentState("player", "playerStore")] IPersistentState&lt;PlayerState&gt; state)
+    {
+        _state = state;
+    }
+
+    public async Task&lt;GachaResult&gt; PullGachaAsync(int count)
+    {
+        var cost = count * 150; // 10연차 = 1500젬
+        if (_state.State.Gems &lt; cost)
+            throw new InvalidOperationException("젬이 부족합니다.");
+
+        // 읽기-수정 (이 Grain은 단일 스레드이므로 락 불필요)
+        _state.State.Gems -= cost;
+        var pulled = GachaTable.Roll(count);
+        _state.State.Inventory.AddRange(pulled);
+
+        // 쓰기: 재화 차감과 아이템 지급이 같은 상태 객체 안 → 한 번의 저장으로 원자적 영속화
+        await _state.WriteStateAsync();
+        return new GachaResult(pulled);
+    }
+}</code></pre>
+                    </div>
+
+                    <div class="q">호스트 쪽 스토리지 프로바이더 등록은 어떻게 하나요?</div>
+                    <div class="a">
+                        <div class="code-block">
+                            <div class="code-header">C# (Silo 호스트 구성)</div>
+                            <pre><code>builder.UseOrleans(silo =&gt;
+{
+    // PlayerGrain의 핫 상태 — 빠른 읽기/쓰기가 중요 → Redis
+    silo.AddRedisGrainStorage("playerStore", o =&gt;
+    {
+        o.ConfigurationOptions = ConfigurationOptions.Parse("redis:6379");
+    });
+
+    // 길드/길드 로그처럼 내구성·쿼리가 중요한 상태 → PostgreSQL (ADO.NET)
+    silo.AddAdoNetGrainStorage("guildStore", o =&gt;
+    {
+        o.Invariant = "Npgsql";
+        o.ConnectionString = builder.Configuration.GetConnectionString("Postgres");
+    });
+});</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="q">매 변경마다 WriteStateAsync를 부르면 DB가 못 버틸 것 같은데요?</div>
+                    <div class="a">
+                        <p>정확한 우려입니다. <code>WriteStateAsync()</code>는 매번 스토리지 왕복(I/O)이 발생하므로, <strong>쓰기 빈도</strong>를 의도적으로 설계해야 합니다.</p>
+                        <p class="warning">안티패턴: 전투 중 1초에 수십 번 바뀌는 HP/딜량을 매 변경마다 WriteStateAsync. → 스토리지가 병목이 되고, 레이턴시가 게임 틱을 잡아먹습니다.</p>
+                        <p>전략은 상태 성격에 따라 다릅니다.</p>
+                        <table class="compare-table">
+                            <thead>
+                                <tr>
+                                    <th>상태 성격</th>
+                                    <th>쓰기 전략</th>
+                                    <th>예시</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>돈/소유권 (잃으면 안 됨)</td>
+                                    <td>변경 직후 즉시 WriteStateAsync (write-through)</td>
+                                    <td>가챠 결제, 아이템 거래, 재화 차감</td>
+                                </tr>
+                                <tr>
+                                    <td>휘발성·고빈도 (잃어도 됨)</td>
+                                    <td>메모리에만 두고, Timer로 N초마다 배치 저장</td>
+                                    <td>레이드 누적 딜량, 위치, 임시 버프</td>
+                                </tr>
+                                <tr>
+                                    <td>세션성 (재계산 가능)</td>
+                                    <td>영속화 안 함. 비활성화 시 버림</td>
+                                    <td>매칭 대기열 임시 상태</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p class="highlight">"더티 플래그 + Timer 배치 저장" 패턴: 상태가 바뀔 때 <code>_dirty = true</code>만 세우고, 주기 Timer에서 dirty일 때만 WriteStateAsync를 호출하면 고빈도 쓰기를 N초 단위로 코얼레싱(coalescing)할 수 있습니다.</p>
+                        <p class="key-point">ETag 충돌: 같은 Grain이 두 실리에서 동시에 활성화될 일은 (단일 활성화 보장 덕에) 없지만, 분할 뇌(split-brain) 상황에선 발생할 수 있습니다. ADO.NET 프로바이더는 ETag로 낙관적 동시성을 검사하므로 <code>InconsistentStateException</code>을 처리할 줄 알아야 합니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 생명주기와 시간 — 스태미나 회복, 일일 리셋은 누가 돌리나</h2>
+            <div class="conversation">
+                <div class="q">Grain이 메모리에서 살아나고 죽는 순간에 훅을 걸 수 있나요?</div>
+                <div class="a">
+                    <p>네. <code>OnActivateAsync</code>(활성화)와 <code>OnDeactivateAsync</code>(비활성화) 두 라이프사이클 훅이 있습니다. 활성화 시 상태를 로드하거나 캐시를 채우고, 비활성화 시 마지막으로 dirty 상태를 flush하는 것이 정석입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>public override Task OnActivateAsync(CancellationToken ct)
+{
+    // 활성화 직후: 오프라인 동안 쌓였어야 할 스태미나를 "지연 계산"으로 보정
+    RecoverStaminaUpToNow();
+    return base.OnActivateAsync(ct);
+}
+
+public override async Task OnDeactivateAsync(DeactivationReason reason, CancellationToken ct)
+{
+    // 비활성화 직전: 메모리에만 있던 변경분을 마지막으로 저장
+    if (_dirty) await _state.WriteStateAsync();
+    await base.OnDeactivateAsync(reason, ct);
+}</code></pre>
+                    </div>
+
+                    <div class="q">스태미나 회복 같은 주기 작업은 Timer로 하나요, Reminder로 하나요?</div>
+                    <div class="a">
+                        <p>이게 면접 단골 질문입니다. 둘 다 "주기 실행"이지만 <strong>생존 보장 범위가 정반대</strong>입니다.</p>
+                        <table class="compare-table">
+                            <thead>
+                                <tr>
+                                    <th>구분</th>
+                                    <th>Timer</th>
+                                    <th>Reminder</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>저장 위치</td>
+                                    <td>메모리 (휘발성)</td>
+                                    <td>스토리지에 영속화 (Reminder Table)</td>
+                                </tr>
+                                <tr>
+                                    <td>Grain 비활성화 시</td>
+                                    <td>같이 사라짐</td>
+                                    <td>살아남음. 발화 시각에 Grain을 자동 활성화</td>
+                                </tr>
+                                <tr>
+                                    <td>최소 주기</td>
+                                    <td>밀리초~초 단위, 자유로움</td>
+                                    <td>약 1분 이상 (저빈도)</td>
+                                </tr>
+                                <tr>
+                                    <td>적합한 작업</td>
+                                    <td>활성 상태에서만 의미 있는 고빈도 작업</td>
+                                    <td>오래 안 들어와도 반드시 일어나야 하는 작업</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="analogy-box">
+                            <strong>🎯 비유로 이해하기</strong>
+                            <p>Timer는 <strong>책상 위 모래시계</strong>입니다. 자리에 앉아 있을 때만 보입니다. 자리를 비우면(비활성화) 모래시계도 같이 치워집니다.</p>
+                            <p>Reminder는 <strong>회사 캘린더에 박은 알람</strong>입니다. 내가 출근을 안 해도(Grain이 죽어 있어도) 알람 시각이 되면 시스템이 나를 호출(활성화)해서 그 일을 시킵니다.</p>
+                        </div>
+
+                        <p class="key-point">실전 선택: 스태미나 회복은 <strong>Timer + 지연 계산</strong>이 정답입니다. 매분 모든 플레이어 Grain을 깨워 +1 하는 건 낭비이므로, 활성화 시점에 "마지막 회복 시각부터 지금까지 경과 시간"으로 한 번에 계산합니다(Part 3 코드의 RecoverStaminaUpToNow). 반면 <strong>일일 리셋·길드전 정산·이벤트 종료</strong>처럼 플레이어가 접속 안 해도 반드시 일어나야 하는 일은 <strong>Reminder</strong>를 씁니다.</p>
+
+                        <div class="code-block">
+                            <div class="code-header">C# (Reminder: 매일 자정 일일 미션 리셋)</div>
+                            <pre><code>// IRemindable 구현 필요
+public class PlayerGrain : Grain, IPlayerGrain, IRemindable
+{
+    public override async Task OnActivateAsync(CancellationToken ct)
+    {
+        // 하루 한 번 발화하는 영속 리마인더 등록 (이미 있으면 갱신)
+        await this.RegisterOrUpdateReminder(
+            reminderName: "daily-reset",
+            dueTime: TimeUntilMidnight(),
+            period: TimeSpan.FromDays(1));
+        await base.OnActivateAsync(ct);
+    }
+
+    public Task ReceiveReminder(string reminderName, TickStatus status)
+    {
+        if (reminderName == "daily-reset")
+        {
+            _state.State.ResetDailyMissions();
+            return _state.WriteStateAsync();
+        }
+        return Task.CompletedTask;
+    }
+}</code></pre>
+                        </div>
+                        <p class="warning">함정: Reminder는 발화할 때마다 죽어 있던 Grain을 깨웁니다. 수백만 플레이어에게 동시 자정 리셋 Reminder를 걸면, 자정에 모든 Grain이 한꺼번에 활성화되는 "썬더링 허드(thundering herd)"가 발생합니다. 발화 시각을 유저별로 분산(jitter)시키거나, 리셋을 지연 계산으로 바꿔 Reminder 자체를 없애는 설계가 더 낫습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: Streams — 실시간 길드 채팅과 알림은 어떻게 흘리나</h2>
+            <div class="conversation">
+                <div class="q">길드원 50명에게 채팅·알림을 실시간으로 뿌리려면, GuildGrain이 50명을 다 직접 호출해야 하나요?</div>
+                <div class="a">
+                    <p>직접 호출도 가능하지만, 그러면 <strong>발신자(GuildGrain)가 수신자 목록을 알아야 하고, 한 명 호출이 실패하면 전체가 흔들립니다</strong>. 이때 <strong>Orleans Streams</strong>가 깔끔합니다. 발행자는 스트림에 이벤트를 던지기만 하고, 누가 듣는지 신경 쓰지 않습니다(발행-구독, pub/sub).</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">발행자</div>
+                                <div class="flow-box__items">GuildGrain.PostChat()</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Stream</div>
+                                <div class="flow-box__items">guildId 네임스페이스 스트림</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">구독자 N</div>
+                                <div class="flow-box__items">접속 중 PlayerGrain들 / 알림 허브</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C# (발행 측: GuildGrain)</div>
+                        <pre><code>public class GuildGrain : Grain, IGuildGrain
+{
+    private IAsyncStream&lt;ChatMessage&gt; _chatStream = default!;
+
+    public override Task OnActivateAsync(CancellationToken ct)
+    {
+        var provider = this.GetStreamProvider("chat"); // 호스트에 등록한 스트림 프로바이더
+        // 스트림 ID = (네임스페이스, 키) = ("guild-chat", 이 길드의 GuidKey)
+        _chatStream = provider.GetStream&lt;ChatMessage&gt;("guild-chat", this.GetPrimaryKey());
+        return base.OnActivateAsync(ct);
+    }
+
+    public Task PostChatAsync(ChatMessage msg)
+        =&gt; _chatStream.OnNextAsync(msg); // 던지면 끝. 구독자 관리는 Orleans가 함
+}</code></pre>
+                    </div>
+
+                    <details class="code-toggle">
+                        <summary>구독 측: 접속 시 PlayerGrain이 길드 스트림 구독 <span class="code-lang">C#</span></summary>
+                        <pre><code>public async Task JoinGuildChatAsync(Guid guildId)
+{
+    var provider = this.GetStreamProvider("chat");
+    var stream = provider.GetStream&lt;ChatMessage&gt;("guild-chat", guildId);
+
+    // 핸들을 받아두면 로그아웃 시 UnsubscribeAsync로 정리 가능
+    _chatSub = await stream.SubscribeAsync((msg, token) =&gt;
+    {
+        // 이 콜백은 스트림 이벤트마다 호출됨 → 클라이언트로 푸시
+        PushToClientSocket(msg);
+        return Task.CompletedTask;
+    });
+}</code></pre>
+                    </details>
+
+                    <div class="q">그럼 모든 Grain 간 통신을 Stream으로 하면 되나요?</div>
+                    <div class="a">
+                        <p>아닙니다. Stream과 직접 호출은 용도가 다릅니다.</p>
+                        <table class="compare-table">
+                            <thead>
+                                <tr>
+                                    <th>상황</th>
+                                    <th>직접 Grain 호출</th>
+                                    <th>Stream (pub/sub)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>관계</td>
+                                    <td>1:1, 호출자가 대상을 앎</td>
+                                    <td>1:N, 발행자가 구독자를 모름</td>
+                                </tr>
+                                <tr>
+                                    <td>반환값 필요</td>
+                                    <td>필요함 (Task&lt;T&gt; await)</td>
+                                    <td>필요 없음 (fire-and-forget성)</td>
+                                </tr>
+                                <tr>
+                                    <td>대표 예시</td>
+                                    <td>가챠 결제, 길드 가입 요청·응답</td>
+                                    <td>길드 채팅, 레이드 보스 처치 알림, 친구 접속 알림</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p class="highlight">판단 기준: "응답을 기다려야 하면 직접 호출, 한 사건을 여러 곳에 흩뿌리면 Stream." 가챠 결과는 한 명에게 정확히 돌려줘야 하니 직접 호출, 길드 보스 처치는 길드원 전체에게 알리는 것이라 Stream입니다.</p>
+                        <p class="key-point">암묵 vs 명시 구독: Orleans는 구독을 영속화하는 implicit subscription(<code>[ImplicitStreamSubscription]</code>)도 지원합니다. 접속 여부와 무관하게 "이 네임스페이스 이벤트는 항상 이 Grain이 받아야 한다"면 implicit, "접속 중에만 듣는다"면 explicit subscribe/unsubscribe를 씁니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: Reentrancy와 교착 — Grain끼리 서로 부르다 멈추는 함정</h2>
+            <div class="conversation">
+                <div class="q">Grain이 단일 스레드라면 안전한 거 아닌가요? 왜 데드락이 생기나요?</div>
+                <div class="a">
+                    <p>바로 그 "한 번에 하나씩"이 데드락의 원인입니다. Grain은 <strong>한 메시지를 처리하는 동안 다른 메시지를 받지 않습니다</strong>(기본 비재진입, non-reentrant). 그런데 그 처리 중에 <strong>다른 Grain을 호출하고 await로 응답을 기다리는데, 그 호출이 호출 사이클을 그려 자기 자신으로 돌아온다면</strong> — 자기는 첫 메시지 처리 중이라 두 번째 메시지를 받지 못해 영원히 멈춥니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">PlayerGrain A</div>
+                                <div class="flow-box__items">JoinGuild() 처리 중<br>GuildGrain 호출 후 await</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">GuildGrain</div>
+                                <div class="flow-box__items">멤버 수 갱신 위해<br>다시 A.NotifyJoined() 호출</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">PlayerGrain A</div>
+                                <div class="flow-box__items">A는 첫 메시지 처리 중<br>→ 두 번째 메시지 못 받음 → 교착</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="q">그럼 어떻게 푸나요? [Reentrant]를 붙이면 끝인가요?</div>
+                    <div class="a">
+                        <p><code>[Reentrant]</code>를 Grain 클래스에 붙이면 <strong>await로 대기하는 동안 다른 메시지를 끼워(interleave) 처리</strong>할 수 있어 위 사이클이 풀립니다. 하지만 공짜가 아닙니다.</p>
+                        <div class="code-block">
+                            <div class="code-header">C#</div>
+                            <pre><code>[Reentrant] // 이 Grain은 await 지점에서 다른 메시지를 끼워 처리할 수 있음
+public class GuildGrain : Grain, IGuildGrain
+{
+    private readonly Dictionary&lt;Guid, MemberInfo&gt; _members = new();
+
+    public async Task ApplyAndProcessAsync(Guid playerId)
+    {
+        var info = _members[playerId];   // await 이전 스냅샷
+        await SomeRemoteCallAsync(info); // ← 여기서 다른 메시지가 끼어들 수 있음!
+        // 주의: await 이후 _members가 다른 메시지에 의해 바뀌어 있을 수 있다.
+        // 재진입 Grain에서는 "await를 건너뛰며 상태가 불변일 것"이라 가정하면 안 됨.
+    }
+}</code></pre>
+                        </div>
+                        <p class="warning">재진입의 대가: 단일 스레드라는 안심이 깨집니다. await 전후로 상태가 다른 메시지에 의해 바뀔 수 있으므로, "await 이후에 멤버 컬렉션을 다시 읽기"처럼 방어적으로 코딩해야 합니다. 사실상 Grain 내부에서도 race condition을 의식해야 합니다.</p>
+
+                        <p>그래서 실전에서는 <code>[Reentrant]</code>를 남발하기보다 <strong>호출 그래프 자체를 사이클이 없도록 설계</strong>하는 것이 1순위입니다.</p>
+                        <ul>
+                            <li><strong>호출 방향을 한쪽으로</strong>: PlayerGrain → GuildGrain 단방향으로만 호출하고, 반대 방향 알림이 필요하면 직접 콜백 대신 <strong>Stream</strong>(Part 4)으로 비동기 통지합니다. 사이클이 끊깁니다.</li>
+                            <li><strong>특정 메서드만 재진입</strong>: 클래스 전체 대신 <code>[AlwaysInterleave]</code>를 읽기 전용 조회 메서드에만 붙여, 쓰기 메서드의 직렬화는 유지하고 조회만 끼워 넣게 합니다.</li>
+                            <li><strong>fire-and-forget 분리</strong>: 응답이 필요 없는 통지는 await하지 않고 던지면, 응답 대기 사이클 자체가 생기지 않습니다.</li>
+                        </ul>
+                        <p class="key-point">면접 포인트: "데드락을 [Reentrant]로 해결했다"보다 "콜백 사이클을 Stream/단방향 호출로 끊어 [Reentrant] 없이 풀었고, 불가피한 경우에만 [AlwaysInterleave]를 읽기 메서드에 한정했다"가 훨씬 시니어다운 답변입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: 확장과 운영 함정 — 인기 길드 하나가 클러스터를 흔든다</h2>
+            <div class="conversation">
+                <div class="q">길드원 5만 명짜리 초인기 길드 Grain 하나에 트래픽이 몰립니다. Orleans가 알아서 분산해 주나요?</div>
+                <div class="a">
+                    <p>아닙니다. 이게 <strong>핫 Grain(hot grain) 문제</strong>입니다. Orleans는 Grain을 실리들에 분산 배치하지만, <strong>한 Grain은 정의상 한 실리에서 단일 스레드로 처리</strong>됩니다. 즉 인기 길드 Grain 하나는 그 자체로 수직 한계를 가지며, 스케일아웃(실리 추가)으로도 그 Grain 하나의 처리량은 늘지 않습니다.</p>
+                    <p class="warning">핫 Grain의 증상: 특정 길드/보스 Grain 호출 큐가 쌓여 p99 레이턴시가 튀고, 그 Grain이 올라간 실리만 CPU가 치솟습니다. 다른 실리는 한가한데 한 실리만 죽습니다.</p>
+
+                    <div class="q">그럼 어떻게 분산하나요?</div>
+                    <div class="a">
+                        <p>해법은 "한 Grain의 부하를 여러 Grain으로 쪼개는" 것입니다.</p>
+                        <ul>
+                            <li><strong>샤딩(분할) Grain</strong>: GuildGrain을 <code>guildId</code>만으로 잡지 말고, 채팅·집계 같은 고부하 기능은 <code>guildId + shardIndex</code>로 여러 Grain에 나눕니다. 라운드로빈/유저 해시로 샤드를 고릅니다.</li>
+                            <li><strong>집계는 fan-in</strong>: 레이드 딜량은 참가자별 PlayerDamageGrain이 로컬 누적하고, RaidGrain은 주기적으로 합산만 합니다. 매 공격이 RaidGrain을 때리지 않게 합니다.</li>
+                            <li><strong>읽기 캐시</strong>: 리더보드처럼 읽기 폭주 데이터는 RankingGrain이 계산한 스냅샷을 Redis에 캐시하고, 클라이언트는 Grain이 아니라 캐시를 읽습니다.</li>
+                            <li><strong>StatelessWorker</strong>: 상태 없는 순수 계산(검증, 변환)은 <code>[StatelessWorker]</code> Grain으로 두면 실리마다 다중 인스턴스가 떠 자동 병렬화됩니다.</li>
+                        </ul>
+
+                        <div class="code-block">
+                            <div class="code-header">C# (길드 채팅 샤딩으로 핫 Grain 완화)</div>
+                            <pre><code>// 한 길드의 채팅을 N개 샤드 Grain으로 분산
+public interface IGuildChatShard : IGrainWithStringKey { }
+
+public Task PostChatAsync(Guid guildId, Guid playerId, ChatMessage msg)
+{
+    // 같은 플레이어는 같은 샤드로 (순서 보장), 부하는 8개로 분산
+    int shard = (int)(playerId.GetHashCode() &amp; 0x7FFFFFFF) % 8;
+    var key = $"{guildId}:{shard}";
+    return GrainFactory.GetGrain&lt;IGuildChatShard&gt;(key).PostAsync(msg);
+}</code></pre>
+                        </div>
+
+                        <div class="q">언제는 Orleans 자체가 답이 아닌가요?</div>
+                        <p>시니어라면 "Orleans가 안 맞는 경계"도 알아야 합니다.</p>
+                        <table class="compare-table">
+                            <thead>
+                                <tr>
+                                    <th>워크로드</th>
+                                    <th>Orleans 적합도</th>
+                                    <th>이유 / 대안</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>플레이어·길드처럼 키로 흩어진 상태 객체</td>
+                                    <td>매우 적합</td>
+                                    <td>가상 액터의 단일 활성화·자동 분산이 정확히 들어맞음</td>
+                                </tr>
+                                <tr>
+                                    <td>실시간 60틱 액션 전투(같은 방 16명)</td>
+                                    <td>주의</td>
+                                    <td>방 하나가 곧 핫 Grain. 전용 게임 서버 프로세스(데디케이트)가 더 적합한 경우가 많음</td>
+                                </tr>
+                                <tr>
+                                    <td>대규모 분석/배치 집계(전 유저 통계)</td>
+                                    <td>부적합</td>
+                                    <td>수백만 Grain 깨우기 = 낭비. 데이터 웨어하우스 + 배치 잡이 정답</td>
+                                </tr>
+                                <tr>
+                                    <td>스트리밍 대량 처리(로그 파이프라인)</td>
+                                    <td>부적합</td>
+                                    <td>Kafka/Flink 같은 전용 스트림 처리 시스템 영역</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p class="highlight">운영 관점: 배포/롤링 업데이트 시 실리가 빠지면 그 위 Grain들이 다른 실리로 이주(activation migration)합니다. 이주 중에는 짧은 비활성화→재활성화가 일어나므로, 상태가 dirty인 채 비활성화되면 손실 위험이 있습니다(OnDeactivateAsync flush가 중요). 또한 Reminder/Stream 프로바이더를 인메모리로 두면 클러스터 재시작 시 사라지므로, 운영 환경에서는 반드시 영속 프로바이더(ADO.NET/Redis/EventHub)를 씁니다.</p>
+                        <p class="key-point">정리: Orleans는 "키로 식별되는 상태 객체 + 적당한 동시성"에 최적입니다. 초고빈도 단일 핫스팟(액션 전투 방)이나 대량 배치는 다른 도구와 조합하는 것이, 모든 걸 Grain으로 욱여넣는 것보다 시니어다운 설계입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Grain 경계 = 락 없는 일관성 경계.</strong> 같이 변하는 상태(재화+인벤토리)는 한 Grain에 묶어 가챠 정합성을 얻고, 키는 도메인 자연 식별자로 잡습니다. 입도는 "직렬화 병목 vs 원격 호출 폭증"의 트레이드오프입니다.</li>
+                <li><strong>Persistence는 쓰기 빈도 설계가 전부.</strong> 돈은 즉시 WriteStateAsync(write-through), 고빈도 휘발 상태는 더티 플래그+Timer 배치 저장으로 코얼레싱, 재계산 가능한 건 영속화하지 않습니다.</li>
+                <li><strong>Timer는 휘발·고빈도, Reminder는 영속·저빈도.</strong> 스태미나는 Timer+지연 계산, 일일 리셋은 Reminder. 단 동시 발화 썬더링 허드를 분산(jitter)하거나 지연 계산으로 회피합니다.</li>
+                <li><strong>응답이 필요하면 직접 호출, 한 사건을 다수에 흩뿌리면 Stream.</strong> 길드 채팅·알림은 pub/sub로 풀고, 이는 Reentrancy 콜백 사이클을 끊는 설계 도구이기도 합니다.</li>
+                <li><strong>데드락은 [Reentrant]보다 호출 그래프로 막습니다.</strong> 단방향 호출+Stream으로 사이클을 끊고, 불가피하면 읽기 메서드에만 [AlwaysInterleave]. 그리고 핫 Grain은 샤딩·fan-in·캐시로 분산하며, 액션 전투·대량 배치는 Orleans 밖 도구와 조합합니다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

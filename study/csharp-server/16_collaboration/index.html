@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>협업 · 품질 · 자동화 마인드셋 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp-server.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>코드만 잘 짜면 끝일까?</h1>
+            <p class="subtitle">Git · Jira · 버그 리포트 · 자동화 &mdash; 시니어가 갖춰야 할 협업 역량</p>
+        </header>
+
+        <!-- ============ Part 1 ============ -->
+        <section class="part">
+            <h2>Part 1: Git 협업 &mdash; 브랜치 전략부터 충돌 해결까지</h2>
+            <div class="conversation">
+                <div class="q">게임 서버 팀에서는 trunk-based와 git-flow 중 무엇을 써야 하나요?</div>
+                <div class="a">
+                    <p>정답은 "팀의 배포 주기와 라이브 운영 부담에 따라 다르다"입니다. 두 전략의 본질적 차이는 <strong>장수(long-lived) 브랜치를 얼마나 허용하느냐</strong>입니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>Trunk-Based</th>
+                                <th>Git-Flow</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>브랜치 수명</td>
+                                <td>짧음(하루~이틀), main에 자주 머지</td>
+                                <td>develop/release/hotfix 등 장수 브랜치 다수</td>
+                            </tr>
+                            <tr>
+                                <td>충돌 빈도</td>
+                                <td>낮음(자주 통합되므로 작게 충돌)</td>
+                                <td>높음(release 머지 시 대형 충돌 위험)</td>
+                            </tr>
+                            <tr>
+                                <td>CI 의존도</td>
+                                <td>매우 높음(테스트 없으면 main이 깨짐)</td>
+                                <td>상대적으로 낮음</td>
+                            </tr>
+                            <tr>
+                                <td>적합한 상황</td>
+                                <td>빠른 라이브 패치, 강한 자동화 보유 팀</td>
+                                <td>정기 빌드/마일스톤 출시 중심 팀</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="key-point">게임 서버처럼 "긴급 핫픽스가 잦고 라이브 빌드와 개발 빌드가 분리"되는 환경에서는, 순수 trunk-based보다 <strong>짧은 feature 브랜치 + 보호된 main + release 태깅</strong>을 결합한 형태가 현실적입니다. 시니어는 교과서 이름표보다 "우리 팀의 핫픽스가 며칠 만에 라이브에 도달하는가"를 기준으로 전략을 고릅니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">feature/login-fix</div>
+                                <div class="flow-box__items">작은 단위 작업</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">PR + CI 통과</div>
+                                <div class="flow-box__items">리뷰 1~2명</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">main</div>
+                                <div class="flow-box__items">항상 배포 가능 상태</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">tag v1.4.0</div>
+                                <div class="flow-box__items">라이브 릴리스</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="q">"의미 있는 커밋 메시지"란 구체적으로 어떤 모양인가요?</div>
+                <div class="a">
+                    <p>커밋 메시지는 미래의 동료(와 6개월 뒤의 나)를 위한 문서입니다. <strong>Conventional Commits</strong> 규약을 쓰면 메시지가 일관되고, 자동 changelog/버전 범핑까지 도구로 처리할 수 있습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">bash</div>
+                        <pre><code># 형식: &lt;type&gt;(&lt;scope&gt;): &lt;요약&gt;
+#   type: feat, fix, refactor, perf, test, chore, docs ...
+
+# 나쁜 예 &mdash; 무엇을/왜 했는지 알 수 없음
+git commit -m "수정"
+git commit -m "ai 커밋"
+
+# 좋은 예 &mdash; 무엇을, 왜 바꿨는지 추적 가능
+git commit -m "fix(matchmaking): 동시 입장 시 방 정원 초과되는 경합 수정"
+
+# 본문에는 '왜'를 남깁니다 (코드 diff는 '무엇'만 보여주므로)
+git commit -m "perf(inventory): 아이템 조회 N+1 쿼리 제거
+
+배치 로드로 변경해 100명 동시 접속 시 DB 왕복 1200회 &rarr; 12회로 감소.
+P99 응답 320ms &rarr; 45ms 측정(부하 테스트 기준)."</code></pre>
+                    </div>
+
+                    <p class="highlight">규칙은 단순합니다. <strong>제목은 명령형 한 줄(50자 내외), 본문은 "왜"를 설명, 이슈 번호를 연결</strong>. diff는 "무엇을 바꿨는지"를 이미 보여주므로, 커밋 메시지는 "왜 그렇게 바꿨는지"에 집중해야 합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>커밋 히스토리는 수사 기록과 같습니다. 1년 뒤 누군가 "이 코드 왜 이렇게 짰지?"라고 물을 때, <code>git blame</code>으로 도달한 커밋이 "수정"이라고만 적혀 있으면 단서가 끊긴 미제 사건이 됩니다. 반대로 "왜"가 적혀 있으면, 그 한 줄이 회의 한 시간을 아껴 줍니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">작은 PR, rebase vs merge, 충돌은 어떻게 다루나요?</div>
+                <div class="a">
+                    <p><strong>작은 PR</strong>이 시니어의 핵심 습관입니다. 400줄 넘는 PR은 리뷰어가 "대충 LGTM"을 누르게 만듭니다. 하나의 PR은 하나의 논리적 변경(한 가지 이유로 리뷰/롤백 가능한 단위)이어야 합니다.</p>
+                    <p>충돌 해결과 히스토리 정리에서 rebase와 merge의 역할은 다릅니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th>rebase</th><th>merge</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>히스토리</td><td>선형(깔끔)</td><td>분기/머지 커밋 포함(사실 그대로)</td></tr>
+                            <tr><td>주 용도</td><td>내 feature 브랜치를 최신 main 위로 정리</td><td>완성된 feature를 main에 통합</td></tr>
+                            <tr><td>금기</td><td>공유(push)된 브랜치를 rebase하지 않기</td><td>잦은 머지로 히스토리 오염 주의</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">주의: 이미 원격에 공유되어 다른 사람이 받아 간 브랜치를 <code>rebase</code>한 뒤 <code>--force</code> push하면 동료의 작업이 날아갑니다. 공유 브랜치 정리는 <code>--force-with-lease</code>로, 그리고 가급적 본인만 쓰는 브랜치에서만 하십시오.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash</div>
+                        <pre><code># feature 브랜치를 최신 main 위로 재정렬 (PR 머지 전 정리)
+git fetch origin
+git rebase origin/main
+# 충돌 시: 파일 수정 후
+git add &lt;충돌파일&gt;
+git rebase --continue
+# 안전한 강제 푸시 (남이 그 사이 올린 커밋이 있으면 거부됨)
+git push --force-with-lease</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ Part 2 ============ -->
+        <section class="part">
+            <h2>Part 2: 코드 리뷰 문화 &mdash; 사람은 사람만 할 수 있는 것을</h2>
+            <div class="conversation">
+                <div class="q">코드 리뷰는 무엇을 잡아야 하나요? 그리고 무엇을 잡지 말아야 하나요?</div>
+                <div class="a">
+                    <p>리뷰의 가치는 "사람의 판단이 필요한 것"에 집중할 때 나옵니다. 들여쓰기, 따옴표 스타일, 줄 끝 공백 같은 것을 사람이 지적하고 있다면, 그건 리뷰 문화가 아니라 도구 부재의 신호입니다.</p>
+                    <p class="key-point"><strong>기계가 잡을 수 있는 것(포맷/린트/타입/테스트)은 CI가 막고, 사람은 설계 의도, 도메인 정합성, 경계 조건, 동시성 위험, 가독성을 봅니다.</strong> 포매터(예: <code>dotnet format</code>)와 정적 분석(Roslyn analyzer)을 PR 게이트에 넣으면, 리뷰 대화에서 사소한 다툼이 사라집니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>리뷰가 봐야 할 것 (사람)</th><th>자동화에 맡길 것 (기계)</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>이 변경이 요구사항을 맞게 푸는가</td><td>들여쓰기/네이밍 컨벤션</td></tr>
+                            <tr><td>경합/락/순서 의존 같은 동시성 위험</td><td>사용하지 않는 import, 포맷</td></tr>
+                            <tr><td>실패/타임아웃/롤백 경로 처리</td><td>단순 null 체크 누락(분석기)</td></tr>
+                            <tr><td>테스트가 진짜 의미 있는 케이스를 막는가</td><td>커버리지 수치, 빌드 통과 여부</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">좋은 리뷰어와 좋은 리뷰이의 태도는 무엇이 다른가요?</div>
+                <div class="a">
+                    <p><strong>좋은 리뷰어</strong>는 코드가 아니라 코드를 비평합니다. "이건 틀렸어요"가 아니라 "여기서 동시 접속 1000명이면 어떻게 동작하나요?"처럼 질문으로 위험을 드러냅니다. 또 의견의 무게를 표시합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">text</div>
+                        <pre><code># 리뷰 코멘트에 '강도'를 명시하면 리뷰이가 우선순위를 정하기 쉽습니다
+[blocker] 이 경로는 트랜잭션 롤백 시 아이템이 중복 지급됩니다. 반드시 수정 필요.
+[suggest] 이 메서드는 두 책임을 가집니다. 분리하면 테스트가 쉬워집니다.
+[nit]     변수명 tmp &rarr; pendingReward 가 의도를 더 드러냅니다. (선택)
+[q]       이 락을 여기서 잡는 이유가 있나요? 데드락 순서가 궁금합니다.</code></pre>
+                    </div>
+                    <p><strong>좋은 리뷰이</strong>는 방어하지 않고 맥락을 제공합니다. 동의하지 않으면 근거(벤치마크, 사양, 제약)를 들어 설명하고, 사소한 의견(nit)에는 빠르게 반영해 리뷰 사이클을 줄입니다.</p>
+                    <p class="highlight">시니어의 리뷰 매너: <strong>승인(approve)에 책임이 따른다</strong>는 것을 압니다. "통과시킨 사람도 공동 저자"라는 마음으로 보면, 형식적 LGTM이 줄고 실제 결함이 더 많이 걸러집니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ Part 3 ============ -->
+        <section class="part">
+            <h2>Part 3: 이슈 추적 &amp; 문서화 &mdash; Jira · Confluence · Slack</h2>
+            <div class="conversation">
+                <div class="q">Jira의 에픽/스토리/스프린트, 그리고 "티켓 위생"이란 무엇인가요?</div>
+                <div class="a">
+                    <p>Jira는 단순 할 일 목록이 아니라 <strong>의사결정과 진행 상태의 단일 출처(single source of truth)</strong>입니다. 계층 구조를 이해해야 보고와 추적이 가능합니다.</p>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">에픽: 신규 길드전 시스템</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">스토리: 길드 매칭 서버 API</div>
+                            <div class="hierarchy-item">스토리: 점수 집계/랭킹 배치</div>
+                            <div class="hierarchy-item">버그: 동시 신청 시 정원 초과</div>
+                        </div>
+                    </div>
+                    <p><strong>티켓 위생(ticket hygiene)</strong>은 시니어가 팀에 주는 보이지 않는 선물입니다.</p>
+                    <ul>
+                        <li>제목만 봐도 무슨 일인지 안다(모호한 "버그 수정" 금지).</li>
+                        <li>상태가 실제와 일치한다(끝난 티켓은 닫고, 막힌 티켓은 Blocked로).</li>
+                        <li>커밋/PR에 티켓 키를 적어 코드와 이슈가 양방향으로 연결된다(예: <code>PROJ-142</code>).</li>
+                        <li>"왜 이렇게 결정했는지"를 코멘트로 남겨, 결정의 맥락이 휘발되지 않게 한다.</li>
+                    </ul>
+                    <p class="warning">주의: Jira에 적지 않은 결정은 일주일 뒤 존재하지 않은 것이 됩니다. 슬랙 DM으로 합의한 사양은 반드시 티켓/문서로 승격시켜야 합니다.</p>
+                </div>
+
+                <div class="q">Confluence(문서)와 Slack(비동기 소통)은 각각 어떤 역할인가요?</div>
+                <div class="a">
+                    <p>도구마다 "지속 시간"이 다릅니다. 이것을 구분하는 게 시니어의 소통 감각입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>도구</th><th>성격</th><th>담는 것</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Jira</td><td>"무엇을, 언제까지"</td><td>작업 단위, 상태, 우선순위</td></tr>
+                            <tr><td>Confluence</td><td>"어떻게, 왜"(영구 지식)</td><td>설계 문서, ADR, 런북, 장애 회고</td></tr>
+                            <tr><td>Slack</td><td>"지금 잠깐"(휘발성)</td><td>빠른 질문, 알림, 비동기 합의</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">특히 게임 서버 팀에서 <strong>런북(runbook)</strong>은 생존 도구입니다. "서버 CPU가 90%를 넘으면 무엇을 확인하고 무엇을 재시작하는가"를 Confluence에 적어 두면, 새벽 온콜(on-call) 중인 동료가 당황하지 않습니다. 그리고 장애 회고(postmortem)는 사람을 탓하지 않고 시스템을 고치는 방향(blameless)으로 작성합니다.</p>
+                    <p class="highlight">Slack 비동기 소통의 핵심은 <strong>"질문에 맥락을 담아 한 번에"</strong>입니다. "혹시 시간 되세요?"만 던지고 기다리는 대신, "X 증상, Y 로그, Z까지 확인함, A가 맞을까요?"라고 보내면 상대가 컨텍스트 전환 없이 즉시 답할 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ Part 4 ============ -->
+        <section class="part">
+            <h2>Part 4: 좋은 버그 리포트 &mdash; 재현 가능해야 고칠 수 있다</h2>
+            <div class="conversation">
+                <div class="q">왜 채용 공고가 "좋은 버그 리포트 작성"을 따로 강조할까요?</div>
+                <div class="a">
+                    <p>버그 수정 시간의 절반 이상은 "재현"에 쓰입니다. 재현이 안 되는 버그는 고칠 수 없고, 고쳤는지 검증할 수도 없습니다. 즉 <strong>좋은 버그 리포트는 디버깅의 절반을 미리 끝내 놓는 행위</strong>입니다. 이것은 QA뿐 아니라 서버 개발자에게도 핵심 역량입니다.</p>
+                    <p class="warning">최악의 리포트: "로그인이 가끔 안 돼요." &mdash; 환경도, 빈도도, 재현 절차도, 기대 동작도 없습니다. 받는 사람은 추측부터 시작해야 하고, 추측 디버깅은 가장 비싼 디버깅입니다.</p>
+                </div>
+
+                <div class="q">좋은 버그 리포트의 구성요소와 템플릿을 알려 주세요.</div>
+                <div class="a">
+                    <p>핵심 구성요소는 <strong>제목 · 재현 절차 · 기대 결과 · 실제 결과 · 환경 · 로그/증거 · 심각도/빈도</strong>입니다. "기대 vs 실제"를 분리해 적는 것이 특히 중요합니다 &mdash; 이것이 명확해야 무엇이 버그인지에 대한 합의가 생깁니다.</p>
+
+                    <details class="code-toggle">
+                        <summary>재현 가능한 버그 리포트 템플릿 <span class="code-lang">text</span></summary>
+                        <pre><code>제목: [심각도:Critical] 길드전 정산 중 보상 중복 지급 (재현율 100%)
+
+■ 요약
+  길드전 종료 정산 배치가 재시도될 때, 일부 유저에게 보상이 2회 지급됨.
+
+■ 환경
+  - 서버 빌드: live-1.4.2 (commit a1b2c3d)
+  - 환경: 스테이징 / DB MySQL 8.0 / .NET 8
+  - 발생 시각: 2026-06-29 03:14 KST
+  - 영향 범위: 정산 배치 타임아웃 후 자동 재시도된 길드(약 1.2%)
+
+■ 재현 절차 (Steps to Reproduce)
+  1. 길드전 종료 직전 정산 배치를 강제로 타임아웃시킨다.
+  2. 배치 스케줄러가 같은 정산 작업을 재시도한다.
+  3. 대상 유저의 인벤토리를 조회한다.
+
+■ 기대 결과 (Expected)
+  보상이 정확히 1회만 지급된다(멱등).
+
+■ 실제 결과 (Actual)
+  보상이 2회 지급된다. reward_log 테이블에 동일 (user_id, season_id) 행이 2건.
+
+■ 로그 / 증거
+  - settle.log L4412: "retry settlement season=812"
+  - 쿼리: SELECT COUNT(*) ... HAVING cnt &gt; 1  →  37건
+  - 스택트레이스 / 스크린샷 첨부
+
+■ 심각도 / 빈도 / 우선순위
+  - 심각도: Critical (재화 정합성 깨짐)
+  - 빈도: 재시도 발생 시 100%
+  - 제안 원인 가설: 정산 처리에 멱등 키 부재. 처리 전 dedup 필요.</code></pre>
+                    </details>
+
+                    <p class="key-point">시니어 팁: 가능하면 <strong>최소 재현(minimal reproduction)</strong>까지 좁히십시오. "이 단계 중 어디까지 줄여도 여전히 재현되는가"를 줄여 가면, 원인 후보 공간이 함께 줄어듭니다. 그리고 리포트에 "심각도(영향)"와 "빈도(재현율)"를 분리해 적어야 우선순위를 올바르게 매길 수 있습니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>좋은 버그 리포트는 119 신고와 같습니다. "불 났어요"만 외치면 출동이 늦습니다. "OO동 3층, 주방, 가스레인지, 사람 1명 갇힘"이라고 위치·원인·범위를 함께 주면, 받는 쪽이 곧바로 올바른 대응을 시작합니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ Part 5 ============ -->
+        <section class="part">
+            <h2>Part 5: 디버깅 규율 &mdash; 추측이 아니라 절차로</h2>
+            <div class="conversation">
+                <div class="q">"감으로 고치는 디버깅"이 왜 위험한가요?</div>
+                <div class="a">
+                    <p>추측 디버깅은 운이 좋으면 빠르고, 운이 나쁘면 증상만 덮고 근본 원인을 남깁니다. 라이브 서버에서 "왜 고쳐졌는지 모르는 수정"은 다음 장애의 씨앗입니다. 시니어는 매번 같은 절차를 따릅니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">1. 재현</div>
+                                <div class="flow-box__items">안정적으로 재현되게 고정</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">2. 가설</div>
+                                <div class="flow-box__items">반증 가능한 한 문장</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">3. 이분 탐색</div>
+                                <div class="flow-box__items">범위를 절반씩 좁힘</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">4. 근본 원인</div>
+                                <div class="flow-box__items">증상 아닌 원인 확인</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">5. 재발 방지</div>
+                                <div class="flow-box__items">실패하던 테스트 추가</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="highlight">핵심은 <strong>"한 번에 하나만 바꾼다"</strong>입니다. 여러 변경을 동시에 넣으면, 고쳐졌을 때 무엇이 진짜 원인이었는지 알 수 없습니다. 가설은 "이 락의 획득 순서가 데드락을 만든다"처럼 <strong>반증 가능한 형태</strong>로 적어야 검증할 수 있습니다.</p>
+                </div>
+
+                <div class="q">"언제 깨졌는지 모를 때"는 어떻게 범인을 찾나요?</div>
+                <div class="a">
+                    <p>커밋 수백 개 중 어느 것이 회귀를 일으켰는지 모를 때, <code>git bisect</code>가 이분 탐색을 자동화해 줍니다. 1024개 커밋도 약 10번의 테스트로 범인을 찾습니다(log&#8322;).</p>
+                    <div class="code-block">
+                        <div class="code-header">bash</div>
+                        <pre><code># 회귀(버그) 추적 시작
+git bisect start
+git bisect bad                 # 현재(HEAD)는 버그 있음
+git bisect good v1.3.0         # 이 태그에서는 정상이었음
+
+# git이 중간 커밋을 체크아웃하면, 재현 절차로 판정만 하면 됩니다
+#   재현되면:  git bisect bad
+#   안 되면:   git bisect good
+# (재현 스크립트가 있으면 완전 자동화)
+git bisect run ./repro_test.sh
+
+# 범인 커밋이 출력되면 종료
+git bisect reset</code></pre>
+                    </div>
+                    <p class="key-point">재발 방지가 마지막 단계인 이유: 버그를 고치기 전에 <strong>"고치면 통과하고, 안 고치면 실패하는 테스트"</strong>를 먼저 추가하십시오. 그 테스트는 같은 버그가 다시 들어오는 순간 CI에서 비명을 지릅니다. 고친 버그에 회귀 테스트가 없으면, 그 버그는 반드시 돌아옵니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ Part 6 ============ -->
+        <section class="part">
+            <h2>Part 6: 자동화 마인드셋 &amp; 성장 &mdash; 같은 일을 세 번 하면</h2>
+            <div class="conversation">
+                <div class="q">"반복 작업 개선 의지"를 실무에서는 어떻게 보여 주나요?</div>
+                <div class="a">
+                    <p>경험칙은 단순합니다. <strong>같은 수작업을 세 번째 하고 있다면, 그건 자동화 신호입니다.</strong> 시니어는 "이거 매번 손으로 하기 귀찮네"라는 짜증을 도구로 바꿉니다. 단, 자동화에도 비용이 있으므로 "들이는 시간 &lt; 앞으로 아낄 시간"일 때 합니다.</p>
+                    <p>게임 서버 팀에서 자주 자동화되는 것들:</p>
+                    <ul>
+                        <li>배포 전 체크리스트 &rarr; CI 파이프라인 게이트(빌드·테스트·포맷·마이그레이션 검증).</li>
+                        <li>장애 알림 &rarr; 임계치 초과 시 Slack 봇이 담당자 멘션 + 런북 링크 첨부.</li>
+                        <li>로그/지표 수집 &rarr; 대시보드와 알람으로, "눈으로 보던 것"을 자동 감지로.</li>
+                        <li>테스트 데이터 세팅 &rarr; 시드 스크립트로 "매번 손으로 계정 만들기"를 제거.</li>
+                        <li>릴리스 노트/changelog &rarr; Conventional Commits로 자동 생성.</li>
+                    </ul>
+                    <div class="code-block">
+                        <div class="code-header">bash</div>
+                        <pre><code># 작은 자동화의 예: PR 올리기 전 로컬 사전 점검을 한 명령으로
+# (이 스크립트를 pre-push 훅이나 alias로 묶으면 '항상' 실행됩니다)
+dotnet format --verify-no-changes   # 포맷 어긋나면 실패
+dotnet build -warnaserror           # 경고를 오류로 취급
+dotnet test --filter Category=Fast  # 빠른 테스트만 우선 실행
+echo "사전 점검 통과 &mdash; PR 올려도 됩니다"</code></pre>
+                    </div>
+                    <p class="highlight">자동화의 진짜 가치는 "시간 절약"보다 <strong>"실수 제거"와 "지식의 코드화"</strong>에 있습니다. 체크리스트를 스크립트로 만들면, 그 팀의 노하우가 사람의 기억이 아니라 저장소에 남습니다.</p>
+                </div>
+
+                <div class="q">새 기술 학습 습관, 그리고 서브컬처 게임(트릭컬) 이해가 왜 가산점인가요?</div>
+                <div class="a">
+                    <p>새 기술을 즐겁게 배우는 사람은 "왜 이 도구가 생겼는가(어떤 고통을 해결하려고)"부터 봅니다. 신기술을 좇아 매번 갈아엎는 게 아니라, <strong>작은 사이드 프로젝트나 사내 도구에 먼저 적용해 검증하고, 트레이드오프를 글로 정리(Confluence/블로그)</strong>하는 식으로 학습을 자산화합니다. 학습이 개인의 머릿속에 머물지 않고 팀 지식이 됩니다.</p>
+                    <p class="key-point">서브컬처 게임 이해가 우대되는 이유는 명확합니다. 게임 서버 개발은 결국 <strong>도메인 감각</strong> 싸움입니다. 트릭컬 같은 서브컬처/수집형 게임을 직접 즐겨 본 사람은 "픽업 가챠 천장", "스태미나/재화 사이클", "한정 이벤트 트래픽 스파이크", "출석/보상 정산", "유저가 무엇에 분노하는가(보상 누락·복구)"를 몸으로 압니다. 같은 기능을 만들어도, 도메인을 아는 사람은 <strong>엣지 케이스와 운영 리스크를 먼저 떠올립니다.</strong></p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>도메인 지식은 요리사가 "손님이 어떤 알레르기를 신경 쓰는지" 아는 것과 같습니다. 레시피(기술)만 아는 사람과 손님(유저)을 아는 사람은, 똑같은 재료로도 다른 결과를 냅니다. 트릭컬을 직접 해 본 서버 개발자는 "한정 가챠 오픈 첫 1분의 트래픽"을 설계 단계에서부터 의식합니다.</p>
+                    </div>
+                    <p class="highlight">정리하면, 협업 역량은 "착한 성격"이 아니라 <strong>판단과 습관</strong>입니다. 추적 가능한 커밋, 재현 가능한 버그 리포트, 절차적 디버깅, 반복을 없애는 자동화, 도메인을 아는 눈 &mdash; 이것들이 코드 실력 위에 얹혔을 때 비로소 "믿고 맡길 수 있는 시니어"가 됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ 핵심 정리 ============ -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Git은 소통 도구다.</strong> 작은 PR + 의미 있는 커밋(Conventional Commits, "왜"를 기록) + 보호된 main, 공유 브랜치 rebase는 금물.</li>
+                <li><strong>리뷰는 사람만 할 수 있는 것에 집중한다.</strong> 포맷/린트/테스트는 CI가 막고, 사람은 설계·동시성·경계 조건을 본다. 승인에는 공동 책임이 따른다.</li>
+                <li><strong>좋은 버그 리포트는 디버깅의 절반이다.</strong> 제목·재현 절차·기대/실제·환경·로그·심각도/빈도를 갖추고, 최소 재현까지 좁힌다.</li>
+                <li><strong>디버깅은 절차다.</strong> 재현 &rarr; 가설 &rarr; 이분 탐색(git bisect) &rarr; 근본 원인 &rarr; 회귀 테스트 추가. 추측으로 증상만 덮지 않는다.</li>
+                <li><strong>같은 일을 세 번 하면 자동화하고, 새 기술과 도메인(서브컬처 게임)을 배워 운영 리스크를 미리 본다.</strong> 협업 역량은 성격이 아니라 판단과 습관이다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

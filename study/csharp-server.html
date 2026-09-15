@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C# Server Study | KMH Portfolio</title>
+    <meta name="description" content="현대적 .NET 게임 백엔드 학습 기록 (Orleans · Azure · K8s)">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☁️</text></svg>">
+</head>
+<body>
+    <header class="header" id="header">
+        <nav class="nav container">
+            <a href="../index.html" class="nav__logo"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></a>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item"><a href="../index.html#about" class="nav__link">About</a></li>
+                <li class="nav__item"><a href="../index.html#projects" class="nav__link">Projects</a></li>
+                <li class="nav__item"><a href="../index.html#skills" class="nav__link">Skills</a></li>
+                <li class="nav__item"><a href="../study.html" class="nav__link active">Study</a></li>
+                <li class="nav__item"><a href="../index.html#contact" class="nav__link">Contact</a></li>
+            </ul>
+            <button class="nav__toggle" id="nav-toggle"><span></span><span></span><span></span></button>
+        </nav>
+    </header>
+    <main class="main">
+        <section class="study-detail section">
+            <div class="container">
+                <nav class="breadcrumb"><a href="../study.html">Study</a><span>/</span><span>C# Server</span></nav>
+                <div class="study-detail__header">
+                    <span class="study-detail__icon">☁️</span>
+                    <h1 class="study-detail__title">C# Server / Backend</h1>
+                </div>
+                <p class="study-detail__desc">현대적 .NET 게임 백엔드 입사 준비 &mdash; 시니어 서버 프로그래머 로드맵 (.NET 10 · Orleans · PostgreSQL · Redis · Azure · Kubernetes)</p>
+                <div class="study-detail__content">
+                    <div class="study-topics">
+                        <h2 class="study-topics__title">학습 주제 목록</h2>
+                        <ul class="study-topics__list">
+                            <li class="study-topic">
+                                <a href="csharp-server/01_roadmap/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">01</span>
+                                    <span class="study-topic__name">시니어 서버 프로그래머 학습 로드맵 &mdash; 무엇을 어떤 순서로 공부할까</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/02_dotnet_host/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">02</span>
+                                    <span class="study-topic__name">.NET 10 서버 앱의 뼈대 &mdash; Generic Host · DI · Kestrel</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/03_async_server/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">03</span>
+                                    <span class="study-topic__name">서버에서의 async/await &mdash; ThreadPool 고갈과 데드락의 함정</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/04_syntactic_sugar/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">04</span>
+                                    <span class="study-topic__name">문법 설탕을 벗기면? &mdash; C# Syntactic Sugar 디슈가링</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/05_orleans_basics/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">05</span>
+                                    <span class="study-topic__name">락 없이 동시성을 다루는 법 &mdash; Microsoft Orleans 가상 액터</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/06_orleans_game/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">06</span>
+                                    <span class="study-topic__name">Orleans로 게임 백엔드 설계하기 &mdash; Grain · Persistence · Stream</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/07_tcp_networking/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">07</span>
+                                    <span class="study-topic__name">TCP 게임 네트워크 프로그래밍 &mdash; 프레이밍과 System.IO.Pipelines</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/08_postgresql/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">08</span>
+                                    <span class="study-topic__name">PostgreSQL 게임 데이터 모델링 &mdash; MVCC · 트랜잭션 · 인덱스</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/09_redis/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">09</span>
+                                    <span class="study-topic__name">Redis 실전 패턴 &mdash; 캐시 · 분산 락 · 실시간 랭킹</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/10_blazor/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">10</span>
+                                    <span class="study-topic__name">Blazor로 운영 백오피스 만들기 &mdash; Server vs WASM</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/11_kubernetes_helm/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">11</span>
+                                    <span class="study-topic__name">Docker · Kubernetes · Helm &mdash; 컨테이너 오케스트레이션</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/12_pulumi_iac/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">12</span>
+                                    <span class="study-topic__name">Pulumi &mdash; C#으로 인프라를 코드로 (IaC)</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/13_azure/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">13</span>
+                                    <span class="study-topic__name">Azure 클라우드 핵심 &mdash; 게임 백엔드 아키텍처</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/14_github_actions/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">14</span>
+                                    <span class="study-topic__name">GitHub Actions &mdash; CI/CD 자동화 파이프라인</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/15_elk_apm/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">15</span>
+                                    <span class="study-topic__name">관측성 &mdash; ELK Stack과 Elastic APM으로 서버 들여다보기</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="csharp-server/16_collaboration/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">16</span>
+                                    <span class="study-topic__name">협업 · 품질 · 자동화 마인드셋 &mdash; Git · Jira · 버그 리포트</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <footer class="footer"><div class="container"><div class="footer__content"><p class="footer__name"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></p><p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p></div></div></footer>
+    <script src="../js/study.js"></script>
+</body>
+</html>

@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ELK Stack &amp; Elastic APM | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp-server.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>장애의 원인은 로그 어딘가에 있다</h1>
+            <p class="subtitle">ELK Stack과 Elastic APM으로 서버 내부를 들여다보기</p>
+        </header>
+
+        <!-- ============ Part 1 ============ -->
+        <section class="part">
+            <h2>Part 1: 관측성(Observability)이란 무엇인가</h2>
+            <div class="conversation">
+                <div class="q">"서버가 느려요"라는 신고가 들어왔습니다. 로그를 봐도 원인을 모르겠는데, 모니터링은 다 켜져 있습니다. 무엇이 문제일까요?</div>
+                <div class="a">
+                    <p>그것이 바로 <strong>모니터링(Monitoring)</strong>과 <strong>관측성(Observability)</strong>의 차이입니다. 모니터링은 "내가 미리 알고 있는 질문"에 답합니다. CPU 사용률, 메모리, 초당 요청 수처럼 <em>무엇을 볼지 사전에 정의한</em> 지표를 대시보드에 띄워두는 것입니다.</p>
+                    <p class="highlight">관측성은 "내가 미리 예상하지 못했던 질문"에도 답할 수 있는 능력입니다. 즉, 시스템의 외부 출력(로그·메트릭·트레이스)만으로 내부 상태를 추론할 수 있는 정도를 말합니다.</p>
+                    <p>장애의 대부분은 "이런 일이 일어날 줄 몰랐던" 상황에서 발생합니다. 그래서 사전 정의된 대시보드만으로는 부족하고, 사후에 자유롭게 파고들 수 있는 데이터가 필요합니다.</p>
+                </div>
+            </div>
+            <div class="conversation">
+                <div class="q">관측성의 3축이라는 게 있던데, 각각 어떤 역할을 하나요?</div>
+                <div class="a">
+                    <p>관측성은 흔히 세 가지 신호(signal)로 구성됩니다. 게임 서버 관점에서 정리하면 다음과 같습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>신호</th><th>질문에 답하는 것</th><th>형태</th><th>게임 서버 예시</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>로그(Logs)</td><td>"무슨 일이 일어났나?"</td><td>이벤트의 이산적 기록</td><td>결제 실패, 인증 거부, 예외 스택트레이스</td></tr>
+                            <tr><td>메트릭(Metrics)</td><td>"전체적으로 얼마나?"</td><td>시계열 수치 집계</td><td>동시접속자(CCU), 초당 매치 생성 수, GC pause</td></tr>
+                            <tr><td>트레이스(Traces)</td><td>"이 요청이 어디서 느려졌나?"</td><td>요청 단위 호출 경로</td><td>매치 입장 요청이 거친 인증→매칭→인벤토리 서비스</td></tr>
+                        </tbody>
+                    </table>
+                    <p>세 신호는 상호 보완적입니다. 메트릭으로 <em>이상을 감지</em>하고, 트레이스로 <em>어느 구간이 문제인지 좁히고</em>, 로그로 <em>정확한 원인</em>을 확인하는 흐름이 이상적입니다.</p>
+                </div>
+            </div>
+            <div class="conversation">
+                <div class="q">단일 서버라면 그냥 콘솔 로그만 봐도 되지 않나요? 왜 분산 시스템에서 특히 필수가 되나요?</div>
+                <div class="a">
+                    <p>모놀리식 단일 프로세스라면 디버거를 붙이거나 한 파일의 로그만 봐도 됩니다. 하지만 게임 백엔드는 보통 <strong>게이트웨이 → 인증 → 매치메이킹 → 게임 서버(또는 Orleans Grain) → DB/Redis</strong>처럼 여러 서비스에 요청이 흩어집니다.</p>
+                    <p class="warning">하나의 "매치 입장" 요청이 5개 서비스를 거치는데, 각 서비스의 로그가 따로 흩어져 있으면 그 요청 하나를 끝까지 따라가는 것 자체가 불가능합니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>관측성은 택배 추적과 같습니다. 모니터링은 "오늘 전체 배송 물량은 1만 건"이라는 집계만 보여줍니다. 하지만 내 택배가 어디서 멈췄는지 알려면, 송장 번호(상관관계 ID) 하나로 집하장→허브→대리점 전 구간을 추적할 수 있어야 합니다.</p>
+                        <p>분산 서버에서 그 "송장 번호"가 바로 TraceId이고, 각 거점의 처리 기록이 로그이며, 전체 물류 처리량 그래프가 메트릭입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ Part 2 ============ -->
+        <section class="part">
+            <h2>Part 2: 구조화 로깅 — 사람이 아니라 기계가 읽는 로그</h2>
+            <div class="conversation">
+                <div class="q">로그는 그냥 문자열로 찍으면 되는 거 아닌가요? 구조화 로깅이 왜 따로 필요한가요?</div>
+                <div class="a">
+                    <p>전통적인 문자열 로그는 사람이 읽기엔 편하지만, 기계가 <em>검색·집계</em>하기엔 끔찍합니다. 예를 들어 이런 로그가 있다고 합시다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// 나쁜 예: 문자열 보간으로 정보가 텍스트에 녹아버림
+_logger.LogInformation(
+    $"User {userId} purchased item {itemId} for {price} gold");
+// 출력: "User 4821 purchased item 309 for 1500 gold"</code></pre>
+                    </div>
+                    <p>이 로그에서 "1500 골드 이상 결제만 모아줘"라고 질의하려면 정규식으로 텍스트를 다시 파싱해야 합니다. 로그 문구가 조금만 바뀌어도 깨집니다.</p>
+                    <p class="key-point">구조화 로깅은 로그를 <strong>키-값(JSON) 형태</strong>로 남깁니다. 메시지 템플릿과 데이터를 분리해서, 나중에 필드 단위로 검색·필터·집계가 가능해집니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// 좋은 예: 메시지 템플릿 + 명명된 속성 (Serilog/MS ILogger 공통 문법)
+_logger.LogInformation(
+    "User {UserId} purchased item {ItemId} for {Price} gold",
+    userId, itemId, price);
+
+// 저장되는 구조(JSON):
+// {
+//   "@m": "User 4821 purchased item 309 for 1500 gold",
+//   "UserId": 4821, "ItemId": 309, "Price": 1500, "@l": "Information"
+// }
+// → Kibana에서 Price &gt;= 1500 처럼 필드로 바로 질의 가능</code></pre>
+                    </div>
+                    <p class="warning">주의: <code>{UserId}</code>처럼 중괄호 명명 속성을 써야 구조화됩니다. <code>$"...{userId}"</code> 문자열 보간을 쓰면 값이 메시지 텍스트에 녹아버려 구조화 속성으로 남지 않습니다. 가장 흔한 실수입니다.</p>
+                </div>
+            </div>
+            <div class="conversation">
+                <div class="q">로그 레벨은 어떤 기준으로 나누고, 상관관계 ID는 어떻게 모든 로그에 자동으로 붙이나요?</div>
+                <div class="a">
+                    <p>로그 레벨은 "이 로그를 누가, 언제 보는가"로 정합니다. 운영에서는 보통 Information 이상을 수집하고, Debug/Trace는 문제 재현 시에만 동적으로 올립니다.</p>
+                    <table class="compare-table">
+                        <thead><tr><th>레벨</th><th>의미</th><th>게임 서버 예시</th></tr></thead>
+                        <tbody>
+                            <tr><td>Trace/Debug</td><td>개발·재현용 상세</td><td>패킷 직렬화 바이트, 매칭 점수 계산 중간값</td></tr>
+                            <tr><td>Information</td><td>정상 흐름의 주요 이벤트</td><td>로그인 성공, 매치 시작, 결제 완료</td></tr>
+                            <tr><td>Warning</td><td>비정상이나 처리는 됨</td><td>재시도 발생, 폐기된 중복 패킷</td></tr>
+                            <tr><td>Error</td><td>요청 단위 실패</td><td>결제 게이트웨이 응답 오류, DB 타임아웃</td></tr>
+                            <tr><td>Critical</td><td>시스템 단위 위협</td><td>DB 커넥션 풀 고갈, 데이터 정합성 붕괴</td></tr>
+                        </tbody>
+                    </table>
+                    <p>상관관계 ID(또는 TraceId)는 <strong>로그 스코프(LogScope)</strong>로 한 번 열어두면 그 안에서 발생하는 모든 로그에 자동으로 따라붙습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>public async Task HandlePurchaseAsync(PurchaseRequest req)
+{
+    // 이 스코프 안의 모든 로그에 CorrelationId / UserId가 자동 첨부됨
+    using (_logger.BeginScope(new Dictionary&lt;string, object&gt;
+    {
+        ["CorrelationId"] = req.CorrelationId,
+        ["UserId"] = req.UserId
+    }))
+    {
+        _logger.LogInformation("결제 처리 시작 {ItemId}", req.ItemId);
+        try
+        {
+            await _paymentGateway.ChargeAsync(req);
+            _logger.LogInformation("결제 완료 {Price}", req.Price);
+        }
+        catch (PaymentException ex)
+        {
+            // 예외는 첫 인자로 넘겨야 스택트레이스가 구조화되어 저장됨
+            _logger.LogError(ex, "결제 실패 {ItemId}", req.ItemId);
+            throw;
+        }
+    }
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+            <div class="conversation">
+                <div class="q">게임 서버에서는 특히 무엇을 로깅해야 하나요? 너무 많이 찍으면 비용이 폭발할 텐데요.</div>
+                <div class="a">
+                    <p>게임 백엔드에서 로그는 "디버깅용"만이 아니라 <strong>비즈니스·보안 증거</strong>이기도 합니다. 다음 카테고리는 반드시 구조화해 남기는 것이 좋습니다.</p>
+                    <p class="highlight">과금(결제 시도/성공/실패, 재화 변동 전후 잔액), 인증/계정(로그인, 비밀번호 변경, 제재), 이상행위(비정상적 골드 획득, 비현실적 이동 속도, 매크로 의심 패턴)는 사후 분쟁·환불·어뷰징 조사의 근거가 됩니다.</p>
+                    <p class="warning">단, 핫패스(매 프레임/매 패킷)에서 Information 로그를 남발하면 로그량과 비용이 폭발합니다. 고빈도 경로는 메트릭으로 집계하고, 로그는 "상태가 변하는 의미 있는 이벤트"에만 남기는 것이 원칙입니다.</p>
+                    <details class="code-toggle">
+                        <summary>Serilog 부트스트랩 설정 — JSON 출력 + 보강(enricher) <span class="code-lang">C#</span></summary>
+<pre><code>Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+    .Enrich.FromLogContext()                 // BeginScope 속성을 끌어옴
+    .Enrich.WithProperty("service", "match-server")
+    .Enrich.WithProperty("env", builder.Environment.EnvironmentName)
+    // 콘솔에는 사람이 읽는 형식, 파일/수집기에는 기계가 읽는 JSON
+    .WriteTo.Console()
+    .WriteTo.File(new Serilog.Formatting.Compact.CompactJsonFormatter(),
+                  "logs/match-server-.json", rollingInterval: RollingInterval.Day)
+    .CreateLogger();
+
+builder.Host.UseSerilog();  // ASP.NET Core / Generic Host에 연결</code></pre>
+                    </details>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ Part 3 ============ -->
+        <section class="part">
+            <h2>Part 3: ELK Stack — 로그를 모으고, 검색하고, 시각화하기</h2>
+            <div class="conversation">
+                <div class="q">ELK Stack은 정확히 무엇으로 구성되고, 각 컴포넌트는 어떤 역할을 하나요?</div>
+                <div class="a">
+                    <p>ELK는 세 제품의 머리글자입니다. 여기에 경량 수집기 <strong>Beats</strong>가 더해져 흔히 Elastic Stack이라 부릅니다.</p>
+                    <table class="compare-table">
+                        <thead><tr><th>구성요소</th><th>역할</th><th>한 줄 요약</th></tr></thead>
+                        <tbody>
+                            <tr><td>Beats (Filebeat)</td><td>수집/전송</td><td>각 서버에서 로그 파일을 읽어 전달하는 경량 에이전트</td></tr>
+                            <tr><td>Logstash</td><td>가공/변환</td><td>파싱·필터·보강 등 무거운 변환 파이프라인(선택)</td></tr>
+                            <tr><td>Elasticsearch</td><td>저장/검색</td><td>역색인 기반 분산 검색 엔진. 로그의 본체가 저장됨</td></tr>
+                            <tr><td>Kibana</td><td>시각화/탐색</td><td>로그를 검색하고 대시보드·알림을 만드는 웹 UI</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">Logstash는 무겁기 때문에, 단순한 경우엔 생략하고 Filebeat가 직접 Elasticsearch로 보내거나, Elasticsearch의 <strong>Ingest Pipeline</strong>으로 가벼운 변환을 처리하는 구성이 흔합니다. "수집은 가볍게, 변환은 필요할 때만"이 요즘 추세입니다.</p>
+                </div>
+            </div>
+            <div class="conversation">
+                <div class="q">로그 한 줄이 코드에서 Kibana 화면까지 가는 전체 데이터 흐름을 그려볼 수 있을까요?</div>
+                <div class="a">
+                    <p>아래가 전형적인 로그 파이프라인입니다. 게임 서버가 JSON 로그를 파일로 남기면, Filebeat가 읽어 올려 Elasticsearch에 색인되고, Kibana에서 검색됩니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">게임 서버</div>
+                                <div class="flow-box__items">Serilog → JSON 로그 파일</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Filebeat</div>
+                                <div class="flow-box__items">파일 tail / 전송</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Logstash (선택)</div>
+                                <div class="flow-box__items">파싱·필터·보강</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Elasticsearch</div>
+                                <div class="flow-box__items">색인·저장·검색</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Kibana</div>
+                                <div class="flow-box__items">대시보드·알림</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>Filebeat는 보통 컨테이너 환경에서 DaemonSet/사이드카로 배치되어, 노드의 모든 컨테이너 stdout 로그를 자동 수집하기도 합니다.</p>
+                    <details class="code-toggle">
+                        <summary>filebeat.yml — JSON 로그를 그대로 ES로 보내기 <span class="code-lang">JSON</span></summary>
+<pre><code>{
+  "filebeat.inputs": [
+    {
+      "type": "filestream",
+      "paths": ["/var/log/match-server/*.json"],
+      "parsers": [
+        { "ndjson": { "target": "", "add_error_key": true } }
+      ]
+    }
+  ],
+  "output.elasticsearch": {
+    "hosts": ["https://es-node:9200"],
+    "index": "game-logs-%{+yyyy.MM.dd}"
+  }
+}</code></pre>
+                    </details>
+                </div>
+            </div>
+            <div class="conversation">
+                <div class="q">Elasticsearch는 왜 로그 검색에 그렇게 강한가요? 그냥 RDB에 넣으면 안 되나요?</div>
+                <div class="a">
+                    <p>핵심은 <strong>역색인(inverted index)</strong>입니다. RDB의 <code>LIKE '%timeout%'</code>는 전체 스캔이라 수억 줄에서는 느립니다. Elasticsearch는 토큰별로 "어느 문서에 나오는지"를 미리 색인해두기 때문에, 키워드·필드 조합 검색이 수억 건에서도 빠릅니다.</p>
+                    <p class="warning">대신 대가가 있습니다. ES는 색인을 메모리에 많이 올리므로, 카디널리티가 높은 필드(예: 매 요청 고유한 raw URL, userId 전체)를 무분별하게 색인하면 메모리·디스크가 빠르게 고갈됩니다. 이 비용 문제는 Part 6에서 다시 다룹니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ Part 4 ============ -->
+        <section class="part">
+            <h2>Part 4: 분산 추적 — 하나의 요청을 끝까지 따라가기</h2>
+            <div class="conversation">
+                <div class="q">로그를 다 모았는데도, 여러 서비스를 거친 요청 하나를 추적하기가 어렵습니다. 분산 추적은 이걸 어떻게 해결하나요?</div>
+                <div class="a">
+                    <p>분산 추적의 핵심은 두 개의 ID입니다.</p>
+                    <p class="highlight"><strong>TraceId</strong>는 하나의 요청 전체에 부여되는 ID로, 모든 서비스를 통과하는 동안 변하지 않습니다. <strong>SpanId</strong>는 그 요청 안에서 "한 작업 단위"(예: DB 쿼리 한 번, 한 서비스 처리)에 부여되며, 부모 Span을 가리켜 트리를 이룹니다.</p>
+                    <p>즉, TraceId로 한 요청의 모든 로그를 모으고, Span 트리로 "어느 작업이 얼마나 걸렸는지"의 시간 구조를 복원합니다. 요청이 서비스 경계를 넘을 때 TraceId/SpanId는 HTTP 헤더(<code>traceparent</code>, W3C Trace Context 표준)로 자동 전파됩니다.</p>
+                </div>
+            </div>
+            <div class="conversation">
+                <div class="q">"매치 입장" 요청이 여러 서비스를 지나는 모습을 트레이스로 보면 어떻게 보이나요?</div>
+                <div class="a">
+                    <p>하나의 Trace는 여러 Span의 계층 구조입니다. 매치 입장 요청을 예로 들면 다음과 같은 Span 트리가 만들어집니다.</p>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">Trace: POST /match/join (총 420ms)</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">Span: 인증 서비스 검증 (40ms)</div>
+                            <div class="hierarchy-item">Span: 매치메이킹 큐 조회 (35ms)</div>
+                            <div class="hierarchy-item">Span: 인벤토리 Grain 호출 (300ms ← 병목)</div>
+                            <div class="hierarchy-item">Span: 결과 응답 직렬화 (15ms)</div>
+                        </div>
+                    </div>
+                    <p class="key-point">전체 420ms 중 300ms가 인벤토리 Grain 호출에서 소모됐다는 것을 한눈에 봅니다. 로그만으로는 "느리다"는 알아도 "어디서" 느린지를 이렇게 정량적으로 짚기 어렵습니다.</p>
+                    <p>같은 흐름을 가로 타임라인으로 보면 각 단계가 어떻게 이어지는지 더 직관적입니다.</p>
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">인증</div>
+                            <div class="pipeline-bar pb-gbuffer"><span>40ms</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">매칭</div>
+                            <div class="pipeline-bar pb-light"><span>35ms</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">인벤토리</div>
+                            <div class="pipeline-bar pb-shadow"><span>300ms (병목)</span></div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">직렬화</div>
+                            <div class="pipeline-bar pb-post"><span>15ms</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="conversation">
+                <div class="q">.NET에서는 이 계측을 어떻게 하나요? 모든 메서드에 수동으로 ID를 넘겨줘야 하나요?</div>
+                <div class="a">
+                    <p>아닙니다. <strong>OpenTelemetry</strong>가 표준입니다. ASP.NET Core, HttpClient, SQL 클라이언트 같은 주요 라이브러리는 자동 계측(instrumentation)이 제공되어, 별도 코드 없이 Span이 생성·전파됩니다. 비즈니스 단위 Span만 직접 추가하면 됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// Program.cs — OpenTelemetry 추적 등록
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r =&gt; r.AddService("match-server"))
+    .WithTracing(t =&gt; t
+        .AddAspNetCoreInstrumentation()   // 들어오는 HTTP 요청 자동 추적
+        .AddHttpClientInstrumentation()   // 나가는 HTTP 호출 자동 전파
+        .AddSource("MatchServer")         // 우리가 직접 만든 ActivitySource
+        .AddOtlpExporter());              // OTLP로 APM/Collector에 전송</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// 비즈니스 단위 Span 직접 추가 (.NET의 Activity = Span)
+private static readonly ActivitySource Tracer = new("MatchServer");
+
+public async Task&lt;MatchResult&gt; JoinMatchAsync(int userId)
+{
+    // using으로 Span 시작 — 자동으로 부모 Trace에 연결됨
+    using var activity = Tracer.StartActivity("JoinMatch");
+    activity?.SetTag("user.id", userId);          // Span에 속성 부착
+
+    var inv = await _inventoryGrain.GetLoadoutAsync(userId); // 하위 Span 자동 생성
+    activity?.SetTag("loadout.size", inv.Count);
+    return await _matchmaker.EnqueueAsync(userId, inv);
+}</code></pre>
+                    </div>
+                    <p class="warning">Orleans 같은 액터 프레임워크나 메시지 큐를 건너갈 때는, 자동 전파가 끊길 수 있습니다. 이 경우 TraceContext를 메시지 헤더에 직접 실어 보내야 트레이스가 이어집니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ Part 5 ============ -->
+        <section class="part">
+            <h2>Part 5: Elastic APM — 성능 신호로 서비스 건강 진단하기</h2>
+            <div class="conversation">
+                <div class="q">로그와 트레이스가 있는데, APM은 또 따로 왜 필요한가요?</div>
+                <div class="a">
+                    <p>APM(Application Performance Monitoring)은 트레이스 데이터를 <strong>성능 관점으로 집계·시각화</strong>한 제품입니다. Elastic APM은 .NET 에이전트로 트랜잭션·스팬을 자동 수집하고, 같은 Elasticsearch에 저장해 Kibana의 APM UI로 보여줍니다. 로그와 한 화면에서 엮인다는 게 큰 장점입니다.</p>
+                    <p>APM이 가장 먼저 보여주는 것이 이른바 <strong>골든 시그널(Golden Signals)</strong>입니다.</p>
+                    <table class="compare-table">
+                        <thead><tr><th>신호</th><th>의미</th><th>게임 서버에서 본다면</th></tr></thead>
+                        <tbody>
+                            <tr><td>응답시간(Latency)</td><td>요청 처리에 걸린 시간</td><td>매치 입장 p95가 200ms→1.2s로 악화</td></tr>
+                            <tr><td>처리량(Throughput)</td><td>초당 요청 수(TPM/RPM)</td><td>점검 종료 직후 로그인 TPS 급증</td></tr>
+                            <tr><td>에러율(Error rate)</td><td>실패 응답 비율</td><td>결제 트랜잭션 5xx 비율 0.1%→8%</td></tr>
+                            <tr><td>(포화도 Saturation)</td><td>자원 한계 근접도</td><td>커넥션 풀·스레드풀 고갈</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">평균값이 아니라 <strong>p95/p99 백분위수</strong>로 봐야 합니다. 평균은 멀쩡한데 상위 1% 사용자가 5초씩 기다리는 상황을 평균은 숨깁니다. 게임에서는 그 1%가 SNS에 불만을 올리는 사람들입니다.</p>
+                </div>
+            </div>
+            <div class="conversation">
+                <div class="q">느린 요청이나 느린 DB 쿼리는 APM에서 어떻게 찾아내나요? 서비스 맵이라는 것도 있던데요.</div>
+                <div class="a">
+                    <p>Elastic APM은 트랜잭션을 응답시간 분포로 보여주고, 느린 표본의 트레이스를 워터폴(폭포수) 차트로 펼쳐줍니다. 그 안에서 "이 트랜잭션의 70%가 특정 SQL 쿼리"라는 식으로 병목을 바로 짚을 수 있습니다. 자동 계측이 SQL 쿼리 텍스트와 소요시간까지 Span으로 남기기 때문입니다.</p>
+                    <p><strong>서비스 맵(Service Map)</strong>은 트레이스 데이터를 모아 "어떤 서비스가 어떤 서비스를 호출하는지" 위상도를 자동으로 그려줍니다. 의존 관계와 각 엣지의 지연/에러율을 한눈에 보여주므로, 장애가 어디서 시작됐는지 전파 경로를 추적하기 좋습니다.</p>
+                    <details class="code-toggle">
+                        <summary>Elastic APM .NET 에이전트 등록 — ASP.NET Core <span class="code-lang">C#</span></summary>
+<pre><code>// appsettings.json 의 ElasticApm 설정을 읽어 자동 계측 활성화
+// (Elastic.Apm.NetCoreAll 패키지)
+var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+// HTTP 요청, EF Core/SQL, HttpClient, gRPC 등을 자동 추적
+app.UseAllElasticApm(builder.Configuration);
+
+app.MapControllers();
+app.Run();
+
+/* appsettings.json
+{
+  "ElasticApm": {
+    "ServiceName": "match-server",
+    "ServerUrl": "http://apm-server:8200",
+    "Environment": "production",
+    "TransactionSampleRate": "0.2"   // 표본 20%만 수집(비용 절감)
+  }
+}
+*/</code></pre>
+                    </details>
+                    <p class="highlight">코드 계측(트레이스)과 APM은 적입니다. Elastic APM 에이전트는 내부적으로 .NET의 Activity와 연동되므로, OpenTelemetry로 만든 Span도 같은 트레이스에 합류시킬 수 있습니다. 둘 중 무엇을 쓰든 핵심은 "TraceId로 로그·트레이스·메트릭이 연결되는가"입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ Part 6 ============ -->
+        <section class="part">
+            <h2>Part 6: 실무 — 장애 대응 워크플로우와 비용 관리</h2>
+            <div class="conversation">
+                <div class="q">정기 점검을 끝내고 서버를 열었더니 에러가 폭증했습니다. 관측성 도구로 어떤 순서로 원인을 찾아가야 하나요?</div>
+                <div class="a">
+                    <p>잘 갖춰진 관측성 스택에서는 "감지 → 좁히기 → 원인 확인"의 흐름이 자연스럽게 이어집니다. 점검 직후 시나리오로 따라가 봅니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">1. 알림(Alert)</div>
+                                <div class="flow-box__items">APM 에러율 8% 돌파 → Slack 알림</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">2. APM</div>
+                                <div class="flow-box__items">결제 트랜잭션 5xx 급증 확인</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">3. 트레이스</div>
+                                <div class="flow-box__items">DB 커넥션 획득 Span 타임아웃</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">4. 로그</div>
+                                <div class="flow-box__items">TraceId로 점프 → 풀 고갈 예외</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">5. 근본 원인</div>
+                                <div class="flow-box__items">점검 후 동시 재접속 폭주 → 커넥션 풀 한계</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">핵심은 각 단계가 <strong>TraceId로 연결</strong>된다는 것입니다. APM의 느린 트랜잭션에서 클릭 한 번으로 그 요청의 모든 로그로 점프할 수 있어야 합니다. 그래서 Part 2에서 모든 로그에 TraceId를 심어둔 것이 여기서 결실을 맺습니다.</p>
+                    <p>원인이 "점검 후 동시 재접속 폭주로 인한 커넥션 풀 고갈"로 드러나면, 단기로는 풀 크기·타임아웃을 조정하고, 장기로는 점진적 입장(큐잉)·재접속 지터(jitter)를 도입하는 식으로 대응합니다.</p>
+                </div>
+            </div>
+            <div class="conversation">
+                <div class="q">Kibana에서 대시보드와 알림은 어떻게 구성하는 게 좋나요?</div>
+                <div class="a">
+                    <p>대시보드는 "한 화면에서 서비스 건강을 판단"할 수 있게 골든 시그널 중심으로 구성합니다. 그리고 사람이 계속 보지 못하므로, <strong>알림(Alerting)</strong>으로 임계치를 넘으면 자동 통보되게 합니다.</p>
+                    <ul>
+                        <li>대시보드: CCU, 로그인 TPS, 결제 에러율, 매치 입장 p95, 상위 느린 트랜잭션</li>
+                        <li>알림 규칙 예: "최근 5분 결제 에러율 &gt; 2%", "매치 입장 p95 &gt; 1s가 3분 지속", "Critical 로그 발생"</li>
+                    </ul>
+                    <p class="warning">알림은 "행동 가능한 것"에만 걸어야 합니다. 사소한 경고까지 다 알림으로 만들면 알림 피로(alert fatigue)가 쌓여, 정작 진짜 장애 알림을 무시하게 됩니다. 새벽에 깨울 가치가 있는 것만 알립니다.</p>
+                </div>
+            </div>
+            <div class="conversation">
+                <div class="q">관측성을 강화할수록 데이터가 폭증할 텐데, 카디널리티와 비용은 어떻게 관리하나요?</div>
+                <div class="a">
+                    <p>관측성의 최대 함정이 바로 <strong>높은 카디널리티(high cardinality)</strong>입니다. 고유값이 폭발적으로 많은 필드를 색인하면 Elasticsearch 메모리·디스크가 폭증합니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>도서관 색인을 생각해보세요. "장르"별 색인(수십 종)은 유용하고 가볍습니다. 하지만 "책마다 고유한 ISBN"을 전부 색인 키로 만들면, 색인 카드만 책 권수만큼 늘어나 서가를 다 차지합니다.</p>
+                        <p>메트릭의 라벨에 userId나 매치ID 같은 고유값을 넣는 것이 바로 이 실수입니다. 그런 값은 메트릭 라벨이 아니라, 트레이스나 로그의 속성으로 남겨야 합니다.</p>
+                    </div>
+                    <p>실무에서 비용을 통제하는 대표적 수단은 다음과 같습니다.</p>
+                    <table class="compare-table">
+                        <thead><tr><th>기법</th><th>내용</th></tr></thead>
+                        <tbody>
+                            <tr><td>샘플링(Sampling)</td><td>모든 트레이스를 저장하지 않고 일부만(예: 10~20%) 수집. 에러는 100% 보존하는 tail-based 방식이 이상적</td></tr>
+                            <tr><td>로그 레벨 제어</td><td>운영은 Information 이상만, Debug는 문제 재현 시 동적으로 상향</td></tr>
+                            <tr><td>인덱스 수명주기(ILM)</td><td>오래된 인덱스는 자동으로 저비용 스토리지로 이동(rollover)하거나 삭제</td></tr>
+                            <tr><td>핫패스 메트릭화</td><td>고빈도 이벤트는 개별 로그 대신 카운터·히스토그램 메트릭으로 집계</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">결국 관측성은 "다 저장하기"가 아니라 "필요할 때 답을 찾을 수 있을 만큼 똑똑하게 저장하기"의 문제입니다. 무한히 로그를 쌓는 것은 관측성이 아니라 비용 부채입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ 핵심 정리 ============ -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>관측성 = 로그·메트릭·트레이스 3축.</strong> 모니터링이 "미리 정한 질문"에 답한다면, 관측성은 "예상 못 한 질문"에도 답하는 능력이며, 분산 게임 서버에서는 필수입니다.</li>
+                <li><strong>구조화 로깅이 출발점입니다.</strong> <code>{UserId}</code> 같은 명명 속성으로 JSON 로그를 남기고, 모든 로그에 TraceId/상관관계 ID를 스코프로 심어야 사후 검색·연결이 가능합니다. 과금·인증·이상행위는 반드시 남깁니다.</li>
+                <li><strong>ELK Stack은 수집(Beats)→가공(Logstash)→저장·검색(Elasticsearch)→시각화(Kibana)의 파이프라인</strong>이며, 역색인 덕분에 대규모 로그에서도 빠른 질의가 가능합니다.</li>
+                <li><strong>분산 추적은 TraceId/SpanId로 요청을 끝까지 따라가고,</strong> OpenTelemetry/Elastic APM로 자동 계측합니다. APM은 골든 시그널(응답시간·처리량·에러율)과 서비스 맵으로 병목을 짚어줍니다.</li>
+                <li><strong>장애 대응은 알림→APM→트레이스→로그→근본원인의 흐름</strong>으로, TraceId가 모든 단계를 연결합니다. 단, 높은 카디널리티와 비용을 샘플링·ILM·메트릭화로 반드시 통제해야 합니다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

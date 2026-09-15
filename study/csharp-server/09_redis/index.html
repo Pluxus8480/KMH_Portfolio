@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redis 실전 패턴 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp-server.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>랭킹 1위는 어떻게 실시간으로 갱신될까?</h1>
+            <p class="subtitle">Redis 캐시 · 분산 락 · ZSet 실시간 랭킹 실전 패턴</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: Redis 자료구조와 게임에서의 용도</h2>
+            <div class="conversation">
+                <div class="q">Redis를 "그냥 캐시"로만 쓰면 손해라고 하던데, 자료구조별로 무엇이 다른가요?</div>
+                <div class="a">
+                    <p>Redis는 단순 Key-Value 저장소가 아니라 <strong>자료구조 서버(data structure server)</strong>입니다. 값 자체가 String/Hash/List/Set/Sorted Set 같은 타입을 가지며, 각 타입에 특화된 원자적 명령이 서버 쪽에서 실행됩니다. 게임 서버에서는 이 타입을 용도에 맞게 골라 쓰는 것이 곧 성능과 코드 복잡도를 결정합니다.</p>
+                    <p class="highlight">핵심은 "로직을 서버로 내려보내는 것"입니다. 예를 들어 랭킹을 클라이언트나 게임 서버에서 정렬하지 않고, ZSet의 ZINCRBY/ZREVRANGE로 Redis가 정렬된 상태를 유지하게 만듭니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>자료구조</th>
+                                <th>특징</th>
+                                <th>게임 사용 예</th>
+                                <th>대표 명령</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>String</strong></td>
+                                <td>단순 값, 숫자 원자 증감(INCR)</td>
+                                <td>세션 토큰, 동시접속 카운터, 일일 보상 수령 플래그</td>
+                                <td>SET / GET / INCR / SETNX</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Hash</strong></td>
+                                <td>필드-값 묶음, 부분 갱신 가능</td>
+                                <td>유저 프로필/인벤토리 요약, 캐릭터 스탯 묶음</td>
+                                <td>HSET / HGET / HINCRBY / HGETALL</td>
+                            </tr>
+                            <tr>
+                                <td><strong>List</strong></td>
+                                <td>양방향 큐, 삽입 순서 유지</td>
+                                <td>채팅 최근 N개, 작업 큐(메일/보상 처리)</td>
+                                <td>LPUSH / RPOP / LRANGE / BLPOP</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Set</strong></td>
+                                <td>중복 없는 집합, 교집합/합집합</td>
+                                <td>현재 매칭 대기열 유저, 친구 추천 교집합</td>
+                                <td>SADD / SISMEMBER / SINTER</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Sorted Set(ZSet)</strong></td>
+                                <td>score 기준 자동 정렬, 순위 조회 O(log N)</td>
+                                <td>실시간 랭킹, 리더보드, 점수 기반 매칭</td>
+                                <td>ZADD / ZINCRBY / ZREVRANGE / ZREVRANK</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>Redis 자료구조는 주방 도구와 같습니다. 못을 박을 때 칼등으로 두드릴 수도 있지만(String으로 랭킹 흉내), 망치(ZSet)를 쓰면 한 번에 끝납니다.</p>
+                        <p>"무엇이든 String에 JSON으로 넣으면 된다"는 유혹이 함정입니다. 부분 갱신이 필요하면 Hash, 순위가 필요하면 ZSet을 써야 네트워크 왕복과 직렬화 비용을 줄일 수 있습니다.</p>
+                    </div>
+
+                    <p class="key-point">타입 선택의 1순위 질문: "이 데이터에 대해 Redis가 대신 해줬으면 하는 연산(정렬·집합·증감·만료)이 무엇인가?" 그 연산을 가진 타입을 고르면 됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 캐시 패턴 — Look-aside, Write-through, 그리고 스탬피드</h2>
+            <div class="conversation">
+                <div class="q">실무에서 가장 많이 쓰는 캐시 패턴은 무엇이고, 트래픽이 몰릴 때 무엇이 터지나요?</div>
+                <div class="a">
+                    <p>가장 보편적인 것은 <strong>Look-aside(Cache-aside)</strong>입니다. 애플리케이션이 캐시를 먼저 보고, 없으면(miss) DB에서 읽어 캐시에 채운 뒤 반환합니다. 캐시가 DB를 모르고, DB도 캐시를 모르며, 둘을 잇는 것은 전적으로 애플리케이션 코드입니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">1. 캐시 조회</div>
+                                <div class="flow-box__items">GET user:42</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">2. Hit?</div>
+                                <div class="flow-box__items">있으면 즉시 반환</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">3. Miss</div>
+                                <div class="flow-box__items">DB SELECT 실행</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">4. 캐시 적재</div>
+                                <div class="flow-box__items">SET + TTL 후 반환</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// StackExchange.Redis - Look-aside 읽기
+public async Task&lt;UserDto&gt; GetUserAsync(int userId)
+{
+    var db = _redis.GetDatabase();
+    var key = $"user:{userId}";
+
+    // 1) 캐시 먼저 조회
+    RedisValue cached = await db.StringGetAsync(key);
+    if (!cached.IsNullOrEmpty)
+        return JsonSerializer.Deserialize&lt;UserDto&gt;(cached!);
+
+    // 2) 캐시 미스 - DB에서 읽기
+    UserDto user = await _userRepository.LoadAsync(userId);
+    if (user == null) return null;
+
+    // 3) 캐시에 적재 (TTL 10분, 약간의 지터로 동시 만료 분산)
+    var ttl = TimeSpan.FromMinutes(10) + TimeSpan.FromSeconds(Random.Shared.Next(0, 60));
+    await db.StringSetAsync(key, JsonSerializer.Serialize(user), ttl);
+    return user;
+}</code></pre>
+                    </div>
+
+                    <p>쓰기 패턴은 두 갈래입니다. <strong>Write-through</strong>는 쓰기 시 캐시와 DB를 함께 갱신해 캐시가 항상 최신을 유지하지만 쓰기 지연이 늘고, <strong>Write-behind(Write-back)</strong>는 캐시에만 먼저 쓰고 DB는 비동기로 반영해 빠르지만 장애 시 유실 위험이 있습니다. 게임 재화처럼 손실이 치명적인 데이터에는 Write-behind를 신중히 써야 합니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>Look-aside</th>
+                                <th>Write-through</th>
+                                <th>Write-behind</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>쓰기 경로</td>
+                                <td>DB 직접(캐시는 무효화)</td>
+                                <td>캐시→DB 동기</td>
+                                <td>캐시 즉시, DB 비동기</td>
+                            </tr>
+                            <tr>
+                                <td>읽기 지연</td>
+                                <td>낮음(히트 시)</td>
+                                <td>낮음</td>
+                                <td>낮음</td>
+                            </tr>
+                            <tr>
+                                <td>일관성</td>
+                                <td>중간(무효화 의존)</td>
+                                <td>높음</td>
+                                <td>낮음(유실 위험)</td>
+                            </tr>
+                            <tr>
+                                <td>적합한 데이터</td>
+                                <td>읽기 多 프로필/랭킹</td>
+                                <td>설정/마스터 데이터</td>
+                                <td>로그성/집계 카운터</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="warning">캐시 스탬피드(thundering herd): 인기 키의 TTL이 만료되는 순간, 수천 개 요청이 동시에 미스를 내고 한꺼번에 DB로 몰립니다. 시즌 시작 시 랭킹 캐시가 동시에 만료되면 DB가 순간적으로 무너질 수 있습니다.</p>
+
+                    <p>방지책은 세 가지입니다. (1) TTL에 랜덤 지터를 더해 동시 만료를 분산, (2) 재생성은 한 요청만 하도록 <strong>분산 락 또는 단일 플라이트(single-flight)</strong>로 직렬화, (3) 만료 직전 백그라운드 갱신(early recomputation). 아래는 락으로 재생성 한 번만 보장하는 예시입니다.</p>
+
+                    <details class="code-toggle">
+                        <summary>스탬피드 방지 - 분산 락으로 재생성 직렬화 <span class="code-lang">C#</span></summary>
+                        <pre><code>public async Task&lt;string&gt; GetWithStampedeGuardAsync(string key)
+{
+    var db = _redis.GetDatabase();
+    RedisValue cached = await db.StringGetAsync(key);
+    if (!cached.IsNullOrEmpty) return cached!;
+
+    // 재생성 권한을 가진 요청만 DB를 친다 (NX 잠금, 짧은 PX)
+    var lockKey = $"lock:rebuild:{key}";
+    var token = Guid.NewGuid().ToString();
+    bool acquired = await db.StringSetAsync(lockKey, token, TimeSpan.FromSeconds(5), When.NotExists);
+
+    if (!acquired)
+    {
+        // 다른 요청이 재생성 중 - 잠깐 후 캐시를 다시 본다 (혹은 stale 값 반환)
+        await Task.Delay(50);
+        return await db.StringGetAsync(key);
+    }
+
+    try
+    {
+        var fresh = await RebuildFromDbAsync(key);            // 무거운 연산은 단 한 번
+        await db.StringSetAsync(key, fresh, TimeSpan.FromMinutes(10));
+        return fresh;
+    }
+    finally
+    {
+        // 소유권 토큰 검증 후 해제 (Part 4에서 상세)
+        await ReleaseLockAsync(db, lockKey, token);
+    }
+}</code></pre>
+                    </details>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 캐시 일관성 함정 — 갱신 순서와 무효화 전략</h2>
+            <div class="conversation">
+                <div class="q">DB는 바뀌었는데 캐시는 옛날 값을 주는 버그, 왜 생기고 어떻게 막나요?</div>
+                <div class="a">
+                    <p>근본 원인은 <strong>DB와 캐시가 별개의 저장소라 둘을 원자적으로 함께 바꿀 수 없다</strong>는 점입니다. 둘 사이에 끼어드는 타이밍과 순서가 불일치를 만듭니다.</p>
+
+                    <p class="highlight">대표 안티패턴: "캐시를 먼저 갱신하고 DB를 갱신한다." DB 갱신이 실패하면 캐시에만 잘못된 값이 남습니다. 또 동시 요청과 엮이면 오래된 값으로 캐시가 덮어써질 수 있습니다.</p>
+
+                    <p>가장 안전한 기본형은 <strong>"DB를 먼저 쓰고, 캐시는 갱신이 아니라 삭제(invalidate)한다"</strong>입니다. 다음 읽기에서 자연스럽게 최신 값으로 다시 채워지므로(Look-aside), 중간 상태가 캐시에 박히는 위험이 줄어듭니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">1. DB UPDATE</div>
+                                <div class="flow-box__items">원본부터 확정</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">2. 캐시 DEL</div>
+                                <div class="flow-box__items">갱신 X, 삭제 O</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">3. 다음 읽기</div>
+                                <div class="flow-box__items">미스 → 최신 재적재</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 권장: DB 먼저 → 캐시는 삭제(무효화)
+public async Task UpdateNicknameAsync(int userId, string nickname)
+{
+    // 1) 원본(DB) 먼저 갱신 - 트랜잭션으로 확정
+    await _userRepository.UpdateNicknameAsync(userId, nickname);
+
+    // 2) 캐시는 새 값으로 SET 하지 말고 DEL 한다
+    //    (동시 요청이 stale 값을 다시 써넣는 경합을 줄임)
+    var db = _redis.GetDatabase();
+    await db.KeyDeleteAsync($"user:{userId}");
+}</code></pre>
+                    </div>
+
+                    <p class="warning">삭제 방식도 완벽하진 않습니다. 'DB 쓰기 → 캐시 삭제' 사이에 다른 요청이 옛 값을 읽어 캐시에 채우면, 삭제가 그 직후 일어나지 않는 한 잠깐 stale가 남을 수 있습니다. 이를 더 줄이려면 지연 이중 삭제(delete → 짧은 지연 → 다시 delete)나 변경 로그(CDC/binlog 구독) 기반 무효화를 씁니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>전략</th>
+                                <th>장점</th>
+                                <th>단점</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>캐시 갱신(SET)</td>
+                                <td>다음 읽기 즉시 히트</td>
+                                <td>동시 쓰기 경합 시 오래된 값으로 덮어쓸 위험</td>
+                            </tr>
+                            <tr>
+                                <td>캐시 삭제(DEL)</td>
+                                <td>경합에 강함, 단순</td>
+                                <td>다음 읽기 1회 미스 비용, 좁은 stale 창</td>
+                            </tr>
+                            <tr>
+                                <td>지연 이중 삭제</td>
+                                <td>읽기 후 채우기 경합까지 보정</td>
+                                <td>구현 복잡, 지연 타이밍 튜닝 필요</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="key-point">결론: 일반적으로 "DB 먼저 + 캐시 삭제"를 기본값으로, 강한 일관성이 필요하면 변경 이벤트 구독 기반 무효화로 보강합니다. "캐시 먼저"는 거의 항상 틀립니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 분산 락 — 중복 결제·중복 보상을 막는 법</h2>
+            <div class="conversation">
+                <div class="q">유저가 결제 버튼을 두 번 누르거나, 서버가 두 대라 보상이 두 번 지급되는 문제, Redis로 어떻게 막나요?</div>
+                <div class="a">
+                    <p>핵심 명령은 <strong><code>SET key value NX PX milliseconds</code></strong> 한 줄입니다. NX는 "키가 없을 때만 설정", PX는 "만료 시간(ms)"입니다. 이 둘이 한 명령으로 원자 실행되므로, 락 획득과 만료 설정 사이의 틈이 사라집니다. value에는 반드시 <strong>요청자 고유 토큰</strong>을 넣어 "내 락만 내가 푼다"를 보장해야 합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Redis CLI</div>
+                        <pre><code># 락 획득: reward:lock:1001 키가 없을 때만, 토큰과 함께, 3초 만료
+SET reward:lock:1001 "a3f9-uuid-token" NX PX 3000
+# → OK (획득 성공) / nil (이미 누군가 보유, 실패)</code></pre>
+                    </div>
+
+                    <p class="warning">절대 하지 말아야 할 것: <code>DEL</code>로 무조건 락을 푸는 것. 내 작업이 PX보다 오래 걸려 락이 만료된 뒤, 다른 요청이 새 락을 잡은 상태에서 내가 DEL을 호출하면 <strong>남의 락을 풀어버립니다.</strong> 그래서 해제는 "토큰이 내 것일 때만 삭제"를 원자적으로 해야 하고, 이는 Lua 스크립트로 처리합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 소유권 토큰 기반 안전한 락 - StackExchange.Redis
+public sealed class RedisLock
+{
+    private readonly IDatabase _db;
+    // 해제는 GET 비교 + DEL을 원자적으로: Lua로 묶는다
+    private const string ReleaseScript = @"
+        if redis.call('get', KEYS[1]) == ARGV[1] then
+            return redis.call('del', KEYS[1])
+        else
+            return 0
+        end";
+
+    public RedisLock(IConnectionMultiplexer redis) =&gt; _db = redis.GetDatabase();
+
+    public async Task&lt;string&gt; AcquireAsync(string key, TimeSpan ttl)
+    {
+        var token = Guid.NewGuid().ToString("N");
+        // SET key token NX PX ttl 와 동일
+        bool ok = await _db.StringSetAsync(key, token, ttl, When.NotExists);
+        return ok ? token : null;   // null이면 획득 실패
+    }
+
+    public async Task&lt;bool&gt; ReleaseAsync(string key, string token)
+    {
+        // 토큰이 일치할 때만 삭제 (남의 락 해제 방지)
+        var result = await _db.ScriptEvaluateAsync(
+            ReleaseScript,
+            new RedisKey[] { key },
+            new RedisValue[] { token });
+        return (long)result == 1;
+    }
+}</code></pre>
+                    </div>
+
+                    <details class="code-toggle">
+                        <summary>중복 보상 방지에 락 적용 <span class="code-lang">C#</span></summary>
+                        <pre><code>public async Task&lt;bool&gt; ClaimDailyRewardAsync(int userId)
+{
+    var lockKey = $"reward:lock:{userId}";
+    string token = await _lock.AcquireAsync(lockKey, TimeSpan.FromSeconds(3));
+    if (token == null) return false;  // 다른 요청이 처리 중 → 중복 차단
+
+    try
+    {
+        if (await _rewardRepo.AlreadyClaimedTodayAsync(userId))
+            return false;            // 멱등성 보장: 이미 수령
+        await _rewardRepo.GrantAsync(userId);
+        return true;
+    }
+    finally
+    {
+        await _lock.ReleaseAsync(lockKey, token);  // 내 토큰일 때만 해제
+    }
+}</code></pre>
+                    </details>
+
+                    <p>단일 인스턴스에서는 위 패턴으로 충분합니다. 하지만 Redis를 복제(master-replica)로 운영할 때는, master가 락 정보를 replica에 전파하기 전에 죽으면 두 클라이언트가 동시에 락을 가질 수 있습니다. 이를 다루려는 것이 <strong>RedLock</strong> 알고리즘(여러 독립 노드 과반 획득)입니다.</p>
+
+                    <p class="key-point">RedLock 논쟁: Martin Kleppmann은 "GC 정지·시계 점프 때문에 RedLock도 안전한 상호배제를 보장하지 못한다"고 비판했고, 안전이 정말 critical하면 락 토큰에 fencing token(단조 증가 번호)을 더해 자원 쪽에서 검증하라고 권합니다. 게임에서는 보통 "재화 차감 자체를 멱등·원자적으로(Lua)" 설계해, 락은 성능/중복 호출 완화 용도로 쓰고 정확성은 DB 트랜잭션이나 멱등키로 보장하는 편이 견고합니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>분산 락은 회의실 문에 거는 "사용 중" 팻말입니다. 팻말(락)이 있어도, 회의가 길어져 시간이 지나면(TTL 만료) 청소부가 들어와 팻말을 떼고 다른 팀이 들어옵니다.</p>
+                        <p>그래서 진짜 중요한 자료(재화)는 문 팻말만 믿지 말고, 금고(DB 트랜잭션·멱등키)에 한 번 더 잠가야 안전합니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 실시간 랭킹 — Sorted Set로 1위를 즉시 갱신하기</h2>
+            <div class="conversation">
+                <div class="q">수십만 명의 점수가 매초 바뀌는데, 어떻게 정렬 비용 없이 순위를 즉시 보여주나요?</div>
+                <div class="a">
+                    <p>정답은 <strong>Sorted Set(ZSet)</strong>입니다. 멤버마다 score를 두면 Redis가 내부적으로 정렬 상태를 유지(skip list + hash)하므로, 점수 갱신은 O(log N), 순위 조회도 O(log N)입니다. 게임 서버는 "정렬"을 신경 쓸 필요 없이 명령만 날립니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Redis CLI</div>
+                        <pre><code># 점수 누적 (킬 1회 = +10점). 멤버가 없으면 생성됨
+ZINCRBY rank:season:5 10 "user:1001"
+
+# 상위 10명 점수와 함께 (내림차순)
+ZREVRANGE rank:season:5 0 9 WITHSCORES
+
+# 특정 유저의 현재 순위 (0-based, 내림차순)
+ZREVRANK rank:season:5 "user:1001"
+
+# 내 점수 직접 세팅
+ZADD rank:season:5 1500 "user:1001"</code></pre>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>public sealed class RankingService
+{
+    private readonly IDatabase _db;
+    public RankingService(IConnectionMultiplexer redis) =&gt; _db = redis.GetDatabase();
+
+    private static string Key(int season) =&gt; $"rank:season:{season}";
+
+    // 점수 가산 (원자적) - 누적 점수 반환
+    public Task&lt;double&gt; AddScoreAsync(int season, long userId, double delta) =&gt;
+        _db.SortedSetIncrementAsync(Key(season), userId, delta);
+
+    // 내 순위 (1-based로 보정) + 점수
+    public async Task&lt;(long rank, double score)&gt; GetMyRankAsync(int season, long userId)
+    {
+        var member = (RedisValue)userId;
+        long? rank = await _db.SortedSetRankAsync(Key(season), member, Order.Descending);
+        double? score = await _db.SortedSetScoreAsync(Key(season), member);
+        return (rank.HasValue ? rank.Value + 1 : -1, score ?? 0);
+    }
+
+    // 페이징 조회 (page는 0-based, size=50)
+    public async Task&lt;List&lt;(long userId, double score)&gt;&gt; GetPageAsync(int season, int page, int size)
+    {
+        long start = (long)page * size;
+        long stop = start + size - 1;
+        var entries = await _db.SortedSetRangeByRankWithScoresAsync(
+            Key(season), start, stop, Order.Descending);
+        return entries.Select(e =&gt; ((long)e.Element, e.Score)).ToList();
+    }
+}</code></pre>
+                    </div>
+
+                    <p class="warning">동점 처리: ZSet은 score가 같으면 <strong>멤버 사전순(lexicographical)</strong>으로 정렬합니다. 게임에서는 보통 "같은 점수면 먼저 달성한 사람이 위"가 자연스럽습니다. 단순 score만 쓰면 이 규칙을 표현할 수 없습니다.</p>
+
+                    <p class="highlight">동점 보정 트릭: score를 합성 점수로 만듭니다. 예를 들어 <code>합성점수 = 실제점수 * 1e13 - 달성타임스탬프</code> 처럼 점수를 상위 자리, "빠를수록 큰 값"이 되도록 시간을 하위 자리에 넣으면, 단일 double score로 "점수 우선, 동점 시 먼저 달성 우선"을 모두 표현할 수 있습니다. (double 정밀도 한계를 고려해 자릿수 설계에 주의)</p>
+
+                    <details class="code-toggle">
+                        <summary>동점 보정 합성 점수 계산 <span class="code-lang">C#</span></summary>
+                        <pre><code>// 점수 우선, 동점이면 먼저 달성한 사람이 위
+// double은 약 15~16 자리 정밀도이므로 점수 범위가 크면 별도 설계 필요
+private static double CompositeScore(long score, long achievedUnixMs)
+{
+    const long TimeSpace = 1_000_000_000_000L; // 약 1e12 (밀리초 타임스탬프 수용)
+    // 시간이 빠를수록 더 큰 보정값 → 동점 시 상위
+    long inverseTime = TimeSpace - (achievedUnixMs % TimeSpace);
+    return (double)score + (double)inverseTime / TimeSpace;
+}</code></pre>
+                    </details>
+
+                    <p>시즌 랭킹은 <strong>키에 시즌 번호를 포함</strong>(rank:season:5)해 분리하고, 시즌 종료 시 보상 정산 후 <code>EXPIRE</code>로 일정 기간 뒤 자동 삭제하거나 아카이브합니다. 대규모 랭킹의 전체 페이징은 <code>ZREVRANGE start stop</code>의 start/stop 인덱스로 처리하되, 매우 깊은 페이지(수백만 위)는 비효율적이므로 "상위 100위 + 내 주변 순위"만 노출하는 UX가 일반적입니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>요구사항</th>
+                                <th>명령</th>
+                                <th>비고</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>점수 가산</td>
+                                <td>ZINCRBY</td>
+                                <td>원자적, 멤버 없으면 생성</td>
+                            </tr>
+                            <tr>
+                                <td>상위 N위</td>
+                                <td>ZREVRANGE 0 N-1 WITHSCORES</td>
+                                <td>리더보드 상단</td>
+                            </tr>
+                            <tr>
+                                <td>내 순위</td>
+                                <td>ZREVRANK</td>
+                                <td>0-based, +1로 보정</td>
+                            </tr>
+                            <tr>
+                                <td>특정 점수 구간</td>
+                                <td>ZRANGEBYSCORE</td>
+                                <td>점수대별 매칭</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: 원자성과 운영 — Lua, Pub/Sub, 영속성, 단일 스레드</h2>
+            <div class="conversation">
+                <div class="q">재화 차감을 안전하게 처리하고, 운영 중 Redis가 갑자기 느려지지 않게 하려면 무엇을 알아야 하나요?</div>
+                <div class="a">
+                    <p>여러 명령을 "함께, 끼어듦 없이" 실행해야 할 때 두 가지 도구가 있습니다. <strong>MULTI/EXEC(트랜잭션)</strong>는 명령을 큐에 모아 한꺼번에 실행하지만, 중간 결과를 보고 분기할 수 없습니다. <strong>Lua 스크립트</strong>는 서버에서 단일 원자 단위로 실행되며, 중간 값을 읽고 조건 분기까지 할 수 있어 "잔액 확인 후 차감" 같은 read-modify-write에 적합합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 원자적 재화 차감: 잔액이 충분할 때만 차감 (경합·이중차감 방지)
+private const string SpendScript = @"
+    local balance = tonumber(redis.call('get', KEYS[1]) or '0')
+    local cost = tonumber(ARGV[1])
+    if balance &lt; cost then
+        return -1                       -- 잔액 부족
+    end
+    return redis.call('decrby', KEYS[1], cost)  -- 차감 후 잔액 반환";
+
+public async Task&lt;long&gt; SpendGoldAsync(int userId, long cost)
+{
+    var result = await _db.ScriptEvaluateAsync(
+        SpendScript,
+        new RedisKey[] { $"gold:{userId}" },
+        new RedisValue[] { cost });
+    long remain = (long)result;
+    if (remain == -1) throw new InsufficientGoldException();
+    return remain;  // 차감 후 잔액
+}</code></pre>
+                    </div>
+
+                    <p class="key-point">Lua가 우월한 이유: GET→비교→DECRBY를 애플리케이션에서 나눠 하면 그 사이에 다른 요청이 끼어들어 음수 잔액이 될 수 있습니다. Lua는 이 셋을 서버에서 한 호출로 원자 실행하므로 race condition이 원천 차단됩니다. (실제 재화 원장은 DB로 영속화하고 Redis는 빠른 검증/캐시 계층으로 두는 이중화가 안전)</p>
+
+                    <p><strong>Pub/Sub</strong>은 채널 기반 메시지 브로드캐스트입니다. 채팅, 서버 간 이벤트 통지(예: "랭킹 갱신됨"), 캐시 무효화 전파 등에 씁니다. 단, Pub/Sub은 메시지를 저장하지 않아 구독자가 없을 때 보낸 메시지는 사라지므로, 신뢰성이 필요하면 Stream(XADD/XREAD)을 고려합니다.</p>
+
+                    <details class="code-toggle">
+                        <summary>Pub/Sub으로 랭킹 갱신 통지 <span class="code-lang">C#</span></summary>
+                        <pre><code>// 발행
+var sub = _redis.GetSubscriber();
+await sub.PublishAsync(RedisChannel.Literal("rank:updated"), "season:5");
+
+// 구독 (다른 서버 인스턴스에서)
+await sub.SubscribeAsync(RedisChannel.Literal("rank:updated"), (channel, message) =&gt;
+{
+    // 로컬 랭킹 캐시 무효화 등 처리
+    InvalidateLocalRankCache(message!);
+});</code></pre>
+                    </details>
+
+                    <p><strong>영속성</strong>은 두 방식입니다. RDB는 특정 시점 스냅샷(빠른 복구, 마지막 스냅샷 이후 유실 가능), AOF는 모든 쓰기 명령 로그(유실 최소, 파일 큼). 게임 핵심 데이터는 RDB+AOF를 함께 쓰되, "Redis는 캐시이고 진실의 원본은 DB"라는 원칙을 유지해 Redis 장애가 데이터 손실로 직결되지 않게 설계합니다.</p>
+
+                    <p class="warning">단일 스레드 모델 주의: Redis는 명령을 한 번에 하나씩 처리합니다. <code>KEYS *</code>, 큰 컬렉션에 대한 <code>SMEMBERS</code>, 큰 ZSet 전체 <code>ZRANGE 0 -1</code> 같은 O(N) 명령 하나가 이벤트 루프를 점유하면 그 사이 모든 요청이 지연됩니다. 운영에서는 <code>KEYS</code> 대신 <code>SCAN</code>, 큰 범위 대신 페이징, 무거운 집계는 별도 인스턴스/replica에서 수행해야 합니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>피해야 할 명령</th>
+                                <th>이유</th>
+                                <th>대안</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>KEYS pattern</td>
+                                <td>전체 키 스캔 O(N), 루프 블로킹</td>
+                                <td>SCAN (커서 기반 분할)</td>
+                            </tr>
+                            <tr>
+                                <td>ZRANGE 0 -1</td>
+                                <td>전체 멤버 반환 O(N)</td>
+                                <td>ZRANGE 페이징 / LIMIT</td>
+                            </tr>
+                            <tr>
+                                <td>FLUSHALL (운영)</td>
+                                <td>전체 삭제, 블로킹</td>
+                                <td>UNLINK / 비동기 삭제</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>자료구조 선택이 곧 설계</strong>입니다. 정렬은 ZSet, 부분 갱신은 Hash, 멱등 플래그는 String처럼 "Redis가 대신 해줄 연산"으로 타입을 고릅니다.</li>
+                <li><strong>캐시는 Look-aside가 기본</strong>이며, 갱신 시에는 "DB 먼저 쓰고 캐시는 삭제(무효화)"가 안전합니다. "캐시 먼저"는 거의 항상 불일치를 만듭니다.</li>
+                <li><strong>스탬피드(thundering herd)</strong>는 TTL 지터 + 재생성 직렬화로 막고, 인기 키의 동시 만료를 분산시킵니다.</li>
+                <li><strong>분산 락은 SET NX PX + 토큰</strong>으로 잡고, 해제는 Lua로 "내 토큰일 때만" 원자 삭제합니다. 정확성이 critical하면 락만 믿지 말고 DB 트랜잭션·멱등키·fencing token으로 보강합니다.</li>
+                <li><strong>실시간 랭킹은 Sorted Set</strong>(ZINCRBY/ZREVRANGE/ZREVRANK)으로 O(log N)에 처리하고, 동점은 합성 점수로 보정하며, 재화 차감 같은 read-modify-write는 Lua로 원자화합니다. O(N) 명령(KEYS, 전체 ZRANGE)은 운영에서 금지합니다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

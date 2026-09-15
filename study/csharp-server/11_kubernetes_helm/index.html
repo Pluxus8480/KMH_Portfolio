@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker · Kubernetes · Helm | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp-server.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>"제 컴퓨터에선 됐는데요?"</h1>
+            <p class="subtitle">컨테이너부터 Kubernetes·Helm 오케스트레이션까지</p>
+        </header>
+
+        <!-- ============================================================ -->
+        <!-- Part 1 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 1: 컨테이너와 Docker — "제 컴퓨터에선 됐는데요"의 종결</h2>
+            <div class="conversation">
+                <div class="q">"제 로컬에선 잘 돌아가는데 운영 서버에선 죽어요." 컨테이너는 이 문제를 어떻게 해결하나요?</div>
+                <div class="a">
+                    <p>이 고전적인 비극은 대부분 <strong>환경의 불일치</strong>에서 옵니다. .NET 런타임 버전, OS의 시스템 라이브러리, 환경 변수, 타임존, 로케일... 개발 PC와 운영 서버가 미묘하게 다르면 같은 바이너리도 다르게 동작합니다.</p>
+                    <p class="highlight">컨테이너는 애플리케이션과 그 실행에 필요한 모든 것(런타임, 라이브러리, 설정)을 하나의 <strong>이미지</strong>로 패키징합니다. 어디서 실행하든 이미지 안의 환경은 동일하므로, "내 컴퓨터에선 됐는데"가 원천적으로 사라집니다.</p>
+                    <p>VM과 달리 컨테이너는 호스트의 커널을 공유합니다. 그래서 게스트 OS 전체를 부팅하지 않고, 프로세스 수준의 격리만 합니다. 결과적으로 <strong>수십 MB~수백 MB</strong> 크기에 <strong>밀리초~초 단위</strong>로 뜹니다. 게임 서버처럼 트래픽에 따라 인스턴스를 빠르게 늘리고 줄여야 할 때 결정적입니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>VM이 "집을 통째로 새로 짓는 것"이라면, 컨테이너는 "이미 지어진 아파트 한 동에 입주하는 것"입니다.</p>
+                        <p>전기·수도(커널)는 건물 전체가 공유하고, 각 세대(컨테이너)는 자기 집 안의 짐(앱·라이브러리)만 챙기면 됩니다. 입주가 빠르고, 옆집과 섞이지 않습니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">이미지의 "레이어"와 "캐시"는 뭔가요? 빌드 속도와 이미지 크기에 왜 중요한가요?</div>
+                <div class="a">
+                    <p>Docker 이미지는 <strong>읽기 전용 레이어의 스택</strong>입니다. Dockerfile의 각 명령(<code>RUN</code>, <code>COPY</code> 등)이 새 레이어를 만들고, 이전 레이어 위에 쌓입니다.</p>
+                    <p class="key-point">핵심은 <strong>레이어 캐시</strong>입니다. 빌드 시 Docker는 위에서부터 명령을 비교해, 변경이 없는 레이어는 캐시를 재사용합니다. 하지만 한 레이어가 바뀌면 그 <strong>아래(이후) 레이어는 모두 무효화</strong>됩니다.</p>
+                    <p>그래서 자주 바뀌지 않는 것(의존성 복원)을 먼저, 자주 바뀌는 것(소스 코드)을 나중에 배치하는 것이 정석입니다. .NET이라면 <code>.csproj</code>만 먼저 복사해 <code>dotnet restore</code>를 캐시하고, 그 다음에 전체 소스를 복사합니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>나쁜 순서</th>
+                                <th>좋은 순서</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>구성</td>
+                                <td>전체 소스 COPY → restore → build</td>
+                                <td>.csproj COPY → restore → 소스 COPY → build</td>
+                            </tr>
+                            <tr>
+                                <td>코드 한 줄 수정 시</td>
+                                <td>restore부터 전부 재실행 (느림)</td>
+                                <td>restore 캐시 재사용, build만 (빠름)</td>
+                            </tr>
+                            <tr>
+                                <td>CI 빌드 시간</td>
+                                <td>매번 수 분</td>
+                                <td>수 초~수십 초</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">.NET 앱을 작고 안전하게 컨테이너화하는 정석은 멀티스테이지 빌드라고 하던데요?</div>
+                <div class="a">
+                    <p>맞습니다. <strong>SDK 이미지로 빌드</strong>하고, <strong>런타임 이미지로 실행</strong>합니다. SDK 이미지는 컴파일러·도구가 들어 있어 수백 MB~1GB가 넘지만, 운영에서는 컴파일이 필요 없습니다.</p>
+                    <p class="highlight">멀티스테이지 빌드는 빌드 산출물(DLL)만 최종 런타임 이미지로 복사합니다. SDK는 버려지므로 최종 이미지가 <strong>작아지고</strong>, 컴파일러 같은 공격 표면이 사라져 <strong>안전</strong>해집니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">Dockerfile</div>
+                        <pre><code># --- 1단계: 빌드 스테이지 (SDK 이미지, 용량이 큼) ---
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+# 의존성 복원을 먼저 캐시하기 위해 csproj만 복사
+COPY ["GameServer.csproj", "./"]
+RUN dotnet restore "GameServer.csproj"
+
+# 이제 전체 소스 복사 후 publish (Release, 자체 포함 아님)
+COPY . .
+RUN dotnet publish "GameServer.csproj" -c Release -o /app/publish \
+    /p:UseAppHost=false   # 런타임 이미지에선 dotnet으로 실행하므로 네이티브 호스트 불필요
+
+# --- 2단계: 런타임 스테이지 (작은 ASP.NET 런타임 이미지) ---
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+WORKDIR /app
+
+# 보안: root가 아닌 비특권 사용자로 실행 (런타임 이미지에 기본 제공)
+USER $APP_UID
+
+# 빌드 스테이지의 산출물(DLL)만 복사 — SDK는 버려짐
+COPY --from=build /app/publish .
+
+# 컨테이너가 listen할 포트 (문서화 목적, 실제 노출은 K8s가 담당)
+EXPOSE 8080
+ENV ASPNETCORE_URLS=http://+:8080
+
+ENTRYPOINT ["dotnet", "GameServer.dll"]</code></pre>
+                    </div>
+                    <p class="warning">주의: 운영 이미지에 <code>latest</code> 태그를 쓰지 마세요. "어떤 버전이 떠 있는지" 추적이 불가능해지고, 롤백 시점에 같은 태그가 다른 이미지를 가리킬 수 있습니다. 반드시 <strong>커밋 SHA나 시맨틱 버전</strong>으로 고정합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 2 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 2: K8s 핵심 오브젝트 — 선언적 desired state와 셀프힐링</h2>
+            <div class="conversation">
+                <div class="q">컨테이너가 있으면 됐지, 굳이 Kubernetes가 왜 필요한가요?</div>
+                <div class="a">
+                    <p>컨테이너 하나를 <code>docker run</code>으로 띄우는 건 쉽습니다. 문제는 운영입니다. 컨테이너가 죽으면 누가 되살리나요? 트래픽이 몰리면 누가 50개로 늘리나요? 새 버전을 무중단으로 어떻게 교체하나요? 수십 대 노드에 어떻게 분산 배치하나요?</p>
+                    <p class="highlight">Kubernetes(K8s)는 이 모든 것을 자동화하는 <strong>컨테이너 오케스트레이터</strong>입니다. 핵심 철학은 <strong>선언적(declarative) 관리</strong>입니다.</p>
+                    <p>나는 "이렇게 해줘(명령형)"가 아니라 <strong>"이런 상태였으면 좋겠어(desired state)"</strong>를 YAML로 선언합니다. 예를 들어 "GameServer Pod 5개". 그러면 K8s 컨트롤러가 현재 상태와 desired state를 끊임없이 비교(reconcile)하며 차이를 메웁니다. Pod 하나가 죽어 4개가 되면, K8s가 알아서 1개를 새로 띄워 5개로 복구합니다. 이것이 <strong>셀프힐링</strong>입니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>명령형은 "오른쪽으로 세 걸음 가, 멈춰, 왼발 들어"처럼 하나하나 지시하는 것입니다.</p>
+                        <p>선언형은 자율주행 자동차에 "목적지: 강남역"만 입력하는 것입니다. 도로가 막히든 사고가 나든, 차가 알아서 목적지(desired state)에 도달하도록 경로를 재계산합니다. K8s도 마찬가지로 "원하는 상태"만 주면 거기로 수렴시킵니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">Pod, ReplicaSet, Deployment, Service, Ingress — 이 오브젝트들의 관계가 헷갈립니다.</div>
+                <div class="a">
+                    <p>위에서 아래로 책임이 위임되는 계층 구조로 보면 명확합니다.</p>
+
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">Ingress (외부 HTTP 라우팅: host/path → Service)</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">Service (안정적 가상 IP + 로드밸런싱)</div>
+                        </div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">Deployment (배포 전략·버전·롤백 관리)</div>
+                        </div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">ReplicaSet (개수 N개 유지)</div>
+                        </div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">Pod 1</div>
+                            <div class="hierarchy-item">Pod 2</div>
+                            <div class="hierarchy-item">Pod N</div>
+                        </div>
+                    </div>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>오브젝트</th>
+                                <th>책임</th>
+                                <th>한 줄 요약</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Pod</td>
+                                <td>컨테이너 1개 이상의 실행 단위</td>
+                                <td>K8s가 스케줄링하는 최소 단위. 일회용(언제든 죽고 새로 뜸)</td>
+                            </tr>
+                            <tr>
+                                <td>ReplicaSet</td>
+                                <td>"Pod N개"를 유지</td>
+                                <td>개수 보장. 보통 직접 만지지 않음</td>
+                            </tr>
+                            <tr>
+                                <td>Deployment</td>
+                                <td>ReplicaSet을 관리하며 롤링 업데이트·롤백</td>
+                                <td>스테이트리스 앱 배포의 표준 진입점</td>
+                            </tr>
+                            <tr>
+                                <td>Service</td>
+                                <td>Pod 집합에 고정 IP/DNS 부여 + 부하분산</td>
+                                <td>Pod IP는 휘발성 → 안정적 주소 제공</td>
+                            </tr>
+                            <tr>
+                                <td>Ingress</td>
+                                <td>외부 HTTP(S)를 도메인/경로로 Service에 라우팅</td>
+                                <td>L7 게이트웨이. TLS 종료도 담당</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="key-point">Pod의 IP는 재시작·재배치 시마다 바뀝니다. 그래서 <strong>다른 Pod이 직접 Pod IP를 참조하면 안 됩니다.</strong> 반드시 Service의 DNS 이름(<code>game-svc.default.svc.cluster.local</code>)을 통해 통신해야, 뒤의 Pod이 교체돼도 호출 측은 영향이 없습니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">YAML</div>
+                        <pre><code># Deployment — desired state로 "GameServer Pod 3개"를 선언
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-server
+spec:
+  replicas: 3                 # 원하는 Pod 개수 (셀프힐링의 기준)
+  selector:
+    matchLabels:
+      app: game-server        # 이 라벨을 가진 Pod을 내 소유로 인식
+  template:                   # 만들 Pod의 설계도
+    metadata:
+      labels:
+        app: game-server
+    spec:
+      containers:
+        - name: game-server
+          image: registry.example.com/game-server:1.4.2  # latest 금지, 버전 고정
+          ports:
+            - containerPort: 8080
+---
+# Service — 3개 Pod 앞에 안정적인 가상 IP/DNS 부여
+apiVersion: v1
+kind: Service
+metadata:
+  name: game-svc
+spec:
+  selector:
+    app: game-server          # 위 라벨과 매칭되는 Pod들로 트래픽 분산
+  ports:
+    - port: 80                # Service가 노출하는 포트
+      targetPort: 8080        # Pod 컨테이너의 포트</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 3 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 3: 설정과 상태 — ConfigMap/Secret, 그리고 StatefulSet</h2>
+            <div class="conversation">
+                <div class="q">DB 연결 문자열이나 매치 설정값을 이미지에 박으면 안 된다고 하던데요?</div>
+                <div class="a">
+                    <p>그렇습니다. 설정을 이미지에 굽으면, 설정 하나 바꾸려고 이미지를 다시 빌드·배포해야 합니다. 같은 이미지를 dev/staging/prod에서 재사용할 수도 없습니다.</p>
+                    <p class="highlight"><strong>ConfigMap</strong>은 비민감 설정(매치 타임아웃, 기능 플래그, 로그 레벨)을, <strong>Secret</strong>은 민감 정보(DB 비밀번호, API 키, JWT 서명키)를 컨테이너 <strong>밖</strong>에서 주입합니다. 이미지는 환경에 무관하게 동일하게 유지됩니다(12-Factor의 "config는 환경에").</p>
+                    <p class="warning">주의: Secret은 기본적으로 <strong>Base64 인코딩일 뿐, 암호화가 아닙니다.</strong> etcd 저장 암호화(encryption at rest), RBAC로 접근 제한, 또는 외부 비밀 관리(Vault, 클라우드 KMS 연동)를 반드시 함께 적용해야 합니다. 또한 Secret을 git에 평문으로 커밋하지 마세요.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">YAML</div>
+                        <pre><code># ConfigMap — 비민감 설정
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: game-config
+data:
+  MATCH_TIMEOUT_SEC: "120"    # 매칭 대기 제한시간
+  LOG_LEVEL: "Information"
+---
+# Secret — 민감 정보 (운영에선 외부 비밀관리로 주입 권장)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: game-secret
+type: Opaque
+stringData:                   # stringData는 평문으로 적으면 K8s가 인코딩
+  DB_PASSWORD: "REPLACE_ME"
+---
+# Pod에서 envFrom으로 한꺼번에 환경변수 주입
+spec:
+  containers:
+    - name: game-server
+      image: registry.example.com/game-server:1.4.2
+      envFrom:
+        - configMapRef:
+            name: game-config
+        - secretRef:
+            name: game-secret</code></pre>
+                    </div>
+                    <p>ASP.NET Core라면 이렇게 주입된 환경변수가 <code>IConfiguration</code>에 자동으로 매핑되어, <code>builder.Configuration["DB_PASSWORD"]</code>로 바로 읽힙니다.</p>
+                </div>
+
+                <div class="q">게임 서버는 세션·매치 상태가 있는데, Deployment의 일회용 Pod과 안 맞지 않나요?</div>
+                <div class="a">
+                    <p>정확한 문제의식입니다. Deployment가 만드는 Pod은 <strong>상호 교체 가능(stateless)</strong>하다고 가정합니다. 이름이 <code>game-server-7d9f-xk2</code>처럼 랜덤이고, 죽으면 전혀 다른 이름·다른 노드에서 부활하며, 안정적인 스토리지가 보장되지 않습니다.</p>
+                    <p class="highlight">상태(데이터·정체성)가 필요한 워크로드에는 <strong>StatefulSet</strong>을 씁니다. StatefulSet은 Deployment와 달리 세 가지를 보장합니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>특성</th>
+                                <th>Deployment</th>
+                                <th>StatefulSet</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Pod 이름</td>
+                                <td>랜덤 (game-7d9f-xk2)</td>
+                                <td>안정적·순차적 (game-0, game-1, game-2)</td>
+                            </tr>
+                            <tr>
+                                <td>네트워크 ID</td>
+                                <td>휘발성 (Service IP만 안정)</td>
+                                <td>안정적 DNS (game-0.headless-svc)</td>
+                            </tr>
+                            <tr>
+                                <td>스토리지</td>
+                                <td>공유/임시</td>
+                                <td>Pod별 전용 PVC, 재시작해도 유지</td>
+                            </tr>
+                            <tr>
+                                <td>배포 순서</td>
+                                <td>병렬, 무순서</td>
+                                <td>순차 생성·역순 종료 (0→1→2)</td>
+                            </tr>
+                            <tr>
+                                <td>대표 용도</td>
+                                <td>웹 API, 스테이트리스 매칭 게이트</td>
+                                <td>DB(레디스 클러스터), 안정 ID가 필요한 dedicated 게임 서버</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="key-point">StatefulSet의 안정적 네트워크 ID는, 매치 코디네이터가 "이 매치는 game-2번 인스턴스가 담당"이라고 <strong>특정 Pod을 지목해 라우팅</strong>해야 할 때 핵심입니다. Pod이 재시작돼도 같은 이름·같은 영속 볼륨(PersistentVolume)을 다시 붙잡으므로, 진행 중인 게임 상태를 복구할 수 있습니다.</p>
+                    <p>다만 현대 게임 운영에서는 dedicated 세션 서버를 K8s에 얹을 때 <strong>Agones</strong> 같은 전용 오퍼레이터(매치당 GameServer CRD, 할당/드레인 라이프사이클)를 쓰는 경우가 많습니다. StatefulSet은 그 빌딩 블록이자 더 일반적인 도구로 이해하면 됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 4 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 4: 스케일링과 안정성 — HPA, resources, 그리고 3종 probe</h2>
+            <div class="conversation">
+                <div class="q">이벤트 오픈 때 트래픽이 폭증합니다. Pod 개수를 자동으로 늘릴 수 있나요?</div>
+                <div class="a">
+                    <p><strong>HPA(Horizontal Pod Autoscaler)</strong>가 그 역할을 합니다. CPU·메모리 사용률이나 커스텀 메트릭(동시 접속 수, 큐 길이)을 기준으로 Deployment의 <code>replicas</code>를 자동 조정합니다.</p>
+                    <p class="warning">중요: HPA가 동작하려면 컨테이너에 <strong>resources requests가 반드시 설정</strong>돼 있어야 합니다. HPA는 "CPU 사용률"을 "실제 사용량 / request" 비율로 계산하기 때문에, request가 없으면 기준이 없어 스케일 판단을 못 합니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">YAML</div>
+                        <pre><code># HPA — CPU 평균 사용률 70% 목표로 3~30개 사이 자동 조정
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: game-server-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: game-server
+  minReplicas: 3              # 평시 최소 (점검 종료 직후 콜드스타트 방지)
+  maxReplicas: 30             # 폭증 상한 (비용·노드 한계 가드)
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70   # request 대비 평균 70% 넘으면 스케일아웃</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">resources의 requests와 limits는 뭐가 다른가요? 잘못 잡으면 어떻게 되나요?</div>
+                <div class="a">
+                    <p><strong>requests</strong>는 "최소 보장량", <strong>limits</strong>는 "최대 상한"입니다.</p>
+                    <ul>
+                        <li><strong>requests</strong>: 스케줄러가 이 Pod을 어느 노드에 올릴지 정하는 기준. requests 합이 노드 가용량을 넘으면 그 노드엔 배치하지 않습니다.</li>
+                        <li><strong>limits</strong>: 이 컨테이너가 쓸 수 있는 천장. <strong>CPU</strong>는 초과 시 스로틀링(느려짐)되고, <strong>메모리</strong>는 초과 시 <strong>OOMKilled</strong>(즉시 강제 종료)됩니다.</li>
+                    </ul>
+                    <p class="key-point">메모리 limit을 너무 낮게 잡으면 GC 압박 상황에서 OOMKilled로 Pod이 죽고, CPU request를 너무 낮게 잡으면 한 노드에 과밀 배치돼 서로 자원을 다툽니다(noisy neighbor). 게임 서버처럼 응답 지연이 민감하면, <strong>실측 기반</strong>으로 requests를 현실적으로 잡고 limits는 버스트를 허용할 만큼 약간 여유 있게 두는 것이 일반적입니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">YAML</div>
+                        <pre><code>resources:
+  requests:                  # 스케줄링·HPA 기준이 되는 보장량
+    cpu: "250m"              # 0.25 vCPU
+    memory: "256Mi"
+  limits:                    # 상한 (메모리 초과 시 OOMKilled)
+    cpu: "1000m"            # 버스트 허용 1 vCPU
+    memory: "512Mi"</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">배포 직후 아직 준비도 안 된 Pod에 트래픽이 들어가서 502가 떴습니다. probe로 막을 수 있나요?</div>
+                <div class="a">
+                    <p>K8s의 세 가지 probe가 정확히 이 문제를 위해 존재합니다. 각자 질문이 다릅니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>Probe</th>
+                                <th>묻는 질문</th>
+                                <th>실패 시 동작</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>startup</td>
+                                <td>"부팅이 끝났나?"</td>
+                                <td>성공 전까지 다른 probe 비활성. 느린 워밍업 보호</td>
+                            </tr>
+                            <tr>
+                                <td>readiness</td>
+                                <td>"지금 트래픽 받아도 되나?"</td>
+                                <td>Service 엔드포인트에서 제외(트래픽 차단). Pod은 안 죽임</td>
+                            </tr>
+                            <tr>
+                                <td>liveness</td>
+                                <td>"살아 있나? (먹통 아닌가)"</td>
+                                <td>컨테이너 재시작</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="highlight">핵심 구분: <strong>readiness 실패는 "잠깐 빼줘"(트래픽만 차단), liveness 실패는 "죽이고 다시 띄워"(재시작)</strong>입니다. 이걸 혼동해 readiness가 할 일을 liveness에 맡기면, 일시적 부하로 느려진 Pod을 계속 죽여 상황을 악화시킵니다(크래시 루프).</p>
+
+                    <div class="code-block">
+                        <div class="code-header">YAML</div>
+                        <pre><code>containers:
+  - name: game-server
+    image: registry.example.com/game-server:1.4.2
+    # 느린 부팅 동안 liveness/readiness를 유보 (최대 30 * 10 = 300초 허용)
+    startupProbe:
+      httpGet: { path: /healthz/startup, port: 8080 }
+      failureThreshold: 30
+      periodSeconds: 10
+    # 트래픽 수용 가능 여부 — DB·캐시 연결 확인 등
+    readinessProbe:
+      httpGet: { path: /healthz/ready, port: 8080 }
+      periodSeconds: 5
+    # 먹통(데드락 등) 감지 — 단순 생존 신호만
+    livenessProbe:
+      httpGet: { path: /healthz/live, port: 8080 }
+      periodSeconds: 10
+      failureThreshold: 3</code></pre>
+                    </div>
+                    <p>ASP.NET Core에서는 <code>AddHealthChecks()</code>로 <code>/healthz/ready</code>(DB·Redis 의존성 체크 포함)와 <code>/healthz/live</code>(의존성 제외, 프로세스 생존만)를 분리해 매핑하는 것이 정석입니다. readiness에만 외부 의존성을 넣고 liveness에는 넣지 않아야, DB 일시 장애가 전 Pod 동시 재시작으로 번지지 않습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 5 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 5: Helm — "Kubernetes의 패키지 매니저"</h2>
+            <div class="conversation">
+                <div class="q">YAML이 수십 개로 늘어나고 dev/staging/prod마다 거의 같은 걸 복붙하게 됩니다. Helm이 답인가요?</div>
+                <div class="a">
+                    <p>맞습니다. Deployment, Service, ConfigMap, HPA, Ingress... 환경 3개면 그 모든 파일이 3벌이 됩니다. replica 수, 이미지 태그, 도메인만 다른데 말이죠. 복붙은 곧 드리프트(불일치)를 부릅니다.</p>
+                    <p class="highlight"><strong>Helm</strong>은 K8s의 패키지 매니저입니다. apt나 npm이 패키지를 다루듯, Helm은 관련된 K8s 리소스 묶음을 하나의 <strong>차트(Chart)</strong>로 패키징하고, 환경별 차이는 <strong>values</strong>로만 분리합니다. 설치된 인스턴스는 <strong>릴리스(Release)</strong>라 부릅니다.</p>
+
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>차트는 "이케아 가구의 조립 설명서 묶음", values는 "이 집에 맞는 치수·색상 옵션"입니다.</p>
+                        <p>같은 설명서(템플릿)에 옵션(values)만 바꿔 끼우면, 거실용·침실용 가구가 각각 조립됩니다. dev용 릴리스와 prod용 릴리스가 같은 차트에서 values만 다르게 나오는 것과 같습니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">차트 구조와 템플릿 변수화는 실제로 어떻게 생겼나요?</div>
+                <div class="a">
+                    <p>차트는 정해진 디렉터리 구조를 가집니다.</p>
+
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">game-server/ (차트 루트)</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">Chart.yaml — 차트 메타데이터(이름·버전)</div>
+                            <div class="hierarchy-item">values.yaml — 기본 설정값</div>
+                            <div class="hierarchy-item">templates/ — 변수화된 매니페스트</div>
+                        </div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">templates/deployment.yaml</div>
+                            <div class="hierarchy-item">templates/service.yaml</div>
+                            <div class="hierarchy-item">templates/_helpers.tpl (공통 함수)</div>
+                        </div>
+                    </div>
+
+                    <p><code>Chart.yaml</code>에는 차트 자체 버전과 앱 버전이 들어가고, <code>values.yaml</code>이 기본값을 정의합니다. <code>templates/</code> 안의 매니페스트는 <code>{{ .Values.xxx }}</code> 문법으로 그 값을 끌어 씁니다.</p>
+
+                    <details class="code-toggle">
+                        <summary>Chart.yaml + values.yaml + 변수화된 deployment.yaml <span class="code-lang">YAML</span></summary>
+                        <pre><code># ===== Chart.yaml — 차트 메타데이터 =====
+apiVersion: v2
+name: game-server
+description: 게임 매칭 서버 차트
+type: application
+version: 0.3.0          # 차트 버전 (배포할 때마다 올림)
+appVersion: "1.4.2"     # 패키징하는 앱 버전
+
+# ===== values.yaml — 기본값 (환경별로 override) =====
+replicaCount: 3
+image:
+  repository: registry.example.com/game-server
+  tag: "1.4.2"          # CI에서 커밋 SHA로 덮어쓰기도 함
+resources:
+  requests: { cpu: "250m", memory: "256Mi" }
+  limits:   { cpu: "1000m", memory: "512Mi" }
+ingress:
+  host: api.dev.example.com
+
+# ===== templates/deployment.yaml — 변수화 =====
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # _helpers.tpl에 정의한 공통 이름 함수 호출 (릴리스명 접두 등)
+  name: {{ include "game-server.fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}     # values에서 주입
+  selector:
+    matchLabels:
+      app: {{ include "game-server.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "game-server.name" . }}
+    spec:
+      containers:
+        - name: game-server
+          # 레포지토리 + 태그를 조합 (환경별로 태그만 바꿔 끼움)
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}   # 블록 통째 들여쓰기 주입</code></pre>
+                    </details>
+                </div>
+
+                <div class="q">환경별 배포, 그리고 배포가 잘못됐을 때 롤백은 명령어로 어떻게 하나요?</div>
+                <div class="a">
+                    <p>같은 차트에 <code>-f</code>로 환경별 values 파일만 덮어씌워 릴리스합니다. Helm은 각 릴리스의 <strong>리비전 히스토리</strong>를 보관하므로, 잘못되면 한 줄로 즉시 되돌립니다.</p>
+
+                    <div class="code-block">
+                        <div class="code-header">bash</div>
+                        <pre><code># 렌더링 결과 미리보기 (실제 적용 없이 YAML 확인 — 사고 예방)
+helm template game-server ./game-server -f values-prod.yaml
+
+# prod 환경에 설치 또는 업그레이드 (없으면 설치, 있으면 갱신)
+helm upgrade --install game-prod ./game-server \
+  -f values-prod.yaml \
+  --set image.tag=1.4.3 \   # CI가 빌드한 새 이미지 태그를 주입
+  --atomic --timeout 5m     # 실패 시 자동으로 이전 상태로 되돌림
+
+# 릴리스 히스토리 확인 (리비전 번호 목록)
+helm history game-prod
+
+# 문제가 생기면 직전 리비전으로 즉시 롤백
+helm rollback game-prod 0   # 0 = 바로 이전 리비전</code></pre>
+                    </div>
+                    <p class="key-point"><code>--atomic</code>은 면접에서 강조할 만한 포인트입니다. 업그레이드 도중 probe 실패 등으로 배포가 안정화되지 못하면, Helm이 <strong>자동으로 이전 정상 상태로 롤백</strong>합니다. "절반만 배포된 채 방치"되는 최악의 상황을 막아 줍니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- Part 6 -->
+        <!-- ============================================================ -->
+        <section class="part">
+            <h2>Part 6: 게임 서버 운영 — 무중단 배포와 세션의 딜레마</h2>
+            <div class="conversation">
+                <div class="q">무중단 배포 전략에는 어떤 것들이 있고, 게임 서버엔 뭐가 맞나요?</div>
+                <div class="a">
+                    <p>대표적인 세 가지 전략입니다.</p>
+
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>전략</th>
+                                <th>방식</th>
+                                <th>장점 / 단점</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>롤링 업데이트</td>
+                                <td>구버전 Pod을 몇 개씩 새 버전으로 점진 교체</td>
+                                <td>추가 자원 적음 / 배포 중 두 버전 공존(호환성 필요)</td>
+                            </tr>
+                            <tr>
+                                <td>블루-그린</td>
+                                <td>새 버전(그린) 풀을 통째로 띄워두고 트래픽을 한 번에 전환</td>
+                                <td>즉시 전환·즉시 롤백 / 두 배 자원 필요</td>
+                            </tr>
+                            <tr>
+                                <td>카나리</td>
+                                <td>새 버전에 트래픽 5%만 흘려 지표 관찰 후 점진 확대</td>
+                                <td>위험 최소화·실측 검증 / 라우팅·관측 인프라 필요</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <p class="highlight">스테이트리스 API(매칭 게이트웨이, 로비, 상점)는 <strong>롤링 업데이트</strong>가 기본이고, 위험한 변경은 <strong>카나리</strong>로 5%부터 검증합니다. 큰 프로토콜 변경처럼 즉시 되돌릴 여지가 필요하면 <strong>블루-그린</strong>이 안전합니다.</p>
+
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">v1 100%</div>
+                                <div class="flow-box__items">기존 운영</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">v2 카나리 5%</div>
+                                <div class="flow-box__items">지표 관찰</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">v2 50%</div>
+                                <div class="flow-box__items">점진 확대</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">v2 100%</div>
+                                <div class="flow-box__items">전환 완료</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="q">그런데 진행 중인 매치(세션)가 붙어 있는 서버는 그냥 Pod을 갈아치우면 유저가 튕기지 않나요?</div>
+                <div class="a">
+                    <p>바로 그 점이 스테이트리스 웹 앱과 다른, 게임 서버 배포의 핵심 난점입니다. 롤링 업데이트가 구버전 Pod에 종료 신호(SIGTERM)를 보내는 순간, 그 Pod에서 플레이 중이던 유저는 끊깁니다.</p>
+                    <p class="key-point">해결의 핵심은 <strong>그레이스풀 드레인(graceful drain)</strong>입니다. 종료 신호를 받은 Pod은 즉시 죽지 않고, <strong>(1) 신규 매치 배정을 중단(readiness를 false로 전환해 트래픽 차단)</strong>하고, <strong>(2) 진행 중인 매치가 자연 종료될 때까지 기다린 뒤(드레인)</strong> 빠집니다.</p>
+                    <p>K8s에서 이를 받쳐 주는 장치들이 있습니다.</p>
+                    <ul>
+                        <li><strong>terminationGracePeriodSeconds</strong>: SIGTERM 후 강제 종료(SIGKILL)까지의 유예 시간. 매치 길이를 고려해 충분히 길게.</li>
+                        <li><strong>preStop 훅</strong>: 종료 직전 "드레인 모드 진입" 로직을 실행할 시간을 확보.</li>
+                        <li><strong>PodDisruptionBudget(PDB)</strong>: 노드 점검·오토스케일 축소 시 한 번에 빠지는 Pod 수를 제한해, 매치 가용량이 급락하지 않게 보호.</li>
+                    </ul>
+
+                    <div class="code-block">
+                        <div class="code-header">YAML</div>
+                        <pre><code>spec:
+  # 진행 중인 매치가 끝날 때까지 강제종료를 미룸 (예: 최대 5분)
+  terminationGracePeriodSeconds: 300
+  containers:
+    - name: game-server
+      lifecycle:
+        preStop:
+          exec:
+            # 종료 신호 직후 드레인 시작: 신규 배정 차단 후 인플라이트 처리 대기
+            command: ["/bin/sh", "-c", "curl -X POST localhost:8080/admin/drain && sleep 5"]</code></pre>
+                    </div>
+                    <p>StatefulSet 기반 dedicated 서버라면, 종종 "교체 대신 비우기"를 택합니다. 즉 새 버전은 <strong>신규 매치만</strong> 새 Pod에 배정하고, 구버전 Pod은 마지막 매치가 끝나면 자연스럽게 회수합니다. Agones 같은 오퍼레이터는 이 "Allocated 상태의 GameServer는 드레인 전까지 보호" 라이프사이클을 표준으로 제공합니다.</p>
+                </div>
+
+                <div class="q">이벤트 오픈이나 점검 종료 직후처럼 트래픽이 한꺼번에 몰리는 순간(thundering herd)은 어떻게 대비하나요?</div>
+                <div class="a">
+                    <p>HPA만 믿으면 늦습니다. HPA가 부하를 감지하고 Pod을 띄우고 그 Pod이 워밍업까지 마치는 데 시간이 걸려서, 그 사이 초기 유저가 502를 맞습니다.</p>
+                    <ul>
+                        <li><strong>사전 웜업(pre-scaling)</strong>: 점검 종료 시각을 알고 있으므로, 그 전에 <code>minReplicas</code>를 미리 올려 용량을 확보해 둡니다. 예측 가능한 스파이크는 자동화에만 맡기지 않습니다.</li>
+                        <li><strong>노드 오토스케일러</strong>: Pod이 늘어도 노드가 부족하면 Pending에 걸립니다. Cluster Autoscaler(또는 Karpenter)로 노드 자체도 늘려야 합니다. Pod 스케일과 노드 스케일은 별개입니다.</li>
+                        <li><strong>점진 입장(대기열)</strong>: 인프라가 못 따라가면, 매칭/입장 게이트에서 대기열을 두어 유입 속도를 평탄화(throttle)합니다. 한 번에 다 받기보다, 천천히 받는 것이 전체를 살립니다.</li>
+                        <li><strong>그레이스풀 디그레이드</strong>: 과부하 시 부가 기능(랭킹 갱신, 친구 추천)을 일시 차단하고 핵심 경로(로그인·매칭)만 지키는 회로 차단(circuit breaker)을 둡니다.</li>
+                    </ul>
+                    <p class="warning">흔한 함정: 점검 종료 직후 전 유저가 동시에 재접속하면서, 비어 있던 캐시를 한꺼번에 채우는 요청이 DB로 쏟아지는 <strong>캐시 스탬피드</strong>가 발생합니다. 미리 캐시를 데워두거나(cache warming), 동일 키 요청을 합치는(single-flight) 방어가 함께 필요합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- 핵심 정리 -->
+        <!-- ============================================================ -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>컨테이너 = 환경 통째 패키징</strong>. .NET은 SDK로 빌드하고 런타임 이미지로 실행하는 멀티스테이지로 작고 안전하게. 레이어 캐시를 노려 의존성 복원을 소스 복사보다 먼저, 태그는 <code>latest</code> 금지·버전 고정.</li>
+                <li><strong>K8s는 선언적 desired state + 셀프힐링</strong>. Ingress→Service→Deployment→ReplicaSet→Pod 계층으로 책임이 위임되고, Pod IP는 휘발성이므로 통신은 항상 Service DNS로.</li>
+                <li><strong>설정은 컨테이너 밖으로</strong>(ConfigMap/Secret), Secret은 Base64일 뿐이라 암호화·RBAC 필수. 상태·안정 ID가 필요하면 Deployment가 아니라 StatefulSet(또는 Agones).</li>
+                <li><strong>스케일·안정성</strong>: HPA는 resources requests가 있어야 동작, 메모리 limit 초과는 OOMKilled. probe 3종을 구분 — readiness=트래픽 차단, liveness=재시작, startup=느린 부팅 보호.</li>
+                <li><strong>Helm으로 차트화</strong>(templates+values+Chart.yaml)해 환경 차이를 values로만 분리, <code>--atomic</code>·<code>helm rollback</code>으로 안전 배포. 게임 서버는 세션 때문에 그레이스풀 드레인·PDB·사전 웜업이 무중단 배포의 핵심.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>시니어 서버 프로그래머 학습 로드맵 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp-server.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>무엇을, 어떤 순서로 공부해야 할까?</h1>
+            <p class="subtitle">.NET 게임 백엔드 채용 공고를 시니어 서버 프로그래머 수준으로 정복하는 학습 로드맵</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 채용 공고를 학습 지도로 번역하기</h2>
+            <div class="conversation">
+                <div class="q">공고에 기술이 너무 많습니다. 다 똑같이 중요한가요?</div>
+                <div class="a">
+                    <p>아닙니다. 채용 공고의 기술 스택은 <strong>"채용 후 매일 만질 것"</strong>과 <strong>"있으면 좋은 것"</strong>이 섞여 있습니다. 합격과 온보딩을 위해서는 우선순위를 매겨야 합니다.</p>
+                    <p>이 공고의 키워드를 분석하면 회사의 정체성이 보입니다. <strong>.NET 10 + Orleans + Blazor</strong>는 "C#만으로 게임 백엔드 전체를 만든다"는 선언이고, <strong>Azure + Pulumi + Kubernetes + Helm + GitHub Actions</strong>는 "클라우드 네이티브 + 코드형 인프라(IaC)"를, <strong>ELK + Elastic APM</strong>은 "관측 가능성(Observability)을 진지하게 본다"는 신호입니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>이 스택은 한 채의 집과 같습니다.</p>
+                        <p><strong>C# / .NET 10 / async</strong>은 집의 골조와 벽돌입니다. 매일 만지고, 부실하면 집 전체가 무너집니다. → 최우선.</p>
+                        <p><strong>Orleans · PostgreSQL · Redis · TCP</strong>는 배관·전기·수도입니다. 보이지 않지만 실제로 일을 하는 핵심 설비입니다. → 핵심.</p>
+                        <p><strong>Azure · K8s · Helm · Pulumi · Actions · ELK</strong>는 집을 짓는 크레인·설계도·CCTV입니다. 직접 살지는 않지만 어떻게 동작하는지 알아야 합니다. → 운영 지식.</p>
+                    </div>
+                </div>
+
+                <div class="q">그래서 우선순위가 어떻게 되나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>티어</th>
+                                <th>항목</th>
+                                <th>요구 깊이</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>🔴 T1 골조<br>(매일 만짐)</td>
+                                <td>C# / async·await / .NET 10 Host·DI / Syntactic Sugar(우대) / CS 기초</td>
+                                <td>설명할 수 있고 디버깅까지 가능한 깊이</td>
+                            </tr>
+                            <tr>
+                                <td>🟠 T2 설비<br>(핵심 로직)</td>
+                                <td>Orleans / PostgreSQL / Redis / TCP 네트워킹</td>
+                                <td>직접 설계하고 트레이드오프를 말할 수 있는 깊이</td>
+                            </tr>
+                            <tr>
+                                <td>🟡 T3 운영<br>(인프라·도구)</td>
+                                <td>Azure / Kubernetes·Helm / Pulumi / GitHub Actions / ELK·APM / Blazor</td>
+                                <td>개념·역할을 알고 기존 설정을 읽고 고칠 수 있는 깊이</td>
+                            </tr>
+                            <tr>
+                                <td>🟢 T4 협업<br>(태도·문화)</td>
+                                <td>Git / Jira·Confluence·Slack / 버그 리포트 / 자동화 마인드 / 서브컬처 게임 이해</td>
+                                <td>실무 습관으로 체화. 면접에서 사례로 답변</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">시니어 지원이라면 T1·T2는 "안다" 수준이 아니라 <strong>"왜 그렇게 동작하는지, 언제 무엇을 선택할지"</strong>를 말할 수 있어야 합니다. T3·T4는 "경험해봤고 막히면 찾아서 한다"는 자신감이면 충분합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 8주 학습 동선 (순서가 중요하다)</h2>
+            <div class="conversation">
+                <div class="q">어떤 순서로 공부해야 효율적인가요?</div>
+                <div class="a">
+                    <p>아래에서 위로 쌓아 올립니다. <strong>언어 → 런타임 → 분산 모델 → 데이터 → 인프라 → 관측 → 협업</strong> 순서입니다. 위 단계는 아래 단계를 전제로 하기 때문에 순서를 건너뛰면 이해가 헐거워집니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">1~2주차: 언어·런타임</div>
+                                <div class="flow-box__items">C# 심화 · async/await 서버 함정<br>Syntactic Sugar 디슈가링 · .NET Host</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">3~4주차: 분산·네트워크</div>
+                                <div class="flow-box__items">Orleans 가상 액터 · 게임 도메인 설계<br>TCP / Pipelines 직렬화</div>
+                            </div>
+                        </div>
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">5주차: 데이터 계층</div>
+                                <div class="flow-box__items">PostgreSQL 트랜잭션·인덱스<br>Redis 캐시·락·랭킹</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">6~7주차: 인프라·운영</div>
+                                <div class="flow-box__items">Docker·K8s·Helm · Azure<br>Pulumi · GitHub Actions · Blazor</div>
+                            </div>
+                        </div>
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">8주차: 관측·통합</div>
+                                <div class="flow-box__items">ELK·APM 붙이기<br>미니 프로젝트로 전체 연결</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">상시: 협업·태도</div>
+                                <div class="flow-box__items">Git 전략 · 버그 리포트<br>반복작업 자동화 습관</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="highlight">핵심 원칙: <strong>"읽기 → 따라 만들기 → 망가뜨려 보기"</strong>. 문서를 읽었다고 아는 게 아닙니다. 작은 프로젝트에 직접 적용하고, 일부러 부하·장애를 일으켜 본 사람만 면접에서 자기 말로 설명합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 항목별 "어디까지" 공부할 것인가</h2>
+            <div class="conversation">
+                <div class="q">각 기술을 정확히 어느 깊이까지 파야 면접에서 통하나요?</div>
+                <div class="a">
+                    <p>"어느 정도 지식"의 기준선을 항목별로 정리했습니다. 각 항목은 이 카테고리의 개별 학습 노트로 이어집니다.</p>
+
+                    <details class="code-toggle">
+                        <summary>🔴 T1 — 언어·런타임 (반드시 깊게) <span class="code-lang">필수</span></summary>
+                        <pre><code>[C# / async·await]  ☞ 03번 노트
+  - async 메서드가 컴파일러에 의해 상태 머신(struct)으로 바뀌는 과정
+  - await 시 스레드가 어떻게 ThreadPool로 반환되는가
+  - sync-over-async(.Result/.Wait) 데드락이 왜 생기는가
+  - ConfigureAwait(false), ValueTask, IAsyncEnumerable, CancellationToken
+  - ThreadPool 고갈(starvation)과 백프레셔
+
+[Syntactic Sugar / Low-Level]  ☞ 04번 노트  (★우대사항 직격)
+  - using / lock / foreach / yield / 이벤트 / 람다 클로저가
+    실제로 무슨 코드로 풀리는지 (디슈가링)
+  - "IL까지는 아니어도 Low-Level 코드를 본 적 있는가"에 대한 정확한 답
+
+[.NET 10 / Host / DI]  ☞ 02번 노트
+  - Generic Host, 의존성 주입 수명(Singleton/Scoped/Transient)
+  - Configuration, Options 패턴, Kestrel, 미들웨어 파이프라인
+  - GC 세대·서버 GC, Span/Memory로 할당 줄이기 (기존 C# 카테고리와 연계)</code></pre>
+                    </details>
+
+                    <details class="code-toggle">
+                        <summary>🟠 T2 — 분산·데이터·네트워크 (설계까지) <span class="code-lang">핵심</span></summary>
+                        <pre><code>[Microsoft Orleans]  ☞ 05·06번 노트  (★이 회사의 정체성)
+  - 가상 액터(Virtual Actor) 모델: Grain은 항상 살아있는 것처럼 보인다
+  - Grain이 단일 스레드로 실행되어 "락 없이" 동시성을 다루는 원리
+  - Silo 클러스터, Grain 배치(placement), 활성화/비활성화 생명주기
+  - Persistence, Streams, Reentrancy, Timer/Reminder
+  - 게임 도메인을 Grain으로 모델링 (PlayerGrain, RoomGrain, GuildGrain)
+
+[PostgreSQL]  ☞ 08번 노트
+  - 스키마/인덱스 설계, B-Tree, 복합 인덱스, 부분 인덱스
+  - MVCC, 트랜잭션 격리 수준, 락, 데드락, VACUUM
+  - 커넥션 풀(Npgsql), Dapper vs EF Core 선택 기준
+
+[Redis]  ☞ 09번 노트
+  - 자료구조별 용도(String/Hash/ZSet/List/Set), 캐시 무효화 전략
+  - 분산 락, 원자성(Lua/MULTI), ZSet 실시간 랭킹, Pub/Sub
+  - 영속성(RDB/AOF), 캐시 일관성 함정
+
+[TCP 네트워킹]  ☞ 07번 노트
+  - TCP vs UDP, Nagle/지연 ACK, 스트림 프레이밍(길이 접두사)
+  - System.IO.Pipelines로 제로카피 파싱, 직렬화(MemoryPack 등)</code></pre>
+                    </details>
+
+                    <details class="code-toggle">
+                        <summary>🟡 T3 — 인프라·운영 (읽고 고칠 수 있게) <span class="code-lang">운영</span></summary>
+                        <pre><code>[Docker / Kubernetes / Helm]  ☞ 11번 노트
+  - 이미지·레이어, Pod/Deployment/Service/Ingress, HPA 오토스케일
+  - StatefulSet과 게임 서버, Helm 차트 구조와 values.yaml
+
+[Pulumi (IaC)]  ☞ 12번 노트
+  - C#으로 클라우드 리소스를 코드로 선언, 상태(state) 관리
+  - Terraform과의 차이, 미리보기(preview)/적용(up)
+
+[Azure]  ☞ 13번 노트
+  - AKS, Container Apps, Storage, Service Bus, Key Vault 역할
+  - 게임 백엔드 표준 아키텍처 그림 그리기
+
+[GitHub Actions]  ☞ 14번 노트
+  - 워크플로우·잡·스텝, 빌드→테스트→컨테이너 푸시→배포
+  - 시크릿·환경·매트릭스, 반복작업 자동화
+
+[Blazor]  ☞ 10번 노트
+  - Server vs WebAssembly 차이, 컴포넌트·렌더링, 운영 백오피스 용도
+
+[ELK Stack / Elastic APM]  ☞ 15번 노트
+  - 구조화 로깅(Serilog), Elasticsearch/Kibana, 분산 추적, APM 지표</code></pre>
+                    </details>
+
+                    <details class="code-toggle">
+                        <summary>🟢 T4 — 협업·태도 (사례로 답하기) <span class="code-lang">문화</span></summary>
+                        <pre><code>[Git / Jira / Confluence / Slack]  ☞ 16번 노트
+  - 브랜치 전략, 좋은 커밋·PR, 코드 리뷰 문화
+  - 재현 가능한 버그 리포트 작성법 (공고가 강조하는 역량)
+  - 반복작업을 스크립트/봇으로 자동화한 경험 만들기
+
+[서브컬처 게임 이해]  (★우대사항)
+  - 트릭컬 또는 서브컬처 게임을 실제로 플레이해보기
+  - 가챠/수집/이벤트/시즌 운영이 백엔드에 주는 부하 특성 이해</code></pre>
+                    </details>
+                    <p class="warning">함정: 인프라(T3)에 빠져 며칠을 쓰면서 정작 async 데드락이나 Orleans 동시성 모델을 설명 못 하면 역효과입니다. 면접 비중은 <strong>T1·T2 &gt; T3·T4</strong> 입니다. 인프라는 "전체 그림 + 직접 한 번 배포"면 충분합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 공부 방법 &mdash; 읽지만 말고 만들어라</h2>
+            <div class="conversation">
+                <div class="q">구체적으로 어떻게 공부해야 머리에 남나요?</div>
+                <div class="a">
+                    <p>기술 학습은 <strong>4단계 루프</strong>로 굴립니다. 한 주제마다 이 루프를 한 바퀴 돌리세요.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">① 공식 문서</div>
+                                <div class="flow-box__items">Microsoft Learn<br>해당 기술 공식 docs<br>"왜 만들어졌나"부터</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">② 따라 만들기</div>
+                                <div class="flow-box__items">Quickstart/샘플<br>내 손으로 실행<br>한 줄씩 의미 확인</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">③ 변형·파괴</div>
+                                <div class="flow-box__items">일부러 부하·장애 주입<br>설정 바꿔 관찰<br>"왜?"를 끝까지 추적</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">④ 내 말로 정리</div>
+                                <div class="flow-box__items">이 학습 노트처럼<br>비유·다이어그램으로<br>설명 가능 = 이해</div>
+                            </div>
+                        </div>
+                    </div>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>주제</th>
+                                <th>추천 1차 자료</th>
+                                <th>손으로 할 것</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>C# / async</td>
+                                <td>Stephen Cleary <em>Concurrency in C# Cookbook</em>, MS docs</td>
+                                <td>SharpLab.io에서 async 메서드 디슈가링 직접 보기</td>
+                            </tr>
+                            <tr>
+                                <td>Orleans</td>
+                                <td>Orleans 공식 docs, "Hello World" 샘플</td>
+                                <td>PlayerGrain + 인메모리 매치 서버 만들기</td>
+                            </tr>
+                            <tr>
+                                <td>PostgreSQL</td>
+                                <td><em>Use The Index, Luke!</em>, 공식 매뉴얼</td>
+                                <td>EXPLAIN ANALYZE로 인덱스 유무 비교</td>
+                            </tr>
+                            <tr>
+                                <td>Redis</td>
+                                <td>redis.io docs, <em>Redis in Action</em></td>
+                                <td>ZSet으로 실시간 랭킹 API 만들기</td>
+                            </tr>
+                            <tr>
+                                <td>K8s/Helm</td>
+                                <td><em>Kubernetes Up &amp; Running</em>, 공식 튜토리얼</td>
+                                <td>로컬 kind/minikube에 내 앱 Helm 배포</td>
+                            </tr>
+                            <tr>
+                                <td>관측성</td>
+                                <td>Serilog·OpenTelemetry·Elastic docs</td>
+                                <td>docker-compose ELK에 로그·트레이스 흘려보기</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">SharpLab.io는 우대사항("Low-Level 코드까지 본 적 있는가")을 직접 충족하는 도구입니다. C# 코드를 붙여넣으면 컴파일러가 생성한 디슈가링 코드와 IL을 즉시 보여줍니다. 면접에서 "SharpLab으로 디슈가링을 확인하며 공부했다"는 한 문장이 강력합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 모든 걸 하나로 묶는 미니 프로젝트</h2>
+            <div class="conversation">
+                <div class="q">기술을 따로따로 배웠는데, 통합 감각은 어떻게 얻나요?</div>
+                <div class="a">
+                    <p>공고의 거의 모든 항목을 한 번에 꿰는 <strong>미니 프로젝트 하나</strong>를 만드세요. 면접 포트폴리오이자, 살아있는 학습 노트가 됩니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 추천 프로젝트: "서브컬처 게임용 미니 백엔드"</strong>
+                        <p>예: <strong>실시간 길드 레이드 랭킹 서버</strong></p>
+                        <p>플레이어가 TCP/HTTP로 접속하고, Orleans Grain이 플레이어·길드 상태를 들고, PostgreSQL에 영속화하고, Redis ZSet으로 실시간 랭킹을 매기고, Blazor 어드민으로 운영하고, ELK로 들여다보는 시스템.</p>
+                    </div>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">미니 게임 백엔드 (한 프로젝트로 전 스택 커버)</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">접속 계층 · TCP/Pipelines + Kestrel (07·02)</div>
+                            <div class="hierarchy-item">도메인 · Orleans Grain: Player·Guild·Raid (05·06)</div>
+                            <div class="hierarchy-item">영속 · PostgreSQL + Redis 랭킹 (08·09)</div>
+                            <div class="hierarchy-item">운영 · Blazor 백오피스 (10)</div>
+                            <div class="hierarchy-item">배포 · Docker→K8s/Helm, Pulumi, Actions (11·12·13·14)</div>
+                            <div class="hierarchy-item">관측 · Serilog→ELK + APM (15)</div>
+                        </div>
+                    </div>
+                    <p class="highlight">이 한 프로젝트를 GitHub에 올리고, README에 아키텍처 다이어그램과 "왜 이 선택을 했는지"를 적으면 — T1~T4 전부를 증명하는 단 하나의 강력한 증거가 됩니다.</p>
+                </div>
+
+                <div class="q">면접 직전에는 무엇을 점검해야 하나요?</div>
+                <div class="a">
+                    <p>아래 질문에 막힘없이 답할 수 있으면 준비된 것입니다.</p>
+                    <ul>
+                        <li><strong>async:</strong> "<code>await</code>를 만나면 스레드는 어디로 가나요?" / "<code>.Result</code>는 왜 위험한가요?"</li>
+                        <li><strong>Orleans:</strong> "Grain은 어떻게 락 없이 동시성을 보장하나요?" / "Silo가 죽으면 Grain은 어떻게 되나요?"</li>
+                        <li><strong>DB:</strong> "이 쿼리가 느립니다. 어디부터 보나요?" / "트랜잭션 격리 수준을 올리면 무엇을 잃나요?"</li>
+                        <li><strong>Redis:</strong> "캐시와 DB가 불일치하면 어떻게 막나요?" / "분산 락을 Redis로 어떻게 구현하나요?"</li>
+                        <li><strong>운영:</strong> "배포 후 에러율이 튑니다. 어떻게 원인을 찾나요?" (→ APM·로그·롤백)</li>
+                        <li><strong>태도:</strong> "반복적인 작업을 자동화한 경험은?" / "당신이 쓴 좋은 버그 리포트 한 건은?"</li>
+                    </ul>
+                    <p class="warning">시니어 면접의 핵심은 암기가 아니라 <strong>트레이드오프 판단</strong>입니다. "정답"보다 "왜 그 상황에서 그 선택을 했는가"를 논리적으로 말하는 연습을 하세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Summary -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li>공고 스택은 <strong>T1 언어·런타임 → T2 분산·데이터 → T3 인프라 → T4 협업</strong>의 우선순위로 나눠서 정복한다</li>
+                <li>이 회사의 정체성은 <strong>"C#으로 끝까지 + 클라우드 네이티브 + 관측 가능성"</strong>이며, <strong>Orleans 가상 액터</strong>가 가장 변별력 있는 주제다</li>
+                <li>공부는 <strong>공식문서 → 따라 만들기 → 파괴 → 내 말로 정리</strong>의 4단계 루프로, 우대사항인 Low-Level은 <strong>SharpLab 디슈가링</strong>으로 채운다</li>
+                <li><strong>미니 게임 백엔드 프로젝트 하나</strong>로 전 스택을 한 번에 묶어 GitHub 포트폴리오로 만든다</li>
+                <li>면접은 암기가 아니라 <strong>트레이드오프 판단</strong>이다 &mdash; "왜 그 선택을 했는가"를 말로 설명할 수 있어야 한다</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulumi로 인프라를 코드로 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp-server.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>클릭으로 만든 서버는 다시 만들 수 없다</h1>
+            <p class="subtitle">Pulumi로 인프라를 C# 코드로 (Infrastructure as Code)</p>
+        </header>
+
+        <section class="part">
+            <h2>Part 1: IaC가 왜 필요한가 &mdash; 클릭옵스의 함정</h2>
+            <div class="conversation">
+                <div class="q">콘솔에서 클릭으로 서버를 만들면 빠르고 편한데, 왜 굳이 코드로 인프라를 짜야 하나요?</div>
+                <div class="a">
+                    <p>처음 한 번은 빠릅니다. 문제는 그 다음입니다. 게임 백엔드를 운영하다 보면 같은 환경을 <strong>여러 번, 똑같이</strong> 만들어야 할 일이 끝없이 생깁니다. dev/staging/prod를 나눠야 하고, 리전별로 매치 서버를 복제해야 하고, 장애가 나면 처음부터 다시 세워야 합니다.</p>
+                    <p>콘솔에서 손으로 클릭해 만든 인프라(흔히 <strong>클릭옵스, ClickOps</strong>라고 부릅니다)는 다음 네 가지 문제를 반드시 안고 갑니다.</p>
+                    <p class="warning">재현 불가: "그 VM 어떤 옵션으로 만들었더라?"를 아무도 정확히 기억하지 못합니다. 똑같은 환경을 두 번 만들면 미묘하게 달라집니다.</p>
+                    <p class="warning">표류(drift): 누군가 운영 중에 콘솔에서 방화벽 규칙 하나를 슬쩍 바꿉니다. 실제 인프라와 "원래 의도"가 어긋나지만, 그 사실을 아무도 추적하지 못합니다.</p>
+                    <p class="warning">리뷰 불가: 인프라 변경에 코드 리뷰가 없습니다. prod DB 보안 그룹을 0.0.0.0/0으로 여는 치명적 변경이 PR 없이, 클릭 한 번으로 나갑니다.</p>
+                    <p class="warning">문서화 부재: 인프라의 "현재 정답"이 어디에도 글로 남지 않습니다. 사람이 퇴사하면 지식도 같이 사라집니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>클릭옵스는 레시피 없이 요리하는 것과 같습니다. 한 번은 맛있게 만들 수 있지만, 다음에 똑같이 만들 수 없고, 다른 사람에게 가르쳐 줄 수도 없습니다.</p>
+                        <p>IaC(Infrastructure as Code)는 그 요리를 <strong>레시피 문서</strong>로 적어 두는 것입니다. 누가 만들어도, 몇 번을 만들어도 같은 맛이 나옵니다. 레시피를 고칠 때는 동료가 검토(PR 리뷰)하고, 바뀐 내역은 git 히스토리에 남습니다.</p>
+                    </div>
+                    <p class="key-point">IaC의 핵심 이점: 재현성(같은 코드 → 같은 인프라), 버전 관리(git diff/리뷰/롤백), 자동화(CI에서 적용), 그리고 코드 자체가 살아 있는 문서가 된다는 점입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 2: Pulumi vs Terraform &mdash; 진짜 언어로 인프라를 쓴다</h2>
+            <div class="conversation">
+                <div class="q">IaC 도구라면 Terraform이 표준 아닌가요? Pulumi는 무엇이 다른가요?</div>
+                <div class="a">
+                    <p>둘 다 "선언적으로 원하는 인프라 상태를 기술하면, 도구가 실제와 비교해 차이만큼만 바꿔 준다"는 모델은 같습니다. 결정적 차이는 <strong>무엇으로 인프라를 기술하느냐</strong>입니다.</p>
+                    <p>Terraform은 <strong>HCL</strong>이라는 전용 DSL을 씁니다. Pulumi는 C#, TypeScript, Python, Go 같은 <strong>진짜 범용 프로그래밍 언어</strong>를 씁니다. C# 서버 개발자라면, 인프라도 C#으로 짤 수 있다는 뜻입니다.</p>
+                    <p class="highlight">이 차이가 중요한 이유: HCL에서 반복문/조건문/추상화는 어색하고 제한적입니다(count, for_each, 모듈). 반면 Pulumi에서는 그냥 C#의 for, if, 클래스, 메서드, 패키지를 씁니다. "리전 리스트를 돌며 매치 서버 풀을 생성"하는 로직을 평범한 foreach로 작성하고, 단위 테스트까지 붙일 수 있습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>Pulumi</th>
+                                <th>Terraform</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>언어</td>
+                                <td>C#, TS, Python, Go 등 범용 언어</td>
+                                <td>HCL (전용 DSL)</td>
+                            </tr>
+                            <tr>
+                                <td>반복/조건</td>
+                                <td>네이티브 for/if/LINQ</td>
+                                <td>count, for_each, 동적 블록(제한적)</td>
+                            </tr>
+                            <tr>
+                                <td>추상화</td>
+                                <td>클래스, 함수, NuGet 패키지</td>
+                                <td>모듈(module)</td>
+                            </tr>
+                            <tr>
+                                <td>테스트</td>
+                                <td>xUnit/NUnit 등 기존 테스트 도구 사용</td>
+                                <td>terraform test, 외부 도구 필요</td>
+                            </tr>
+                            <tr>
+                                <td>IDE 지원</td>
+                                <td>완전한 자동완성/타입체크/리팩터링</td>
+                                <td>HCL 플러그인 수준</td>
+                            </tr>
+                            <tr>
+                                <td>상태 백엔드</td>
+                                <td>Pulumi Cloud / 셀프호스트(S3, Azure Blob 등)</td>
+                                <td>다양한 백엔드 / Terraform Cloud</td>
+                            </tr>
+                            <tr>
+                                <td>생태계 성숙도</td>
+                                <td>빠르게 성장, 다소 작음</td>
+                                <td>업계 표준, 매우 큼</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">한 줄 정리: "인프라 팀이 따로 있고 HCL에 익숙하다"면 Terraform이 무난합니다. "서버 개발자가 인프라까지 C#으로 직접 다루고, 복잡한 로직/테스트/추상화가 필요하다"면 Pulumi가 강력합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 3: Pulumi 기본 개념 &mdash; 프로젝트, 스택, Output&lt;T&gt;</h2>
+            <div class="conversation">
+                <div class="q">Pulumi로 실제 코드를 짜기 전에, 알아야 할 핵심 개념은 무엇인가요?</div>
+                <div class="a">
+                    <p>네 가지만 잡으면 됩니다: <strong>프로젝트</strong>, <strong>스택</strong>, <strong>리소스</strong>, 그리고 <strong>Input/Output&lt;T&gt;</strong>입니다.</p>
+                    <p><strong>프로젝트(Project)</strong>는 하나의 인프라 코드 단위입니다(<code>Pulumi.yaml</code>). <strong>스택(Stack)</strong>은 그 프로젝트의 격리된 인스턴스로, 보통 환경별로 둡니다 &mdash; <code>dev</code>, <code>staging</code>, <code>prod</code>. 같은 코드를 스택별 설정만 바꿔 배포합니다.</p>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">Project: game-backend-infra</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">Stack: dev (작은 VM, 단일 노드)</div>
+                            <div class="hierarchy-item">Stack: staging (prod 축소판)</div>
+                            <div class="hierarchy-item">Stack: prod (멀티존, 오토스케일)</div>
+                        </div>
+                    </div>
+                    <p>가장 헷갈리는 개념이 <strong>Input/Output&lt;T&gt;</strong>입니다. 클라우드 리소스의 속성 중 상당수는 <strong>리소스를 실제로 만들어 봐야</strong> 알 수 있습니다. 예를 들어 ResourceGroup을 만들기 전에는 그 ID를 모릅니다. 그래서 Pulumi는 이런 값을 즉시 확정된 <code>string</code>이 아니라, "나중에 채워질 비동기 값"인 <code>Output&lt;string&gt;</code>으로 다룹니다.</p>
+                    <p class="highlight"><code>Output&lt;T&gt;</code>는 Task/Promise와 비슷한, 리소스 간 <strong>의존성 그래프</strong>를 표현하는 장치입니다. A 리소스의 Output을 B 리소스의 Input으로 넘기면, Pulumi는 "B는 A에 의존한다"를 자동으로 파악해 생성 순서를 정합니다. 그래서 직접 <code>.Result</code>로 까서 쓰면 안 되고, <code>Apply</code>로 변환하거나 <code>Output.Format</code>으로 조합해야 합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// ResourceGroup의 Name은 Output&lt;string&gt; 입니다.
+var rg = new ResourceGroup("game-rg");
+
+// 잘못된 사용: Output을 그냥 string처럼 쓸 수 없습니다.
+// string name = rg.Name; // 컴파일 에러
+
+// 올바른 사용 1: Apply로 변환 (의존성 유지)
+Output&lt;string&gt; upper = rg.Name.Apply(n =&gt; n.ToUpper());
+
+// 올바른 사용 2: Output.Format으로 문자열 보간
+Output&lt;string&gt; label = Output.Format($"리소스 그룹: {rg.Name}");
+
+// 설정값과 시크릿 읽기 (스택 config에서)
+var config = new Config();
+string region = config.Require("region");           // 일반 설정
+string dbPassword = config.RequireSecret("dbPassword"); // 암호화된 시크릿
+</code></pre>
+                    </div>
+                    <p class="warning">주의: <code>Output&lt;T&gt;</code>를 <code>.GetValue()</code>나 동기 블로킹으로 강제로 꺼내려 하지 마십시오. 의존성 추적이 깨지고, preview 단계에서는 아직 값이 없어 동작 자체가 불가능합니다. 항상 <code>Apply</code>/<code>Output.Format</code>으로 다뤄야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 4: 상태(state) 관리와 워크플로우</h2>
+            <div class="conversation">
+                <div class="q">"실제 인프라와 비교해 차이만큼만 바꾼다"고 했는데, 그 비교 기준은 어디에 저장되나요?</div>
+                <div class="a">
+                    <p>그 기준이 바로 <strong>상태(state)</strong>입니다. Pulumi는 두 가지 그림을 비교합니다.</p>
+                    <p class="highlight"><strong>Desired state(원하는 상태)</strong>: 여러분이 C# 코드로 선언한 인프라. <strong>Actual state(실제 상태)</strong>: 상태 백엔드에 기록된, Pulumi가 마지막으로 알고 있는 클라우드의 모습. 이 둘의 <strong>차이(diff)</strong>만큼만 실제 클라우드에 적용합니다.</p>
+                    <p>이 상태는 어딘가에 안전하게 저장되어야 합니다. 백엔드 선택지는 두 가지입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>백엔드</th>
+                                <th>Pulumi Cloud (관리형)</th>
+                                <th>셀프호스트</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>저장 위치</td>
+                                <td>Pulumi가 운영하는 SaaS</td>
+                                <td>Azure Blob / S3 / 로컬</td>
+                            </tr>
+                            <tr>
+                                <td>상태 잠금</td>
+                                <td>자동 제공</td>
+                                <td>백엔드에 따라 직접 구성</td>
+                            </tr>
+                            <tr>
+                                <td>히스토리/감사</td>
+                                <td>웹 UI로 제공</td>
+                                <td>직접 구축 필요</td>
+                            </tr>
+                            <tr>
+                                <td>적합한 경우</td>
+                                <td>빠른 시작, 협업 편의</td>
+                                <td>데이터 주권/규제/비용 통제</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p>핵심 워크플로우는 세 명령으로 요약됩니다. <strong>항상 preview로 변경을 눈으로 확인한 뒤 up으로 적용</strong>하는 것이 철칙입니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">코드 작성</div>
+                                <div class="flow-box__items">C#으로 desired state 선언</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">pulumi preview</div>
+                                <div class="flow-box__items">무엇이 생성/변경/삭제될지 diff 출력 (적용 안 함)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">pulumi up</div>
+                                <div class="flow-box__items">diff를 실제 클라우드에 적용, 상태 갱신</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">pulumi destroy</div>
+                                <div class="flow-box__items">스택의 모든 리소스 정리</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">bash</div>
+                        <pre><code># 새 스택 선택/생성
+pulumi stack select prod
+
+# 변경 미리보기 (실제 적용 없음, CI에서 PR마다 실행 권장)
+pulumi preview
+
+# 미리보기 결과를 실제로 적용
+pulumi up
+
+# 표류(drift) 점검: 실제 클라우드와 상태 불일치 확인
+pulumi refresh
+
+# 스택 전체 정리 (주의: 모든 리소스 삭제)
+pulumi destroy
+</code></pre>
+                    </div>
+                    <p class="warning">상태 파일은 인프라의 "정답지"입니다. 손상되거나 분실되면 Pulumi가 실제 리소스를 추적하지 못합니다. 절대 로컬 PC에만 두거나 git에 평문으로 커밋하지 말고, 잠금이 가능한 원격 백엔드에 두어야 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 5: C#으로 Azure 게임 백엔드 리소스 만들기</h2>
+            <div class="conversation">
+                <div class="q">실제로 게임 서버용 인프라를 C#으로 짜면 어떤 모습인가요? AKS 같은 걸로요.</div>
+                <div class="a">
+                    <p>게임 백엔드를 컨테이너로 운영한다면 보통 <strong>ResourceGroup &rarr; AKS 클러스터 &rarr; (그 위에 매치 서버/게이트웨이 배포)</strong> 흐름입니다. AzureNative 프로바이더로 작성한 예시입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>using Pulumi;
+using AzureNative = Pulumi.AzureNative;
+
+return await Deployment.RunAsync(() =&gt;
+{
+    var config = new Config();
+    // 스택별로 다른 값을 주입 (dev는 노드 1개, prod는 5개)
+    int nodeCount = config.GetInt32("nodeCount") ?? 3;
+    string nodeSize = config.Get("nodeSize") ?? "Standard_D4s_v5";
+
+    // 1) 리소스 그룹: 게임 백엔드 리소스를 담을 논리적 컨테이너
+    var rg = new AzureNative.Resources.ResourceGroup("game-rg", new()
+    {
+        Location = "koreacentral",
+    });
+
+    // 2) AKS 클러스터: 매치 서버/게이트웨이를 돌릴 쿠버네티스
+    var cluster = new AzureNative.ContainerService.ManagedCluster("game-aks", new()
+    {
+        // rg.Name은 Output&lt;string&gt; — Input으로 그대로 넘기면 의존성이 잡힙니다
+        ResourceGroupName = rg.Name,
+        DnsPrefix = "gameaks",
+        AgentPoolProfiles = new[]
+        {
+            new AzureNative.ContainerService.Inputs.ManagedClusterAgentPoolProfileArgs
+            {
+                Name = "gamepool",
+                Count = nodeCount,          // 스택 config에서 온 값
+                VmSize = nodeSize,
+                Mode = "System",
+                OsType = "Linux",
+            },
+        },
+        Identity = new AzureNative.ContainerService.Inputs.ManagedClusterIdentityArgs
+        {
+            Type = AzureNative.ContainerService.ResourceIdentityType.SystemAssigned,
+        },
+    });
+
+    // 3) 다른 시스템이 쓸 수 있도록 출력값을 내보냅니다
+    return new Dictionary&lt;string, object?&gt;
+    {
+        ["resourceGroup"] = rg.Name,
+        ["clusterName"] = cluster.Name,
+        ["kubeFqdn"] = cluster.Fqdn,   // 역시 Output&lt;string&gt;
+    };
+});
+</code></pre>
+                    </div>
+                    <p class="key-point">주목할 점: <code>rg.Name</code>(Output)을 AKS의 <code>ResourceGroupName</code>(Input)에 그대로 꽂는 순간, Pulumi가 "AKS는 RG 다음에 만들어야 한다"는 순서를 자동으로 추론합니다. 명시적 dependsOn 없이 의존성 그래프가 완성됩니다.</p>
+                    <p><code>nodeCount</code>를 코드에 박지 않고 <code>config.GetInt32</code>로 빼냈기 때문에, <strong>같은 코드</strong>로 dev 스택은 1노드, prod 스택은 5노드로 배포됩니다. 이것이 "코드 한 벌 + 스택별 설정"의 힘입니다.</p>
+                    <details class="code-toggle">
+                        <summary>리전 리스트를 순회하며 글로벌 매치 서버를 찍어내기 (Pulumi에서 루프가 자연스러운 이유) <span class="code-lang">C#</span></summary>
+                        <pre><code>// HCL의 for_each 대신, 그냥 C# foreach를 씁니다.
+var regions = new[] { "koreacentral", "japaneast", "westus2" };
+
+var matchRgs = new Dictionary&lt;string, AzureNative.Resources.ResourceGroup&gt;();
+
+foreach (var region in regions)
+{
+    // 리전별로 격리된 리소스 그룹을 동적으로 생성
+    var matchRg = new AzureNative.Resources.ResourceGroup($"match-{region}", new()
+    {
+        Location = region,
+    });
+    matchRgs[region] = matchRg;
+
+    // 여기에 리전별 매치 서버 풀, 스토리지 등을 이어서 선언
+    // 평범한 C# 코드이므로 if/LINQ/메서드 추출이 전부 가능합니다.
+}
+</code></pre>
+                    </details>
+                </div>
+            </div>
+        </section>
+
+        <section class="part">
+            <h2>Part 6: 실무 &mdash; 시크릿, 환경 분리, CI, 컴포넌트, 협업</h2>
+            <div class="conversation">
+                <div class="q">실제 팀에서 Pulumi를 안전하게 굴리려면 무엇을 챙겨야 하나요?</div>
+                <div class="a">
+                    <p><strong>1) 시크릿 관리.</strong> DB 비밀번호, API 키를 코드나 git에 평문으로 두면 안 됩니다. Pulumi는 <code>--secret</code>으로 넣은 config 값을 <strong>상태 파일과 stack config 안에서 암호화</strong>해 보관합니다. 코드에서는 <code>RequireSecret</code>으로 읽고, 이 값은 <code>Output&lt;string&gt;</code>이라 로그에도 <code>[secret]</code>으로 가려집니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash</div>
+                        <pre><code># 평문 설정
+pulumi config set region koreacentral
+
+# 시크릿 설정 (상태/설정 파일에 암호화되어 저장됨)
+pulumi config set --secret dbPassword 'S3cr3t!Pa$$'
+
+# 스택별로 격리: prod 스택에만 prod 비번이 들어갑니다
+pulumi stack select prod
+pulumi config set --secret dbPassword 'prod-only-secret'
+</code></pre>
+                    </div>
+                    <p class="highlight"><strong>2) 환경별 스택 분리.</strong> dev/staging/prod를 별도 스택으로 두면 상태가 격리됩니다. dev에서 <code>pulumi destroy</code>를 잘못 눌러도 prod는 안전합니다. 스택별 설정 파일(<code>Pulumi.dev.yaml</code>, <code>Pulumi.prod.yaml</code>)이 환경 차이를 흡수합니다.</p>
+                    <p><strong>3) CI에서 자동 적용(GitHub Actions).</strong> 핵심 패턴: <strong>PR에서는 preview만, main 머지 시에만 up</strong>. 이렇게 하면 모든 인프라 변경이 코드 리뷰를 거치고, diff가 PR에 남습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash</div>
+                        <pre><code># .github/workflows/infra.yml (개념 요약)
+# on: pull_request  -&gt;  pulumi preview  (변경 미리보기만, 리뷰어가 diff 확인)
+# on: push to main  -&gt;  pulumi up --yes (승인된 변경만 실제 적용)
+
+# 실행 단계 예시
+- run: pulumi stack select prod
+- run: pulumi preview            # PR 단계
+- run: pulumi up --yes           # main 머지 후 단계
+# PULUMI_ACCESS_TOKEN, ARM_CLIENT_ID 등은 GitHub Secrets로 주입
+</code></pre>
+                    </div>
+                    <p><strong>4) 모듈화 &mdash; ComponentResource.</strong> 매치 서버 한 세트(RG + AKS + 스토리지 + 네트워크)를 반복해서 만든다면, 이를 하나의 <strong>컴포넌트 리소스</strong>로 묶어 재사용합니다. C# 클래스로 추상화하므로, 호출부는 한 줄로 깔끔해집니다.</p>
+                    <details class="code-toggle">
+                        <summary>매치 서버 한 세트를 ComponentResource로 캡슐화 <span class="code-lang">C#</span></summary>
+                        <pre><code>// 리전 단위 게임 인프라를 하나의 재사용 컴포넌트로 묶습니다.
+public class GameRegionStack : ComponentResource
+{
+    public Output&lt;string&gt; ClusterFqdn { get; private set; }
+
+    public GameRegionStack(string name, string location, int nodeCount)
+        : base("game:infra:Region", name)
+    {
+        // 부모를 this로 지정해 리소스 트리에 묶습니다.
+        var opts = new CustomResourceOptions { Parent = this };
+
+        var rg = new AzureNative.Resources.ResourceGroup($"{name}-rg",
+            new() { Location = location }, opts);
+
+        var aks = new AzureNative.ContainerService.ManagedCluster($"{name}-aks", new()
+        {
+            ResourceGroupName = rg.Name,
+            DnsPrefix = $"{name}aks",
+            // ... 노드 풀 설정 (nodeCount 사용) ...
+        }, opts);
+
+        ClusterFqdn = aks.Fqdn;
+        RegisterOutputs();
+    }
+}
+
+// 호출부: 리전마다 한 줄이면 끝납니다.
+var korea = new GameRegionStack("korea", "koreacentral", nodeCount: 5);
+var japan = new GameRegionStack("japan", "japaneast", nodeCount: 3);
+</code></pre>
+                    </details>
+                    <p class="warning"><strong>5) 협업 주의 &mdash; 상태 잠금.</strong> 두 사람이 동시에 같은 스택에 <code>up</code>을 돌리면 상태가 깨집니다. Pulumi Cloud나 잠금을 지원하는 백엔드는 동시 실행을 막아 줍니다. 잠금이 비정상 종료로 남았다면 <code>pulumi cancel</code>로 풀되, <strong>정말 아무도 실행 중이 아닌지 반드시 확인한 뒤</strong>에만 해야 합니다. 그래서 사람이 로컬에서 prod에 직접 up하는 것보다, CI 한 곳에서만 prod를 적용하도록 통로를 단일화하는 것이 안전합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>클릭옵스는 재현 불가/표류/리뷰 불가/문서화 부재</strong>를 낳습니다. IaC는 인프라를 코드로 만들어 재현성, git 버전 관리, 자동화, 살아 있는 문서를 동시에 얻습니다.</li>
+                <li><strong>Pulumi는 HCL 대신 C# 같은 범용 언어</strong>로 인프라를 작성합니다. 네이티브 for/if/클래스/NuGet/단위 테스트를 그대로 쓸 수 있어, 복잡한 로직과 추상화에 강합니다.</li>
+                <li>핵심 개념은 <strong>프로젝트 &mdash; 스택(환경별) &mdash; 리소스 &mdash; Input/Output&lt;T&gt;</strong>입니다. Output을 Input으로 넘기면 의존성 그래프가 자동으로 잡히며, <code>Apply</code>/<code>Output.Format</code>으로만 다뤄야 합니다.</li>
+                <li>워크플로우는 <strong>preview로 diff 확인 &rarr; up으로 적용</strong>이 철칙이며, 상태(desired vs actual)는 잠금이 가능한 원격 백엔드에 안전하게 보관해야 합니다.</li>
+                <li>실무에서는 <strong>시크릿 암호화, 환경별 스택 분리, PR=preview/main=up CI, ComponentResource 모듈화, 상태 잠금</strong>으로 안전한 협업 인프라를 구성합니다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

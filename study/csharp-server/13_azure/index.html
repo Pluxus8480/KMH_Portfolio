@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure 클라우드 핵심 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp-server.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>게임 백엔드는 클라우드에서 어떻게 살까?</h1>
+            <p class="subtitle">Azure 핵심 서비스로 그리는 게임 백엔드 아키텍처</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 클라우드의 좌표계 — 리전, 구독, 그리고 책임의 경계</h2>
+            <div class="conversation">
+                <div class="q">Azure를 처음 열면 리전(Region)과 가용 영역(Availability Zone)부터 고르라고 합니다. 게임 서버 입장에서 이 둘은 무엇이 다른가요?</div>
+                <div class="a">
+                    <p>클라우드 자원은 물리적으로 어딘가의 데이터센터에 있습니다. 그 물리적 위치를 추상화한 것이 <strong>리전</strong>입니다. <code>Korea Central</code>, <code>Japan East</code>, <code>East US</code>처럼 지리적으로 떨어진 단위이며, 리전 간 거리는 곧 네트워크 지연(latency)으로 직결됩니다. 한국 유저를 받는 서브컬처 게임이라면 게임 서버는 <code>Korea Central</code>에 두는 것이 출발점입니다.</p>
+                    <p>한 리전 안에는 보통 전력·냉각·네트워크가 물리적으로 분리된 데이터센터 묶음이 여러 개 있고, 이것이 <strong>가용 영역</strong>입니다. 같은 리전 안의 AZ-1과 AZ-2는 지연이 거의 없을 만큼 가깝지만, 한 영역에 정전이나 화재가 나도 다른 영역은 살아남도록 분리돼 있습니다.</p>
+                    <p class="highlight">정리하면, <strong>리전</strong>은 "유저와 얼마나 가까운가(지연)"를 결정하고, <strong>가용 영역</strong>은 "한 데이터센터가 죽어도 서비스가 살아남는가(고가용성)"를 결정합니다. 게임 백엔드의 핵심 컴포넌트는 여러 AZ에 분산 배치해야 정전 한 번에 서비스 전체가 내려가지 않습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>리전은 <strong>도시</strong>입니다. 서울 지점과 도쿄 지점은 거리가 멀어 오가는 데 시간이 걸립니다(지연).</p>
+                        <p>가용 영역은 <strong>같은 도시 안의 서로 다른 건물</strong>입니다. 본사 건물에 불이 나도 길 건너 별관 건물에 서버가 한 벌 더 있으면 영업은 계속됩니다. 중요한 짐을 한 건물에만 쌓아두지 않는 것이 가용 영역 분산입니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">IaaS, PaaS, SaaS는 면접 단골인데, 막상 설명하려면 헷갈립니다. 게임 백엔드 관점에서 한 번에 정리할 수 있나요?</div>
+                <div class="a">
+                    <p>세 모델의 차이는 결국 <strong>"내가 어디까지 직접 관리하고, 어디부터 클라우드가 대신 관리해 주느냐"</strong>의 경계선입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>모델</th>
+                                <th>내가 관리하는 것</th>
+                                <th>Azure가 관리하는 것</th>
+                                <th>게임 백엔드 예시</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>IaaS<br>(서비스형 인프라)</td>
+                                <td>OS, 런타임, 미들웨어, 앱, 패치까지 전부</td>
+                                <td>물리 서버, 가상화, 네트워크</td>
+                                <td>Virtual Machine 위에 직접 게임 서버 설치</td>
+                            </tr>
+                            <tr>
+                                <td>PaaS<br>(서비스형 플랫폼)</td>
+                                <td>앱 코드와 데이터만</td>
+                                <td>OS, 런타임, 패치, 스케일링 기반</td>
+                                <td>App Service, AKS, Azure Database for PostgreSQL</td>
+                            </tr>
+                            <tr>
+                                <td>SaaS<br>(서비스형 소프트웨어)</td>
+                                <td>설정과 사용</td>
+                                <td>앱까지 통째로</td>
+                                <td>PlayFab, Application Insights 대시보드</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">시니어 백엔드의 기본 전략은 <strong>"가능한 한 PaaS로, 통제가 꼭 필요한 곳만 IaaS로"</strong>입니다. OS 패치와 보안 업데이트를 직접 짊어지는 IaaS는 운영 부담이 크기 때문에, DB·캐시·컨테이너 오케스트레이션은 PaaS에 맡기고 인력을 게임 로직에 집중시킵니다.</p>
+                </div>
+
+                <div class="q">리소스 그룹(Resource Group)과 구독(Subscription)은 단순한 폴더 같은데, 굳이 신경 써야 하나요?</div>
+                <div class="a">
+                    <p>단순한 폴더가 아니라 <strong>비용·권한·생명주기의 단위</strong>입니다. 계층은 위에서부터 <code>관리 그룹 → 구독 → 리소스 그룹 → 리소스</code> 순으로 내려갑니다.</p>
+                    <ul>
+                        <li><strong>구독</strong>: 청구(billing)와 할당량(quota)의 경계입니다. <code>game-prod</code>, <code>game-dev</code>처럼 환경별로 구독을 나누면 운영 비용과 개발 비용이 청구서에서 깔끔하게 분리됩니다.</li>
+                        <li><strong>리소스 그룹</strong>: 함께 태어나고 함께 죽는 리소스의 묶음입니다. 한 게임 타이틀의 인프라(AKS, DB, Redis, Key Vault)를 하나의 리소스 그룹에 넣으면, 타이틀을 접을 때 그룹째 삭제해 깔끔하게 정리할 수 있습니다.</li>
+                    </ul>
+                    <p>이 경계를 따라 RBAC(역할 기반 접근 제어)도 걸립니다. "개발팀은 <code>game-dev</code> 구독에만, 운영팀은 <code>game-prod</code> 리소스 그룹에 Reader만" 같은 권한 분리가 여기서 나옵니다.</p>
+                </div>
+
+                <div class="q">"책임 공유 모델(Shared Responsibility Model)"은 말은 들었는데 실무에서 어떤 의미인가요?</div>
+                <div class="a">
+                    <p>보안과 가용성의 책임을 클라우드 사업자와 고객이 <strong>나눠 진다</strong>는 원칙입니다. Azure는 데이터센터의 물리 보안, 하드웨어, 하이퍼바이저까지 책임지지만, <strong>그 위에서 도는 내 데이터, 접근 권한, 애플리케이션 취약점은 전적으로 내 책임</strong>입니다.</p>
+                    <p class="warning">"클라우드에 올렸으니 보안은 알아서 되겠지"는 사고로 가는 지름길입니다. 예를 들어 Blob Storage 컨테이너를 실수로 public으로 열어 유저 데이터가 유출되는 것은 100% 고객 책임입니다. 책임 경계는 모델마다 다릅니다 — IaaS일수록 내 책임이 넓고, SaaS일수록 좁습니다. 이 경계를 정확히 아는 것이 시니어 운영의 출발점입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 컴퓨트 선택 — 게임 서버는 무엇 위에서 도는가</h2>
+            <div class="conversation">
+                <div class="q">Azure의 컴퓨트 옵션이 너무 많습니다. AKS, Container Apps, App Service, VM/VMSS — 게임 백엔드에서 무엇을 언제 쓰는지 기준이 있나요?</div>
+                <div class="a">
+                    <p>선택의 핵심 질문은 두 가지입니다. <strong>"얼마나 세밀하게 제어해야 하는가"</strong>와 <strong>"운영 부담을 얼마나 줄이고 싶은가"</strong>. 이 둘은 대개 반비례합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>옵션</th>
+                                <th>정체</th>
+                                <th>제어 수준 / 운영 부담</th>
+                                <th>게임 백엔드에서 언제</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>AKS<br>(Azure Kubernetes Service)</td>
+                                <td>매니지드 쿠버네티스. 컨트롤 플레인은 Azure가 운영</td>
+                                <td>제어 높음 / 부담 중상</td>
+                                <td>Orleans 클러스터, 다수의 마이크로서비스, 복잡한 배포·오토스케일이 필요한 핵심 게임 서버</td>
+                            </tr>
+                            <tr>
+                                <td>Container Apps</td>
+                                <td>K8s를 숨긴 서버리스 컨테이너(내부적으로 KEDA/Dapr 기반)</td>
+                                <td>제어 중 / 부담 낮음</td>
+                                <td>이벤트 기반 워커, 매치메이킹 잡, 0→N 스케일이 잦은 보조 서비스</td>
+                            </tr>
+                            <tr>
+                                <td>App Service</td>
+                                <td>웹 앱/API 전용 PaaS</td>
+                                <td>제어 낮음 / 부담 낮음</td>
+                                <td>로그인/계정 REST API, 운영툴 백오피스, 웹훅 수신</td>
+                            </tr>
+                            <tr>
+                                <td>VM / VMSS<br>(Virtual Machine Scale Sets)</td>
+                                <td>가상 머신과 그 자동 확장 집합</td>
+                                <td>제어 최고 / 부담 높음</td>
+                                <td>커스텀 커널·특수 네트워크 튜닝이 필요한 실시간 전투 서버, 데디케이티드 게임 서버(DGS)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">실무 감각으로 요약하면 — <strong>상태를 가진 핵심 게임 로직(Orleans Silo)은 AKS</strong>, <strong>가끔 돌고 빠르게 스케일해야 하는 워커는 Container Apps</strong>, <strong>단순 REST API는 App Service</strong>, <strong>OS·네트워크를 뼛속까지 만져야 하는 실시간 데디서버는 VMSS</strong>입니다.</p>
+                </div>
+
+                <div class="q">왜 핵심 게임 서버에 AKS를 선택하나요? Container Apps가 더 편하다면서요.</div>
+                <div class="a">
+                    <p>Orleans 같은 <strong>스테이트풀(stateful) 분산 시스템</strong>은 노드 간 멤버십, 그레인 활성화 배치, 롤링 업데이트 시 우아한 드레이닝 등 세밀한 제어가 필요합니다. AKS는 <code>StatefulSet</code>, <code>PodDisruptionBudget</code>, 노드 어피니티, HPA(Horizontal Pod Autoscaler) 같은 쿠버네티스의 모든 무기를 그대로 줍니다. Container Apps는 그 무기를 일부러 숨겨 단순화했기 때문에 정교한 제어가 필요한 순간 벽에 부딪힙니다.</p>
+                    <p>아래는 AKS 클러스터를 가용 영역에 분산해 생성하는 az CLI 예시입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash</div>
+<pre><code># 리소스 그룹 생성 (한국 중부 리전)
+az group create \
+  --name rg-game-prod \
+  --location koreacentral
+
+# AKS 클러스터 생성: 3개 가용 영역에 노드 분산 + 오토스케일 활성화
+az aks create \
+  --resource-group rg-game-prod \
+  --name aks-game-orleans \
+  --location koreacentral \
+  --zones 1 2 3 \
+  --node-count 3 \
+  --enable-cluster-autoscaler \
+  --min-count 3 \
+  --max-count 12 \
+  --enable-managed-identity \
+  --network-plugin azure \
+  --generate-ssh-keys
+
+# kubectl 자격 증명 가져오기 (이후 kubectl로 배포)
+az aks get-credentials \
+  --resource-group rg-game-prod \
+  --name aks-game-orleans</code></pre>
+                    </div>
+                    <p class="key-point"><code>--zones 1 2 3</code>이 핵심입니다. 이 한 줄로 워커 노드가 세 가용 영역에 분산되어, 한 영역이 통째로 죽어도 Orleans 클러스터의 다수 실로가 살아남습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 데이터와 캐시 — 무엇을 어디에 저장하는가</h2>
+            <div class="conversation">
+                <div class="q">게임 데이터를 저장할 곳이 PostgreSQL, Redis, Blob/Table Storage로 나뉩니다. 각각 무엇을 담당하나요?</div>
+                <div class="a">
+                    <p>저장소 선택의 원칙은 <strong>"데이터의 성격에 맞는 그릇을 쓴다"</strong>입니다. 모든 것을 RDB 하나에 욱여넣으면 비용과 성능 양쪽에서 무너집니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>서비스</th>
+                                <th>성격</th>
+                                <th>게임 백엔드 용도</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Azure Database<br>for PostgreSQL</td>
+                                <td>매니지드 관계형 DB(트랜잭션·정합성)</td>
+                                <td>계정, 인벤토리, 재화, 결제 영수증 등 <strong>절대 틀리면 안 되는 영구 데이터</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Azure Cache<br>for Redis</td>
+                                <td>인메모리 키-값 저장소(초저지연)</td>
+                                <td>세션, 랭킹(Sorted Set), 매치메이킹 큐, 분산 락, 핫 데이터 캐싱</td>
+                            </tr>
+                            <tr>
+                                <td>Blob Storage</td>
+                                <td>대용량 비정형 객체 저장</td>
+                                <td>리플레이 파일, 게임 패치/에셋 번들, 스크린샷, 크래시 덤프</td>
+                            </tr>
+                            <tr>
+                                <td>Table Storage</td>
+                                <td>스키마 없는 대규모 키-값/NoSQL</td>
+                                <td>대량 이벤트 로그, 감사 기록 등 저렴하게 쌓아둘 단순 구조 데이터</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">한 문장 기준: <strong>"틀리면 안 되는 건 PostgreSQL, 빨라야 하는 건 Redis, 큰 파일은 Blob, 싸게 많이 쌓을 건 Table."</strong></p>
+                </div>
+
+                <div class="q">Redis는 그냥 캐시 아닌가요? 게임에서 이렇게까지 중요한 이유가 있나요?</div>
+                <div class="a">
+                    <p>게임 백엔드에서 Redis는 캐시를 넘어 <strong>실시간 상태의 중추</strong> 역할을 합니다. 대표적으로 랭킹은 Redis의 <strong>Sorted Set</strong> 자료구조로 구현하면 점수 갱신과 순위 조회가 모두 로그 시간에 끝납니다 — RDB로는 흉내 내기 어려운 성능입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// StackExchange.Redis 로 랭킹 보드 구현 예시
+// ZADD: 점수 갱신 (Sorted Set 에 멤버와 스코어를 넣음)
+await db.SortedSetAddAsync("rank:season1", playerId, newScore);
+
+// ZREVRANGE: 상위 10명 조회 (점수 내림차순)
+RedisValue[] top10 = await db.SortedSetRangeByRankAsync(
+    "rank:season1", 0, 9, Order.Descending);
+
+// ZREVRANK: 특정 플레이어의 현재 순위 조회
+long? myRank = await db.SortedSetRankAsync(
+    "rank:season1", playerId, Order.Descending);</code></pre>
+                    </div>
+                    <p class="warning">단, Azure Cache for Redis도 비용이 듭니다. 캐시는 휘발성이라는 전제를 잊지 말아야 합니다. Redis가 재시작되어 데이터가 날아가도 PostgreSQL의 원본으로 복구 가능한 구조(캐시 미스 시 DB 조회 후 재적재)를 항상 갖춰야 합니다. 캐시를 단일 진실 공급원(source of truth)으로 착각하는 것이 흔한 사고입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 메시징과 통합 — 동기의 사슬을 끊다</h2>
+            <div class="conversation">
+                <div class="q">결제 완료 후 아이템 지급, 메일 발송, 로그 적재를 한 요청 안에서 다 처리하니 응답이 느리고 하나라도 실패하면 전체가 무너집니다. 어떻게 풀어야 하나요?</div>
+                <div class="a">
+                    <p>해법은 <strong>비동기 메시징</strong>입니다. 무거운 후속 작업을 동기 호출 체인에서 떼어내 메시지로 던지고, 별도 워커가 천천히 소화하게 만듭니다. Azure에는 성격이 다른 두 가지 메시징 서비스가 있습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>서비스</th>
+                                <th>모델</th>
+                                <th>특징</th>
+                                <th>게임 백엔드 용도</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Service Bus</td>
+                                <td>엔터프라이즈 메시지 브로커<br>(큐 / 토픽-구독)</td>
+                                <td>한 건씩 신뢰성 있게 전달. 순서 보장(세션), 중복 제거, 데드레터 큐</td>
+                                <td>결제 후 아이템 지급, 우편 발송 같은 <strong>한 건도 잃으면 안 되는 명령</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Event Hubs</td>
+                                <td>대용량 이벤트 스트리밍<br>(파티션 기반)</td>
+                                <td>초당 수백만 건 인입. 다수 컨슈머가 같은 스트림을 각자 읽음</td>
+                                <td>플레이어 행동 로그, 텔레메트리, 매치 이벤트 등 <strong>대량으로 쏟아지는 데이터의 인입구</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">핵심 구분: <strong>Service Bus는 "명령(command)을 빠짐없이 한 번씩 처리"</strong>하는 데 강하고, <strong>Event Hubs는 "이벤트(event) 폭우를 흘려보내며 여러 곳이 동시에 소비"</strong>하는 데 강합니다. 결제 지급은 Service Bus, 분석용 로그 스트림은 Event Hubs입니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>Service Bus는 <strong>등기우편</strong>입니다. 한 통 한 통 수령 확인이 되고, 실패하면 반송함(데드레터)에 따로 보관됩니다. 결제 영수증처럼 절대 잃으면 안 되는 편지에 씁니다.</p>
+                        <p>Event Hubs는 <strong>실시간 방송 전파</strong>입니다. 송출국은 쉴 새 없이 신호를 쏘고, 여러 방송국(컨슈머 그룹)이 같은 전파를 동시에 자기 속도로 수신합니다. 한두 신호를 놓쳐도 흐름은 계속됩니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">비동기로 바꾸면 결제는 됐는데 아이템 지급이 실패하는 경우가 생기지 않나요?</div>
+                <div class="a">
+                    <p>그래서 Service Bus가 <strong>데드레터 큐(Dead-Letter Queue)</strong>와 <strong>재시도(retry)</strong>를 기본 제공합니다. 워커가 메시지 처리에 실패하면 자동 재시도하고, 끝내 실패한 메시지는 본 큐에서 빠져 데드레터 큐로 격리됩니다. 운영자는 데드레터 큐만 모니터링하면 "어떤 지급이 끝내 실패했는지"를 추적하고 수동 보정할 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash</div>
+<pre><code># 결제 지급용 Service Bus 네임스페이스와 큐 생성
+az servicebus namespace create \
+  --resource-group rg-game-prod \
+  --name sb-game-prod \
+  --location koreacentral \
+  --sku Standard
+
+# 'reward-grant' 큐 생성: 최대 전달 시도 5회, 락 지속 5분
+az servicebus queue create \
+  --resource-group rg-game-prod \
+  --namespace-name sb-game-prod \
+  --name reward-grant \
+  --max-delivery-count 5 \
+  --lock-duration PT5M</code></pre>
+                    </div>
+                    <p class="highlight"><code>--max-delivery-count 5</code>는 "5번 재시도 후에도 실패하면 데드레터로 보낸다"는 뜻입니다. 일시적 장애(DB 순단)는 재시도로 흡수되고, 진짜 문제(잘못된 메시지)만 격리되어 운영자에게 노출됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 보안과 운영 — 키 없는 인증과 관측 가능성</h2>
+            <div class="conversation">
+                <div class="q">DB 비밀번호, Redis 접속 키, 외부 API 토큰을 어디에 두어야 하나요? 설정 파일에 넣자니 불안합니다.</div>
+                <div class="a">
+                    <p>시크릿을 코드나 설정 파일, 환경 변수에 평문으로 두는 것은 사고의 씨앗입니다. Azure의 정답은 <strong>Key Vault</strong>입니다. 모든 시크릿·인증서·키를 중앙 금고에 넣고, 접근은 RBAC로 통제하며, 접근 기록은 감사 로그로 남깁니다.</p>
+                    <p>그런데 더 근본적인 문제가 있습니다 — <strong>"Key Vault에 접근하기 위한 키는 또 어디에 두는가?"</strong> 이 닭과 달걀 문제를 끊는 것이 <strong>Managed Identity(관리 ID)</strong>입니다.</p>
+                    <p class="highlight">Managed Identity는 Azure가 리소스(AKS 파드, App Service 등)에 부여하는 <strong>키 없는 신분증</strong>입니다. 애플리케이션은 비밀번호 없이 자신의 Managed Identity로 Entra ID(구 Azure AD)에 토큰을 요청하고, 그 토큰으로 Key Vault·DB·Storage에 접근합니다. <strong>코드 어디에도 시크릿이 등장하지 않습니다.</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// Azure SDK + Managed Identity 로 Key Vault 에서 시크릿 읽기
+// DefaultAzureCredential 이 실행 환경의 Managed Identity 를 자동 인식
+var client = new SecretClient(
+    new Uri("https://kv-game-prod.vault.azure.net/"),
+    new DefaultAzureCredential());
+
+// 코드에 비밀번호가 전혀 없음: 신분증(토큰)으로 금고를 연다
+KeyVaultSecret dbSecret = await client.GetSecretAsync("PostgresConnString");
+string connectionString = dbSecret.Value;</code></pre>
+                    </div>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>비밀번호 방식은 <strong>금고 열쇠를 또 다른 서랍에 숨겨두는</strong> 것과 같습니다. 그 서랍 열쇠는 어디 둘까요? 무한 반복입니다.</p>
+                        <p>Managed Identity는 <strong>사원증</strong>입니다. 사원증을 단말기에 갖다 대면 출입 권한이 확인됩니다. 열쇠 꾸러미를 들고 다닐 필요가 없고, 퇴사(리소스 삭제)하면 사원증도 즉시 무효가 됩니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">서비스가 여러 개로 쪼개지니 장애가 났을 때 어디가 문제인지 찾기가 어렵습니다. 운영은 어떻게 보강하나요?</div>
+                <div class="a">
+                    <p>분산 시스템에서는 <strong>관측 가능성(Observability)</strong>이 생존 기술입니다. Azure는 <strong>Azure Monitor</strong>를 중심으로 텔레메트리를 모읍니다.</p>
+                    <ul>
+                        <li><strong>Log Analytics</strong>: 모든 리소스와 컨테이너의 로그를 한곳에 모아 KQL(Kusto Query Language)로 질의합니다. "지난 1시간 매치메이킹 워커의 5xx를 시간대별로" 같은 분석이 쿼리 한 방에 나옵니다.</li>
+                        <li><strong>Application Insights</strong>: 분산 추적(distributed tracing)으로 한 요청이 API → Orleans 실로 → DB를 거치는 전 경로의 지연을 시각화합니다. 병목 구간을 눈으로 짚어냅니다.</li>
+                        <li><strong>Metrics &amp; Alerts</strong>: CPU, 큐 적체량, 응답 지연에 임계치를 걸고, 넘으면 알림(또는 오토스케일)을 발동합니다.</li>
+                    </ul>
+                    <p class="key-point">비용 관리도 운영의 일부입니다. <strong>Cost Management + 예산(Budget) 알림</strong>으로 월 예산을 걸어 두고, 리소스에 <strong>태그(team, title, env)</strong>를 붙여 어느 게임·환경이 비용을 얼마나 쓰는지 추적합니다. 클라우드 비용은 방치하면 조용히 새는 욕조 물 같아서, 관측과 알림 없이는 청구서가 와서야 사고를 알게 됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: 종합 아키텍처 — 서브컬처 게임 백엔드 한 장 그림</h2>
+            <div class="conversation">
+                <div class="q">지금까지의 조각들을 모으면, 실제 게임 백엔드 한 채는 어떤 모양이 되나요?</div>
+                <div class="a">
+                    <p>클라이언트의 요청이 들어와 처리되고 데이터가 흐르는 전체 경로를 그려 보겠습니다. 핵심 게임 로직은 AKS 위의 Orleans 클러스터가 담당하고, 그 주변을 데이터·메시징·관측 서비스가 감쌉니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">게임 클라이언트</div>
+                                <div class="flow-box__items">유저 / 모바일·PC</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Ingress / 부하 분산</div>
+                                <div class="flow-box__items">Front Door + AKS Ingress</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">AKS · Orleans</div>
+                                <div class="flow-box__items">게임 로직 실로<br>(가용영역 1·2·3 분산)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>Orleans 실로는 아래의 백엔드 서비스들과 통신합니다.</p>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">AKS · Orleans 게임 서버</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">PostgreSQL<br>(영구 데이터)</div>
+                            <div class="hierarchy-item">Redis<br>(세션·랭킹·락)</div>
+                            <div class="hierarchy-item">Service Bus<br>(지급·우편 명령)</div>
+                            <div class="hierarchy-item">Event Hubs<br>(행동 로그 인입)</div>
+                            <div class="hierarchy-item">Key Vault<br>(시크릿, MI 인증)</div>
+                            <div class="hierarchy-item">Azure Monitor<br>(로그·추적·알림)</div>
+                        </div>
+                    </div>
+                    <p>데이터의 흐름을 단계로 정리하면 다음과 같습니다.</p>
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">요청 유입</div>
+                            <div class="pipeline-bar pb-gbuffer">
+                                <span>클라이언트</span><span>Front Door</span><span>Ingress</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">로직 처리</div>
+                            <div class="pipeline-bar pb-light">
+                                <span>Orleans 그레인</span><span>Redis 조회</span><span>PostgreSQL 갱신</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">비동기 후처리</div>
+                            <div class="pipeline-bar pb-post">
+                                <span>Service Bus</span><span>워커 지급</span><span>Event Hubs 로그</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">관측 / 보안</div>
+                            <div class="pipeline-bar pb-shadow">
+                                <span>Azure Monitor</span><span>Key Vault</span><span>Managed Identity</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="highlight">이 구성에서 <strong>고가용성</strong>은 두 축으로 확보됩니다. (1) AKS 노드와 DB·Redis를 <strong>여러 가용 영역</strong>에 분산해 한 데이터센터 장애를 견딥니다. (2) 글로벌 서비스라면 여러 <strong>리전</strong>에 같은 스택을 복제하고 <strong>Front Door</strong>로 유저를 가까운 리전에 라우팅하되, DB는 지연·정합성 때문에 리전별로 신중히 설계합니다.</p>
+                </div>
+
+                <div class="q">한 가지 더 — 왜 굳이 이렇게 여러 서비스로 쪼개나요? 한 덩어리로 두면 단순하지 않나요?</div>
+                <div class="a">
+                    <p>각 서비스를 <strong>독립적으로 확장하고 교체하기 위해서</strong>입니다. 신규 이벤트로 트래픽이 폭증하면 Orleans 파드만 오토스케일로 늘리고, 로그가 쏟아지면 Event Hubs 파티션만 키웁니다. 한 덩어리(모놀리식)였다면 가장 무거운 부분에 맞춰 전체를 키워야 해서 비용과 운영이 비효율적입니다.</p>
+                    <p class="warning">다만 분리는 공짜가 아닙니다. 네트워크 호출, 분산 추적, 메시지 정합성, 부분 실패 처리라는 복잡성을 떠안습니다. 그래서 <strong>"처음부터 모든 것을 쪼개지 말고, 병목과 책임 경계가 분명해지는 지점에서 점진적으로 분리"</strong>하는 것이 시니어의 현실적 판단입니다. 클라우드는 그 분리를 빠르고 안전하게 실험하게 해주는 도구입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>좌표계</strong>: 리전은 유저와의 지연을, 가용 영역은 장애 격리(고가용성)를 결정합니다. 핵심 컴포넌트는 여러 AZ에 분산하고, 운영은 책임 공유 모델에 따라 "내 데이터·권한·앱"은 끝까지 내 책임임을 잊지 않습니다.</li>
+                <li><strong>컴퓨트</strong>: 스테이트풀 핵심 로직(Orleans)은 AKS, 가변 부하 워커는 Container Apps, 단순 REST API는 App Service, OS·네트워크 튜닝이 필요한 데디서버는 VMSS — 제어 수준과 운영 부담의 균형으로 고릅니다.</li>
+                <li><strong>데이터·메시징</strong>: 틀리면 안 되는 건 PostgreSQL, 빨라야 하는 건 Redis, 큰 파일은 Blob입니다. 한 건도 잃으면 안 되는 명령은 Service Bus(+데드레터), 대량 이벤트 스트림은 Event Hubs로 비동기 처리합니다.</li>
+                <li><strong>보안·운영</strong>: 시크릿은 Key Vault에 모으고 Managed Identity로 키 없이 인증해 코드에서 비밀번호를 제거합니다. Azure Monitor·Log Analytics·Application Insights로 분산 추적과 알림을, 예산·태그로 비용을 관측합니다.</li>
+                <li><strong>아키텍처</strong>: 클라이언트 → Front Door/Ingress → AKS의 Orleans → PostgreSQL/Redis → Service Bus/Event Hubs → Azure Monitor로 이어지는 구성이 기본형입니다. 고가용성은 멀티 AZ와 멀티 리전으로 확보하되, 분리는 병목이 드러나는 지점에서 점진적으로 진행합니다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TCP 게임 네트워크 프로그래밍 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp-server.html" class="back-link">&larr; 목록으로</a>
+        <header class="content-header">
+            <h1>메시지 경계는 누가 정해줄까?</h1>
+            <p class="subtitle">TCP 스트림 프레이밍과 System.IO.Pipelines 고성능 파싱</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 왜 게임 서버는 TCP를 고를까, 그리고 그 대가는?</h2>
+            <div class="conversation">
+                <div class="q">게임 서버를 만들 때 TCP와 UDP 중 무엇을 선택해야 하나요? 그 기준이 뭔가요?</div>
+                <div class="a">
+                    <p>한 줄로 답하면, <strong>"틀리면 안 되는 데이터는 TCP, 늦으면 안 되는 데이터는 UDP"</strong>입니다. 게임 장르와 패킷 성격에 따라 선택이 갈립니다.</p>
+                    <p>TCP는 <strong>연결 지향(connection-oriented)</strong>이며, <strong>순서 보장</strong>, <strong>자동 재전송</strong>, <strong>흐름 제어/혼잡 제어</strong>를 OS 커널이 대신 해 줍니다. 로그인, 인벤토리, 상점 결제, 길드 채팅처럼 한 바이트라도 누락되면 안 되는 데이터에 적합합니다.</p>
+                    <p>반대로 FPS의 위치 동기화처럼 "0.1초 지난 좌표는 이미 쓸모없는" 데이터는 TCP의 재전송이 오히려 독이 됩니다. 옛 패킷을 기다리느라 최신 패킷이 막히는 <strong>HoL(Head-of-Line) 블로킹</strong>이 발생하기 때문입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th>TCP</th><th>UDP</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>연결</td><td>3-way handshake로 연결 수립</td><td>비연결(connectionless)</td></tr>
+                            <tr><td>순서/신뢰성</td><td>순서 보장, 손실 시 재전송</td><td>보장 없음(앱이 직접 구현)</td></tr>
+                            <tr><td>경계</td><td>바이트 스트림(경계 없음)</td><td>데이터그램(메시지 단위 보존)</td></tr>
+                            <tr><td>지연 특성</td><td>HoL 블로킹 가능</td><td>최신 패킷 우선 처리 가능</td></tr>
+                            <tr><td>적합 사례</td><td>로그인/채팅/거래/턴제</td><td>FPS 이동/실시간 액션</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">MMORPG·턴제·소셜·캐주얼 서버는 대부분 TCP로 충분합니다. 실시간 슈터/레이싱만이 UDP 위에 신뢰성 계층(예: 선택적 재전송)을 직접 얹습니다.</p>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <div class="q">TCP를 쓰기로 했습니다. 그런데 면접에서 "TcpNoDelay 왜 켰어요?"라고 묻더군요. 이게 왜 중요한가요?</div>
+                <div class="a">
+                    <p>이 질문은 사실상 <strong>Nagle 알고리즘과 지연 ACK(delayed ACK)의 상호작용</strong>을 아느냐를 묻는 것입니다. 시니어 면접의 단골입니다.</p>
+                    <p><strong>Nagle 알고리즘</strong>은 작은 패킷을 모아서 보내 네트워크 효율을 높이는 기법입니다. "아직 ACK 안 받은 데이터가 떠 있으면, 작은 데이터는 버퍼에 쌓아 두었다가 한꺼번에 보낸다"는 규칙입니다.</p>
+                    <p><strong>지연 ACK</strong>는 수신 측이 ACK를 곧바로 안 보내고 최대 약 40~200ms 모았다가 보내는 기법입니다.</p>
+                    <p class="warning">문제는 둘이 만나면 <strong>최악의 궁합</strong>이라는 점입니다. 송신 측은 ACK를 기다리며 작은 패킷을 안 보내고, 수신 측은 보낼 응답이 없어 ACK를 미룹니다. 결과적으로 수십~수백 ms의 인위적 지연이 생깁니다. 게임에서 이건 치명적입니다.</p>
+                    <p>그래서 게임 서버는 거의 항상 <code>Socket.NoDelay = true</code>로 Nagle을 끕니다. 작은 패킷이라도 즉시 전송시켜 레이턴시를 우선합니다. 대신 small write가 많으면 패킷 수가 늘 수 있으니, <strong>애플리케이션 레벨에서 배칭(batching)</strong>으로 직접 묶어 보내는 전략을 함께 씁니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 게임 서버 소켓 표준 설정
+var socket = new Socket(AddressFamily.InterNetwork,
+                        SocketType.Stream, ProtocolType.Tcp);
+
+// Nagle 알고리즘 비활성화 → 작은 패킷도 즉시 전송(지연 최소화)
+socket.NoDelay = true;
+
+// 끊긴 연결을 빨리 감지하기 위한 keep-alive (Part 6에서 상세)
+socket.SetSocketOption(SocketOptionLevel.Socket,
+                       SocketOptionName.KeepAlive, true);</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 스트림은 메시지가 아니다 - 프레이밍의 탄생</h2>
+            <div class="conversation">
+                <div class="q">제목이 "메시지 경계는 누가 정해줄까"인데, 이게 무슨 뜻인가요? Send를 한 번 했으니 Recv도 한 번에 오는 것 아닌가요?</div>
+                <div class="a">
+                    <p>바로 그 직관이 모든 초보 네트워크 버그의 출발점입니다. <strong>TCP는 메시지(message)가 아니라 바이트 스트림(byte stream)입니다.</strong> TCP 어디에도 "여기까지가 한 메시지"라는 표시는 없습니다.</p>
+                    <p>송신 측이 <code>Send("MOVE")</code>, <code>Send("CHAT")</code>를 따로 호출해도, 수신 측 한 번의 <code>Recv</code>에서 다음과 같은 일이 벌어질 수 있습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>현상</th><th>설명</th><th>원인</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>분할 수신 (partial)</td><td>"MOV"만 도착, "E"는 다음 Recv에</td><td>MSS 분할, 네트워크 단편화</td></tr>
+                            <tr><td>합쳐짐 (sticky packet)</td><td>"MOVECHAT"가 한 번에 도착</td><td>Nagle 배칭, 커널 버퍼 결합</td></tr>
+                            <tr><td>혼합</td><td>"MOVECHA"까지 도착, 나머지는 다음에</td><td>위 둘이 동시에</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>TCP는 <strong>컨베이어 벨트 위로 흘러오는 물</strong>과 같습니다. 보내는 쪽은 컵(메시지)으로 부었지만, 받는 쪽에는 그냥 끊김 없는 물줄기로 도착합니다.</p>
+                        <p>"여기까지가 한 컵 분량"이라는 표시는 물에 적혀 있지 않습니다. 그 경계를 다시 그려 내는 일, 그게 바로 <strong>프레이밍(framing)</strong>입니다.</p>
+                    </div>
+                    <p class="highlight">메시지 경계는 TCP가 주지 않습니다. 애플리케이션 프로토콜이 직접 정의해야 합니다. 이것이 프레이밍이 필요한 근본 이유입니다.</p>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <div class="q">그러면 메시지 경계를 어떻게 표시하나요? 어떤 프로토콜 설계가 표준인가요?</div>
+                <div class="a">
+                    <p>경계를 표시하는 방법은 크게 두 가지입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>방식</th><th>원리</th><th>장단점</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>구분자(delimiter)</td><td>'\n' 같은 종료 문자로 구분</td><td>텍스트엔 쉽지만, 바이너리에 그 바이트가 나오면 깨짐(이스케이프 필요)</td></tr>
+                            <tr><td>길이 접두사(length-prefix)</td><td>본문 앞에 본문 길이를 기록</td><td>바이너리 안전, 미리 크기를 알아 버퍼 할당 효율적 ← <strong>게임 표준</strong></td></tr>
+                        </tbody>
+                    </table>
+                    <p>게임 서버는 거의 예외 없이 <strong>길이 접두사 프로토콜</strong>을 씁니다. 헤더에 "본문이 몇 바이트인지"를 먼저 적어 두면, 수신 측은 "헤더를 읽어 길이 N을 알아낸다 → N바이트가 다 모일 때까지 기다린다 → 하나의 완전한 메시지로 꺼낸다"는 명확한 규칙을 가질 수 있습니다.</p>
+                    <p>아래는 전형적인 게임 패킷 레이아웃입니다. 헤더 4바이트(길이 2 + 타입 2) 뒤에 가변 길이 본문이 옵니다.</p>
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">헤더 (4 bytes)</div>
+                            <div class="pipeline-bar pb-gbuffer">
+                                <span>Length (ushort, 2B)</span><span>PacketId (ushort, 2B)</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">본문 (N bytes)</div>
+                            <div class="pipeline-bar pb-light">
+                                <span>Payload (직렬화된 패킷 데이터)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">Length 필드에 "본문 길이만"을 담을지 "헤더 포함 전체 길이"를 담을지는 설계 선택입니다. 어느 쪽이든 송수신이 같은 규칙을 따르고, 엔디안(보통 리틀엔디안)을 고정하는 것이 핵심입니다.</p>
+                    <p class="warning">Length 필드는 반드시 검증해야 합니다. 악의적 클라이언트가 길이를 2GB로 보내면 그만큼 버퍼를 할당하려다 서버가 죽습니다. <code>if (length &gt; MaxPacketSize) Disconnect();</code> 같은 상한 검사는 필수입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 전통적 Socket/NetworkStream 수신 루프와 그 한계</h2>
+            <div class="conversation">
+                <div class="q">Pipelines 같은 신문물 말고, 고전적인 방식으로 길이 접두사를 직접 파싱하면 어떻게 되나요?</div>
+                <div class="a">
+                    <p>핵심은 <strong>"불완전 프레임을 직접 누적(accumulate)하고, 완성될 때마다 잘라낸다"</strong>는 상태 관리를 손으로 하는 것입니다. <code>NetworkStream</code>이나 <code>Socket.ReceiveAsync</code>로 받은 바이트를 임시 버퍼에 쌓고, 헤더 길이만큼 모였는지, 본문이 다 왔는지 매번 점검합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 전통적 수신 루프: 직접 버퍼를 관리하며 프레임을 잘라낸다
+async Task ReceiveLoopAsync(Socket socket)
+{
+    const int HeaderSize = 4;          // Length(2) + PacketId(2)
+    var buffer = new byte[8192];       // 소켓 수신 버퍼
+    int writePos = 0;                  // 쌓인 바이트 끝 위치
+
+    while (true)
+    {
+        // 1) 남은 공간에 추가 수신
+        int read = await socket.ReceiveAsync(
+            buffer.AsMemory(writePos), SocketFlags.None);
+        if (read == 0) break;          // 정상 종료(상대가 연결을 닫음)
+        writePos += read;
+
+        // 2) 쌓인 데이터에서 완전한 프레임을 가능한 만큼 꺼낸다
+        int readPos = 0;
+        while (writePos - readPos &gt;= HeaderSize)
+        {
+            // 헤더에서 본문 길이 파싱(리틀엔디안)
+            ushort bodyLen = BinaryPrimitives.ReadUInt16LittleEndian(
+                buffer.AsSpan(readPos, 2));
+            int frameSize = HeaderSize + bodyLen;
+
+            // 아직 한 프레임이 다 안 모였으면 다음 수신을 기다린다
+            if (writePos - readPos &lt; frameSize) break;
+
+            ushort packetId = BinaryPrimitives.ReadUInt16LittleEndian(
+                buffer.AsSpan(readPos + 2, 2));
+            var body = buffer.AsSpan(readPos + HeaderSize, bodyLen);
+            Dispatch(packetId, body);  // 완성된 패킷 처리
+
+            readPos += frameSize;
+        }
+
+        // 3) 처리하고 남은 불완전 프레임을 버퍼 앞으로 당긴다(compaction)
+        int remaining = writePos - readPos;
+        if (remaining &gt; 0)
+            Array.Copy(buffer, readPos, buffer, 0, remaining);
+        writePos = remaining;
+    }
+}</code></pre>
+                    </div>
+                    <p>동작은 합니다. 하지만 시니어 관점에서 보면 이 코드에는 숨은 비용과 함정이 많습니다.</p>
+                    <p class="warning">한계 1 - <strong>버퍼 압축(compaction) 복사</strong>: 매 루프마다 남은 바이트를 앞으로 당기는 <code>Array.Copy</code>가 발생합니다. 트래픽이 많으면 이 memmove가 그대로 CPU 비용이 됩니다.</p>
+                    <p class="warning">한계 2 - <strong>고정 버퍼 한계</strong>: 8192바이트보다 큰 프레임이 오면 버퍼를 재할당/확장하는 로직을 또 손으로 짜야 합니다. 경계 처리 버그의 온상입니다.</p>
+                    <p class="warning">한계 3 - <strong>제로카피가 아님</strong>: 소켓 버퍼 → 임시 버퍼 복사, 다시 역직렬화 버퍼 복사로 같은 데이터를 여러 번 옮깁니다.</p>
+                    <p class="highlight">결국 "부분 수신 누적 + 프레임 절단 + 버퍼 재배치"라는 반복적이고 버그 나기 쉬운 코드를 모든 연결마다 직접 관리해야 합니다. 바로 이 고통을 표준 라이브러리로 흡수한 것이 System.IO.Pipelines입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: System.IO.Pipelines - 프레이밍 고통의 해결사</h2>
+            <div class="conversation">
+                <div class="q">System.IO.Pipelines는 정확히 무엇을 해결해 주나요? 위 코드의 어떤 부분이 사라지나요?</div>
+                <div class="a">
+                    <p><strong>System.IO.Pipelines</strong>는 .NET 팀이 Kestrel(ASP.NET Core 웹서버)을 만들면서 추출한 고성능 I/O 파이프라인입니다. 핵심 아이디어는 <strong>읽기와 파싱을 분리하고, 버퍼 관리를 라이브러리가 떠안는 것</strong>입니다.</p>
+                    <ul>
+                        <li><strong>PipeWriter</strong>: 소켓에서 받은 바이트를 파이프에 쓰는 쪽</li>
+                        <li><strong>PipeReader</strong>: 파이프에서 바이트를 읽어 프레임을 파싱하는 쪽</li>
+                    </ul>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">Socket</div>
+                                <div class="flow-box__items">바이트 수신</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">PipeWriter</div>
+                                <div class="flow-box__items">GetMemory / Advance</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Pipe (내부 버퍼)</div>
+                                <div class="flow-box__items">백프레셔 관리</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">PipeReader</div>
+                                <div class="flow-box__items">ReadOnlySequence 파싱</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>Pipelines가 없애 주는 것들입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>고전 방식의 고통</th><th>Pipelines의 해결</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>버퍼 압축 Array.Copy</td><td><code>ReadOnlySequence&lt;byte&gt;</code>가 분절 버퍼를 논리적으로 잇는다(제로카피)</td></tr>
+                            <tr><td>버퍼 확장 직접 구현</td><td>Pipe가 메모리 풀에서 세그먼트를 자동 관리</td></tr>
+                            <tr><td>소비/미소비 위치 수동 추적</td><td><code>Advance(consumed, examined)</code>로 명시적 표현</td></tr>
+                            <tr><td>흐름 폭주 시 메모리 폭증</td><td>PauseWriterThreshold로 <strong>백프레셔</strong> 내장</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="conversation">
+                <div class="q">실제 프레임 파싱은 어떻게 짜나요? consumed와 examined가 헷갈립니다.</div>
+                <div class="a">
+                    <p>패턴은 항상 같습니다. 읽기 루프에서 <code>ReadOnlySequence&lt;byte&gt;</code>를 받아, <strong>완전한 프레임을 만들 수 있을 만큼 데이터가 있는지</strong> 검사합니다. 있으면 잘라서 처리(consumed를 전진), 없으면 "여기까지 다 봤지만 아직 부족하다"고 알립니다(examined를 끝까지).</p>
+                    <p class="key-point"><strong>consumed</strong>는 "이만큼은 처리 완료, 버려도 됨"이고, <strong>examined</strong>는 "이만큼까지 들여다봤지만 더 필요함"입니다. examined를 끝까지 두면, 다음 ReadAsync는 새 데이터가 더 올 때까지 깨어나지 않아 불필요한 폴링을 막습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 소켓 → PipeWriter 채우기
+async Task FillPipeAsync(Socket socket, PipeWriter writer)
+{
+    while (true)
+    {
+        // 풀에서 쓰기 가능한 메모리 블록을 빌린다(직접 할당 X)
+        Memory&lt;byte&gt; memory = writer.GetMemory(sizeHint: 4096);
+        int read = await socket.ReceiveAsync(memory, SocketFlags.None);
+        if (read == 0) break;
+
+        writer.Advance(read);              // 실제 받은 만큼 커밋
+
+        // 백프레셔: 소비가 느리면 여기서 자연스럽게 대기한다
+        FlushResult result = await writer.FlushAsync();
+        if (result.IsCompleted) break;
+    }
+    await writer.CompleteAsync();
+}
+
+// PipeReader → 프레임 파싱
+async Task ReadPipeAsync(PipeReader reader)
+{
+    while (true)
+    {
+        ReadResult result = await reader.ReadAsync();
+        ReadOnlySequence&lt;byte&gt; buffer = result.Buffer;
+
+        // 가능한 만큼 완전한 프레임을 잘라낸다
+        while (TryReadFrame(ref buffer, out ushort id,
+                            out ReadOnlySequence&lt;byte&gt; body))
+        {
+            Dispatch(id, body);            // 제로카피로 본문 전달
+        }
+
+        // consumed = buffer.Start (남은 미완성 프레임 시작)
+        // examined = buffer.End   (여기까지 다 들여다봤다)
+        reader.AdvanceTo(buffer.Start, buffer.End);
+
+        if (result.IsCompleted) break;     // 상대가 연결 종료
+    }
+    await reader.CompleteAsync();
+}</code></pre>
+                    </div>
+                    <details class="code-toggle">
+                        <summary>TryReadFrame - SequenceReader로 길이 접두사 파싱 <span class="code-lang">C#</span></summary>
+                        <pre><code>// ReadOnlySequence는 여러 세그먼트로 쪼개져 있을 수 있으므로
+// SequenceReader로 경계를 신경 쓰지 않고 안전하게 읽는다.
+static bool TryReadFrame(
+    ref ReadOnlySequence&lt;byte&gt; buffer,
+    out ushort packetId,
+    out ReadOnlySequence&lt;byte&gt; body)
+{
+    packetId = 0;
+    body = default;
+
+    var reader = new SequenceReader&lt;byte&gt;(buffer);
+
+    const int HeaderSize = 4;
+    // 헤더(4바이트)도 안 모였으면 더 기다린다
+    if (reader.Remaining &lt; HeaderSize) return false;
+
+    // 길이 + 타입 읽기(리틀엔디안)
+    reader.TryReadLittleEndian(out short rawLen);
+    reader.TryReadLittleEndian(out short rawId);
+    ushort bodyLen = (ushort)rawLen;
+    packetId = (ushort)rawId;
+
+    if (bodyLen &gt; MaxPacketSize)           // 악성 길이 방어
+        throw new InvalidDataException("packet too large");
+
+    // 본문이 아직 다 안 왔으면 더 기다린다
+    if (reader.Remaining &lt; bodyLen) return false;
+
+    // 본문 구간을 슬라이스(복사 없음)
+    body = buffer.Slice(reader.Position, bodyLen);
+
+    // 소비한 만큼 buffer 시작점을 전진(헤더 + 본문)
+    buffer = buffer.Slice(reader.Position).Slice(bodyLen);
+    return true;
+}</code></pre>
+                    </details>
+                    <p class="highlight">버퍼 압축도, 수동 위치 추적도, 버퍼 확장도 사라졌습니다. 파싱 코드는 "프레임이 다 모였는가"라는 본질에만 집중하고, 메모리 관리와 백프레셔는 Pipe가 책임집니다. 이것이 Kestrel급 처리량의 비결입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: 본문은 무엇으로 채울까 - 직렬화 선택</h2>
+            <div class="conversation">
+                <div class="q">프레임 본문(payload)에 객체를 어떻게 담나요? JSON을 써도 되나요?</div>
+                <div class="a">
+                    <p>본문을 바이트로 바꾸는 것이 <strong>직렬화(serialization)</strong>입니다. 게임 패킷은 초당 수만~수십만 개가 오가므로, 직렬화 비용과 크기가 곧 서버 성능입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>방식</th><th>크기</th><th>속도</th><th>특징</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>JSON</td><td>큼(텍스트)</td><td>느림</td><td>사람이 읽기 쉬움, 디버깅·웹 API용. 게임 핫패스엔 부적합</td></tr>
+                            <tr><td>MessagePack</td><td>작음(바이너리)</td><td>빠름</td><td>스키마리스 가능, 크로스 언어 호환 우수</td></tr>
+                            <tr><td>MemoryPack</td><td>매우 작음</td><td>매우 빠름</td><td>.NET 전용, 제로 인코딩 지향, Span 기반 초고속</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">결론: <strong>게임 핫패스 패킷은 바이너리 직렬화(MemoryPack/MessagePack)</strong>를 씁니다. JSON은 디버그 로그, 설정 파일, 외부 REST 연동처럼 가독성이 중요한 곳에만 제한적으로 씁니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>JSON은 <strong>택배 상자에 내용물 설명서를 일일이 한글로 적어 넣는 것</strong>입니다. 누가 봐도 알지만 무겁고 느립니다.</p>
+                        <p>바이너리 직렬화는 <strong>송수신자가 미리 합의한 순서대로 내용물만 빽빽이 채우는 것</strong>입니다. 설명서가 없어 사람은 못 읽지만, 작고 빠릅니다. 게임 서버에는 후자가 맞습니다.</p>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// MemoryPack으로 게임 패킷 정의 (로그인 / 이동 / 채팅)
+[MemoryPackable]
+public partial class C_Login          // Client → Server
+{
+    public string AccountId { get; set; }
+    public string Token { get; set; }
+}
+
+[MemoryPackable]
+public partial class C_Move
+{
+    public int EntityId { get; set; }
+    public float X { get; set; }
+    public float Y { get; set; }
+    public float Z { get; set; }
+    public long ClientTick { get; set; }   // 서버 보정용 타임스탬프
+}
+
+[MemoryPackable]
+public partial class S_Chat           // Server → Client (브로드캐스트)
+{
+    public int SenderId { get; set; }
+    public string Message { get; set; }
+}
+
+// 직렬화/역직렬화 (Part 4의 body는 ReadOnlySequence)
+byte[] bytes = MemoryPackSerializer.Serialize(move);
+var move = MemoryPackSerializer.Deserialize&lt;C_Move&gt;(body);</code></pre>
+                    </div>
+                    <p class="warning">스키마/버전 호환은 운영의 함정입니다. 클라이언트와 서버 배포 시점이 어긋나면 필드가 다를 수 있습니다. 필드를 <strong>제거 대신 deprecated 처리</strong>하고, 새 필드는 <strong>맨 뒤에 추가</strong>하며, PacketId로 버전을 명확히 분기하는 규칙을 세워야 합니다. MessagePack의 <code>[Key]</code> 인덱스 고정이나 MemoryPack의 멤버 순서 관리가 여기에 직결됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: 수천 명을 버티는 .NET 소켓 서버 운영</h2>
+            <div class="conversation">
+                <div class="q">동시접속 수천 명을 받는 서버 구조는 어떻게 잡나요? 끊긴 연결은 어떻게 감지하나요?</div>
+                <div class="a">
+                    <p>구조의 뼈대는 <strong>"하나의 수락(accept) 루프 + 연결별 독립 처리"</strong>입니다. 메인 루프는 새 연결을 받기만 하고, 각 연결은 자체 Pipe와 비동기 태스크에서 독립적으로 송수신합니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">Accept 루프</div>
+                                <div class="flow-box__items">새 연결 수락</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Session 생성</div>
+                                <div class="flow-box__items">Pipe + 송수신 태스크</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">연결별 처리</div>
+                                <div class="flow-box__items">FillPipe / ReadPipe</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 수락 루프: 받기만 하고 즉시 연결별 처리로 넘긴다
+async Task AcceptLoopAsync(Socket listener)
+{
+    while (true)
+    {
+        Socket conn = await listener.AcceptAsync();
+        conn.NoDelay = true;                 // Part 1: Nagle off
+
+        var session = new Session(conn);
+        // await 하지 않고 던진다 → 수락 루프가 막히지 않는다
+        _ = session.ProcessAsync();
+    }
+}
+
+// 세션: 송수신을 분리한 두 태스크로 동시 처리
+class Session
+{
+    public async Task ProcessAsync()
+    {
+        var pipe = new Pipe();
+        Task write = FillPipeAsync(_socket, pipe.Writer);
+        Task read  = ReadPipeAsync(pipe.Reader);
+        await Task.WhenAll(read, write);
+        OnDisconnected();                    // 정리(룸 퇴장 등)
+    }
+}</code></pre>
+                    </div>
+                    <p class="highlight">대규모에서는 <code>AcceptAsync</code>/<code>ReceiveAsync</code>의 <strong>SocketAsyncEventArgs</strong> 기반 또는 위처럼 Task 기반 비동기를 써서 연결당 스레드를 만들지 않습니다. 스레드 풀 위에서 수천 연결을 소수 스레드로 처리하는 것이 핵심입니다.</p>
+                    <p>운영에서 빠지면 안 되는 두 가지가 더 있습니다.</p>
+                    <p class="key-point"><strong>1) Heartbeat / Keep-alive</strong>: TCP는 한쪽이 조용히 죽어도(케이블 뽑힘 등) 상대가 바로 모릅니다. 일정 주기로 ping 패킷을 주고받고, N초간 응답이 없으면 좀비 연결로 간주해 강제로 끊습니다. OS keep-alive(SetSocketOption)와 앱 레벨 heartbeat를 함께 씁니다.</p>
+                    <p class="key-point"><strong>2) 버퍼 풀(ArrayPool)</strong>: 패킷마다 <code>new byte[]</code>를 하면 GC가 폭발합니다. 송신 버퍼·임시 버퍼는 <code>ArrayPool&lt;byte&gt;.Shared</code>에서 빌리고 반납해 할당을 0에 수렴시킵니다. PipeReader/PipeWriter도 내부적으로 같은 철학(MemoryPool)을 따릅니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+                        <pre><code>// 송신 시 ArrayPool로 임시 버퍼 재사용 → GC 압박 제거
+byte[] rented = ArrayPool&lt;byte&gt;.Shared.Rent(HeaderSize + body.Length);
+try
+{
+    // [길이][타입][본문] 형식으로 직렬화
+    BinaryPrimitives.WriteUInt16LittleEndian(rented, (ushort)body.Length);
+    BinaryPrimitives.WriteUInt16LittleEndian(rented.AsSpan(2), packetId);
+    body.CopyTo(rented.AsSpan(HeaderSize));
+    await socket.SendAsync(
+        rented.AsMemory(0, HeaderSize + body.Length), SocketFlags.None);
+}
+finally
+{
+    ArrayPool&lt;byte&gt;.Shared.Return(rented);   // 반드시 반납
+}</code></pre>
+                    </div>
+                    <p class="warning">연결 폭주(접속 스파이크) 대비: 동시 연결 상한, 수락 큐(backlog) 크기, 핸드셰이크 타임아웃, 인증 전 데이터 제한을 두지 않으면 슬로로리스(slowloris)류 공격이나 부팅 직후 동시접속에 서버가 무너집니다. 백프레셔(Pipe)와 연결 한도를 함께 거는 것이 안전합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>TCP는 메시지가 아니라 바이트 스트림</strong>입니다. 분할 수신과 합쳐짐(sticky packet)이 정상이며, 메시지 경계는 애플리케이션이 프레이밍으로 직접 정의해야 합니다.</li>
+                <li>게임 표준 프레이밍은 <strong>길이 접두사(length-prefix) 프로토콜</strong>입니다. 헤더에 길이 + 타입을 두고, 길이는 반드시 상한 검증해 악성 패킷을 막습니다.</li>
+                <li>레이턴시가 중요한 게임은 <strong>TcpNoDelay=true</strong>로 Nagle을 끕니다. Nagle과 지연 ACK가 겹치면 수십~수백 ms의 인위적 지연이 생기기 때문입니다.</li>
+                <li>전통적 수신 루프는 버퍼 압축·확장·위치 추적을 손으로 해야 하지만, <strong>System.IO.Pipelines</strong>는 <code>ReadOnlySequence&lt;byte&gt;</code> 제로카피, 자동 버퍼 관리, 백프레셔를 제공해 이 고통을 제거합니다.</li>
+                <li>핫패스 패킷은 <strong>바이너리 직렬화(MemoryPack/MessagePack)</strong>로 작고 빠르게, 운영은 <strong>heartbeat·ArrayPool·수락 루프 + 연결별 비동기 처리·연결 한도</strong>로 대규모 동시접속을 버팁니다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

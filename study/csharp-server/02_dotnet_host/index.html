@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>.NET 10 서버의 뼈대 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp-server.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>프로그램은 Main에서 시작하지 않는다?</h1>
+            <p class="subtitle">.NET 10 Generic Host · 의존성 주입 · Kestrel로 보는 서버 앱의 뼈대</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: .NET 10 런타임 — 게임 백엔드에 왜 적합한가</h2>
+            <div class="conversation">
+                <div class="q">C# 코드가 실행되기까지 무슨 일이 일어나나요? CLR, JIT, AOT가 다 뭔가요?</div>
+                <div class="a">
+                    <p>C#은 컴파일하면 기계어가 아니라 <strong>IL(Intermediate Language)</strong>이라는 중간 코드가 됩니다. 이 IL을 실제 CPU 명령어로 바꾸고, 메모리·스레드·예외를 관리하는 가상 머신이 <strong>CLR(Common Language Runtime)</strong>입니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">C# 소스</div>
+                                <div class="flow-box__items">.cs 파일</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">Roslyn 컴파일</div>
+                                <div class="flow-box__items">IL + 메타데이터<br>(.dll)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">JIT 컴파일</div>
+                                <div class="flow-box__items">실행 직전 IL&rarr;기계어<br>(런타임)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">CPU 실행</div>
+                                <div class="flow-box__items">네이티브 코드</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p><strong>JIT(Just-In-Time)</strong>는 메서드가 처음 호출될 때 IL을 그 자리에서 기계어로 번역합니다. 실행 중 수집한 정보(어떤 분기가 자주 타는지 등)로 코드를 다시 최적화하는 <strong>Tiered Compilation</strong>과 <strong>PGO(Profile-Guided Optimization)</strong>가 .NET 10 기본 동작이라, 오래 켜두는 게임 서버일수록 시간이 지나며 더 빨라집니다.</p>
+                    <p><strong>Native AOT</strong>는 반대로 빌드 시점에 미리 전부 기계어로 만들어 둡니다. JIT 워밍업이 없어 시작이 빠르고 메모리가 작아, 빠르게 뜨고 죽는 함수형 워커나 사이드카에 유리합니다.</p>
+                    <p class="warning">함정: Native AOT는 런타임 코드 생성(<code>Reflection.Emit</code>), 동적 어셈블리 로드, 일부 무제한 리플렉션을 쓸 수 없습니다. Orleans처럼 코드 생성·리플렉션에 의존하는 프레임워크가 핵심인 게임 서버 본체는 보통 <strong>JIT(Server GC) 기반으로 운영</strong>하는 편이 안전합니다.</p>
+                </div>
+
+                <div class="q">"서버 GC"와 "워크스테이션 GC"는 뭐가 다른가요? 면접에서 자주 묻던데요.</div>
+                <div class="a">
+                    <p>둘 다 자동 메모리 회수(GC)지만 <strong>지연시간(latency)과 처리량(throughput) 중 무엇을 우선하느냐</strong>가 다릅니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>Workstation GC</th>
+                                <th>Server GC</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>힙 구성</td>
+                                <td>단일 힙, GC 스레드 1개</td>
+                                <td>코어(또는 지정)마다 힙·GC 스레드 분리</td>
+                            </tr>
+                            <tr>
+                                <td>최적화 대상</td>
+                                <td>UI 반응성, 낮은 메모리</td>
+                                <td>높은 처리량, 멀티코어 병렬 회수</td>
+                            </tr>
+                            <tr>
+                                <td>적합한 곳</td>
+                                <td>데스크톱 앱, CLI 도구</td>
+                                <td>다수 동접을 받는 게임 서버</td>
+                            </tr>
+                            <tr>
+                                <td>주의점</td>
+                                <td>코어 많아도 못 살림</td>
+                                <td>힙이 코어 수만큼 늘어 메모리 사용량↑</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">ASP.NET Core 서버 프로젝트는 <strong>Server GC가 기본값</strong>입니다. 추가로 컨테이너에서는 코어를 다 쓰지 못하게 막히는 경우가 많으므로, <code>GCHeapCount</code>나 <code>DOTNET_GCHeapHardLimitPercent</code>로 힙 수·상한을 명시해 K8s 메모리 limit과 충돌하지 않게 맞추는 것이 시니어의 튜닝 포인트입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>&lt;!-- .csproj: 동접을 받는 게임 서버는 Server GC + Concurrent --&gt;
+&lt;PropertyGroup&gt;
+  &lt;ServerGarbageCollection&gt;true&lt;/ServerGarbageCollection&gt;
+  &lt;ConcurrentGarbageCollection&gt;true&lt;/ConcurrentGarbageCollection&gt;
+  &lt;!-- TieredPGO는 .NET 10에서 기본 on, 명시해도 무방 --&gt;
+  &lt;TieredPGO&gt;true&lt;/TieredPGO&gt;
+&lt;/PropertyGroup&gt;</code></pre>
+                    </div>
+                    <p>정리하면 .NET이 게임 백엔드에 맞는 이유는 <strong>(1) Server GC + Tiered/PGO로 장시간 운영 시 처리량이 우수</strong>하고, <strong>(2) async/await로 수만 동접 I/O를 적은 스레드로 처리</strong>하며, <strong>(3) Orleans·Kestrel·DI 같은 1급 서버 생태계가 한 언어로 통합</strong>되기 때문입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: Generic Host — 앱의 진짜 시작점</h2>
+            <div class="conversation">
+                <div class="q">제목이 "Main에서 시작하지 않는다"인데, 그럼 어디서 시작하나요?</div>
+                <div class="a">
+                    <p>물리적으로는 여전히 <code>Main</code>입니다. 다만 현대 .NET 서버에서 <code>Main</code>은 한두 줄이고, 실제 일은 <strong>Host</strong>라는 컨테이너가 합니다. Host는 (1) DI 컨테이너, (2) Configuration, (3) Logging, (4) 생명주기 관리, (5) 백그라운드 서비스 실행을 하나로 묶은 <strong>앱의 런타임 셸</strong>입니다.</p>
+                    <p><code>WebApplication.CreateBuilder()</code>는 내부적으로 Generic Host 위에 Kestrel·라우팅을 얹은 버전입니다. 즉 웹 서버든 순수 워커든 같은 Host 골격을 공유합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// Program.cs — top-level statements. Main이 보이지 않지만 컴파일러가 감싸줍니다.
+var builder = WebApplication.CreateBuilder(args);
+
+// 1) 서비스(=의존성)를 DI 컨테이너에 등록하는 "구성" 단계
+builder.Services.AddSingleton&lt;IMatchRepository, RedisMatchRepository&gt;();
+builder.Services.AddHostedService&lt;MatchCleanupWorker&gt;();
+
+var app = builder.Build();   // 여기서 컨테이너가 "동결(freeze)"됩니다
+
+// 2) 미들웨어 파이프라인과 엔드포인트를 꽂는 "실행" 단계
+app.MapGet("/players/{id}", (string id, ISessionService s) =&gt; s.Find(id));
+
+await app.RunAsync();        // 종료 신호가 올 때까지 블록</code></pre>
+                    </div>
+                    <p class="highlight">핵심 흐름은 <strong>구성(Build 전) → 동결(Build) → 실행(Run)</strong> 3단계입니다. <code>Build()</code> 이후에는 서비스를 더 등록할 수 없습니다. 이 경계를 모르면 "왜 등록이 안 먹히지?" 류의 버그를 만듭니다.</p>
+                </div>
+
+                <div class="q">서버가 켜진 뒤 계속 도는 백그라운드 작업(매치 정리 같은)은 어떻게 만드나요?</div>
+                <div class="a">
+                    <p><code>IHostedService</code>를 구현하면 Host가 시작될 때 <code>StartAsync</code>, 종료될 때 <code>StopAsync</code>를 호출해 줍니다. 주기적/지속 작업은 이를 감싼 <code>BackgroundService</code>를 상속해 <code>ExecuteAsync</code> 하나만 채우면 됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// 좀비 매치(아무도 안 남은 방)를 주기적으로 청소하는 워커
+public sealed class MatchCleanupWorker(
+    IMatchRepository repo,
+    ILogger&lt;MatchCleanupWorker&gt; logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        // stoppingToken은 graceful shutdown 시 신호가 옵니다
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            var removed = await repo.PurgeEmptyMatchesAsync(stoppingToken);
+            if (removed &gt; 0)
+                logger.LogInformation("빈 매치 {Count}개 정리", removed);
+        }
+    }
+}</code></pre>
+                    </div>
+                    <p class="warning">함정: <code>ExecuteAsync</code> 안에서 <code>while(true)</code>로 돌면서 <code>stoppingToken</code>을 무시하면, 서버가 종료를 시도해도 워커가 멈추지 않아 종료가 영원히 매달립니다. 모든 루프와 비동기 호출에 <code>stoppingToken</code>을 반드시 전파해야 합니다.</p>
+                </div>
+
+                <div class="q">"우아한 종료(graceful shutdown)"는 정확히 무슨 의미인가요? K8s에서 중요하다던데요.</div>
+                <div class="a">
+                    <p>SIGTERM(K8s가 파드를 내릴 때 보내는 신호)을 받으면 바로 죽는 게 아니라, <strong>새 요청은 거부하되 처리 중인 요청·세션은 안전하게 마무리하고 나서 종료</strong>하는 것을 말합니다. Host에는 <code>IHostApplicationLifetime</code>이 있어 <code>ApplicationStopping</code> 토큰으로 이 순간을 잡을 수 있습니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">SIGTERM 수신</div>
+                                <div class="flow-box__items">K8s가 파드 종료 시작</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">ApplicationStopping</div>
+                                <div class="flow-box__items">신규 요청 차단<br>HostedService StopAsync</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Drain</div>
+                                <div class="flow-box__items">진행 요청 완료<br>세션 flush · 연결 정리</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">프로세스 종료</div>
+                                <div class="flow-box__items">코드 0 반환</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">기본 종료 타임아웃은 <code>ShutdownTimeout</code>(기본 30초)입니다. 이 안에 끝내지 못하면 강제 종료되어 세션 유실이 발생할 수 있으니, K8s의 <code>terminationGracePeriodSeconds</code>를 이 값보다 넉넉히 잡아야 합니다. 실제 flush 코드는 Part 6에서 다룹니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 의존성 주입 — 수명(Lifetime)이 곧 버그의 근원</h2>
+            <div class="conversation">
+                <div class="q">Singleton, Scoped, Transient — 셋의 차이를 한 번에 정리해 주세요.</div>
+                <div class="a">
+                    <p>DI 컨테이너가 "이 의존성의 인스턴스를 <strong>언제 새로 만들고 언제 재사용할지</strong>" 정하는 규칙이 수명입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>수명</th>
+                                <th>인스턴스 생성 시점</th>
+                                <th>게임 백엔드 예시</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Singleton</strong></td>
+                                <td>앱 전체에 1개. 프로세스 생명주기 동안 공유</td>
+                                <td>Redis 연결 풀, 매치 큐, 설정 캐시</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Scoped</strong></td>
+                                <td>스코프(=HTTP 요청)마다 1개</td>
+                                <td>요청별 DbContext, 요청 단위 UnitOfWork</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Transient</strong></td>
+                                <td>주입될 때마다 매번 새로</td>
+                                <td>가벼운 stateless 헬퍼, 검증기</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>게임 서버를 식당이라고 생각해 봅시다.</p>
+                        <p><strong>Singleton</strong>은 주방(하나뿐이고 모두가 공유). <strong>Scoped</strong>는 손님 한 테이블에 배정된 담당 웨이터(그 손님 식사 동안만 유효). <strong>Transient</strong>는 주문할 때마다 새로 뽑는 영수증(매번 새 종이)입니다.</p>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>builder.Services.AddSingleton&lt;IRedisConnection, RedisConnection&gt;();   // 연결 풀: 공유
+builder.Services.AddScoped&lt;GuildUnitOfWork&gt;();                       // 요청 단위 트랜잭션
+builder.Services.AddTransient&lt;IDamageCalculator, DamageCalculator&gt;(); // 매번 새로</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">"captive dependency"가 뭔가요? 이걸로 사고 났다는 얘기를 들었어요.</div>
+                <div class="a">
+                    <p><strong>긴 수명이 짧은 수명을 붙잡아 가두는 현상</strong>입니다. Singleton이 생성자에서 Scoped를 주입받으면, 그 Scoped 인스턴스는 Singleton과 함께 앱 전체 동안 살아남습니다. 요청마다 새로 만들어져야 할 것이 첫 요청 것에 고정되어 버리는 것입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// 잘못된 예: Singleton이 Scoped DbContext를 캡처해 버림
+public sealed class MatchmakingService          // Singleton으로 등록됨
+{
+    private readonly GameDbContext _db;          // Scoped여야 정상!
+    public MatchmakingService(GameDbContext db) =&gt; _db = db; // 첫 요청 컨텍스트에 고정
+}</code></pre>
+                    </div>
+                    <p class="warning">DbContext는 스레드 안전하지 않습니다. 이렇게 캡처되면 모든 요청이 같은 컨텍스트를 동시에 건드려 <code>InvalidOperationException</code>("A second operation started...")이나 데이터 오염이 터집니다.</p>
+                    <p>해결은 Singleton이 직접 Scoped를 들고 있지 않고, <strong>필요할 때 스코프를 직접 열어서 꺼내 쓰는 것</strong>입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>public sealed class MatchmakingService(IServiceScopeFactory scopeFactory)
+{
+    public async Task ProcessTickAsync(CancellationToken ct)
+    {
+        // 매 작업마다 짧은 스코프를 만들어 Scoped 의존성을 안전하게 사용
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService&lt;GameDbContext&gt;();
+        await db.SaveChangesAsync(ct);
+    } // 스코프가 닫히며 DbContext가 정상 폐기됩니다
+}</code></pre>
+                    </div>
+                    <p class="key-point">.NET은 개발 환경에서 <code>ValidateScopes</code>를 켜 두어, Singleton이 Scoped를 직접 주입받으면 <code>Build()</code> 시점에 예외로 막아 줍니다. CI에서 이 검증이 켜진 상태로 부팅 테스트를 돌리면 captive dependency를 배포 전에 잡을 수 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: Configuration &amp; Options — 설정을 코드처럼 다루기</h2>
+            <div class="conversation">
+                <div class="q">설정값(접속 정보, 매치 정원 등)은 어디서 읽고 어떻게 합쳐지나요?</div>
+                <div class="a">
+                    <p>.NET의 Configuration은 여러 <strong>소스를 순서대로 겹쳐 쌓는(layered)</strong> 구조입니다. 같은 키가 여러 곳에 있으면 <strong>나중에 추가된 소스가 이깁니다</strong>. 기본 순서는 아래와 같습니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">appsettings.json</div>
+                                <div class="flow-box__items">공통 기본값</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">appsettings.{Env}.json</div>
+                                <div class="flow-box__items">환경별 덮어쓰기</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">환경변수</div>
+                                <div class="flow-box__items">컨테이너/K8s 주입</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">명령행 인자</div>
+                                <div class="flow-box__items">최종 승자</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>덕분에 비밀번호 같은 민감값은 파일에 두지 않고 <strong>환경변수</strong>로 주입할 수 있습니다. K8s에서는 보통 Secret을 환경변수로 마운트하며, <code>Redis__ConnectionString</code>처럼 <strong>이중 밑줄(<code>__</code>)이 JSON의 계층(콜론)으로 매핑</strong>됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// appsettings.json
+{
+  "Match": { "MaxPlayers": 8, "SessionTimeoutSeconds": 120 },
+  "Redis": { "ConnectionString": "localhost:6379" }
+}
+
+// 환경변수로 덮어쓰기 (K8s Secret/ConfigMap)
+//   Match__MaxPlayers=10
+//   Redis__ConnectionString=redis-prod:6379</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">IOptions, IOptionsSnapshot, IOptionsMonitor — 비슷한데 뭐가 다른가요?</div>
+                <div class="a">
+                    <p>설정을 문자열 키로 꺼내 쓰는 대신, <strong>강타입 클래스에 바인딩</strong>해 주입받는 것이 Options 패턴입니다. 세 인터페이스의 차이는 "<strong>언제 값을 읽고, 변경을 반영하느냐</strong>"입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>인터페이스</th>
+                                <th>수명/갱신</th>
+                                <th>언제 쓰나</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>IOptions&lt;T&gt;</code></td>
+                                <td>Singleton, 앱 시작 시 1회 고정</td>
+                                <td>실행 중 안 바뀌는 값(매치 정원 등)</td>
+                            </tr>
+                            <tr>
+                                <td><code>IOptionsSnapshot&lt;T&gt;</code></td>
+                                <td>Scoped, 요청마다 새로 읽음</td>
+                                <td>요청 단위로 최신값을 원할 때</td>
+                            </tr>
+                            <tr>
+                                <td><code>IOptionsMonitor&lt;T&gt;</code></td>
+                                <td>Singleton, 변경 시 즉시 알림(OnChange)</td>
+                                <td>싱글톤·백그라운드 워커에서 실시간 반영</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// 강타입 옵션 클래스
+public sealed class MatchOptions
+{
+    public int MaxPlayers { get; init; } = 8;
+    public int SessionTimeoutSeconds { get; init; } = 120;
+}
+
+// 등록 + 검증(부팅 시점에 잘못된 설정을 잡음)
+builder.Services
+    .AddOptions&lt;MatchOptions&gt;()
+    .Bind(builder.Configuration.GetSection("Match"))
+    .Validate(o =&gt; o.MaxPlayers is &gt; 0 and &lt;= 64, "MaxPlayers는 1~64")
+    .ValidateOnStart();   // 위반 시 앱이 아예 안 뜨게 함</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// 백그라운드 워커에서 핫 리로드: IOptionsMonitor로 실시간 반영
+public sealed class MatchmakingWorker(IOptionsMonitor&lt;MatchOptions&gt; opts)
+{
+    public int CurrentMaxPlayers =&gt; opts.CurrentValue.MaxPlayers; // 항상 최신
+}</code></pre>
+                    </div>
+                    <p class="warning">함정: Singleton 서비스에 <code>IOptionsSnapshot&lt;T&gt;</code>를 주입하면 안 됩니다. Snapshot은 Scoped라 captive dependency가 되어 ValidateScopes에서 막힙니다. 싱글톤에서는 <code>IOptionsMonitor&lt;T&gt;</code>를 쓰세요.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: Kestrel &amp; 미들웨어 파이프라인</h2>
+            <div class="conversation">
+                <div class="q">요청이 들어오면 어디를 거쳐 처리되나요? Kestrel은 또 뭔가요?</div>
+                <div class="a">
+                    <p><strong>Kestrel</strong>은 .NET에 내장된 크로스플랫폼 웹 서버입니다. 소켓에서 바이트를 읽어 HTTP로 파싱하고, 그 요청을 <strong>미들웨어 파이프라인</strong>이라는 양파 껍질 구조로 흘려보냅니다. 각 미들웨어는 다음(<code>next</code>)을 부르기 <em>전</em>과 <em>후</em>에 코드를 실행할 수 있습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>미들웨어 파이프라인은 공항 입국 심사대와 같습니다. 들어올 때 여권 검사(인증)→세관(검증)→입국(엔드포인트) 순으로 통과하고, 나갈 때는 역순으로 거칩니다. 앞 단계에서 막히면(인증 실패) 뒤 단계까지 가지 않고 바로 돌아갑니다(short-circuit).</p>
+                    </div>
+                    <p class="highlight">순서가 곧 동작입니다. 인증(Authentication)은 인가(Authorization)보다 앞서야 하고, 예외 처리·로깅은 가장 바깥쪽에 두어야 안쪽에서 던진 예외를 잡을 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>var app = builder.Build();
+
+app.UseExceptionHandler("/error"); // 가장 바깥: 아래 단계의 예외를 포착
+app.UseSerilogRequestLogging();    // 요청 로깅 (ELK로 흘러감)
+app.UseAuthentication();           // 너는 누구인가 (JWT 검증)
+app.UseAuthorization();            // 권한이 있는가 (반드시 Authn 다음)
+
+app.MapGet("/matches/{id}", GetMatch); // 엔드포인트(가장 안쪽)
+await app.RunAsync();</code></pre>
+                    </div>
+                    <p class="warning">함정: <code>UseAuthorization</code>을 <code>UseAuthentication</code>보다 먼저 두면, 인가 단계에서 사용자 정보가 아직 채워지지 않아 항상 401/403이 나거나 인증이 무력화됩니다. 순서 실수는 컴파일 에러가 아니라 런타임 보안 구멍이 됩니다.</p>
+                </div>
+
+                <div class="q">엔드포인트는 Minimal API로 짜나요? 커스텀 미들웨어는 어떻게 만드나요?</div>
+                <div class="a">
+                    <p>게임 백엔드의 가벼운 HTTP 엔드포인트(상태 조회, 매치 생성 등)는 <strong>Minimal API</strong>로 간결하게 작성합니다. 핸들러 파라미터에 DI 서비스를 그대로 받을 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// Minimal API: 라우트 그룹으로 묶고 서비스를 파라미터로 주입
+var matches = app.MapGroup("/matches");
+
+matches.MapPost("/", async (CreateMatchReq req, IMatchService svc, CancellationToken ct) =&gt;
+{
+    var match = await svc.CreateAsync(req.HostPlayerId, ct);
+    return Results.Created($"/matches/{match.Id}", match);
+});
+
+matches.MapGet("/{id}", async (string id, IMatchService svc, CancellationToken ct) =&gt;
+    await svc.FindAsync(id, ct) is { } m
+        ? Results.Ok(m)
+        : Results.NotFound());</code></pre>
+                    </div>
+                    <p>공통 관심사(요청별 추적 ID 부여 등)는 커스텀 미들웨어로 분리합니다. 고성능 경로라면 매 요청 할당을 줄이도록 <code>IMiddleware</code> 대신 <strong>규약 기반(생성자 주입 + Invoke)</strong> 미들웨어를 쓰되, 안에서 무거운 동기 블로킹을 절대 하지 않는 것이 핵심입니다.</p>
+                    <details class="code-toggle">
+                        <summary>커스텀 미들웨어 — 요청 상관관계 ID 주입 <span class="code-lang">C#</span></summary>
+<pre><code>public sealed class CorrelationIdMiddleware(RequestDelegate next)
+{
+    private const string Header = "X-Correlation-Id";
+
+    public async Task InvokeAsync(HttpContext ctx)
+    {
+        // 들어오는 헤더가 있으면 잇고, 없으면 새로 발급
+        var id = ctx.Request.Headers.TryGetValue(Header, out var v)
+            ? v.ToString()
+            : Guid.NewGuid().ToString("N");
+
+        ctx.Response.Headers[Header] = id;
+
+        // 로그 스코프에 넣어 두면 ELK에서 한 요청을 끝까지 추적 가능
+        using (ctx.RequestServices
+                  .GetRequiredService&lt;ILogger&lt;CorrelationIdMiddleware&gt;&gt;()
+                  .BeginScope(new Dictionary&lt;string, object&gt; { ["CorrelationId"] = id }))
+        {
+            await next(ctx); // 다음 미들웨어로
+        }
+    }
+}
+
+// 등록: 로깅보다 앞에 두어 모든 로그에 ID가 찍히게 함
+app.UseMiddleware&lt;CorrelationIdMiddleware&gt;();</code></pre>
+                    </details>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: 게임 백엔드에 통째로 적용하기</h2>
+            <div class="conversation">
+                <div class="q">지금까지 배운 걸 묶어서 실제 게임 서버 부팅 코드로 보고 싶어요.</div>
+                <div class="a">
+                    <p>아래는 <strong>세션 관리 + 백그라운드 워커 + 헬스체크 + 우아한 종료</strong>를 갖춘 최소 게임 백엔드 부팅 코드입니다. 앞 파트의 조각들이 어떻게 한 자리에 모이는지 보여 줍니다.</p>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">WebApplication Host</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">DI: SessionService(Singleton) · MatchService(Scoped)</div>
+                            <div class="hierarchy-item">BackgroundService: MatchCleanupWorker</div>
+                            <div class="hierarchy-item">Middleware: 예외 → 로깅 → 인증/인가</div>
+                            <div class="hierarchy-item">Endpoints: /matches · /healthz</div>
+                            <div class="hierarchy-item">Lifetime: ApplicationStopping → 세션 flush</div>
+                        </div>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>var builder = WebApplication.CreateBuilder(args);
+
+// 1) 설정 바인딩 + 부팅 검증
+builder.Services.AddOptions&lt;MatchOptions&gt;()
+    .Bind(builder.Configuration.GetSection("Match")).ValidateOnStart();
+
+// 2) 의존성 등록 (수명 선택이 핵심)
+builder.Services.AddSingleton&lt;ISessionService, RedisSessionService&gt;(); // 공유 상태
+builder.Services.AddScoped&lt;IMatchService, MatchService&gt;();            // 요청 단위
+builder.Services.AddHostedService&lt;MatchCleanupWorker&gt;();              // 상시 워커
+
+// 3) 헬스체크: K8s liveness/readiness probe가 찌를 엔드포인트
+builder.Services.AddHealthChecks()
+    .AddCheck&lt;RedisHealthCheck&gt;("redis");
+
+var app = builder.Build();
+
+// 4) 파이프라인 (순서 = 동작)
+app.UseExceptionHandler("/error");
+app.UseAuthentication();
+app.UseAuthorization();
+
+// 5) 엔드포인트
+app.MapHealthChecks("/healthz");           // readiness probe
+app.MapGet("/matches/{id}", async (string id, IMatchService s, CancellationToken ct)
+    =&gt; await s.FindAsync(id, ct) is { } m ? Results.Ok(m) : Results.NotFound());
+
+await app.RunAsync();</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">종료 신호가 왔을 때 메모리에 있던 세션을 Redis/DB로 flush하려면요?</div>
+                <div class="a">
+                    <p>핵심은 <code>IHostApplicationLifetime.ApplicationStopping</code> 토큰이나, 종료 시 <code>StopAsync</code>가 보장 호출되는 <code>IHostedService</code>에 flush 로직을 거는 것입니다. 후자가 더 견고합니다. Host가 종료 단계에서 반드시 기다려 주기 때문입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// 종료 시 메모리 세션을 Redis로 안전하게 내보내는 서비스
+public sealed class SessionFlushService(
+    ISessionService sessions,
+    ILogger&lt;SessionFlushService&gt; logger) : IHostedService
+{
+    public Task StartAsync(CancellationToken ct) =&gt; Task.CompletedTask;
+
+    public async Task StopAsync(CancellationToken ct)
+    {
+        // ct는 ShutdownTimeout 안에서만 유효 — 이 안에 끝내야 함
+        logger.LogInformation("종료 감지 — 활성 세션 flush 시작");
+        var flushed = await sessions.FlushAllAsync(ct);
+        logger.LogInformation("세션 {Count}건 영속화 완료", flushed);
+    }
+}
+
+builder.Services.AddHostedService&lt;SessionFlushService&gt;();</code></pre>
+                    </div>
+                    <p class="key-point">HostedService의 <code>StopAsync</code>는 <strong>등록의 역순</strong>으로 호출됩니다. 따라서 새 요청을 받는 워커를 먼저 멈추고, flush 서비스를 나중에 등록하면 "더 이상 세션이 늘지 않는 상태에서 마지막으로 비우기"라는 순서를 자연스럽게 보장할 수 있습니다.</p>
+                    <p class="warning">flush가 <code>ShutdownTimeout</code>(기본 30초)을 넘기면 토큰이 취소되어 작업이 잘립니다. 세션이 많다면 타임아웃을 늘리고(<code>HostOptions.ShutdownTimeout</code>), K8s <code>terminationGracePeriodSeconds</code>도 그보다 크게 설정해 강제 <code>SIGKILL</code>을 피해야 데이터 유실이 없습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// 세션이 많은 서버라면 종료 유예시간을 늘립니다
+builder.Services.Configure&lt;HostOptions&gt;(o =&gt;
+    o.ShutdownTimeout = TimeSpan.FromSeconds(45));</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>런타임</strong>: IL을 JIT(Tiered/PGO)이 실행 중 최적화 → 오래 켜둘수록 빨라지는 게임 서버에 유리. 동접 서버는 <strong>Server GC</strong>가 정답이며 컨테이너 메모리 limit과 힙 수를 맞춰야 합니다.</li>
+                <li><strong>Host</strong>는 DI·Config·Logging·생명주기를 묶은 셸. <code>구성 → Build(동결) → Run</code> 3단계를 이해하고, 상시 작업은 <code>BackgroundService</code>에 <code>stoppingToken</code>을 끝까지 전파합니다.</li>
+                <li><strong>DI 수명</strong>: Singleton/Scoped/Transient를 도메인에 맞게 고르되, Singleton이 Scoped를 붙드는 <strong>captive dependency</strong>는 <code>IServiceScopeFactory</code>로 회피하고 <code>ValidateScopes</code>로 부팅 시 검증합니다.</li>
+                <li><strong>Configuration/Options</strong>는 소스를 겹쳐 쌓고 환경변수(<code>__</code>)로 덮어씁니다. 싱글톤·워커에는 <code>IOptionsMonitor</code>, 요청 단위 최신값은 <code>IOptionsSnapshot</code>, 고정값은 <code>IOptions</code>를 쓰며 <code>ValidateOnStart</code>로 잘못된 설정을 부팅에서 차단합니다.</li>
+                <li><strong>파이프라인 순서가 곧 동작</strong>입니다. 예외→로깅→인증→인가→엔드포인트 순서를 지키고, 종료 시에는 헬스체크·<code>StopAsync</code>·세션 flush를 <code>ShutdownTimeout</code>·<code>terminationGracePeriodSeconds</code> 안에서 우아하게 마무리합니다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

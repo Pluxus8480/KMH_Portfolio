@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PostgreSQL 게임 데이터 모델링 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../csharp-server.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>느린 쿼리는 어디서부터 봐야 할까?</h1>
+            <p class="subtitle">PostgreSQL MVCC · 트랜잭션 · 인덱스로 게임 데이터 다루기</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 게임 스키마 설계 — 무엇을 쪼개고 무엇을 합칠까?</h2>
+            <div class="conversation">
+                <div class="q">계정, 캐릭터, 인벤토리, 재화 테이블을 어떻게 설계해야 할까요? 일단 다 한 테이블에 넣으면 안 되나요?</div>
+                <div class="a">
+                    <p>게임 데이터는 "거의 안 변하지만 자주 읽는 것(계정)", "자주 변하는 것(재화)", "수가 폭증하는 것(인벤토리)"이 섞여 있습니다. 이 셋을 한 테이블에 욱여넣으면 작은 재화 갱신 한 번에 거대한 행 전체가 새 버전으로 복제됩니다(뒤에 나올 MVCC 때문입니다). 그래서 <strong>변경 빈도와 생명주기</strong>를 기준으로 테이블을 나눕니다.</p>
+                    <p class="highlight">설계의 출발점은 "엔티티 다이어그램"이 아니라 "이 행이 얼마나 자주, 어떤 패턴으로 갱신되는가?"입니다.</p>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">accounts (계정 · 거의 불변)</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">characters (캐릭터 · account_id FK)</div>
+                            <div class="hierarchy-item">wallets (재화 · 초고빈도 갱신)</div>
+                            <div class="hierarchy-item">inventory_items (인벤토리 · 행 수 폭증)</div>
+                        </div>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">SQL</div>
+<pre><code>-- 계정: 로그인 기준, 거의 변하지 않음
+CREATE TABLE accounts (
+    account_id   BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    email        CITEXT UNIQUE NOT NULL,           -- 대소문자 무시 이메일
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 캐릭터: 계정당 N개
+CREATE TABLE characters (
+    character_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    account_id   BIGINT NOT NULL REFERENCES accounts(account_id),
+    nickname     TEXT NOT NULL,
+    level        INT  NOT NULL DEFAULT 1,
+    last_login   TIMESTAMPTZ
+);
+
+-- 재화: 캐릭터당 1행, 초당 수백 번 갱신될 수 있음 → 별도 테이블로 격리
+CREATE TABLE wallets (
+    character_id BIGINT PRIMARY KEY REFERENCES characters(character_id),
+    gold         BIGINT NOT NULL DEFAULT 0 CHECK (gold &gt;= 0),  -- 음수 방지
+    gem          BIGINT NOT NULL DEFAULT 0 CHECK (gem  &gt;= 0),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">정규화를 어디까지 해야 하나요? 인벤토리 같은 건 비정규화가 빠르다고 들었습니다.</div>
+                <div class="a">
+                    <p>원칙은 <strong>"정규화로 시작하고, 측정된 병목에 한해 비정규화한다"</strong>입니다. 정규화는 데이터 정합성을 공짜로 주지만, 모든 조회에 JOIN 비용을 청구합니다. 비정규화는 읽기를 빠르게 만드는 대신 갱신 시 중복 데이터를 직접 동기화해야 합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th>정규화 (분리 테이블)</th><th>비정규화 (중복 보관)</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>정합성</td><td>FK·제약으로 DB가 보장</td><td>애플리케이션이 책임 (버그 위험)</td></tr>
+                            <tr><td>읽기</td><td>JOIN 비용 발생</td><td>단일 행 조회로 빠름</td></tr>
+                            <tr><td>쓰기</td><td>한 곳만 갱신</td><td>여러 곳 갱신 (누락 위험)</td></tr>
+                            <tr><td>게임 적용 예</td><td>인벤토리 아이템 마스터 참조</td><td>랭킹 보드의 닉네임 캐싱</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">랭킹 보드처럼 "읽기는 폭발적이고 원본은 거의 안 변하는" 데이터는 닉네임·길드명을 살짝 비정규화해 두는 것이 정석입니다. 단, 닉네임 변경 이벤트가 발생하면 동기화하는 코드를 반드시 함께 만들어 둡니다.</p>
+                </div>
+
+                <div class="q">가챠 결과나 아이템별 옵션처럼 스키마가 들쭉날쭉한 데이터는요? 컬럼을 계속 추가해야 하나요?</div>
+                <div class="a">
+                    <p>아닙니다. 이럴 때 <strong>JSONB</strong>를 씁니다. 가챠 결과 로그, 아이템 강화 옵션, 유저별 설정처럼 "스키마가 자주 바뀌거나 키가 가변적인" 데이터는 JSONB 컬럼 하나로 유연하게 담고, 그 안의 특정 키를 자주 조회한다면 그 키에 인덱스를 겁니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">SQL</div>
+<pre><code>-- 아이템: 고정 컬럼 + 유동 옵션은 JSONB
+CREATE TABLE inventory_items (
+    item_uid     BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    character_id BIGINT NOT NULL REFERENCES characters(character_id),
+    item_code    INT    NOT NULL,                 -- 마스터 데이터 참조
+    quantity     INT    NOT NULL DEFAULT 1,
+    options      JSONB  NOT NULL DEFAULT '{}'      -- 강화 수치/옵션 등
+);
+
+-- JSONB 내부 키로 조회/필터링
+SELECT item_uid, options-&gt;&gt;'enchant' AS lv
+FROM   inventory_items
+WHERE  character_id = 1001
+  AND  options @&gt; '{"rarity":"legendary"}';      -- 포함 연산자
+
+-- 위 @&gt; 조회를 빠르게: JSONB 전용 GIN 인덱스
+CREATE INDEX idx_items_options_gin
+    ON inventory_items USING GIN (options jsonb_path_ops);</code></pre>
+                    </div>
+                    <p class="warning">JSONB를 남용하면 "스키마 없는 DB"가 되어 정합성·인덱싱·타입 검증을 모두 잃습니다. 항상 같은 키로 조회되고 항상 존재하는 필드라면, 그것은 JSONB 안이 아니라 정식 컬럼이어야 합니다. JSONB는 "정말로 가변적인 부분"에만 씁니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 인덱스 — 느린 쿼리의 첫 번째 용의자</h2>
+            <div class="conversation">
+                <div class="q">인덱스가 B-Tree라고 하는데, 이게 왜 조회를 빠르게 만드나요?</div>
+                <div class="a">
+                    <p>PostgreSQL의 기본 인덱스는 <strong>B-Tree(균형 트리)</strong>입니다. 정렬된 키들이 트리로 묶여 있어, 1000만 행에서 특정 값을 찾을 때 전부 훑지 않고 트리 깊이(보통 3~4단계)만 타고 내려가 위치를 찾습니다. 즉 O(N) 풀스캔이 O(log N) 탐색으로 바뀝니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>인덱스 없는 테이블은 "페이지 번호 없는 백과사전"입니다. '동기화'라는 단어를 찾으려면 1페이지부터 끝까지 넘겨야 합니다(Seq Scan).</p>
+                        <p>B-Tree 인덱스는 "ㄱㄴㄷ 순으로 정렬된 색인"입니다. 'ㄷ' 섹션으로 바로 점프해 단어를 찾습니다(Index Scan). 단, 색인 자체도 책 뒤에 인쇄되어 공간을 차지하고, 본문이 바뀔 때마다 색인도 갱신해야 합니다 — 인덱스의 쓰기 비용이 바로 이것입니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">복합 인덱스를 만들 때 컬럼 순서가 중요하다던데, 왜 그런가요?</div>
+                <div class="a">
+                    <p>복합 인덱스 <code>(a, b, c)</code>는 "a로 먼저 정렬하고, 같은 a 안에서 b로, 같은 b 안에서 c로 정렬한 색인"입니다. 그래서 <strong>왼쪽 접두사(leftmost prefix)</strong> 규칙이 생깁니다. <code>(a)</code>, <code>(a, b)</code>, <code>(a, b, c)</code> 조회는 인덱스를 쓸 수 있지만, <code>(b)</code>나 <code>(c)</code>만으로는 못 씁니다.</p>
+                    <p class="highlight">규칙: 등호(=) 조건 컬럼을 앞에, 범위(&gt;, &lt;, BETWEEN) 조건 컬럼을 뒤에, 정렬/그룹 컬럼을 그 다음에 둡니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">SQL</div>
+<pre><code>-- "특정 캐릭터의 최근 거래 내역을 시간 역순으로" 가 잦은 쿼리라면
+SELECT * FROM trades
+WHERE  character_id = 1001          -- 등호 → 앞
+ORDER BY created_at DESC            -- 정렬 → 뒤
+LIMIT 50;
+
+-- 이 패턴에 딱 맞는 복합 인덱스 (DESC까지 인덱스에 반영)
+CREATE INDEX idx_trades_char_time
+    ON trades (character_id, created_at DESC);
+-- 이제 정렬 단계 없이 인덱스를 순서대로 읽어 LIMIT 50만 가져옴</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">부분 인덱스, 커버링 인덱스라는 말도 봤습니다. 게임에서 언제 쓰나요?</div>
+                <div class="a">
+                    <p><strong>부분 인덱스(Partial Index)</strong>는 WHERE 조건을 붙여 "테이블의 일부 행만" 색인하는 것입니다. 예를 들어 "삭제되지 않은 캐릭터"만 조회한다면, 삭제된 행까지 색인할 필요가 없습니다. 인덱스가 작아져 빠르고 가볍습니다.</p>
+                    <p><strong>커버링 인덱스(Covering Index)</strong>는 <code>INCLUDE</code>로 조회에 필요한 컬럼을 인덱스에 함께 담아, 테이블 본체(힙)를 다시 방문하지 않고 인덱스만 읽고 끝내는 기법입니다. 이를 <strong>Index Only Scan</strong>이라 부릅니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">SQL</div>
+<pre><code>-- 부분 인덱스: 활성 캐릭터만 (deleted_at IS NULL)
+CREATE INDEX idx_active_chars
+    ON characters (account_id)
+    WHERE deleted_at IS NULL;
+
+-- 커버링 인덱스: 랭킹 조회에 필요한 score, nickname을 인덱스에 포함
+CREATE INDEX idx_ranking_cover
+    ON characters (level DESC, exp DESC)
+    INCLUDE (nickname);
+-- SELECT nickname,level,exp ... ORDER BY level DESC, exp DESC
+--  → 힙 방문 없이 Index Only Scan 가능</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">EXPLAIN ANALYZE 결과를 보면 Seq Scan, Index Scan이 나오는데 무엇을 봐야 하나요?</div>
+                <div class="a">
+                    <p>느린 쿼리 분석의 출발점이 바로 <code>EXPLAIN ANALYZE</code>입니다. <code>EXPLAIN</code>은 계획(추정)만, <code>EXPLAIN ANALYZE</code>는 실제로 실행해 본 시간과 행 수까지 보여줍니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">Seq Scan</div>
+                                <div class="flow-box__items">테이블 전체를 처음부터 끝까지 읽음. 큰 테이블에서 보이면 경고 신호</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Index Scan</div>
+                                <div class="flow-box__items">인덱스로 위치 찾고 힙 방문. 소수 행 조회에 유리</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">Index Only Scan</div>
+                                <div class="flow-box__items">힙 방문조차 생략. 커버링 인덱스의 결실</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">핵심 체크포인트: ① 추정 행 수(rows=)와 실제 행 수(actual rows=)가 크게 어긋나면 통계가 낡은 것 → <code>ANALYZE</code> 실행. ② 큰 테이블에 Seq Scan + Filter가 보이면 인덱스 부재 의심. ③ <code>Buffers</code> 옵션(<code>EXPLAIN (ANALYZE, BUFFERS)</code>)으로 디스크 I/O 양을 함께 확인.</p>
+                </div>
+
+                <div class="q">인덱스를 만들었는데도 PostgreSQL이 안 쓰는 경우가 있던데요?</div>
+                <div class="a">
+                    <p>옵티마이저는 "인덱스를 쓰는 게 항상 빠르다"고 보지 않습니다. 비용 기반으로, 인덱스를 외면하는 정당한 이유들이 있습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>인덱스가 외면받는 경우</th><th>이유 / 해결</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>조회 결과가 테이블의 큰 비율</td><td>그냥 다 읽는 Seq Scan이 더 쌈 (랜덤 I/O 회피)</td></tr>
+                            <tr><td>인덱스 컬럼을 함수로 감쌈<br><code>WHERE lower(nickname)=...</code></td><td>인덱스 무력화 → 표현식 인덱스 생성으로 해결</td></tr>
+                            <tr><td>좌변에 연산<br><code>WHERE gold + 10 &gt; 100</code></td><td>인덱스 못 씀 → <code>gold &gt; 90</code>으로 정리</td></tr>
+                            <tr><td>통계가 낡음</td><td>옵티마이저 오판 → <code>ANALYZE</code> 또는 autovacuum 점검</td></tr>
+                            <tr><td>데이터 양이 너무 적음</td><td>오버헤드보다 풀스캔이 빨라 의도된 선택</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">SQL</div>
+<pre><code>-- 함수로 감싸 인덱스가 죽는 문제 → 표현식 인덱스로 살리기
+CREATE INDEX idx_chars_lower_nick
+    ON characters (lower(nickname));
+-- 이제 WHERE lower(nickname) = 'kmh' 가 인덱스를 탐</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: MVCC와 트랜잭션 격리 수준 — 같은 행을 동시에 읽고 쓰면?</h2>
+            <div class="conversation">
+                <div class="q">PostgreSQL은 읽기가 쓰기를 막지 않는다고 들었습니다. 어떻게 가능한가요?</div>
+                <div class="a">
+                    <p>비결은 <strong>MVCC(Multi-Version Concurrency Control, 다중 버전 동시성 제어)</strong>입니다. 행을 갱신할 때 PostgreSQL은 기존 행을 덮어쓰지 않고, <strong>새 버전의 행을 추가</strong>합니다. 각 트랜잭션은 자기 시작 시점의 "스냅샷"에 맞는 버전을 봅니다. 그래서 읽는 트랜잭션은 쓰는 트랜잭션을 기다릴 필요가 없습니다.</p>
+                    <p class="highlight">"Readers don't block writers, writers don't block readers." 읽기와 쓰기가 서로를 막지 않는 것이 MVCC의 핵심 선물입니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>MVCC는 "구글 문서의 버전 기록"과 같습니다. 내가 문서를 보는 동안 동료가 수정해도, 내 화면은 내가 열었던 시점의 버전으로 고정됩니다. 동료의 수정은 새 버전으로 쌓이고, 내가 새로고침(새 트랜잭션 시작)해야 비로소 보입니다.</p>
+                        <p>대신 옛 버전들이 문서에 계속 쌓입니다. 이 "휴지통 비우기"가 뒤에 나올 VACUUM입니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">트랜잭션 격리 수준이 여러 개라던데, 게임 서버는 무엇을 골라야 하나요?</div>
+                <div class="a">
+                    <p>격리 수준은 "동시 트랜잭션이 서로의 작업을 얼마나 보게 할 것인가"의 강도입니다. 강할수록 안전하지만 충돌(직렬화 실패)이 늘어 재시도 비용이 듭니다. 각 수준은 특정 "이상 현상"을 막아 줍니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>격리 수준</th>
+                                <th>Dirty Read</th>
+                                <th>Non-repeatable Read</th>
+                                <th>Phantom Read</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Read Committed<br>(PG 기본값)</td><td>방지</td><td>발생 가능</td><td>발생 가능</td></tr>
+                            <tr><td>Repeatable Read</td><td>방지</td><td>방지</td><td>방지*</td></tr>
+                            <tr><td>Serializable</td><td>방지</td><td>방지</td><td>방지</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">참고: PostgreSQL은 Repeatable Read를 스냅샷 격리로 구현해, 표준에서 허용되는 Phantom Read까지 사실상 막습니다(*). 그래서 PG의 Repeatable Read는 다른 DB보다 강합니다. 다만 충돌 시 <code>could not serialize access</code> 오류가 나므로 재시도 로직이 필요합니다.</p>
+                    <details class="code-toggle">
+                        <summary>각 이상 현상이 무엇인지 <span class="code-lang">개념</span></summary>
+<pre><code>Dirty Read         : 아직 커밋 안 된 남의 변경을 읽음 (가장 위험)
+Non-repeatable Read: 같은 행을 두 번 읽었는데 값이 달라짐 (중간에 남이 커밋)
+Phantom Read       : 같은 조건으로 두 번 조회했는데 행 개수가 달라짐
+                     (예: WHERE level &gt; 10 결과에 새 행이 끼어듦)</code></pre>
+                    </details>
+                    <p>게임 서버의 99% 일반 쿼리는 기본값 Read Committed로 충분합니다. 다만 "여러 행을 읽어 합산한 뒤 그 결과로 갱신하는" 정산/집계 트랜잭션(예: 길드 재화 분배)은 Repeatable Read 이상으로 올려야 안전합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 락과 동시성 — 재화 차감을 어떻게 안전하게 할까?</h2>
+            <div class="conversation">
+                <div class="q">결제로 100 보석을 차감하는데, 동시에 두 요청이 들어오면 둘 다 통과해서 보석이 마이너스가 될까 봐 걱정입니다.</div>
+                <div class="a">
+                    <p>전형적인 <strong>경쟁 조건(race condition)</strong>입니다. "읽고-검사하고-쓰는(read-check-write)" 사이에 다른 트랜잭션이 끼어들면 둘 다 "잔액 충분"으로 판단해 이중 차감이 일어납니다. 해법은 두 가지 — 단일 원자적 UPDATE, 또는 비관적 락입니다.</p>
+                    <p class="highlight">가장 간단하고 안전한 답: 읽지 말고, 조건부 UPDATE 하나로 끝낸다.</p>
+                    <div class="code-block">
+                        <div class="code-header">SQL</div>
+<pre><code>-- 방법 A: 원자적 조건부 UPDATE (별도 SELECT 불필요)
+UPDATE wallets
+SET    gem = gem - 100,
+       updated_at = now()
+WHERE  character_id = 1001
+  AND  gem &gt;= 100;            -- 잔액 부족이면 0행 갱신 → 차감 실패로 처리
+
+-- 영향받은 행 수가 0이면 "잔액 부족", 1이면 "차감 성공"
+-- WHERE 절과 UPDATE가 한 문장이라 그 사이에 끼어들 틈이 없음</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">읽은 값으로 복잡한 계산을 한 뒤 갱신해야 한다면요? 그땐 UPDATE 한 방으로 안 되잖아요.</div>
+                <div class="a">
+                    <p>그럴 땐 <strong>SELECT ... FOR UPDATE</strong>로 그 행에 <strong>행 락(row lock)</strong>을 걸어 두고, 계산한 뒤 같은 트랜잭션 안에서 갱신합니다. 락이 걸린 동안 다른 트랜잭션의 같은 행 갱신은 대기합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">SQL</div>
+<pre><code>BEGIN;
+-- 이 행을 잠그고 읽음 → 트랜잭션 끝까지 다른 갱신은 대기
+SELECT gem FROM wallets
+WHERE  character_id = 1001
+FOR UPDATE;
+
+-- (애플리케이션에서 복잡한 가격/할인 계산 수행) ...
+
+UPDATE wallets SET gem = gem - :finalCost
+WHERE  character_id = 1001;
+COMMIT;   -- 커밋과 함께 락 해제</code></pre>
+                    </div>
+                    <p class="key-point">랭킹 집계처럼 "잠그되 줄을 세우고 싶지 않은" 경우엔 <code>FOR UPDATE SKIP LOCKED</code>를 씁니다. 이미 잠긴 행은 건너뛰고 다음 행을 가져와, 작업 큐(매치메이킹 대기열 소비 등)를 여러 워커가 충돌 없이 나눠 처리할 수 있습니다.</p>
+                </div>
+
+                <div class="q">데드락은 왜 생기고 어떻게 피하나요?</div>
+                <div class="a">
+                    <p>데드락은 두 트랜잭션이 서로가 잡은 락을 기다리며 영원히 멈추는 상태입니다. 트랜잭션 A는 행 1→2 순으로 잠그고, 트랜잭션 B는 행 2→1 순으로 잠그면 서로를 물고 늘어집니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">Tx A</div>
+                                <div class="flow-box__items">행1 잠금 →<br>행2 대기</div>
+                            </div>
+                            <div class="flow-arrow">&harr;</div>
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">Tx B</div>
+                                <div class="flow-box__items">행2 잠금 →<br>행1 대기</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">감지기</div>
+                                <div class="flow-box__items">PG가 자동 감지, 한쪽을 ROLLBACK</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="warning">예방책은 단순합니다 — <strong>여러 행을 잠글 땐 항상 같은 순서(예: character_id 오름차순)로 잠근다.</strong> 거래(trade)처럼 두 캐릭터 지갑을 동시에 건드릴 때 특히 중요합니다. PostgreSQL이 데드락을 자동 감지해 한쪽을 롤백하므로, 애플리케이션은 그 오류를 잡아 재시도해야 합니다.</p>
+                </div>
+
+                <div class="q">낙관적 락과 비관적 락은 언제 무엇을 쓰나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th>비관적 락 (Pessimistic)</th><th>낙관적 락 (Optimistic)</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>전제</td><td>"충돌이 자주 일어난다"</td><td>"충돌은 드물다"</td></tr>
+                            <tr><td>방식</td><td>SELECT ... FOR UPDATE로 먼저 잠금</td><td>version 컬럼 비교 후 갱신</td></tr>
+                            <tr><td>비용</td><td>대기·데드락 위험</td><td>충돌 시 재시도 필요</td></tr>
+                            <tr><td>게임 예</td><td>핫한 단일 재화 차감</td><td>가끔 바뀌는 캐릭터 설정</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">SQL</div>
+<pre><code>-- 낙관적 락: version이 내가 읽은 값과 같을 때만 갱신
+UPDATE characters
+SET    settings = :json, version = version + 1
+WHERE  character_id = 1001
+  AND  version = :readVersion;
+-- 0행이 갱신되면 "그 사이 누가 먼저 바꿈" → 다시 읽고 재시도</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 5 -->
+        <section class="part">
+            <h2>Part 5: .NET 연동 — Npgsql, Dapper, EF Core 사이에서</h2>
+            <div class="conversation">
+                <div class="q">매 요청마다 DB 커넥션을 새로 여나요? 커넥션 풀은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>커넥션 생성은 TCP 핸드셰이크 + 인증으로 비싸므로, 매번 새로 열면 안 됩니다. Npgsql 드라이버는 <strong>커넥션 풀</strong>을 내장하고 있어, 연결 문자열이 같으면 풀에서 빌려 쓰고 반납합니다. <code>using</code>으로 닫는 것은 "물리적 종료"가 아니라 "풀로 반납"입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// 연결 문자열에 풀 크기를 명시 (서버 max_connections와 함께 설계)
+var connString = "Host=db;Database=game;Username=app;" +
+                 "Password=***;Maximum Pool Size=50;Minimum Pool Size=5";
+
+// using으로 닫으면 풀에 반납됨 (실제 소켓은 유지)
+await using var conn = new NpgsqlConnection(connString);
+await conn.OpenAsync();
+// ... 쿼리 ...</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">SQL 인젝션이 무섭습니다. 문자열로 쿼리를 조립하면 위험하다는데요.</div>
+                <div class="a">
+                    <p>맞습니다. 사용자 입력을 문자열로 이어 붙이면 인젝션에 노출됩니다. 반드시 <strong>파라미터화 쿼리</strong>를 씁니다. 파라미터 값은 SQL 코드가 아니라 데이터로만 취급되어, 닉네임에 <code>'; DROP TABLE ...</code>이 들어와도 그저 문자열로 저장될 뿐입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// 절대 금지: 문자열 연결 (인젝션 + 계획 캐시 낭비)
+// var sql = $"SELECT * FROM characters WHERE nickname = '{input}'";
+
+// 올바른 방법: 파라미터 바인딩 (Npgsql 원형)
+await using var cmd = new NpgsqlCommand(
+    "SELECT character_id FROM characters WHERE nickname = @nick", conn);
+cmd.Parameters.AddWithValue("nick", input);   // 값으로만 취급
+await using var reader = await cmd.ExecuteReaderAsync();</code></pre>
+                    </div>
+                    <p class="key-point">파라미터화는 보안뿐 아니라 성능 이득도 줍니다 — 같은 쿼리 형태가 실행 계획 캐시를 재사용하므로, 매번 다른 리터럴로 만든 쿼리보다 파싱·계획 비용이 절약됩니다.</p>
+                </div>
+
+                <div class="q">Dapper와 EF Core 중 무엇을 써야 하나요?</div>
+                <div class="a">
+                    <p>둘 다 정답이 될 수 있고, 한 프로젝트에서 혼용하기도 합니다. 선택 기준은 "제어권과 생산성의 트레이드오프"입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th>Dapper (마이크로 ORM)</th><th>EF Core (풀 ORM)</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>제어</td><td>SQL을 직접 작성 (투명함)</td><td>LINQ → SQL 생성 (추상화)</td></tr>
+                            <tr><td>성능</td><td>오버헤드 최소, 핫패스에 유리</td><td>변경 추적 등 오버헤드 존재</td></tr>
+                            <tr><td>생산성</td><td>매핑은 자동, 쿼리는 수작업</td><td>마이그레이션·관계 매핑 자동</td></tr>
+                            <tr><td>적합</td><td>고빈도 게임 트랜잭션 경로</td><td>관리툴·복잡한 도메인 CRUD</td></tr>
+                        </tbody>
+                    </table>
+                    <details class="code-toggle">
+                        <summary>Dapper로 파라미터화 조회 <span class="code-lang">C#</span></summary>
+<pre><code>// Dapper: SQL은 내가 쓰고, 매핑은 Dapper가 해줌
+var wallet = await conn.QuerySingleOrDefaultAsync&lt;Wallet&gt;(
+    "SELECT gold, gem FROM wallets WHERE character_id = @id",
+    new { id = 1001 });   // 익명 객체 → 파라미터 자동 바인딩</code></pre>
+                    </details>
+                </div>
+
+                <div class="q">EF Core를 쓰다 보면 쿼리가 갑자기 수백 번 나가던데, N+1 문제인가요?</div>
+                <div class="a">
+                    <p>맞습니다. <strong>N+1 문제</strong>는 "캐릭터 목록 1번 조회(1) + 각 캐릭터의 인벤토리를 루프 돌며 N번 조회"로 쿼리가 폭증하는 현상입니다. 50명을 불러오면 51번의 쿼리가 나갑니다. DB 왕복(round-trip)이 진짜 비용입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">C#</div>
+<pre><code>// 나쁜 예: 지연 로딩으로 루프마다 추가 쿼리 (N+1)
+var chars = await db.Characters.ToListAsync();          // 1번
+foreach (var c in chars)
+    Console.WriteLine(c.Inventory.Count);              // 각자 +1번 → N번
+
+// 좋은 예: Include로 한 번에 JOIN하여 가져옴 (1~2번)
+var chars2 = await db.Characters
+    .Include(c =&gt; c.Inventory)                          // eager loading
+    .Where(c =&gt; c.Level &gt; 10)
+    .ToListAsync();</code></pre>
+                    </div>
+                    <p class="highlight">대량 삽입/갱신도 한 건씩 보내면 왕복이 누적됩니다. 다건 입력은 <code>COPY</code>(Npgsql의 <code>BeginBinaryImport</code>)나 다중 행 <code>INSERT</code>, EF Core의 <code>ExecuteUpdate</code>/배치로 한 번에 보냅니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 6 -->
+        <section class="part">
+            <h2>Part 6: 운영 — 부풀어 오르는 테이블과 줄어드는 커넥션</h2>
+            <div class="conversation">
+                <div class="q">MVCC로 옛 버전이 계속 쌓인다고 했는데, 그럼 테이블이 무한정 커지나요?</div>
+                <div class="a">
+                    <p>그래서 <strong>VACUUM</strong>이 있습니다. 갱신·삭제로 생긴 "죽은 튜플(dead tuple)"은 어떤 트랜잭션도 더는 볼 수 없게 되면 회수 대상이 됩니다. VACUUM이 이 공간을 재사용 가능하게 표시합니다. 평소엔 <strong>autovacuum</strong>이 백그라운드로 자동 수행합니다.</p>
+                    <p class="warning">재화 테이블처럼 초당 수백 번 UPDATE되는 핫 테이블은 죽은 튜플이 빠르게 쌓여 "테이블 비대화(bloat)"가 됩니다. bloat가 심하면 Index Scan조차 느려집니다. 갱신이 폭주하는 테이블은 autovacuum 임계치를 더 공격적으로(작은 <code>scale_factor</code>) 조정해야 합니다.</p>
+                    <details class="code-toggle">
+                        <summary>핫 테이블 autovacuum 튜닝과 점검 <span class="code-lang">SQL</span></summary>
+<pre><code>-- 죽은 튜플이 전체의 1%만 쌓여도 청소하도록 공격적으로 설정
+ALTER TABLE wallets SET (
+    autovacuum_vacuum_scale_factor = 0.01,
+    autovacuum_vacuum_cost_delay   = 2
+);
+
+-- 죽은 튜플/마지막 청소 시각 점검
+SELECT relname, n_live_tup, n_dead_tup, last_autovacuum
+FROM   pg_stat_user_tables
+ORDER  BY n_dead_tup DESC;</code></pre>
+                    </details>
+                </div>
+
+                <div class="q">"느린 쿼리"를 운영 중에 어떻게 잡아내나요?</div>
+                <div class="a">
+                    <p>두 가지 무기를 켜 둡니다. ① <code>log_min_duration_statement</code>로 일정 시간(예: 500ms) 넘는 쿼리를 로그로 남기는 <strong>슬로우 쿼리 로그</strong>. ② <code>pg_stat_statements</code> 확장으로 "어떤 쿼리가 총합으로 시간을 가장 많이 먹는지" 집계하는 것입니다. 단발성 1초 쿼리보다, 50ms짜리가 초당 1만 번 도는 쿼리가 진짜 범인일 때가 많습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">SQL</div>
+<pre><code>-- 누적 실행시간 상위 쿼리 찾기 (확장 설치 후)
+SELECT query, calls, total_exec_time, mean_exec_time
+FROM   pg_stat_statements
+ORDER  BY total_exec_time DESC
+LIMIT  10;
+-- 여기서 뽑힌 쿼리를 EXPLAIN ANALYZE로 끌고 가 분석 (Part 2 흐름)</code></pre>
+                    </div>
+                    <p class="key-point">느린 쿼리 진단 흐름: 슬로우 로그/pg_stat_statements로 <strong>범인 쿼리 특정</strong> → <code>EXPLAIN (ANALYZE, BUFFERS)</code>로 <strong>실행 계획 확인</strong> → Seq Scan·낡은 통계·N+1 중 <strong>원인 분류</strong> → 인덱스/쿼리 재작성/통계 갱신으로 <strong>처방</strong>.</p>
+                </div>
+
+                <div class="q">스키마를 바꿔야 할 때, 운영 중인 게임 DB에 컬럼을 함부로 추가하면 위험하지 않나요?</div>
+                <div class="a">
+                    <p>마이그레이션은 <strong>락과 무중단</strong>을 늘 의식해야 합니다. 위험한 변경은 ACCESS EXCLUSIVE 락을 길게 잡아 서비스를 멈출 수 있습니다. EF Core Migrations나 Flyway 같은 도구로 버전 관리하되, 큰 테이블에선 주의가 필요합니다.</p>
+                    <p class="highlight">최신 PostgreSQL에서 <code>ADD COLUMN ... DEFAULT</code>는 메타데이터만 바꿔 빠르지만, 인덱스 생성은 다릅니다. 운영 테이블엔 테이블 쓰기를 막지 않는 <code>CREATE INDEX CONCURRENTLY</code>를 사용합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">SQL</div>
+<pre><code>-- 쓰기 차단 없이 인덱스 생성 (트랜잭션 밖에서 실행)
+CREATE INDEX CONCURRENTLY idx_trades_char_time
+    ON trades (character_id, created_at DESC);
+-- 일반 CREATE INDEX는 그동안 INSERT/UPDATE를 막음 → 운영 중엔 CONCURRENTLY</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">트래픽이 몰리면 "too many connections" 오류가 납니다. 풀을 키우면 되나요?</div>
+                <div class="a">
+                    <p>무작정 풀을 키우면 역효과입니다. PostgreSQL은 커넥션당 프로세스를 두는 구조라, 커넥션이 많으면 메모리와 컨텍스트 스위칭 비용이 폭증합니다. 보통 코어 수의 수 배 정도가 적정 동시 활성 커넥션입니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>식당 주방에 요리사(코어)가 8명인데 주문서(커넥션)를 500장 동시에 받는다고 요리가 빨라지지 않습니다. 오히려 주문서를 정리하고 들고 다니느라 더 느려집니다. 적정 수의 주문만 받고, 나머지는 <strong>웨이터(커넥션 풀러)</strong>가 줄 세웁니다.</p>
+                    </div>
+                    <p class="key-point">해법은 풀 확대가 아니라 <strong>커넥션 풀링 게이트웨이</strong>입니다. 수백 개의 앱 인스턴스(특히 서버리스/오토스케일 환경)가 각자 풀을 들면 합산 커넥션이 폭발하므로, <strong>PgBouncer</strong> 같은 외부 풀러를 DB 앞에 두어 실제 DB 커넥션 수를 수십 개로 묶습니다. 트랜잭션 단위 풀링이면 더 효율적입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>스키마는 변경 빈도로 쪼갠다</strong> — 계정/캐릭터/재화/인벤토리를 생명주기별로 분리하고, 정규화로 시작해 측정된 병목만 비정규화하며, 진짜 가변 데이터(가챠 결과·옵션)에만 JSONB+GIN 인덱스를 쓴다.</li>
+                <li><strong>느린 쿼리는 EXPLAIN ANALYZE부터</strong> — Seq Scan/낡은 통계/함수로 감싼 컬럼을 의심하고, 복합 인덱스는 등호→범위→정렬 순서로, 핫 조회는 커버링 인덱스로 Index Only Scan을 노린다.</li>
+                <li><strong>MVCC는 읽기/쓰기를 서로 막지 않게 한다</strong> — 기본은 Read Committed로 충분하고, 읽고-합산-갱신하는 정산 트랜잭션만 Repeatable Read 이상으로 올려 이상 현상을 막는다.</li>
+                <li><strong>재화 차감은 원자적으로</strong> — 조건부 단일 UPDATE(<code>WHERE gem &gt;= 100</code>) 또는 <code>FOR UPDATE</code> 행 락으로 처리하고, 여러 행은 항상 같은 순서로 잠가 데드락을 예방한다.</li>
+                <li><strong>.NET 연동과 운영은 한 묶음</strong> — 파라미터화로 인젝션을 막고, N+1은 eager loading으로 잡고, 핫 테이블은 autovacuum을 공격적으로 튜닝하며, 커넥션은 풀을 키우기보다 PgBouncer로 묶는다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>
