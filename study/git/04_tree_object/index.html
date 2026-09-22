@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>트리 객체와 모드 비트 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>Git은 폴더를 어떻게 기억할까?</h1>
+            <p class="subtitle">트리 객체의 바이트 구조 · 모드 비트 5종 · "src"가 "src-file.txt"보다 뒤에 오는 이유</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 트리 객체의 바이트 구조</h2>
+            <div class="conversation">
+                <div class="q">blob은 내용만 담는다고 했는데, 그럼 파일 이름과 디렉토리 구조는 누가 기억하나요?</div>
+                <div class="a">
+                    <p><strong>트리 객체</strong>입니다. 트리는 "디렉토리 한 층"을 표현하며, 엔트리 하나가 그 디렉토리 안의 항목 하나에 대응합니다. 엔트리의 포맷은 놀랄 만큼 단순합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">트리 엔트리 포맷 (반복)</div>
+                        <pre><code>&lt;mode&gt; &lt;name&gt;\0&lt;20바이트 바이너리 OID&gt;
+  |      |    |    \- 16진수 문자열이 아니라 raw 20바이트! (SHA-256이면 32바이트)
+  |      |    \- NUL 구분자
+  |      \- 파일/디렉토리 이름 (길이 제한 없음, 구분자는 NUL)
+  \- 8진수 ASCII 문자열. 앞의 0은 생략됨 ("40000", "100644")</code></pre>
+                    </div>
+                    <p class="warning">주의할 점 두 가지입니다. 첫째, <strong>OID가 40자 16진수 문자열이 아니라 20바이트 바이너리</strong>입니다. 그래서 트리 객체를 <code>cat</code>으로 열면 깨져 보입니다. 둘째, <strong>엔트리 사이에 구분자가 없습니다.</strong> OID가 고정 길이이므로 20바이트를 읽고 나면 곧바로 다음 엔트리의 모드가 시작됩니다.</p>
+                    <p>실제 바이트를 보겠습니다. <code>a.txt</code>, <code>src-file.txt</code>, 그리고 디렉토리 <code>src/</code>가 있는 저장소입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 트리의 진짜 바이트</div>
+                        <pre><code>$ git cat-file -p HEAD^{tree}
+100644 blob ce013625030ba8dba906f756967f9e9ca394464a	a.txt
+100644 blob 975fbec8256d3e8a3797e7a3611380f27c49f4ac	src-file.txt
+040000 tree add4794d9c94872b96c1697c056fb82ae0d72880	src
+
+$ git cat-file tree HEAD^{tree} | xxd
+00000000: 3130 3036 3434 2061 2e74 7874 00ce 0136  100644 a.txt...6
+00000010: 2503 0ba8 dba9 06f7 5696 7f9e 9ca3 9446  %.......V......F
+00000020: 4a31 3030 3634 3420 7372 632d 6669 6c65  J100644 src-file
+00000030: 2e74 7874 0097 5fbe c825 6d3e 8a37 97e7  .txt.._..%m&gt;.7..
+00000040: a361 1380 f27c 49f4 ac34 3030 3030 2073  .a...|I..40000 s
+00000050: 7263 00ad d479 4d9c 9487 2b96 c169 7c05  rc...yM...+..i|.
+00000060: 6fb8 2ae0 d728 80                        o.*..(.</code></pre>
+                    </div>
+                    <p class="key-point">중요한 발견이 하나 있습니다. <code>cat-file -p</code>는 <code>040000</code>이라고 보여 주지만 <strong>디스크에는 <code>34 30 30 30 30</code> = "40000"</strong>으로 저장되어 있습니다. 앞의 0은 사람이 읽기 좋으라고 출력할 때 붙이는 것이며, 실제 바이트에는 없습니다. 트리 객체를 직접 파싱하는 도구를 만들 때 자주 걸려 넘어지는 지점입니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>blob이 <strong>내용물만 든 무명의 상자</strong>라면, 트리는 <strong>창고 한 층의 배치도</strong>입니다.</p>
+                        <p>배치도에는 "A-3 칸: 도서(권한 644), 지문 ce0136..." 같은 줄이 적혀 있습니다. 상자 자체에는 이름표가 없고, 이름은 오직 배치도에만 존재합니다. 그래서 같은 내용물이 여러 칸에 있어도 상자는 하나면 충분합니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">트리가 트리를 가리켜 재귀 구조가 되는 건가요?</div>
+                <div class="a">
+                    <p>맞습니다. 엔트리의 OID가 tree를 가리키면 하위 디렉토리, blob을 가리키면 파일입니다. 이 재귀가 파일 시스템 전체를 표현합니다.</p>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">루트 tree (커밋이 가리키는 것)</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">100644 a.txt &rarr; blob ce0136</div>
+                            <div class="hierarchy-item">100644 src-file.txt &rarr; blob 975fbe</div>
+                            <div class="hierarchy-item">40000 src &rarr; <strong>tree add479</strong></div>
+                        </div>
+                    </div>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">tree add479 (src 디렉토리)</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">100644 b.txt &rarr; blob 587be6</div>
+                        </div>
+                    </div>
+                    <p class="highlight">여기서 Git의 유명한 제약이 나옵니다. <strong>빈 디렉토리는 표현할 수 없습니다.</strong> 트리는 엔트리의 목록이고, 엔트리는 blob이나 tree를 가리켜야 합니다. 안에 아무것도 없는 디렉토리는 어떤 트리 엔트리로도 표현되지 않으므로 존재 자체가 기록되지 않습니다. 관례적으로 <code>.gitkeep</code> 같은 빈 파일을 넣는 이유입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 모드 비트 &mdash; 딱 다섯 가지만 존재한다</h2>
+            <div class="conversation">
+                <div class="q">Unix 권한이 다 들어가나요? <code>chmod 640</code>도 기록되나요?</div>
+                <div class="a">
+                    <p>아닙니다. Git이 기록하는 모드는 <strong>다섯 가지뿐</strong>이며, 이는 의도적인 설계 결정입니다. Git은 백업 도구가 아니라 소스 코드 버전 관리 도구이므로, 협업에 의미 있는 최소한만 남깁니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>모드</th>
+                                <th>의미</th>
+                                <th>가리키는 객체</th>
+                                <th>비고</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>100644</code></td>
+                                <td>일반 파일 (non-executable)</td>
+                                <td>blob</td>
+                                <td>가장 흔함. <code>rw-r--r--</code></td>
+                            </tr>
+                            <tr>
+                                <td><code>100755</code></td>
+                                <td>실행 가능 파일</td>
+                                <td>blob</td>
+                                <td>실행 비트 하나만 구분</td>
+                            </tr>
+                            <tr>
+                                <td><code>120000</code></td>
+                                <td>심볼릭 링크</td>
+                                <td>blob</td>
+                                <td>blob 내용이 <strong>링크 대상 경로 문자열</strong></td>
+                            </tr>
+                            <tr>
+                                <td><code>40000</code></td>
+                                <td>디렉토리</td>
+                                <td>tree</td>
+                                <td>출력 시에만 <code>040000</code>으로 표시</td>
+                            </tr>
+                            <tr>
+                                <td><code>160000</code></td>
+                                <td>gitlink (서브모듈)</td>
+                                <td><strong>commit</strong></td>
+                                <td>그 객체는 이 저장소에 없어도 됨</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">그룹/기타 쓰기 권한, setuid, 소유자, 타임스탬프는 <strong>일절 기록하지 않습니다.</strong> 같은 저장소를 여러 사람이 서로 다른 umask로 쓰더라도 트리 OID가 흔들리지 않게 하기 위한 선택입니다. 파일 권한을 정확히 보존해야 하는 배포에는 Git이 아니라 tar/패키지 도구를 써야 합니다.</p>
+                    <p class="warning">Windows에서는 실행 비트를 파일 시스템이 표현하지 못하므로 <code>core.filemode = false</code>가 기본입니다. 이 설정이 켜진 저장소와 꺼진 저장소를 오가면 <strong>실제 내용은 그대로인데 모드만 바뀐 diff</strong>가 잔뜩 생기는 사고가 납니다.</p>
+                </div>
+
+                <div class="q"><code>120000</code> 심볼릭 링크는 어떻게 저장되나요?</div>
+                <div class="a">
+                    <p>심볼릭 링크는 <strong>링크 대상 경로를 내용으로 갖는 blob</strong>입니다. 파일 시스템의 심링크 개념을 Git 객체로 번역한 것입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 심링크의 정체</div>
+                        <pre><code>$ ln -s src/b.txt shortcut
+$ git add shortcut &amp;&amp; git commit -q -m "add symlink"
+
+$ git ls-tree HEAD
+100644 blob ce0136...	a.txt
+120000 blob 4b1b1a...	shortcut          # &larr; 모드 120000
+040000 tree add479...	src
+
+# 그 blob의 내용은?
+$ git cat-file -p 4b1b1a...
+src/b.txt                                   # &larr; 경로 문자열 그 자체 (개행 없음)
+$ git cat-file -s 4b1b1a...
+9                                           # "src/b.txt" 9바이트</code></pre>
+                    </div>
+                    <p>체크아웃할 때 Git은 모드가 <code>120000</code>이면 일반 파일을 쓰는 대신 <code>symlink(blob내용, 경로)</code>를 호출합니다. 심링크를 지원하지 않는 환경(구형 Windows, <code>core.symlinks=false</code>)에서는 <strong>대상 경로가 적힌 평범한 텍스트 파일</strong>로 풀립니다.</p>
+                </div>
+
+                <div class="q"><code>160000</code> gitlink는 왜 특이한가요?</div>
+                <div class="a">
+                    <p>서브모듈을 표현하는 모드입니다. 트리 엔트리가 <strong>commit 객체의 OID</strong>를 가리키는데, <strong>그 commit 객체는 이 저장소의 객체 DB에 존재하지 않아도 됩니다.</strong> 다른 저장소의 커밋을 참조하는 "외부 포인터"인 셈입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 서브모듈 엔트리</div>
+                        <pre><code>$ git ls-tree HEAD
+100644 blob a1b2c3...	README.md
+160000 commit 7f8e9d...	vendor/lib        # &larr; 모드 160000, 타입 commit
+
+# 이 커밋이 우리 저장소에 있나? 없다!
+$ git cat-file -t 7f8e9d...
+fatal: git cat-file: could not get object info
+
+# 대신 .gitmodules가 "어느 저장소에서 가져올지"를 알려 준다
+$ cat .gitmodules
+[submodule "vendor/lib"]
+	path = vendor/lib
+	url = https://github.com/example/lib.git</code></pre>
+                    </div>
+                    <p class="highlight">서브모듈이 다루기 까다로운 이유가 여기서 나옵니다. 부모 저장소는 <strong>"자식 저장소의 어느 커밋"인지만 기억하고, 그 커밋의 실체는 갖고 있지 않습니다.</strong> 그래서 <code>git clone</code> 후 <code>--recurse-submodules</code> 없이는 빈 디렉토리만 나오고, 서브모듈 커밋이 자식 저장소에서 사라지면(force push 등) 부모가 가리키는 대상이 영영 증발합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 정렬 규칙 &mdash; "src"가 "src-file.txt"보다 뒤인 이유</h2>
+            <div class="conversation">
+                <div class="q">앞의 hexdump에서 <code>src</code> 디렉토리가 <code>src-file.txt</code>보다 <em>뒤에</em> 있었습니다. 알파벳순이면 <code>src</code>가 먼저 아닌가요?</div>
+                <div class="a">
+                    <p>날카로운 관찰입니다. 그리고 이것이 트리 객체에서 가장 자주 헷갈리는 규칙입니다.</p>
+                    <p class="highlight">Git은 트리 엔트리를 이름순으로 정렬하되, <strong>디렉토리(tree) 엔트리는 이름 뒤에 <code>/</code>가 붙은 것처럼 취급</strong>해서 비교합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">비교되는 실제 문자열</div>
+                        <pre><code>비교 대상            정렬 키          첫 다른 바이트
+---------------------------------------------------------
+"a.txt"     (blob) → "a.txt"
+"src-file.txt"(blob)→ "src-file.txt"   'src' 다음이 '-' = 0x2D
+"src"       (tree) → "src/"            'src' 다음이 '/' = 0x2F
+
+0x2D('-') &lt; 0x2F('/')  ⟹  "src-file.txt" 가 "src/" 보다 앞!</code></pre>
+                    </div>
+                    <p>왜 이렇게 할까요? <strong>트리 비교(diff)를 단순하게 만들기 위해서</strong>입니다. 디렉토리를 "경로 접두사"로 취급하면, 트리를 재귀적으로 훑을 때 <code>src/b.txt</code>와 <code>src-file.txt</code>의 상대 순서가 <strong>루트 트리에서나 전체 경로 목록에서나 동일하게</strong> 유지됩니다. 두 트리를 merge-sort처럼 나란히 걸으며 비교하는 <code>tree-diff</code> 알고리즘이 이 불변식에 의존합니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>전화번호부에서 "김"과 "김철수"를 정렬하는 상황입니다. 그냥 "김"으로 두면 어디에 끼워야 할지 애매하지만, 회사명에는 항상 "㈜"를 붙이기로 규칙을 정하면 순서가 명확해집니다.</p>
+                        <p>Git은 디렉토리에 항상 <code>/</code>를 붙여 생각함으로써, "디렉토리 하나"와 "그 안의 모든 파일 경로"가 정렬상 같은 자리를 차지하게 만듭니다.</p>
+                    </div>
+                    <p class="warning">이 규칙을 어긴 트리를 직접 만들면 <code>git fsck</code>가 <code>not properly sorted</code> 오류를 냅니다. 트리 객체를 손으로 조립하는 도구를 만든다면 반드시 구현해야 하는 규칙입니다.</p>
+                </div>
+
+                <div class="q">정렬이 틀리면 정말 문제가 생기나요?</div>
+                <div class="a">
+                    <p>두 가지 문제가 생깁니다.</p>
+                    <p><strong>1) OID가 달라집니다.</strong> 같은 파일 구성이라도 엔트리 순서가 다르면 바이트열이 다르고, 따라서 트리 OID가 달라집니다. 즉 <strong>중복 제거가 깨집니다.</strong> 정렬 규칙은 "같은 내용 &rarr; 같은 OID"라는 정규형(canonical form)을 보장하기 위한 장치입니다.</p>
+                    <p><strong>2) diff/merge가 오동작합니다.</strong> 두 트리를 동시에 걸으며 비교하는 알고리즘은 양쪽이 같은 순서로 정렬되어 있다고 가정합니다. 순서가 깨지면 "삭제 후 추가"로 잘못 판단합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 트리 직접 만들기 (mktree)</div>
+                        <pre><code># 손으로 트리를 조립할 수 있다. 정렬은 mktree가 알아서 해 준다.
+$ printf '100644 blob ce013625030ba8dba906f756967f9e9ca394464a\ta.txt\n' | git mktree
+9f1a2b...
+
+# --missing 없이는 존재하지 않는 객체를 넣을 수 없다 (무결성 검사)
+$ printf '100644 blob 0000000000000000000000000000000000000000\tx\n' | git mktree
+fatal: entry '0000...' object 0000... is unavailable</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 트리가 만들어지는 순간 &mdash; write_tree</h2>
+            <div class="conversation">
+                <div class="q">커밋할 때 트리는 언제, 어떻게 만들어지나요?</div>
+                <div class="a">
+                    <p><code>git commit</code> 내부에서 <strong><code>write_tree()</code></strong>(plumbing으로는 <code>git write-tree</code>)가 호출됩니다. 입력은 <strong>인덱스</strong>이고, 출력은 <strong>루트 트리의 OID</strong>입니다.</p>
+                    <p>인덱스는 평평한 경로 목록(<code>src/b.txt</code>, <code>a.txt</code> ...)인데, 이를 계층적 트리로 접어 올려야 합니다. 동작은 이렇습니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">1. 인덱스 순회</div>
+                                <div class="flow-box__items">경로순 정렬된 엔트리를 앞에서부터 읽음</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">2. 디렉토리 경계 감지</div>
+                                <div class="flow-box__items">경로에 <code>/</code>가 나오면 하위 디렉토리 구간으로 재귀</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">3. 하위부터 기록</div>
+                                <div class="flow-box__items">가장 깊은 디렉토리의 tree부터 써서 OID를 얻고, 그 OID로 상위 엔트리를 채움</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">4. 루트 tree 반환</div>
+                                <div class="flow-box__items">이 OID가 commit 객체의 <code>tree</code> 줄에 들어감</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">파일 10만 개짜리 저장소에서 파일 하나만 고쳐도 트리를 전부 다시 만들어야 할까요? 그렇지 않습니다. <strong>cache-tree</strong>라는 인덱스 확장이 "이 디렉토리 구간은 이미 tree OID가 무엇인지 알고 있다"를 캐싱합니다. 수정된 경로의 <em>조상 디렉토리들만</em> 무효화되므로, 실제로 새로 만들어지는 트리는 보통 서너 개뿐입니다. 자세한 내용은 06편에서 다룹니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 트리 생성 직접 해 보기</div>
+                        <pre><code># 인덱스로부터 트리를 만든다 (커밋 없이)
+$ git write-tree
+4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e
+
+# 그 트리로 커밋 객체를 손으로 만든다
+$ echo "manual commit" | git commit-tree 4d5e6f7... -p HEAD
+c0ffee1234...
+
+# 브랜치를 그 커밋으로 옮기면 정식 커밋이 된다
+$ git update-ref refs/heads/main c0ffee1234...
+$ git log --oneline -1
+c0ffee1 manual commit</code></pre>
+                    </div>
+                    <p class="highlight"><code>git commit</code>은 결국 <strong><code>write-tree</code> + <code>commit-tree</code> + <code>update-ref</code>의 묶음</strong>입니다. 초기 Git이 셸 스크립트로 구현되던 시절의 흔적이 지금도 plumbing 명령으로 남아 있습니다.</p>
+                </div>
+
+                <div class="q">트리 구조를 알면 실무에서 어떤 걸 할 수 있나요?</div>
+                <div class="a">
+                    <p>가장 실용적인 것은 <strong>거대 저장소의 구조 분석</strong>과 <strong>부분 체크아웃 최적화</strong>입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 트리 기반 분석</div>
+                        <pre><code># 특정 커밋의 디렉토리별 파일 수
+$ git ls-tree -r --name-only HEAD | awk -F/ '{print $1}' | sort | uniq -c | sort -rn
+   4821 src
+    932 assets
+    112 docs
+
+# 트리 객체 자체가 몇 개인지 (디렉토리가 많으면 트리도 많다)
+$ git cat-file --batch-all-objects --batch-check='%(objecttype)' \
+    | sort | uniq -c
+  284917 blob
+   12043 commit
+   71204 tree          # &larr; 디렉토리 구조가 깊고 넓으면 여기가 커진다
+
+# 두 커밋 사이에서 바뀐 트리만 (경로 단위 diff보다 훨씬 빠름)
+$ git diff-tree HEAD~1 HEAD
+:040000 040000 add479... bb1234... M	src</code></pre>
+                    </div>
+                    <p>트리가 많다는 것은 곧 <strong>디렉토리 하나만 바꿔도 그 조상 트리가 전부 새로 생긴다</strong>는 뜻입니다. 모노레포에서 깊은 디렉토리 구조가 객체 수를 부풀리는 원인이며, 이것이 <strong>희소 인덱스(sparse index)</strong>가 등장한 배경이기도 합니다(23편).</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>트리 엔트리 = <code>&lt;mode&gt; &lt;name&gt;\0&lt;20바이트 raw OID&gt;</code>의 반복이다.</strong> OID는 16진수 문자열이 아니라 바이너리이고, 엔트리 사이 구분자는 없다.</li>
+                <li><strong>모드는 다섯 가지뿐이다.</strong> <code>100644</code>, <code>100755</code>, <code>120000</code>(심링크), <code>40000</code>(디렉토리, 출력만 <code>040000</code>), <code>160000</code>(서브모듈). 소유자·타임스탬프·세부 권한은 기록하지 않는다.</li>
+                <li><strong>디렉토리 엔트리는 이름 뒤에 <code>/</code>가 붙은 것처럼 정렬된다.</strong> 그래서 <code>src-file.txt</code>(<code>-</code>=0x2D)가 <code>src</code>(<code>/</code>=0x2F)보다 앞에 온다. 정규형을 보장하고 트리 diff를 단순하게 만드는 규칙이다.</li>
+                <li><strong>빈 디렉토리는 표현할 수 없다.</strong> 트리는 엔트리 목록이고, 가리킬 대상이 없으면 엔트리도 없기 때문이다.</li>
+                <li><strong><code>git commit</code> = <code>write-tree</code> + <code>commit-tree</code> + <code>update-ref</code>다.</strong> 트리는 인덱스에서 만들어지며, cache-tree 덕분에 수정된 경로의 조상만 새로 생성된다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

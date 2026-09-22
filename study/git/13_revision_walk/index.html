@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>git log는 어떤 순서로 커밋을 뱉을까 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>git log는 어떤 순서로 커밋을 뱉을까?</h1>
+            <p class="subtitle">리비전 워크 해부 &mdash; 우선순위 큐 · UNINTERESTING 전파 · TREESAME과 히스토리 단순화</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: DAG를 "목록"으로 펴는 문제</h2>
+            <div class="conversation">
+                <div class="q">커밋 그래프는 DAG인데 <code>git log</code>는 일렬로 출력합니다. 순서는 누가 정하나요?</div>
+                <div class="a">
+                    <p><strong>리비전 워크(revision walk)</strong>라는 Git의 핵심 엔진이 정합니다. <code>revision.c</code>가 그 구현이고, <code>log</code>, <code>rev-list</code>, <code>bisect</code>, <code>blame</code>, <code>pack-objects</code>, <code>fetch</code>의 네고시에이션까지 전부 이 엔진 위에 얹혀 있습니다.</p>
+                    <p>문제의 본질은 이렇습니다. DAG에는 <strong>"올바른 순서"가 유일하지 않습니다.</strong> 두 브랜치가 갈라진 구간의 커밋들은 서로 조상 관계가 없으므로 어느 쪽을 먼저 보여 줘도 위상적으로 정당합니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--small">A</div>
+                            <div class="flow-arrow">&larr;</div>
+                            <div class="flow-box flow-box--small">B</div>
+                            <div class="flow-arrow">&larr;</div>
+                            <div class="flow-box flow-box--info">C1, C2 (브랜치 1)</div>
+                            <div class="flow-arrow">&larr;</div>
+                            <div class="flow-box flow-box--highlight">M</div>
+                        </div>
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--small">&nbsp;</div>
+                            <div class="flow-arrow">&nbsp;</div>
+                            <div class="flow-box flow-box--small">&nbsp;</div>
+                            <div class="flow-arrow">&nbsp;</div>
+                            <div class="flow-box flow-box--info">D1, D2 (브랜치 2)</div>
+                            <div class="flow-arrow">&larr;</div>
+                            <div class="flow-box flow-box--small">&nbsp;</div>
+                        </div>
+                    </div>
+                    <p class="key-point">C1, C2, D1, D2를 어떤 순서로 보여 줄지는 <strong>정책의 문제</strong>입니다. Git은 기본적으로 <strong>커밋 날짜 내림차순</strong>을 택하고, <code>--topo-order</code>, <code>--author-date-order</code>, <code>--reverse</code>로 바꿀 수 있게 열어 두었습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>여러 지류가 합쳐지는 <strong>강</strong>을 하구에서 거슬러 오르는 상황입니다.</p>
+                        <p>갈림길을 만나면 두 지류 중 어디로 갈지 골라야 합니다. Git의 기본 전략은 <strong>"지금 눈앞의 후보들 중 가장 최근에 비가 온 지류부터"</strong>(커밋 날짜순)입니다. <code>--topo-order</code>는 <strong>"한 지류를 끝까지 따라간 뒤 다른 지류로"</strong>로 정책을 바꿉니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">실제 알고리즘은 어떻게 되나요?</div>
+                <div class="a">
+                    <p><strong>우선순위 큐를 쓰는 BFS 변형</strong>입니다. 소스의 자료구조가 그대로 드러납니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">revision.c &mdash; 우선순위 큐</div>
+                        <pre><code>struct prio_queue queue = { .compare = compare_commits_by_commit_date };</code></pre>
+                    </div>
+                    <p>기본 흐름은 네 단계입니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">1. 시드 투입</div>
+                                <div class="flow-box__items">시작 ref들(HEAD, 지정한 리비전)을 큐에 넣는다</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">2. 최우선 꺼내기</div>
+                                <div class="flow-box__items">커밋 날짜가 가장 <strong>최근</strong>인 것을 큐에서 뺀다</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">3. 출력 + 부모 투입</div>
+                                <div class="flow-box__items">조건을 만족하면 출력하고, 부모들을 큐에 넣는다(<code>SEEN</code> 표시)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">4. 반복</div>
+                                <div class="flow-box__items">큐가 비거나 중단 조건까지 2~3 반복</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="warning">여기서 중요한 함정이 있습니다. <strong>커밋 날짜는 신뢰할 수 없습니다.</strong> 05편에서 봤듯 rebase·cherry-pick은 committer date를 바꾸고, 시계가 틀린 머신에서 만든 커밋은 부모보다 <em>이른</em> 날짜를 가질 수 있습니다. 그래서 날짜순 워크는 <strong>위상 순서를 보장하지 못합니다</strong> &mdash; 자식이 부모보다 먼저 출력되는 일이 드물게 발생합니다.</p>
+                    <p><code>--topo-order</code>는 이를 해결하지만 대가가 있습니다. "이 커밋의 모든 자식을 출력했는가"를 알아야 하므로, <strong>출력 전에 그래프를 미리 훑어야</strong> 합니다. 그래서 첫 출력까지의 지연이 커집니다.</p>
+                    <p class="key-point">Git은 이 비용을 <strong>commit-graph의 generation number</strong>로 줄입니다. 소스에서 topo-order의 탐색 큐는 <code>compare_commits_by_gen_then_commit_date</code>를 씁니다 &mdash; 날짜가 아니라 <strong>세대 번호를 1순위</strong>로 삼는 것입니다(14편).</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: UNINTERESTING &mdash; 범위 표기의 실체</h2>
+            <div class="conversation">
+                <div class="q"><code>main..feature</code>는 내부적으로 어떻게 계산되나요?</div>
+                <div class="a">
+                    <p><strong>플래그 전파</strong>로 계산합니다. <code>revision.h</code>의 비트 플래그가 워크의 상태 기계를 이룹니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">revision.h &mdash; 워크 플래그</div>
+                        <pre><code>#define SEEN            (1u&lt;&lt;0)   /* 큐에 이미 들어갔음 */
+#define UNINTERESTING   (1u&lt;&lt;1)   /* 이 커밋과 그 조상은 제외 */
+#define TREESAME        (1u&lt;&lt;2)   /* 부모와 (관심 경로의) 트리가 동일 */
+#define SHOWN           (1u&lt;&lt;3)   /* 이미 출력했음 */
+#define ADDED           (1u&lt;&lt;7)   /* 부모를 이미 파싱해 큐에 넣었음 */
+#define BOTTOM          (1u&lt;&lt;10)  /* 워크의 바닥 경계 */</code></pre>
+                    </div>
+                    <p><code>main..feature</code>는 <code>^main feature</code>와 같습니다. <code>^</code>가 붙은 것이 <strong><code>UNINTERESTING</code> 시드</strong>입니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">1. 시드 표시</div>
+                                <div class="flow-box__items"><code>feature</code>는 관심(interesting), <code>main</code>은 <code>UNINTERESTING</code></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">2. 전파</div>
+                                <div class="flow-box__items"><code>UNINTERESTING</code> 커밋의 <strong>부모도 전부 <code>UNINTERESTING</code></strong></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">3. 출력 필터</div>
+                                <div class="flow-box__items">플래그가 없는 커밋만 출력</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">4. 조기 종료</div>
+                                <div class="flow-box__items">큐에 남은 것이 <strong>전부 <code>UNINTERESTING</code></strong>이면 그만둔다</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">4번이 성능의 핵심입니다. <code>main..feature</code>에 커밋 5개만 있다면, Git은 <strong>저장소 전체 히스토리를 훑지 않고</strong> 공통 조상 언저리에서 멈춥니다. 커밋 100만 개짜리 저장소에서도 이 질의는 즉시 끝납니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 범위 표기의 등가 형태</div>
+                        <pre><code># 이 셋은 전부 같다
+$ git log main..feature
+$ git log ^main feature
+$ git rev-list feature --not main
+
+# 대칭 차집합: 양쪽에 각자 있는 것
+$ git log main...feature          # = (A∪B) - (A∩B)
+$ git log --left-right main...feature
+&lt; abc1234 main에만 있음           # &lt; = 왼쪽(main)
+&gt; def5678 feature에만 있음        # &gt; = 오른쪽(feature)
+
+# 여러 개도 가능
+$ git log ^main ^develop feature  # main과 develop 어디에도 없는 feature의 커밋
+
+# 실전: "아직 푸시 안 한 내 커밋"
+$ git log @{u}..HEAD              # @{u} = upstream
+# 실전: "원격에 있는데 아직 안 받은 커밋"
+$ git log HEAD..@{u}</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">이 메커니즘이 다른 곳에도 쓰이나요?</div>
+                <div class="a">
+                    <p>Git의 거의 모든 핵심 연산이 이 위에 있습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>연산</th><th>리비전 워크를 어떻게 쓰나</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>git push</code></td>
+                                <td>"원격이 가진 것"을 <code>UNINTERESTING</code>으로 두고 워크 &rarr; 보낼 객체 확정</td>
+                            </tr>
+                            <tr>
+                                <td><code>git fetch</code></td>
+                                <td>네고시에이션으로 얻은 공통 커밋을 <code>UNINTERESTING</code>으로 두고 받을 범위 계산 (21편)</td>
+                            </tr>
+                            <tr>
+                                <td><code>git gc</code></td>
+                                <td>모든 ref + reflog를 시드로 워크 &rarr; 도달 가능한 객체 집합 확정 (20편)</td>
+                            </tr>
+                            <tr>
+                                <td><code>git bisect</code></td>
+                                <td><code>good..bad</code> 범위를 워크해 후보 집합을 만들고 그 안에서 이분 탐색</td>
+                            </tr>
+                            <tr>
+                                <td><code>git merge-base</code></td>
+                                <td>양방향 플래그 전파의 특수 형태 (15편)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight"><code>git rev-list</code>가 이 엔진의 <strong>날것 그대로의 인터페이스</strong>입니다. <code>git log</code>는 여기에 포매팅을 씌운 것이고, 스크립트를 짤 때는 <code>rev-list</code>를 직접 쓰는 것이 훨씬 빠르고 안정적입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; rev-list 활용</div>
+                        <pre><code># 커밋 개수만 (로그 포매팅 비용 없음)
+$ git rev-list --count main..feature
+17
+
+# 도달 가능한 모든 객체 (경로까지)
+$ git rev-list --objects --all | head
+c0ffee1...
+a1b2c3d... src
+d4e5f6a... src/main.c
+
+# 릴리스 노트용: main 줄기의 머지 커밋만
+$ git rev-list --first-parent --merges v1.0..v2.0 --format='%s'
+
+# 특정 파일을 건드린 커밋
+$ git rev-list HEAD -- src/auth.c</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 경로 필터와 히스토리 단순화</h2>
+            <div class="conversation">
+                <div class="q"><code>git log -- src/auth.c</code>를 하면 머지 커밋이 안 보입니다. 버그인가요?</div>
+                <div class="a">
+                    <p>버그가 아니라 <strong>기본 동작인 "히스토리 단순화(history simplification)"</strong>입니다. 이 동작을 모르면 "커밋이 사라졌다"는 오해를 하게 됩니다.</p>
+                    <p>경로를 지정하면 Git은 각 커밋마다 <strong>"이 경로의 트리가 부모와 같은가"</strong>를 검사해 <code>TREESAME</code> 플래그를 답니다. 그리고 기본 규칙은 이렇습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">단순화 규칙</div>
+                        <pre><code>일반 커밋 (부모 1개):
+  TREESAME  → 출력하지 않음. 부모로 대체해 계속 진행
+  다름      → 출력
+
+머지 커밋 (부모 여러 개):
+  <strong>어느 한 부모와라도 TREESAME이면</strong>
+      → 그 부모 쪽만 따라가고, 나머지 부모 방향은 <strong>통째로 버린다</strong>
+  모든 부모와 다르면
+      → 출력하고 모든 부모를 따라간다</code></pre>
+                    </div>
+                    <p class="warning">머지 규칙이 강력한 부작용을 냅니다. feature 브랜치에서 <code>src/auth.c</code>를 고쳤고 main에서는 안 고쳤다면, 머지 커밋은 <strong>main 쪽 부모와 TREESAME이 아니고 feature 쪽 결과와 같습니다.</strong> 그런데 머지가 "feature 쪽 내용을 그대로 취한" 경우라면 feature 부모와 TREESAME이 되어, <strong>Git은 feature 방향만 따라가고 main 방향을 잘라냅니다.</strong> 반대 상황에서는 feature 쪽 커밋들이 통째로 보이지 않게 됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 단순화 제어</div>
+                        <pre><code># 기본 (단순화 적용) — 커밋이 "사라져" 보일 수 있다
+$ git log --oneline -- src/auth.c
+
+# 모든 커밋을 보고 싶다 (단순화 끄기)
+$ git log --full-history --oneline -- src/auth.c
+
+# 머지의 어느 쪽에서 왔는지 그래프로 확인
+$ git log --full-history --graph --oneline -- src/auth.c
+
+# 파일이 삭제된 시점 찾기 (자주 쓰는 패턴)
+$ git log --full-history --diff-filter=D --oneline -- src/auth.c
+
+# rename을 따라 끝까지 추적
+$ git log --follow --oneline -- src/auth.c</code></pre>
+                    </div>
+                    <p class="key-point">실무 규칙: <strong>"파일 하나의 진짜 이력을 조사할 때는 <code>--full-history</code>를 붙이십시오."</strong> 기본 단순화는 "이 파일이 지금 모습이 된 <em>대표 경로</em>"를 보여 주는 것이지, 완전한 이력이 아닙니다. 장애 조사에서 결정적 커밋을 놓치는 흔한 원인입니다.</p>
+                </div>
+
+                <div class="q"><code>--follow</code>는 왜 파일 하나에만 쓸 수 있나요?</div>
+                <div class="a">
+                    <p><strong>rename 감지가 조회 시점 추론이기 때문</strong>입니다(17편). Git은 "이 파일이 저 파일에서 이름이 바뀌었다"를 <strong>저장하지 않습니다.</strong> 커밋마다 두 트리를 비교해 유사도로 추측할 뿐입니다.</p>
+                    <p><code>--follow</code>는 워크 도중 "경로가 사라진 커밋"을 만나면 그 커밋의 diff에서 rename을 찾아 <strong>추적 대상 경로를 바꿔치기</strong>합니다. 경로가 여러 개면 각각을 독립적으로 바꿔치기해야 하는데, 워크 상태가 경로 집합 전체에 걸려 있어 구현이 복잡해집니다. 그래서 Git은 경로 하나로 제한합니다.</p>
+                    <p class="highlight"><code>--follow</code>는 근사입니다. 파일 내용이 rename과 동시에 크게 바뀌면(유사도 50% 미만) 추적이 끊깁니다. 정확한 추적이 필요하면 <code>git log --find-renames=30% --full-history</code>처럼 임계값을 낮추거나, <code>git log -S'함수이름'</code>으로 <strong>내용 기반</strong>으로 찾는 편이 낫습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 내용 기반 탐색 (pickaxe)</div>
+                        <pre><code># -S: 이 문자열의 "등장 횟수가 바뀐" 커밋을 찾는다 (추가/삭제 시점)
+$ git log -S'ValidateToken' --oneline
+a1b2c3d refactor: 인증 로직 분리
+f7d3c0e feat: 토큰 검증 추가
+
+# -G: 이 정규식에 매치되는 줄이 diff에 등장한 커밋 (수정 시점까지 포함)
+$ git log -G'ValidateToken\s*\(' --oneline
+
+# 경로 제한 없이 저장소 전체에서 찾으므로 rename에 영향받지 않는다
+# 장애 조사에서 --follow보다 신뢰할 만한 경우가 많다</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 정렬 옵션과 성능 튜닝</h2>
+            <div class="conversation">
+                <div class="q">정렬 옵션들은 정확히 뭐가 다른가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>옵션</th><th>순서 기준</th><th>특징</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>(기본)</td>
+                                <td>committer date 내림차순</td>
+                                <td>빠름. 첫 결과가 즉시 나옴. <strong>위상 순서 보장 안 됨</strong></td>
+                            </tr>
+                            <tr>
+                                <td><code>--date-order</code></td>
+                                <td>날짜순이되 <strong>부모를 자식보다 먼저 보이지 않게</strong></td>
+                                <td>기본과 위상 정렬의 절충</td>
+                            </tr>
+                            <tr>
+                                <td><code>--author-date-order</code></td>
+                                <td>author date 기준</td>
+                                <td>rebase가 많은 저장소에서 "실제 작성 순서"에 가까움</td>
+                            </tr>
+                            <tr>
+                                <td><code>--topo-order</code></td>
+                                <td>순수 위상 정렬. <strong>한 갈래를 끝낸 뒤 다음 갈래</strong></td>
+                                <td>브랜치가 섞이지 않아 읽기 좋음. 선행 탐색 비용</td>
+                            </tr>
+                            <tr>
+                                <td><code>--reverse</code></td>
+                                <td>결과를 뒤집음</td>
+                                <td><strong>전체를 다 계산한 뒤</strong> 뒤집으므로 <code>-n</code>과 조합 시 주의</td>
+                            </tr>
+                            <tr>
+                                <td><code>--first-parent</code></td>
+                                <td>머지의 첫 부모만 따라감</td>
+                                <td>PR 단위 히스토리. 릴리스 노트에 최적</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning"><code>--reverse -n 10</code>은 함정입니다. <strong>"가장 오래된 10개"가 아니라 "최신 10개를 뒤집은 것"</strong>입니다. Git이 <code>-n</code>을 먼저 적용하고 <code>--reverse</code>를 나중에 하기 때문입니다. 가장 오래된 10개를 원하면 <code>git log --reverse | head -10</code>처럼 파이프를 쓰거나 <code>git rev-list --max-parents=0</code> 계열을 씁니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 정렬 차이 확인</div>
+                        <pre><code># 브랜치가 섞여 읽기 어려운 기본 출력
+$ git log --oneline --graph -15
+
+# 갈래별로 모여 읽기 좋은 위상 정렬
+$ git log --oneline --graph --topo-order -15
+
+# main 줄기만 (머지 내부 무시) - 릴리스 노트용
+$ git log --oneline --first-parent v1.0..v2.0
+
+# 루트 커밋 찾기
+$ git rev-list --max-parents=0 HEAD
+
+# 머지 커밋만 / 머지 아닌 것만
+$ git log --merges --oneline
+$ git log --no-merges --oneline</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">대형 저장소에서 <code>git log</code>가 느릴 때는 어떻게 하나요?</div>
+                <div class="a">
+                    <p>느려지는 원인이 세 가지로 나뉘고, 처방이 각각 다릅니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>증상</th><th>원인</th><th>처방</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>git log</code> 자체가 느림</td>
+                                <td>커밋 객체를 하나씩 압축 해제하며 파싱</td>
+                                <td><strong>commit-graph</strong> (14편). 파싱 없이 이진 데이터에서 부모/날짜를 읽음</td>
+                            </tr>
+                            <tr>
+                                <td><code>--topo-order</code>가 느림</td>
+                                <td>선행 탐색 범위가 넓음</td>
+                                <td>commit-graph의 <strong>generation number</strong>가 탐색을 조기 종료시킴</td>
+                            </tr>
+                            <tr>
+                                <td><code>log -- path/</code>가 느림</td>
+                                <td>커밋마다 트리를 비교해 TREESAME 판정</td>
+                                <td><strong>changed-path Bloom filter</strong>. "이 커밋이 이 경로를 건드렸을 리 없다"를 즉시 배제</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 세 가지를 한 번에 해결</div>
+                        <pre><code># commit-graph + Bloom filter 생성
+$ git commit-graph write --reachable --changed-paths
+
+# 효과 측정 (모노레포 실측 예)
+$ time git log --oneline -- services/payment/ | wc -l
+# 전: 18.4s  →  후: 0.6s
+
+# 자동 유지: fetch 후 자동 갱신
+$ git config fetch.writeCommitGraph true
+$ git maintenance start        # commit-graph, MIDX, prune 등을 주기적으로 갱신
+
+# 진단: 어디서 시간을 쓰는지
+$ GIT_TRACE2_PERF=1 git log --oneline -- services/payment/ 2&gt;&amp;1 | head -30</code></pre>
+                    </div>
+                    <p class="key-point">정리하면 <strong>리비전 워크의 성능은 "그래프 탐색 비용"과 "커밋 파싱 비용"의 합</strong>입니다. commit-graph가 후자를 없애고 generation number가 전자를 줄이며, Bloom filter가 경로 필터의 트리 비교를 건너뜁니다. 이 셋이 대형 저장소 성능 개선의 표준 패키지이고, 다음 편의 주제입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>리비전 워크는 우선순위 큐 기반 그래프 순회다.</strong> 기본 키는 committer date 내림차순인데, 날짜는 rebase나 시계 오차로 신뢰할 수 없어 <strong>위상 순서를 보장하지 않는다.</strong></li>
+                <li><strong><code>A..B</code>는 <code>^A B</code>이고, <code>^</code>는 <code>UNINTERESTING</code> 플래그를 부모로 전파한다.</strong> 큐가 전부 <code>UNINTERESTING</code>이 되면 조기 종료하므로 거대 저장소에서도 범위 질의가 즉시 끝난다.</li>
+                <li><strong>push·fetch·gc·bisect·merge-base가 모두 이 엔진 위에 있다.</strong> <code>git rev-list</code>가 날것의 인터페이스이며, 스크립트에는 <code>log</code>보다 <code>rev-list</code>가 적합하다.</li>
+                <li><strong>경로를 주면 기본으로 히스토리 단순화가 걸린다.</strong> 머지 커밋이 어느 한 부모와 <code>TREESAME</code>이면 나머지 부모 방향을 통째로 버리므로, 진짜 이력 조사에는 <code>--full-history</code>가 필요하다.</li>
+                <li><strong>성능은 commit-graph(파싱 제거) + generation number(탐색 조기 종료) + changed-path Bloom filter(트리 비교 생략)로 해결한다.</strong> <code>git commit-graph write --reachable --changed-paths</code>가 표준 처방이다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

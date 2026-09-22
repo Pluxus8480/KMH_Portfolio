@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>git diff는 대체 무엇을 최소화하는가 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>git diff는 대체 무엇을 최소화하는가?</h1>
+            <p class="subtitle">xdiff 해부 &mdash; Myers O(ND) · patience · histogram · 들여쓰기 휴리스틱</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: diff는 저장되지 않는다, 계산된다</h2>
+            <div class="conversation">
+                <div class="q">05편에서 "커밋에 diff가 없다"고 했습니다. 그럼 <code>git show</code>는 매번 계산하는 건가요?</div>
+                <div class="a">
+                    <p>그렇습니다. 그리고 그것이 <strong>장점</strong>입니다.</p>
+                    <p>저장된 diff는 고정된 하나의 표현이지만, 계산되는 diff는 <strong>보는 사람의 목적에 맞춰 달라질 수 있습니다.</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">같은 커밋, 다른 diff</div>
+                        <pre><code>$ git show HEAD                       # 기본
+$ git show -w HEAD                    # 공백 변경 무시
+$ git show -M HEAD                    # rename을 "이동"으로 표시
+$ git show --histogram HEAD           # 다른 알고리즘
+$ git show --word-diff HEAD           # 줄이 아니라 단어 단위
+$ git show --function-context HEAD    # 함수 전체를 컨텍스트로
+$ git show --stat HEAD                # 요약만</code></pre>
+                    </div>
+                    <p class="key-point">저장하지 않는 대신 <strong>계산 비용</strong>을 냅니다. 그래서 diff 알고리즘의 성능이 <code>git log -p</code>, <code>git blame</code>, 머지 전체의 체감 속도를 좌우합니다. Git은 이를 위해 <strong><code>xdiff/</code></strong>라는 전용 라이브러리를 내장하고 있습니다(LibXDiff에서 유래).</p>
+                </div>
+
+                <div class="q">diff 문제를 정확히 정의하면 무엇인가요?</div>
+                <div class="a">
+                    <p><strong>최장 공통 부분 수열(LCS, Longest Common Subsequence)</strong> 문제입니다. 두 줄 시퀀스 A, B가 주어졌을 때 <strong>양쪽에 순서대로 등장하는 가장 긴 공통 줄 집합</strong>을 찾으면, 나머지가 자동으로 "삭제"와 "추가"가 됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">LCS와 편집 스크립트</div>
+                        <pre><code>A = [a, b, c, d, e]
+B = [a, x, c, e]
+
+LCS = [a, c, e]  (길이 3)
+
+편집 스크립트:
+  a       유지
+  -b      삭제
+  +x      추가
+  c       유지
+  -d      삭제
+  e       유지
+
+"LCS를 최대화" = "편집 거리(추가+삭제 수)를 최소화"</code></pre>
+                    </div>
+                    <p>순진한 동적 계획법은 <strong>O(N&times;M)</strong> 시간과 공간이 듭니다. 5,000줄 파일 두 개면 2,500만 칸의 표가 필요합니다. 현실적이지 않습니다.</p>
+                    <p class="warning">더 근본적인 문제는 <strong>"최소 편집 스크립트가 반드시 읽기 좋은 것은 아니다"</strong>라는 점입니다. 수학적으로 최적인 diff가 사람 눈에는 엉망일 수 있고, 이것이 Git이 여러 알고리즘과 휴리스틱을 두는 이유입니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>두 판본의 악보를 비교해 "무엇이 바뀌었나"를 표시하는 일입니다.</p>
+                        <p>기계적으로는 "가장 적은 수의 음표를 지우고 넣는 방법"을 찾으면 됩니다. 하지만 그 결과가 <strong>"3마디 끝 음표 하나 삭제, 4마디 첫 음표 하나 추가, 4마디 끝 음표 하나 삭제..."</strong>처럼 흩어지면 연주자는 무엇이 바뀐 건지 알 수 없습니다.</p>
+                        <p>사람이 원하는 것은 <strong>"4마디가 통째로 바뀌었습니다"</strong>입니다. 편집 횟수는 더 많아 보여도 훨씬 읽기 좋습니다. Git의 휴리스틱들이 하는 일이 정확히 이 조정입니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: Myers 알고리즘 &mdash; 기본값</h2>
+            <div class="conversation">
+                <div class="q">Git의 기본 알고리즘은 뭔가요?</div>
+                <div class="a">
+                    <p><strong>Myers 알고리즘</strong>입니다. Git 소스에 논문이 그대로 인용되어 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">xdiff/xdiffi.c</div>
+                        <pre><code>/*
+ * See "An O(ND) Difference Algorithm and its Variations", by Eugene Myers.
+ */</code></pre>
+                    </div>
+                    <p>핵심 통찰은 <strong>"차이가 작으면 빠르게 풀자"</strong>입니다. 파일 길이 N이 아니라 <strong>편집 횟수 D</strong>에 비례하도록 문제를 바꿉니다. 실제 코드 변경은 대개 몇 줄이므로 D가 아주 작고, 따라서 극도로 빠릅니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">Myers의 발상</div>
+                        <pre><code>편집 그래프를 상상한다:
+  가로축 = A의 줄, 세로축 = B의 줄
+  오른쪽 이동 = A의 줄 삭제
+  아래쪽 이동 = B의 줄 추가
+  대각선 이동 = 같은 줄 (공짜!)
+
+목표: (0,0)에서 (N,M)까지 <strong>대각선을 최대한 타면서</strong> 가는 것
+   = 가로/세로 이동 횟수 D를 최소화
+
+Myers: D를 0, 1, 2, ... 로 늘려 가며
+       "D번 이동으로 갈 수 있는 가장 먼 지점"을 대각선별로 기록.
+       목표에 도달하는 순간의 D가 최소 편집 거리.
+
+시간 O(ND), 공간 O(N+M)  ← 표 전체를 만들지 않는다</code></pre>
+                    </div>
+                    <p>Git의 구현은 여기에 <strong>분할 정복</strong>을 더합니다. 소스 주석이 직접 설명합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">xdiff/xdiffi.c &mdash; 분할 정복</div>
+                        <pre><code>/*
+ * Rule: "Divide et Impera" (divide &amp; conquer). Recursively split the box in
+ * sub-boxes by calling the box splitting function. ...
+ */</code></pre>
+                    </div>
+                    <p class="highlight">양쪽 끝에서 동시에 탐색해(forward/backward) 중간에서 만나는 지점을 찾고, 그 지점을 기준으로 문제를 두 개의 작은 박스로 쪼개 재귀합니다. <strong>선형 공간</strong>으로 최적해를 구하는 Myers 논문의 변형(variation)입니다.</p>
+                    <p class="warning">거대 파일에서 D가 커지면 O(ND)도 부담됩니다. 그래서 Git은 <strong>탐색량이 임계를 넘으면 최적성을 포기하고 근사 분할로 넘어갑니다.</strong> <code>--minimal</code> 옵션은 이 포기를 막아 "정말로 최소인" diff를 강제하지만, 느려질 수 있습니다.</p>
+                </div>
+
+                <div class="q">Myers가 만들어 내는 "읽기 나쁜 diff"는 어떤 건가요?</div>
+                <div class="a">
+                    <p>가장 유명한 사례가 <strong>블록 추가</strong>입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">문제 상황 &mdash; 함수 하나를 추가했을 뿐인데</div>
+                        <pre><code>[원본]
+ def foo():
+     return 1
+
+ def baz():
+     return 3
+
+[foo와 baz 사이에 bar를 추가]
+ def foo():
+     return 1
+
+ def bar():
+     return 2
+
+ def baz():
+     return 3
+
+[Myers가 만들 수 있는 diff — 수학적으로는 최소]
+ def foo():
+     return 1
+
++def bar():
++    return 2
++
+ def baz():
+     return 3
+
+[또는 이렇게 — 편집 횟수는 같지만 읽기 나쁨]
+ def foo():
+     return 1
+
++    return 2
++
++def bar():
+ def baz():
+     return 3</code></pre>
+                    </div>
+                    <p>두 번째 형태가 나오는 이유는 <strong>빈 줄과 들여쓰기 패턴이 여러 위치에서 똑같이 매치</strong>되기 때문입니다. 알고리즘 입장에서는 둘 다 "추가 3줄"이라 우열이 없습니다.</p>
+                    <p class="key-point">이 문제를 해결하는 것이 <strong>들여쓰기 휴리스틱(<code>XDF_INDENT_HEURISTIC</code>)</strong>입니다. Git 2.14부터 <strong>기본 활성</strong>이며, 소스의 기본값이 <code>diff_indent_heuristic = 1</code>입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 들여쓰기 휴리스틱 &mdash; "읽기 좋음"을 점수화하다</h2>
+            <div class="conversation">
+                <div class="q">들여쓰기 휴리스틱은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>같은 편집 횟수를 갖는 <strong>여러 후보 경계</strong> 중에서 "가장 읽기 좋은" 것을 고릅니다. 그리고 "읽기 좋음"을 <strong>정량적 점수</strong>로 정의합니다.</p>
+                    <p>Git 소스의 <code>struct split_measurement</code>가 측정하는 항목을 그대로 보면 이렇습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">xdiff/xdiffi.c &mdash; 분할 지점의 측정 항목</div>
+                        <pre><code>struct split_measurement {
+        /* 이 분할이 파일 끝(빈 줄 제외)에 있는가? */
+        int end_of_file;
+
+        /* 분할 <strong>직후</strong> 줄의 들여쓰기 깊이 (없으면 -1) */
+        int indent;
+
+        /* 분할 <strong>위쪽</strong>으로 연속된 빈 줄 수 */
+        int pre_blank;
+
+        /* 분할 위쪽의 가장 가까운 비어 있지 않은 줄의 들여쓰기 */
+        int pre_indent;
+
+        /* 분할 직후 줄 <strong>다음</strong>으로 연속된 빈 줄 수 */
+        int post_blank;
+
+        /* 그 아래 가장 가까운 비어 있지 않은 줄의 들여쓰기 */
+        int post_indent;
+};
+
+struct split_score {
+        /* 이 분할의 실효 들여쓰기 (작을수록 선호) */
+        int effective_indent;
+        ...
+};</code></pre>
+                    </div>
+                    <p class="highlight">규칙을 사람 말로 옮기면 이렇습니다. <strong>"빈 줄 바로 뒤에서 끊어라. 들여쓰기가 얕은 곳에서 끊어라. 블록의 시작에서 끊어라."</strong> 이는 프로그래머가 코드를 시각적으로 덩어리 짓는 방식과 일치합니다.</p>
+                    <p>소스 주석이 <code>score_split</code>의 결과가 int에 들어가도록 보장한다는 언급까지 하는 것을 보면, 여러 항목에 가중치를 매겨 합산하는 방식임을 알 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 휴리스틱 켜고 끄기 비교</div>
+                        <pre><code>$ git diff --no-indent-heuristic HEAD~1
+$ git diff --indent-heuristic HEAD~1        # 기본값
+
+# 전역 설정
+$ git config --global diff.indentHeuristic false    # 끄고 싶다면
+
+# 실제로 차이가 나는지 확인하는 가장 빠른 방법:
+# 함수를 하나 추가한 커밋에서 두 옵션으로 diff를 떠 비교</code></pre>
+                    </div>
+                    <p class="key-point">이 휴리스틱은 <strong>diff의 "정확성"을 바꾸지 않습니다.</strong> 결과를 적용하면 동일한 파일이 나옵니다. 바뀌는 것은 <strong>어느 경계를 택하느냐</strong>뿐이며, 순수하게 사람의 가독성을 위한 장치입니다.</p>
+                </div>
+
+                <div class="q">patience와 histogram은 뭐가 다른가요?</div>
+                <div class="a">
+                    <p>Myers와 <strong>접근 방식 자체가 다릅니다.</strong> "최소 편집"을 목표로 하지 않고, <strong>"신뢰할 만한 기준점(anchor)"을 먼저 찾습니다.</strong></p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>알고리즘</th><th>핵심 아이디어</th><th>강점</th><th>약점</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>myers</strong> (기본)</td>
+                                <td>편집 횟수 D 최소화. O(ND) 분할 정복</td>
+                                <td>빠르고 범용적</td>
+                                <td>반복 패턴에서 경계가 흩어짐</td>
+                            </tr>
+                            <tr>
+                                <td><strong>minimal</strong></td>
+                                <td>Myers + 최적성 포기 금지</td>
+                                <td>정말 최소인 diff</td>
+                                <td>느릴 수 있음</td>
+                            </tr>
+                            <tr>
+                                <td><strong>patience</strong></td>
+                                <td><strong>양쪽에 정확히 한 번씩만 등장하는 줄</strong>을 기준점으로 삼고, 그 사이를 재귀</td>
+                                <td>함수 이동·대규모 재배치에서 의미 있는 결과</td>
+                                <td>유일한 줄이 없으면 이점 없음</td>
+                            </tr>
+                            <tr>
+                                <td><strong>histogram</strong></td>
+                                <td>patience 개선판. 줄 등장 빈도 히스토그램을 만들어 <strong>가장 드물게 나오는 줄</strong>을 기준점으로</td>
+                                <td>patience의 품질 + 더 빠름</td>
+                                <td>Myers보다는 느릴 수 있음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">xdiff/xdiff.h &mdash; 알고리즘 플래그</div>
+                        <pre><code>#define XDF_NEED_MINIMAL          (1 &lt;&lt; 0)
+#define XDF_PATIENCE_DIFF         (1 &lt;&lt; 14)
+#define XDF_HISTOGRAM_DIFF        (1 &lt;&lt; 15)
+#define XDF_DIFF_ALGORITHM_MASK   (XDF_PATIENCE_DIFF | XDF_HISTOGRAM_DIFF | XDF_NEED_MINIMAL)
+#define XDF_INDENT_HEURISTIC      (1 &lt;&lt; 23)</code></pre>
+                    </div>
+                    <p>구현은 각각 <code>xdiff/xpatience.c</code>, <code>xdiff/xhistogram.c</code>에 있습니다.</p>
+                    <p class="highlight"><strong>patience의 이름은 카드 게임 "페이션스(솔리테어)"</strong>에서 왔습니다. 유일한 줄들을 순서대로 늘어놓고 <strong>최장 증가 부분 수열</strong>을 찾는 과정이 그 게임의 "patience sorting"과 같기 때문입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 알고리즘 선택</div>
+                        <pre><code># 일회성
+$ git diff --histogram HEAD~1
+$ git diff --patience HEAD~1
+
+# 전역 설정 (많은 팀이 histogram을 선호)
+$ git config --global diff.algorithm histogram
+
+# 머지에도 적용 (충돌 감소 효과)
+$ git config --global merge.conflictStyle zdiff3
+
+# 파일 종류별로 다르게 (gitattributes)
+$ cat .gitattributes
+*.py  diff=python
+*.cs  diff=csharp
+# → 함수 헤더 인식이 개선되어 @@ 줄에 함수명이 표시됨</code></pre>
+                    </div>
+                    <p class="key-point">실무 권장: <strong><code>diff.algorithm = histogram</code>을 켜 두십시오.</strong> 리팩터링이 잦은 코드베이스에서 diff 품질이 눈에 띄게 좋아지고, <strong>머지 충돌도 줄어듭니다</strong>(머지가 같은 diff 엔진을 쓰기 때문입니다).</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 실전 &mdash; diff를 다루는 기술</h2>
+            <div class="conversation">
+                <div class="q">공백/포맷 변경이 diff를 뒤덮을 때는요?</div>
+                <div class="a">
+                    <p>Git이 여러 층위의 무시 옵션을 제공합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>옵션</th><th>무시하는 것</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>-w</code> / <code>--ignore-all-space</code></td><td>모든 공백 차이</td></tr>
+                            <tr><td><code>-b</code> / <code>--ignore-space-change</code></td><td>공백의 <strong>개수</strong> 변화만 (있음/없음은 구분)</td></tr>
+                            <tr><td><code>--ignore-space-at-eol</code></td><td>줄 끝 공백</td></tr>
+                            <tr><td><code>--ignore-blank-lines</code></td><td>빈 줄만 추가/삭제된 hunk</td></tr>
+                            <tr><td><code>--ignore-cr-at-eol</code></td><td>CRLF/LF 차이</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 대규모 포맷 변경 커밋 다루기</div>
+                        <pre><code># 포매터를 돌린 커밋에서 "진짜 로직 변경"만 보기
+$ git show -w --ignore-blank-lines HEAD
+
+# blame에서 포맷 커밋 건너뛰기 (매우 유용)
+$ echo "a1b2c3d4e5f6..." &gt;&gt; .git-blame-ignore-revs   # 포매팅 커밋 OID
+$ git config blame.ignoreRevsFile .git-blame-ignore-revs
+$ git blame src/main.c        # 이제 포맷 커밋이 건너뛰어짐
+# GitHub도 이 파일을 인식한다
+
+# 단어 단위 diff — 긴 문장의 한 단어만 바뀐 경우
+$ git diff --word-diff=color HEAD~1
+$ git diff --word-diff-regex='[A-Za-z_]+|[^[:space:]]' HEAD~1</code></pre>
+                    </div>
+                    <p class="warning"><code>-w</code>는 <strong>보기에만</strong> 적용됩니다. <code>git apply</code>나 머지에서는 공백이 그대로 의미를 갖습니다. "diff에는 안 보였는데 충돌이 났다"는 상황의 원인이 여기 있습니다.</p>
+                </div>
+
+                <div class="q">diff 성능이 문제가 되는 경우는 없나요?</div>
+                <div class="a">
+                    <p>있습니다. 세 가지 상황이 대표적입니다.</p>
+                    <p><strong>1) 거대 파일.</strong> 수십만 줄짜리 생성 코드나 데이터 파일은 O(ND)가 커집니다. <code>.gitattributes</code>에서 <code>-diff</code>로 <strong>바이너리 취급</strong>하게 만들면 diff를 아예 건너뜁니다.</p>
+                    <p><strong>2) <code>git log -p</code> 전체 순회.</strong> 커밋마다 diff를 계산하므로 히스토리가 길면 오래 걸립니다. <code>--stat</code>이나 <code>--name-only</code>로 충분하다면 그쪽이 훨씬 쌉니다.</p>
+                    <p><strong>3) rename 감지.</strong> 파일이 많이 바뀐 커밋에서 rename 후보 비교가 O(추가&times;삭제)가 됩니다(17편).</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; diff 비용 줄이기</div>
+                        <pre><code># .gitattributes로 특정 파일을 diff 대상에서 제외
+$ cat .gitattributes
+*.min.js       -diff
+*.pb.go        -diff linguist-generated=true
+package-lock.json  -diff
+Assets/**/*.meta   -diff
+
+# 계산량이 적은 출력 형식 쓰기
+$ git log --stat --oneline           # diff 본문 없이 통계만
+$ git log --name-status --oneline    # 파일명과 상태만 (A/M/D/R)
+
+# 진단
+$ GIT_TRACE2_PERF=1 git log -p -100 2&gt;&amp;1 | grep -i xdiff</code></pre>
+                    </div>
+                    <p class="key-point">면접 포인트: <strong>"Git의 diff는 저장된 데이터가 아니라 조회 시점의 계산 결과"</strong>라는 사실이 여러 동작을 설명합니다. 같은 커밋이 옵션에 따라 다르게 보이는 이유, rename이 "감지"되는 이유(17편), 머지가 diff 알고리즘 선택에 영향받는 이유(18편)가 전부 여기서 나옵니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>diff는 저장되지 않고 조회할 때마다 계산된다.</strong> 덕분에 <code>-w</code>, <code>-M</code>, <code>--word-diff</code>처럼 목적에 맞춰 표현을 바꿀 수 있지만, 계산 비용이 <code>log -p</code>·<code>blame</code>·머지 속도를 좌우한다.</li>
+                <li><strong>기본은 Myers의 O(ND) 알고리즘이다.</strong> 파일 길이가 아니라 <strong>편집 횟수 D</strong>에 비례하며, Git은 여기에 양방향 탐색 + 분할 정복을 더해 선형 공간으로 구현했다.</li>
+                <li><strong>최소 편집이 곧 읽기 좋은 diff는 아니다.</strong> 들여쓰기 휴리스틱(기본 활성)이 같은 편집 횟수의 후보들 중 "빈 줄 뒤, 얕은 들여쓰기, 블록 시작"을 점수화해 경계를 고른다. 정확성은 바뀌지 않는다.</li>
+                <li><strong>patience는 양쪽에 한 번씩만 나오는 줄을, histogram은 가장 드문 줄을 기준점으로 삼는다.</strong> 리팩터링·코드 이동이 잦다면 <code>diff.algorithm = histogram</code>이 품질과 속도 면에서 좋은 기본값이다.</li>
+                <li><strong>공백 무시 옵션은 "보기"에만 적용된다.</strong> apply와 머지에서는 공백이 그대로 의미를 가지므로, 포매팅 커밋은 <code>.git-blame-ignore-revs</code>로 blame에서 걸러내는 편이 실용적이다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

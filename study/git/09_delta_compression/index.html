@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git은 diff를 저장하지 않는다더니 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>Git은 diff를 저장하지 않는다더니?</h1>
+            <p class="subtitle">델타 압축 해부 &mdash; copy/insert 명령 인코딩 · 델타 윈도우 · 체인 깊이 50의 트레이드오프</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: "스냅샷인데 델타"라는 모순</h2>
+            <div class="conversation">
+                <div class="q">커밋은 스냅샷이라고 배웠는데, 팩 파일에서는 델타를 쓴다니 모순 아닌가요?</div>
+                <div class="a">
+                    <p>모순이 아니라 <strong>계층 분리</strong>입니다. Git은 두 관심사를 의도적으로 떼어 놓았습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>계층</th><th>모델</th><th>이유</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>데이터 모델</strong> (객체 DB)</td>
+                                <td>순수 스냅샷. 커밋 &rarr; 트리 &rarr; 블롭</td>
+                                <td>어느 버전이든 즉시 꺼낼 수 있고, 머지·브랜치 논리가 단순해짐</td>
+                            </tr>
+                            <tr>
+                                <td><strong>저장 계층</strong> (팩 파일)</td>
+                                <td>객체 간 델타 압축</td>
+                                <td>유사한 객체끼리 묶어 디스크·네트워크 비용을 줄임</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">결정적인 차이가 하나 더 있습니다. SVN 같은 델타 기반 VCS는 <strong>"파일 하나의 시간순 변경 체인"</strong>을 저장합니다. Git의 델타는 <strong>시간순도, 같은 경로도 아닙니다.</strong> 완전히 다른 파일끼리 델타를 맺을 수도 있고, 심지어 <strong>새 버전을 base로 삼고 옛 버전을 델타로 만드는</strong> 경우가 흔합니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>도서관에 같은 책의 판본 50개가 있습니다.</p>
+                        <p>SVN식은 <strong>"초판 전체 + 2판 정오표 + 3판 정오표 ..."</strong>로 보관합니다. 50판을 보려면 정오표 49장을 순서대로 적용해야 합니다.</p>
+                        <p>Git식은 <strong>"가장 최근 판을 온전히 보관하고, 나머지는 그것과의 차이만 적어 둡니다."</strong> 사람들이 가장 자주 찾는 최신판이 압축 해제 없이 바로 나오고, 옛 판본만 약간의 복원 비용을 냅니다.</p>
+                    </div>
+                    <p class="key-point">"최신 것을 base로 삼는다"는 발상이 실용적 핵심입니다. Git 소스의 <code>type_size_sort()</code>가 델타 후보를 정렬할 때 <strong>같은 타입·같은 경로 해시 안에서 크기가 큰 것을 앞에</strong> 두고, 마지막 비교에서 <strong>"newest first"</strong>를 택합니다. 결과적으로 최근 객체가 base가 되기 쉽습니다.</p>
+                </div>
+
+                <div class="q">델타는 diff와 같은 건가요?</div>
+                <div class="a">
+                    <p>다릅니다. 이름은 비슷하지만 목적과 단위가 전혀 다릅니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th><code>git diff</code>의 diff</th><th>팩의 델타</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>단위</td><td><strong>줄(line)</strong></td><td><strong>바이트 범위</strong></td></tr>
+                            <tr><td>대상</td><td>텍스트 파일</td><td>임의의 바이너리 포함 모든 객체</td></tr>
+                            <tr><td>목적</td><td>사람이 읽기 위해</td><td>기계가 공간을 아끼기 위해</td></tr>
+                            <tr><td>알고리즘</td><td>Myers / histogram (16편)</td><td>롤링 해시 기반 블록 매칭 (<code>diff-delta.c</code>)</td></tr>
+                            <tr><td>저장 여부</td><td>저장 안 함. 매번 계산</td><td>팩 안에 실제로 저장됨</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">이 구분을 놓치면 "Git이 diff를 저장한다"는 잘못된 모델을 갖게 됩니다. <strong>팩의 델타는 줄 개념을 전혀 모릅니다.</strong> PNG 이미지 두 장 사이에도 델타를 만들 수 있고, 실제로 그렇게 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 델타 명령 &mdash; copy와 insert 두 개뿐</h2>
+            <div class="conversation">
+                <div class="q">델타 데이터는 어떻게 생겼나요?</div>
+                <div class="a">
+                    <p>구조가 대단히 단순합니다. <strong>헤더 두 개 + 명령 나열</strong>이 전부입니다.</p>
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">헤더</div>
+                            <div class="pipeline-bar pb-gbuffer">
+                                <span>base 크기 (VLQ)</span><span>결과 크기 (VLQ)</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">명령 나열</div>
+                            <div class="pipeline-bar pb-light">
+                                <span>copy</span><span>insert</span><span>copy</span><span>copy</span><span>insert</span><span>...</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p>각 명령은 결과 버퍼 뒤에 데이터를 <strong>덧붙이기만</strong> 합니다. 명령을 순서대로 실행하면 결과가 완성되고, 그때 크기가 헤더의 "결과 크기"와 정확히 일치해야 합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">명령 구분 &mdash; 첫 바이트의 최상위 비트</div>
+                        <pre><code>첫 바이트의 비트 7 (0x80):
+  1 → COPY   : base의 [offset, offset+size) 구간을 그대로 복사
+  0 → INSERT : 이어지는 바이트들을 그대로 삽입 (하위 7비트가 길이)
+  0x00       → 예약. 만나면 오류 (데이터 손상 가능성)</code></pre>
+                    </div>
+                    <p class="key-point"><strong>COPY 명령의 인코딩이 이 포맷의 백미</strong>입니다. offset 4바이트 + size 3바이트를 모두 쓰면 8바이트인데, 실제로는 <strong>필요한 바이트만 선택적으로 보냅니다.</strong> 어떤 바이트를 보냈는지는 첫 바이트의 하위 7비트가 알려 줍니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">COPY 명령 비트 맵</div>
+                        <pre><code>  +----------+---------+---------+---------+---------+-------+-------+-------+
+  | 1xxxxxxx | offset1 | offset2 | offset3 | offset4 | size1 | size2 | size3 |
+  +----------+---------+---------+---------+---------+-------+-------+-------+
+
+첫 바이트의 각 비트 = "그 자리 바이트가 존재하는가"
+  비트 0 (0x01) → offset의 0~7비트
+  비트 1 (0x02) → offset의 8~15비트
+  비트 2 (0x04) → offset의 16~23비트
+  비트 3 (0x08) → offset의 24~31비트
+  비트 4 (0x10) → size의 0~7비트
+  비트 5 (0x20) → size의 8~15비트
+  비트 6 (0x40) → size의 16~23비트
+
+생략된 바이트의 값은 0. 오프셋/크기는 리틀엔디언.</code></pre>
+                    </div>
+                    <p class="warning">함정이 하나 있습니다. Git 문서가 명시적으로 경고하는 부분입니다. <strong>바이트를 생략해도 남은 바이트의 자리값은 바뀌지 않습니다.</strong> <code>10000101</code>처럼 offset2를 건너뛰고 offset3만 보냈다면, offset3은 여전히 <strong>16~23비트 자리</strong>이지 8~15비트로 당겨지지 않습니다.</p>
+                    <p>또 하나. <strong>size가 0이면 자동으로 0x10000(65536)으로 해석됩니다.</strong> 크기 0짜리 복사는 무의미하므로, 그 인코딩을 "가장 흔한 큰 값"에 재활용한 것입니다.</p>
+                </div>
+
+                <div class="q">실제 Git 소스는 이걸 어떻게 처리하나요?</div>
+                <div class="a">
+                    <p><code>patch-delta.c</code>의 <code>patch_delta()</code>가 델타 적용 전부를 담당합니다. 100줄이 채 안 되는 함수입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">patch-delta.c &mdash; 핵심 루프</div>
+                        <pre><code>/* 헤더: base 크기를 읽어 실제 base와 일치하는지 검증 */
+size = get_delta_hdr_size(&amp;data, top);
+if (size != src_size)
+        return NULL;                      /* base가 틀리면 즉시 실패 */
+
+/* 헤더: 결과 크기를 읽어 버퍼를 한 번에 할당 */
+size = get_delta_hdr_size(&amp;data, top);
+dst_buf = xmallocz(size);
+
+out = dst_buf;
+while (data &lt; top) {
+        cmd = *data++;
+        if (cmd &amp; 0x80) {                 /* ---- COPY ---- */
+                unsigned long cp_off = 0, cp_size = 0;
+                PARSE_CP_PARAM(0x01, cp_off,  0);
+                PARSE_CP_PARAM(0x02, cp_off,  8);
+                PARSE_CP_PARAM(0x04, cp_off, 16);
+                PARSE_CP_PARAM(0x08, cp_off, 24);
+                PARSE_CP_PARAM(0x10, cp_size, 0);
+                PARSE_CP_PARAM(0x20, cp_size, 8);
+                PARSE_CP_PARAM(0x40, cp_size, 16);
+                if (cp_size == 0) cp_size = 0x10000;   /* 0은 65536 */
+
+                /* 범위 검사 — 손상된 델타가 버퍼를 넘지 못하게 */
+                if (cp_off + cp_size &gt; src_size || cp_size &gt; size)
+                        goto bad_length;
+
+                memcpy(out, (char *) src_buf + cp_off, cp_size);
+                out += cp_size;  size -= cp_size;
+        } else if (cmd) {                 /* ---- INSERT ---- */
+                memcpy(out, data, cmd);   /* cmd 자체가 길이 (1~127) */
+                out += cmd;  data += cmd;  size -= cmd;
+        } else {                          /* ---- 0x00: 예약 ---- */
+                error("unexpected delta opcode 0");
+                goto bad;
+        }
+}</code></pre>
+                    </div>
+                    <p class="highlight">주목할 점은 <strong>범위 검사가 촘촘하다</strong>는 것입니다. 델타는 신뢰할 수 없는 원격에서 오는 데이터이므로, <code>cp_off + cp_size &gt; src_size</code> 같은 검사가 없으면 <strong>원격이 임의 메모리를 읽게 만드는 취약점</strong>이 됩니다. 실제로 Git의 델타 파서에서 과거에 CVE가 나온 적이 있습니다.</p>
+                </div>
+
+                <div class="q">구체적인 예로 따라가 볼 수 있을까요?</div>
+                <div class="a">
+                    <p>base가 <code>"Hello, world!"</code>(13바이트)이고 결과가 <code>"Hello, Git!"</code>(11바이트)인 경우를 만들어 보겠습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">델타 바이트 조립</div>
+                        <pre><code>base   : H e l l o ,   w o r l d !      (13바이트, 오프셋 0..12)
+결과   : H e l l o ,   G i t !         (11바이트)
+
+공통 접두사: "Hello, "  (오프셋 0, 길이 7)
+새 내용    : "Git!"     (4바이트)
+
+델타 바이트열:
+  0D          base 크기 13 (VLQ 1바이트)
+  0B          결과 크기 11 (VLQ 1바이트)
+  90 07       COPY: 0x90 = 1001 0000
+              비트7=1 → COPY
+              비트4(0x10)=1 → size1 존재  → size = 0x07 = 7
+              offset 비트 전부 0 → offset = 0
+              ⇒ base[0..7)을 복사 → "Hello, "
+  04 47 69 74 21   INSERT: 0x04 = 0000 0100 (비트7=0, 길이 4)
+              이어지는 4바이트 "G","i","t","!" 삽입
+
+총 9바이트로 11바이트 결과를 표현.</code></pre>
+                    </div>
+                    <p>여기서 왜 델타가 작은 객체에 손해인지 드러납니다. <strong>헤더 2바이트 + 명령 오버헤드</strong>가 고정 비용이라, 원본이 수십 바이트면 이득이 없습니다. 08편의 <code>verify-pack</code> 출력에서 "9바이트 객체가 팩에서 20바이트"였던 것이 이 때문입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: base를 고르는 법 &mdash; 윈도우와 휴리스틱</h2>
+            <div class="conversation">
+                <div class="q">객체 30만 개 중에서 어떤 둘을 짝지을지 어떻게 정하나요? 전부 비교하면 O(N&sup2;)일 텐데요.</div>
+                <div class="a">
+                    <p>정확히 그 문제 때문에 Git은 <strong>정렬 + 슬라이딩 윈도우</strong>라는 근사 해법을 씁니다. 최적해를 포기하는 대신 선형에 가까운 시간을 얻습니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">1. 정렬</div>
+                                <div class="flow-box__items">타입 &rarr; 경로 해시 &rarr; 크기(큰 것 먼저) &rarr; 최신 순으로 전체 객체를 줄 세운다</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">2. 윈도우 슬라이딩</div>
+                                <div class="flow-box__items">앞에서부터 훑으며 <strong>최근 10개</strong>(<code>window=10</code>)만 후보로 유지</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">3. 시도</div>
+                                <div class="flow-box__items">윈도우의 각 후보를 base로 델타를 만들어 보고 <strong>가장 작은 것</strong>을 채택</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">4. 깊이 제한</div>
+                                <div class="flow-box__items">체인이 <strong>50단계</strong>(<code>depth=50</code>)를 넘지 않게 제한</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">builtin/pack-objects.c &mdash; 기본값</div>
+                        <pre><code>static int window = 10;    /* 델타 후보 윈도우 크기 */
+static int depth = 50;     /* 델타 체인 최대 깊이 */</code></pre>
+                    </div>
+                    <p class="key-point">정렬 기준이 곧 <strong>"비슷할 것 같은 객체를 가까이 두는 휴리스틱"</strong>입니다. 정렬 함수 <code>type_size_sort()</code>의 우선순위는 이렇습니다.</p>
+                    <ol>
+                        <li><strong>타입</strong> 내림차순 &mdash; blob끼리, tree끼리 묶는다</li>
+                        <li><strong>경로 해시</strong> 내림차순 &mdash; <em>같은 파일명/확장자</em>를 가진 것끼리 모은다 (핵심!)</li>
+                        <li>preferred_base 여부</li>
+                        <li><strong>크기</strong> 내림차순 &mdash; 큰 것이 base가 되게</li>
+                        <li>동률이면 <strong>최신 것 먼저</strong></li>
+                    </ol>
+                    <p class="highlight">2번이 가장 영리한 부분입니다. 경로 해시는 <strong>파일명의 끝부분에 가중치를 둔 해시</strong>라서, <code>src/a/Foo.cs</code>와 <code>src/b/Foo.cs</code>처럼 <strong>디렉토리가 달라도 이름이 같은 파일들이 인접</strong>하게 됩니다. 그리고 4번 덕분에 "큰 최신 버전이 base, 작은 옛 버전이 델타"가 되어 최신 조회가 빨라집니다.</p>
+                </div>
+
+                <div class="q">window와 depth를 키우면 더 작아지나요?</div>
+                <div class="a">
+                    <p>작아집니다. 하지만 대가가 명확합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>설정</th><th>키우면</th><th>줄이면</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>pack.window</code> (기본 10)</td>
+                                <td>더 좋은 base를 찾아 팩이 작아짐. <strong>패킹 시간과 메모리가 선형 이상으로 증가</strong></td>
+                                <td>패킹이 빠름. 팩이 커짐</td>
+                            </tr>
+                            <tr>
+                                <td><code>pack.depth</code> (기본 50)</td>
+                                <td>팩이 작아짐. <strong>객체 하나 읽는 데 최대 50번 델타 적용</strong> &rarr; 조회 느려짐</td>
+                                <td>조회가 빠름. 팩이 커짐</td>
+                            </tr>
+                            <tr>
+                                <td><code>pack.windowMemory</code></td>
+                                <td>&mdash;</td>
+                                <td>윈도우가 쓰는 메모리 상한. 거대 파일이 많으면 OOM 방지에 필수</td>
+                            </tr>
+                            <tr>
+                                <td><code>core.bigFileThreshold</code> (기본 512MB)</td>
+                                <td>&mdash;</td>
+                                <td>이보다 큰 파일은 <strong>델타 압축을 시도하지 않고</strong> deflate만 해서 팩에 넣음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 공격적 재패킹 (시간을 들여 최대한 압축)</div>
+                        <pre><code># 아카이브 목적: 시간이 오래 걸려도 최대한 작게
+$ git repack -a -d -f --window=250 --depth=250
+#   -a : 모든 객체를 하나의 팩으로
+#   -d : 기존 팩 삭제
+#   -f : 기존 델타를 버리고 처음부터 다시 계산 (필수!)
+
+$ git count-objects -vH
+size-pack: 84.21 MiB          # 기본 설정 132MB → 84MB
+
+# 대신 조회가 느려진다. 체인 길이 분포를 확인하자
+$ git verify-pack -v .git/objects/pack/*.idx | grep 'chain length' | tail -3
+chain length = 248: 12 objects
+chain length = 249: 4 objects
+chain length = 250: 1 objects</code></pre>
+                    </div>
+                    <p class="warning"><code>-f</code>를 빼면 기존 델타를 그대로 재사용하므로 <code>--window</code>를 키운 효과가 거의 없습니다. "옵션을 줬는데 크기가 그대로"라는 흔한 착오의 원인입니다.</p>
+                    <p class="key-point">서버(GitHub 등)는 정반대 전략을 씁니다. <strong>조회 지연이 곧 사용자 경험</strong>이므로 depth를 과하게 키우지 않고, 대신 <strong>비트맵 인덱스</strong>와 <strong>MIDX</strong>로 탐색 비용을 줄입니다(10편). 압축률과 지연 사이의 선택은 "이 저장소를 누가 어떻게 읽는가"에 달려 있습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 실무 &mdash; 왜 내 저장소는 델타가 안 먹히는가</h2>
+            <div class="conversation">
+                <div class="q">바이너리 에셋이 많은 게임 저장소가 유독 큽니다. 왜 그런가요?</div>
+                <div class="a">
+                    <p>세 가지 이유가 겹칩니다.</p>
+                    <p><strong>1) 이미 압축된 포맷은 델타가 안 먹힙니다.</strong> PNG, JPG, MP3, ZIP, FBX(압축형)는 내부적으로 엔트로피 압축이 되어 있어, 원본이 조금만 달라도 <strong>바이트열 전체가 뒤바뀝니다.</strong> 롤링 해시로 공통 블록을 찾을 수 없습니다.</p>
+                    <p><strong>2) 텍스처 한 장을 100번 수정하면 blob 100개가 남습니다.</strong> 각각 5MB면 500MB이고, 델타가 안 먹히므로 그대로 500MB입니다.</p>
+                    <p><strong>3) <code>core.bigFileThreshold</code>(기본 512 MiB)를 넘으면 델타를 시도조차 하지 않습니다.</strong> 그 이상 파일은 deflate만 해서 팩에 넣고, <code>diff</code>/<code>log</code>에서도 바이너리로 취급되며, 메모리 폭증을 막기 위해 스트리밍으로 처리됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 델타가 안 먹히는 객체 찾기</div>
+                        <pre><code># "압축 후 크기 ≈ 원본 크기"이고 델타 체인이 없는 큰 blob = 압축 불가 에셋
+$ git verify-pack -v .git/objects/pack/*.idx \
+  | awk '$2=="blob" &amp;&amp; NF==5 &amp;&amp; $3&gt;1000000 {printf "%-42s raw=%9d packed=%9d ratio=%.2f\n", $1,$3,$4,$4/$3}' \
+  | sort -k4 -r | head
+3f4a5b6c...  raw=  5242880 packed=  5240112 ratio=1.00   # ← 전혀 안 줄음
+7d8e9f0a...  raw=  2097152 packed=  2095033 ratio=1.00
+
+# 그 객체의 경로 역추적
+$ git rev-list --objects --all | grep 3f4a5b6c
+3f4a5b6c... Assets/Textures/Character_Diffuse.png</code></pre>
+                    </div>
+                    <p class="key-point">해법은 Git 안에서 찾지 말아야 합니다. <strong>Git LFS</strong>로 큰 바이너리를 외부 스토리지에 두고 포인터 파일만 커밋하거나, 에셋을 <strong>Perforce/아트 파이프라인</strong>으로 분리하는 것이 게임 프로젝트의 정석입니다. 이미 커밋된 것을 걷어내려면 <code>git filter-repo</code> + 강제 push + 원격 GC가 필요합니다.</p>
+                </div>
+
+                <div class="q">반대로 델타가 아주 잘 먹히는 경우는요?</div>
+                <div class="a">
+                    <p>소스 코드, 특히 <strong>같은 파일의 여러 버전</strong>입니다. 함수 하나를 고친 커밋에서 파일 전체 3,000줄 중 5줄만 달라지면, 델타는 "앞의 1,200바이트 복사 &rarr; 새 80바이트 삽입 &rarr; 뒤의 40,000바이트 복사"로 끝납니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 델타 효과 측정</div>
+                        <pre><code># 전부 느슨한 객체일 때 vs 팩일 때
+$ git count-objects -vH
+count: 0
+size: 0 bytes
+in-pack: 368164
+size-pack: 132.48 MiB
+
+# 같은 객체를 느슨하게 펼치면? (실험용 - 디스크 주의)
+$ git unpack-objects &lt; .git/objects/pack/pack-xxx.pack   # 팩 → 느슨
+$ git count-objects -vH
+count: 368164
+size: 1.42 GiB          # ← 약 11배. 델타 + 블록 낭비의 합작
+
+# Git 저장소 자체로 측정하면 보통 8~15배 차이가 난다</code></pre>
+                    </div>
+                    <p class="highlight">Linux 커널 저장소는 커밋 120만 개, 객체 1,000만 개가 넘지만 클론 크기는 약 5GB입니다. 스냅샷 모델대로 모든 버전의 모든 파일을 온전히 저장했다면 <strong>수백 TB</strong>가 필요했을 것입니다. 델타 압축 없이는 Git의 스냅샷 모델이 성립할 수 없습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>델타 압축은 <strong>"이사 갈 때 짐을 다시 싸는 것"</strong>에 비유할 수 있습니다.</p>
+                        <p>평소(느슨한 객체)에는 물건을 하나씩 아무 상자에나 넣습니다. 빠르지만 공간이 낭비됩니다. 이사(gc)할 때는 시간을 들여 비슷한 물건끼리 모으고, 겹치는 것은 "이건 저 상자 것과 같음"이라고 적어 부피를 줄입니다.</p>
+                        <p>그런데 이미 진공 포장된 물건(PNG, ZIP)은 아무리 다시 싸도 부피가 줄지 않습니다. 그런 것은 아예 별도 창고(LFS)로 보내는 게 맞습니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>스냅샷과 델타는 계층이 다르다.</strong> 데이터 모델(객체 DB)은 스냅샷, 저장 계층(팩 파일)만 델타다. 팩의 델타는 시간순도 같은 경로도 아니며, 흔히 <strong>최신 버전이 base</strong>가 된다.</li>
+                <li><strong>델타 명령은 COPY와 INSERT 둘뿐이다.</strong> 첫 바이트 MSB가 1이면 COPY(하위 7비트가 "어떤 offset/size 바이트를 보냈는가"의 비트맵), 0이면 INSERT(하위 7비트가 길이). <code>size=0</code>은 65536을 뜻한다.</li>
+                <li><strong>base 선택은 정렬 + 윈도우 10 + 깊이 50의 근사 해법이다.</strong> 타입 &rarr; 경로 해시 &rarr; 크기(큰 것 먼저) &rarr; 최신 순 정렬이 "비슷한 객체를 인접시키는" 휴리스틱 역할을 한다.</li>
+                <li><strong>window/depth를 키우면 팩은 작아지고 조회는 느려진다.</strong> <code>repack -f</code> 없이는 기존 델타를 재사용하므로 옵션 효과가 나타나지 않는다.</li>
+                <li><strong>이미 압축된 바이너리(PNG·ZIP·MP3)는 델타가 전혀 먹히지 않는다.</strong> 게임 에셋 저장소가 비대해지는 근본 원인이며, 해법은 Git 튜닝이 아니라 LFS나 별도 에셋 파이프라인이다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

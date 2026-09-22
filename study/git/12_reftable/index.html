@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>레퍼런스 86만 개를 어떻게 감당할까 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>레퍼런스 86만 개를 어떻게 감당할까?</h1>
+            <p class="subtitle">reftable 백엔드 &mdash; 블록 구조 · 접두사 압축 · LSM 스택 · 툼스톤과 컴팩션</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: files 백엔드가 무너지는 지점</h2>
+            <div class="conversation">
+                <div class="q">11편에서 본 loose ref + packed-refs로 충분하지 않나요?</div>
+                <div class="a">
+                    <p>보통 규모에서는 충분합니다. 하지만 ref가 수십만 개가 되는 순간 세 가지가 한꺼번에 무너집니다. Git 문서 <code>reftable.adoc</code>이 제시하는 실측이 명확합니다.</p>
+                    <p class="warning">안드로이드 저장소는 ref가 <strong>86만 6천 개</strong>입니다. <code>packed-refs</code> 파일 하나가 <strong>62MB</strong>이고, <strong>단일 ref를 찾으려면 파일 전체를 선형 스캔</strong>해야 합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>문제</th><th>내용</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>조회가 선형</strong></td>
+                                <td>packed-refs는 텍스트이므로 줄 길이가 가변. 이진 탐색을 하려면 줄 경계를 찾아 되감아야 하고, 실질적으로 전체 스캔에 가깝다</td>
+                            </tr>
+                            <tr>
+                                <td><strong>쓰기 증폭</strong></td>
+                                <td>ref <strong>2개</strong>를 바꾸는 atomic push가 62MB를 읽고 62MB를 쓴다. 트랜잭션 크기와 무관하게 비용이 파일 크기에 비례</td>
+                            </tr>
+                            <tr>
+                                <td><strong>inode 고갈</strong></td>
+                                <td>loose ref는 41바이트인데 파일 하나 = 디스크 블록 하나. 저장소 수천 개를 한 파일 시스템에 올린 호스팅 서버에서 inode가 먼저 바닥난다</td>
+                            </tr>
+                            <tr>
+                                <td><strong>reflog 비대</strong></td>
+                                <td>ref 43,061개의 로그 항목 149,932건이 <code>$GIT_DIR/logs</code>에서 <strong>173MB</strong>(항목당 1,209바이트!). 대부분이 경로 문자열 중복</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>packed-refs는 <strong>거대한 전화번호부를 통째로 한 장의 두루마리에 적어 놓은 것</strong>입니다.</p>
+                        <p>번호 하나를 찾으려면 두루마리를 펼쳐 훑어야 하고, 번호 두 개를 고치려면 <strong>두루마리 전체를 새로 베껴 써야</strong> 합니다. 86만 명이 적힌 두루마리에서요.</p>
+                        <p>reftable은 이를 <strong>색인 탭이 달린 바인더</strong>로 바꿉니다. 페이지(블록) 단위로 나뉘어 있어 원하는 페이지로 바로 넘어갈 수 있고, 수정은 <strong>새 페이지를 뒤에 끼워 넣는 것</strong>으로 끝납니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">reftable이 실제로 얼마나 나아지나요?</div>
+                <div class="a">
+                    <p>Git 문서가 제시하는 측정값입니다. 숫자가 설계를 대변합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>저장소</th><th>packed-refs</th><th>reftable</th><th>비율</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>android (86.6만 ref)</td><td>62.2 MB</td><td>36.1 MB</td><td>58.0%</td></tr>
+                            <tr><td>rails (3.1만 ref)</td><td>1.8 MB</td><td>1.1 MB</td><td>57.7%</td></tr>
+                            <tr><td>git</td><td>78.7 KB</td><td>48.1 KB</td><td>61.0%</td></tr>
+                        </tbody>
+                    </table>
+                    <p>하지만 <strong>진짜 차이는 크기가 아니라 조회 속도</strong>입니다. ref 86만 개에서 이름으로 하나를 찾는 시간입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>포맷</th><th>캐시</th><th>전체 스캔</th><th>이름으로 1건</th><th>SHA-1로 1건</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>packed-refs</td><td>cold</td><td>402 ms</td><td><strong>409,660 &micro;s</strong></td><td>412,536 &micro;s</td></tr>
+                            <tr><td>packed-refs</td><td>hot</td><td>&mdash;</td><td>6,845 &micro;s</td><td>20,110 &micro;s</td></tr>
+                            <tr><td>reftable</td><td>cold</td><td>112 ms</td><td><strong>33.9 &micro;s</strong></td><td>323 &micro;s</td></tr>
+                            <tr><td>reftable</td><td>hot</td><td>&mdash;</td><td>20.2 &micro;s</td><td>321 &micro;s</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">cold 상태에서 <strong>409,660&micro;s &rarr; 33.9&micro;s, 약 12,000배</strong>입니다. reflog도 극적입니다. 173MB(항목당 1,209바이트) &rarr; <strong>5MB(항목당 37바이트)</strong>로 줄어듭니다. 경로 문자열을 접두사 압축으로 제거한 효과입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 블록 구조와 접두사 압축</h2>
+            <div class="conversation">
+                <div class="q">reftable 파일은 어떤 구조인가요?</div>
+                <div class="a">
+                    <p><strong>블록의 나열 + 각 종류별 색인</strong>입니다. 데이터베이스의 SSTable(정렬된 문자열 테이블)과 사실상 같은 설계입니다.</p>
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">첫 블록</div>
+                            <div class="pipeline-bar pb-gbuffer">
+                                <span>header</span><span>첫 ref_block</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">ref 영역</div>
+                            <div class="pipeline-bar pb-light">
+                                <span>ref_block*</span><span>ref_index*</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">obj 영역</div>
+                            <div class="pipeline-bar pb-post">
+                                <span>obj_block*</span><span>obj_index*</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">log 영역</div>
+                            <div class="pipeline-bar pb-shadow">
+                                <span>log_block*</span><span>log_index*</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">꼬리</div>
+                            <div class="pipeline-bar pb-gbuffer">
+                                <span>footer</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p>핵심 규칙 몇 가지가 조회 성능을 만듭니다.</p>
+                    <ul>
+                        <li><strong>블록은 첫 ref 이름 기준으로 사전순 정렬</strong>됩니다 &rarr; 색인에서 이진 탐색이 가능합니다.</li>
+                        <li><strong>ref는 블록을 가로지를 수 없습니다.</strong> 그래서 블록 크기는 가장 긴 ref 이름보다 커야 합니다. 권장 크기는 4KB/8KB(VM·파일 시스템 친화적), 최대 16,777,215바이트(약 16MB)입니다.</li>
+                        <li><strong>블록 내부에서 접두사 압축</strong>을 씁니다 &mdash; <code>refs/heads/main</code> 다음에 <code>refs/heads/master</code>가 오면 공통 접두사 <code>refs/heads/ma</code>를 반복하지 않습니다.</li>
+                        <li><strong>obj_block</strong>은 "이 OID를 가리키는 ref들"의 역방향 색인입니다. <code>allow-tip-sha1-in-want</code> 같은 기능에서 "이 객체가 어떤 ref에 걸려 있나"를 상수 시간에 답하기 위한 장치입니다.</li>
+                    </ul>
+                    <p class="highlight">ref 하나당 평균 크기를 보면 압축 효과가 드러납니다. 안드로이드 기준 <strong>ref 하나 33바이트, 객체 색인 항목 5바이트</strong>입니다. ref 이름이 보통 30~60바이트인데 33바이트에 담긴다는 것은, <strong>이름 대부분이 접두사 압축으로 사라졌다</strong>는 뜻입니다.</p>
+                </div>
+
+                <div class="q">reftable이 쓰는 varint는 팩 파일 것과 같나요?</div>
+                <div class="a">
+                    <p>Git 문서가 <strong>"varint 인코딩은 팩 파일의 ofs-delta 인코딩과 동일하다"</strong>고 명시합니다. 08편에서 본 그 인코딩입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">reftable.adoc &mdash; varint 디코더</div>
+                        <pre><code>val = buf[ptr] &amp; 0x7f
+while (buf[ptr] &amp; 0x80) {
+  ptr++
+  val = ((val + 1) &lt;&lt; 7) | (buf[ptr] &amp; 0x7f)
+}</code></pre>
+                    </div>
+                    <p><code>(val + 1)</code>의 <code>+1</code>이 바로 08편에서 본 "2^7 + 2^14 + ... 를 더하는" 규칙의 루프 형태 표현입니다. <strong>같은 값을 두 가지 길이로 표현할 수 없게 해 정규형을 보장</strong>합니다.</p>
+                    <p class="key-point">Git 포맷 설계의 일관성이 여기서도 드러납니다. 팩 오프셋, 인덱스 v4 경로 길이, reftable 필드 &mdash; <strong>같은 varint를 재사용</strong>해 구현과 검증 부담을 줄입니다.</p>
+                </div>
+
+                <div class="q">files 백엔드와 다른 의미론적 차이도 있나요?</div>
+                <div class="a">
+                    <p>있습니다. 눈여겨볼 두 가지입니다.</p>
+                    <p><strong>1) 디렉토리/파일 충돌이 허용됩니다.</strong> reftable은 <code>refs/heads/foo</code>와 <code>refs/heads/foo/bar</code>를 <strong>서로 다른 별개의 ref로 저장할 수 있습니다.</strong> files 백엔드에서는 <code>foo</code>가 파일이면 <code>foo/</code> 디렉토리를 만들 수 없으므로 불가능했습니다.</p>
+                    <p class="warning">다만 문서는 <strong>"동료(peer)에게 문제를 일으킬 수 있으니 이런 충돌을 계속 거부하는 편이 낫다"</strong>고 권고합니다. 실제로 Git은 호환성을 위해 여전히 거부합니다. 포맷의 능력과 정책적 제약이 분리된 사례입니다.</p>
+                    <p><strong>2) 모든 태그가 peel된 상태로 저장됩니다.</strong> 주석 태그는 "태그 객체 OID"와 "최종적으로 가리키는 커밋 OID"를 함께 기록합니다. packed-refs의 <code>fully-peeled</code>와 같은 개념이지만, 옵션이 아니라 <strong>포맷의 기본</strong>입니다.</p>
+                    <p><strong>3) reflog가 ref와 같은 파일에 들어갑니다.</strong> files 백엔드는 <code>refs/heads/main</code>과 <code>logs/refs/heads/main</code>이 별개 파일이라, ref를 갱신하면 <strong>두 파일을 각각</strong> 건드려야 했습니다. reftable은 하나의 트랜잭션이 하나의 파일에 ref와 log를 함께 씁니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 스택 &mdash; 불변 파일에 쓰기를 구현하는 법</h2>
+            <div class="conversation">
+                <div class="q">reftable 파일이 불변이라면 ref를 어떻게 갱신하나요?</div>
+                <div class="a">
+                    <p><strong>새 파일을 만들어 스택 맨 뒤에 붙입니다.</strong> LSM 트리(Log-Structured Merge tree)와 같은 발상입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">.git/reftable/ 디렉토리</div>
+                        <pre><code>$ ls .git/reftable/
+0x000000000001-0x000000000001-a1b2c3d4.ref
+0x000000000002-0x000000000005-e5f6a7b8.ref
+0x000000000006-0x000000000006-c9d0e1f2.ref
+tables.list
+
+$ cat .git/reftable/tables.list
+0x000000000001-0x000000000001-a1b2c3d4.ref     ← 가장 오래됨 (base)
+0x000000000002-0x000000000005-e5f6a7b8.ref
+0x000000000006-0x000000000006-c9d0e1f2.ref     ← 가장 최신</code></pre>
+                    </div>
+                    <p>파일 이름은 <code>${min_update_index}-${max_update_index}-${random}.ref</code> 규약입니다. <strong>random 부분이 있는 이유</strong>가 실용적입니다 &mdash; Windows에서는 열려 있는 파일을 덮어쓰거나 지울 수 없으므로, 이름이 절대 겹치지 않아야 합니다.</p>
+                    <p class="key-point"><strong>읽기는 최신 파일부터 역순으로 탐색</strong>합니다. 원하는 ref를 최신 파일에서 찾으면 거기서 멈춥니다. 최근에 바뀐 ref일수록 빨리 찾아집니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">읽기 절차 (reftable.adoc)</div>
+                        <pre><code>1. tables.list를 열어 읽는다
+2. 거기 적힌 각 reftable 파일을 연다
+3. 파일 중 하나라도 없으면 → 1번으로 되돌아간다 (재시도)
+4. 열어 둔 파일들에서 필요한 만큼 읽는다
+
+3번이 핵심: 그 사이 컴팩션이 파일을 지웠다는 뜻이므로
+목록을 다시 읽어 일관된 스냅샷을 다시 잡는다.</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">쓰기 트랜잭션은 어떻게 원자적이 되나요?</div>
+                <div class="a">
+                    <p><strong>단 하나의 락(<code>tables.list.lock</code>)과 단 한 번의 rename</strong>으로 끝납니다. files 백엔드가 ref마다 락을 잡던 것과 대조적입니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">1~2. 락 + 현황 파악</div>
+                                <div class="flow-box__items"><code>tables.list.lock</code> 획득 &rarr; 현재 스택 읽기</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">3~4. 새 테이블 작성</div>
+                                <div class="flow-box__items"><code>update_index</code> = 최신의 max+1. 임시 파일에 <strong>ref와 log를 함께</strong> 기록</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">5~6. 이름 확정</div>
+                                <div class="flow-box__items">임시 &rarr; 정식 이름으로 rename. <code>tables.list</code> 사본에 한 줄 추가</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">7. 커밋</div>
+                                <div class="flow-box__items"><code>tables.list.lock</code> &rarr; <code>tables.list</code> rename. <strong>이 한 번의 rename이 트랜잭션 커밋</strong></div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="highlight">ref를 100개 바꾸든 2개 바꾸든 <strong>비용이 변경량에만 비례</strong>합니다. 문서가 설계 목표로 명시한 <strong>"atomic push를 O(size_of_update)로 지원"</strong>이 바로 이것입니다. packed-refs의 O(전체 크기)와 근본적으로 다릅니다.</p>
+                    <p class="warning">대가도 명확합니다. <strong>락이 하나뿐이므로 저장소는 쓰기에 대해 단일 스레드</strong>입니다. 문서는 쓰는 쪽이 백오프를 두고 바쁜 대기를 하다가, 너무 붐비면 포기하라고 권합니다. Gerrit 같은 애플리케이션 서버는 그 위에 자체 대기 큐를 얹어 공정성을 확보합니다.</p>
+                </div>
+
+                <div class="q">삭제는 어떻게 표현하나요? 불변 파일에서 지울 수가 없을 텐데요.</div>
+                <div class="a">
+                    <p><strong>툼스톤(tombstone)</strong>입니다. 삭제를 "삭제되었다는 기록"으로 표현합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">툼스톤 레코드</div>
+                        <pre><code>ref_record의 type을 0x0으로 두고 value 필드를 생략한다.
+→ "이 ref는 존재하지 않는다"는 단언이 되어,
+   스택의 <strong>더 오래된 파일</strong>에 있는 같은 이름의 레코드를 덮어쓴다.</code></pre>
+                    </div>
+                    <p>최신 파일부터 역순으로 읽으므로, 툼스톤을 먼저 만나면 "없음"으로 확정하고 더 내려가지 않습니다. 11편에서 본 <strong>"loose ref를 지웠더니 packed-refs의 옛 값이 되살아나는"</strong> 문제가 구조적으로 발생하지 않습니다.</p>
+                    <p class="key-point">툼스톤은 분산 시스템과 LSM 기반 DB(Cassandra, RocksDB, LevelDB)에서 표준적으로 쓰이는 기법입니다. <strong>"삭제도 하나의 쓰기"</strong>로 환원하면 추가 쓰기만으로 모든 변경을 표현할 수 있습니다.</p>
+                </div>
+
+                <div class="q">스택이 무한정 길어지지 않나요?</div>
+                <div class="a">
+                    <p><strong>컴팩션(compaction)</strong>이 정리합니다. 인접한 테이블 몇 개를 골라 하나로 병합합니다.</p>
+                    <p>병합은 <strong>merge join</strong>입니다. 각 테이블이 이미 이름순 정렬이므로, 나란히 걸으며 같은 키는 <strong>최신 값</strong>을 택하고, <strong>더 아래 테이블에 나타나지 않는 툼스톤은 아예 버립니다</strong>(지울 대상이 이미 없으므로).</p>
+                    <div class="code-block">
+                        <div class="code-header">컴팩션 절차 &mdash; 스택 A,B,C,D 중 B와 C를 병합</div>
+                        <pre><code>1. tables.list.lock 획득 + tables.list 읽기
+2. B.lock, C.lock 획득       ← 다른 프로세스가 같은 것을 컴팩션하지 못하게
+3. <strong>tables.list.lock 해제</strong>  ← 여기가 핵심!
+4. B와 C를 임시 파일로 병합  (시간이 오래 걸리는 작업)
+5. tables.list.lock 재획득
+6. B와 C가 여전히 그 순서로 스택에 있는지 검증
+7~9. 새 파일로 교체하고 tables.list를 원자적으로 갱신
+10. B, C 삭제 (읽는 쪽이 되감지 않도록 잠시 기다린 뒤)</code></pre>
+                    </div>
+                    <p class="highlight">3번에서 <strong>전역 락을 일찍 놓는 것</strong>이 설계의 핵심입니다. 오래 걸리는 병합 작업 동안 락을 쥐고 있으면 그 시간 내내 push가 전부 막힙니다. 개별 테이블 락(B.lock, C.lock)만 유지한 채 병합하므로, 문서의 표현대로 <strong>"컴팩션이 갱신과 독립적으로 진행"</strong>됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 실전 &mdash; 언제 쓰고 어떻게 옮기는가</h2>
+            <div class="conversation">
+                <div class="q">지금 내 저장소에서 써 볼 수 있나요?</div>
+                <div class="a">
+                    <p>Git 2.45부터 실험적으로, 2.48 이후로는 안정화되어 사용 가능합니다. 저장소 단위로 켭니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; reftable 사용</div>
+                        <pre><code># 새 저장소를 reftable로 만들기
+$ git init --ref-format=reftable myrepo
+$ git clone --ref-format=reftable https://... myrepo
+
+# 현재 저장소의 포맷 확인
+$ git rev-parse --show-ref-format
+files
+
+# 기존 저장소를 변환 (양방향 가능)
+$ git refs migrate --ref-format=reftable
+$ git rev-parse --show-ref-format
+reftable
+
+# 되돌리기
+$ git refs migrate --ref-format=files</code></pre>
+                    </div>
+                    <p>변환 후 디렉토리가 어떻게 바뀌는지 보면 설계가 한눈에 들어옵니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 변환 전후 비교</div>
+                        <pre><code># 변환 전 (files)
+.git/HEAD                    ← "ref: refs/heads/main"
+.git/refs/heads/main
+.git/refs/tags/v1.0
+.git/packed-refs
+.git/logs/HEAD
+.git/logs/refs/heads/main
+
+# 변환 후 (reftable)
+.git/HEAD                    ← "ref: refs/heads/.invalid"  (더미!)
+.git/refs/heads              ← 디렉토리가 아니라 <strong>일반 파일</strong> (더미)
+.git/reftable/tables.list
+.git/reftable/0x...-0x...-xxxxxxxx.ref</code></pre>
+                    </div>
+                    <p class="key-point">더미 파일들이 흥미롭습니다. 문서는 <strong>"구버전 클라이언트가 이 디렉토리를 git 저장소로는 인식해서, 상위 디렉토리로 올라가 다른 저장소를 찾지 않도록"</strong> 이들을 두라고 명시합니다. <code>HEAD</code>의 내용이 <code>refs/heads/.invalid</code>인 것은 <strong>절대 유효할 수 없는 ref 이름</strong>이라 구버전이 조용히 잘못 동작하는 대신 명확히 실패하게 만듭니다.</p>
+                    <p class="warning">주의할 점: reftable 저장소는 <strong>구버전 Git으로 열 수 없습니다.</strong> 팀이 공유하는 저장소나 CI 러너의 Git 버전이 제각각이라면 신중해야 합니다. 서버 측은 호스팅 서비스가 지원해야 하고, 클라이언트 측은 로컬 선택이므로 개인 저장소부터 시험하는 것이 안전합니다.</p>
+                </div>
+
+                <div class="q">어떤 상황에서 실제 이득이 있나요?</div>
+                <div class="a">
+                    <p>ref 수가 임계를 넘는 환경들입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>상황</th><th>왜 ref가 많아지나</th><th>reftable의 이득</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Gerrit / 코드 리뷰 서버</td>
+                                <td>패치셋마다 <code>refs/changes/NN/NNNN/N</code> 생성</td>
+                                <td>설계의 원래 동기. 수십만 ref에서 조회 12,000배</td>
+                            </tr>
+                            <tr>
+                                <td>대형 모노레포 호스팅</td>
+                                <td>PR ref, 태그, 릴리스 브랜치 누적</td>
+                                <td>inode 고갈 해소, atomic push가 O(변경량)</td>
+                            </tr>
+                            <tr>
+                                <td>CI가 ref를 남기는 파이프라인</td>
+                                <td>빌드마다 <code>refs/builds/*</code> 생성</td>
+                                <td>packed-refs 재작성 비용 제거</td>
+                            </tr>
+                            <tr>
+                                <td>Windows 개발 환경</td>
+                                <td>&mdash;</td>
+                                <td>파일 생성/삭제가 느린 OS에서 파일 수 자체가 급감</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">반대로 <strong>ref가 수백 개 수준인 평범한 저장소에서는 체감 차이가 거의 없습니다.</strong> packed-refs 조회가 이미 수 ms 안에 끝나기 때문입니다. "새 기술이니 무조건 전환"할 이유는 없고, <strong>ref 수가 만 단위를 넘거나 push 지연이 관측될 때</strong> 검토하는 것이 합리적입니다.</p>
+                    <p class="key-point">설계 관점에서 배울 점이 더 큽니다. reftable은 <strong>"불변 파일 + 스택 + 툼스톤 + 컴팩션"</strong>이라는 LSM 패턴을 Git의 ref 저장소에 그대로 적용한 사례입니다. 같은 패턴이 RocksDB, Cassandra, Lucene 세그먼트, 그리고 <strong>Git 자신의 loose object / pack file 관계</strong>에도 나타납니다. 읽기 최적화와 쓰기 최적화가 충돌할 때 나오는 보편적인 해법입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>files 백엔드는 ref 수십만 개에서 무너진다.</strong> 안드로이드 기준 packed-refs 62MB를 선형 스캔해야 하고, ref 2개를 바꾸는 push가 62MB를 읽고 쓴다. reflog는 항목당 1,209바이트로 173MB에 달한다.</li>
+                <li><strong>reftable은 정렬된 블록 + 접두사 압축 + 색인 구조(SSTable)다.</strong> 조회가 cold 기준 409,660&micro;s &rarr; 33.9&micro;s로 약 12,000배 빨라지고, reflog는 항목당 37바이트로 줄어든다.</li>
+                <li><strong>파일은 불변이고, 갱신은 새 파일을 스택(<code>tables.list</code>)에 덧붙이는 것이다.</strong> 트랜잭션 커밋은 <code>tables.list.lock &rarr; tables.list</code> rename 단 한 번이라 비용이 O(변경량)이다.</li>
+                <li><strong>삭제는 툼스톤(type=0x0)으로 표현하고, 컴팩션이 merge join으로 스택을 정리한다.</strong> 컴팩션은 병합 중 전역 락을 놓아 갱신과 독립적으로 진행된다.</li>
+                <li><strong>대가는 "쓰기에 대해 단일 스레드"라는 점이다.</strong> 또한 구버전 Git과 호환되지 않으므로, ref가 만 단위를 넘거나 push 지연이 관측되는 환경에서 선택적으로 도입한다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

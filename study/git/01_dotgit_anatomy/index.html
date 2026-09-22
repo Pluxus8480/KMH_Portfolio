@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>.git 디렉토리 해부 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>폴더 하나를 지우면 왜 역사가 통째로 사라질까?</h1>
+            <p class="subtitle">.git 디렉토리 해부 &mdash; 저장소는 파일 시스템 위에 얹힌 작은 데이터베이스다</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: git init이 실제로 하는 일</h2>
+            <div class="conversation">
+                <div class="q"><code>git init</code>을 치면 "Initialized empty Git repository"라는 한 줄만 나옵니다. 내부에서는 뭘 하는 건가요?</div>
+                <div class="a">
+                    <p>거창한 일은 일어나지 않습니다. <strong>디렉토리 몇 개와 파일 세 개를 만드는 것</strong>이 전부입니다. Git 소스에서 이 작업은 <code>setup.c</code>의 <code>init_db()</code> 함수가 담당하며, 하는 일을 요약하면 다음과 같습니다.</p>
+                    <ol>
+                        <li><code>.git/objects</code>, <code>.git/refs/heads</code>, <code>.git/refs/tags</code> 디렉토리 생성</li>
+                        <li>템플릿 디렉토리(<code>/usr/share/git-core/templates</code>)의 내용 복사 &mdash; 여기서 <code>hooks/</code> 샘플들이 따라옵니다</li>
+                        <li><code>.git/config</code>에 저장소 설정(<code>core.repositoryformatversion</code>, <code>core.bare</code> 등) 기록</li>
+                        <li><code>.git/HEAD</code>에 <code>ref: refs/heads/main</code> 한 줄 기록</li>
+                    </ol>
+                    <p class="highlight">중요한 사실: <strong>이 시점에는 객체가 단 하나도 없습니다.</strong> <code>.git/objects</code>는 텅 빈 디렉토리이고, <code>refs/heads/main</code>이라는 파일조차 존재하지 않습니다. HEAD는 <em>아직 존재하지 않는 파일</em>을 가리키고 있으며, 이 상태를 Git은 "unborn branch"라고 부릅니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p><code>git init</code>은 도서관 건물을 짓는 것이 아니라, <strong>빈 책장과 대출 카드 서랍, 그리고 "현재 보고 있는 책" 메모지 한 장을 준비하는 것</strong>에 가깝습니다.</p>
+                        <p>책(객체)은 아직 한 권도 없습니다. 메모지(HEAD)에는 "나는 'main'이라는 이름표가 붙은 선반을 보고 있다"고 적혀 있지만, 정작 그 선반은 첫 책이 들어오는 순간에야 만들어집니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">그래서 <code>.git</code> 안에는 정확히 무엇이 들어 있나요?</div>
+                <div class="a">
+                    <p>실제 저장소의 <code>.git</code> 디렉토리를 펼쳐 보면 이런 구조입니다. 각 항목이 무슨 역할인지가 곧 Git 전체의 설계도입니다.</p>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">.git/</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">HEAD &mdash; 지금 어디에 서 있는가 (symref 또는 raw OID)</div>
+                            <div class="hierarchy-item">config &mdash; 이 저장소만의 설정 (remote, branch, core.*)</div>
+                            <div class="hierarchy-item">index &mdash; 스테이징 영역 (바이너리, DIRC)</div>
+                            <div class="hierarchy-item">objects/ &mdash; 모든 내용물이 저장되는 객체 DB</div>
+                            <div class="hierarchy-item">refs/ &mdash; 브랜치·태그 이름 &rarr; OID 매핑</div>
+                            <div class="hierarchy-item">packed-refs &mdash; refs/를 한 파일로 압축한 것</div>
+                            <div class="hierarchy-item">logs/ &mdash; reflog (ref가 움직인 이력)</div>
+                            <div class="hierarchy-item">hooks/ &mdash; 이벤트 훅 스크립트</div>
+                            <div class="hierarchy-item">info/exclude &mdash; 커밋되지 않는 개인용 .gitignore</div>
+                            <div class="hierarchy-item">COMMIT_EDITMSG, MERGE_HEAD, ORIG_HEAD &mdash; 진행 중 상태 파일</div>
+                        </div>
+                    </div>
+                    <p class="key-point">이 구조를 한 문장으로 요약하면 이렇습니다. <strong>objects/는 "무엇이 있는가", refs/는 "무엇이 중요한가", index는 "다음에 무엇을 저장할 것인가", HEAD는 "나는 지금 어디인가"</strong>입니다. 나머지는 전부 부가 기능이거나 캐시입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 네 개의 축 &mdash; objects, refs, index, HEAD</h2>
+            <div class="conversation">
+                <div class="q">이 네 가지가 서로 어떻게 맞물려 돌아가나요?</div>
+                <div class="a">
+                    <p>Git의 모든 명령은 결국 이 네 축 사이를 오가는 일입니다. <code>git add</code>는 워킹 트리 &rarr; objects + index, <code>git commit</code>은 index &rarr; objects + refs, <code>git checkout</code>은 objects &rarr; index + 워킹 트리로 데이터를 옮깁니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">워킹 트리</div>
+                                <div class="flow-box__items">평범한 파일들. Git이 관리하지 않는 보통의 디스크 내용</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">index (.git/index)</div>
+                                <div class="flow-box__items"><code>git add</code>: 내용은 blob으로 objects에 쓰고, 경로 + OID + stat 정보를 index에 기록</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">objects + refs</div>
+                                <div class="flow-box__items"><code>git commit</code>: index를 tree로 굳히고, commit 객체를 만들고, HEAD가 가리키는 ref를 새 OID로 갱신</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>반대로 <code>git checkout &lt;branch&gt;</code>는 이 흐름을 거꾸로 탑니다. ref &rarr; commit &rarr; tree를 읽어 index를 통째로 갈아끼우고, index에 맞춰 워킹 트리 파일을 쓰고, 마지막으로 HEAD의 symref 대상을 바꿉니다.</p>
+                    <p class="warning">주의: 흔한 오해와 달리 <strong><code>git add</code> 시점에 이미 객체가 저장됩니다.</strong> 커밋 전이라도 blob은 <code>.git/objects</code>에 존재합니다. 그래서 <code>git add</code> 후 파일을 지워도 <code>git cat-file -p &lt;oid&gt;</code>로 내용을 되살릴 수 있습니다.</p>
+                </div>
+
+                <div class="q">HEAD 파일은 정확히 어떻게 생겼나요?</div>
+                <div class="a">
+                    <p>두 가지 형태밖에 없습니다. 브랜치 위에 있으면 <strong>symbolic ref</strong>, detached 상태면 <strong>원시 OID</strong>입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">.git/HEAD &mdash; 두 가지 상태</div>
+                        <pre><code># 1) 브랜치에 붙어 있을 때 (symref)
+$ cat .git/HEAD
+ref: refs/heads/main
+
+# 2) detached HEAD (git checkout &lt;커밋해시&gt; 이후)
+$ cat .git/HEAD
+a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0</code></pre>
+                    </div>
+                    <p>이 한 줄의 차이가 <code>git commit</code>의 결과를 완전히 바꿉니다. symref 상태에서 커밋하면 Git은 <code>refs/heads/main</code> 파일을 새 커밋 OID로 덮어씁니다. detached 상태에서 커밋하면 <strong>갱신할 ref가 없으므로 HEAD 자체에 새 OID를 직접 씁니다.</strong> 그래서 다른 브랜치로 이동하는 순간 그 커밋을 가리키는 이름이 아무것도 남지 않고, 나중에 GC 대상이 됩니다.</p>
+                    <p class="key-point">"detached HEAD에서 작업하면 잃어버린다"는 경고의 정체가 바로 이것입니다. 커밋 객체는 멀쩡히 존재하지만 <strong>도달 가능한 이름이 없어서</strong> 사라질 운명이 됩니다. reflog가 유일한 생명줄입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 삭제하면 왜 모든 게 사라지는가</h2>
+            <div class="conversation">
+                <div class="q">워킹 트리에 소스 코드가 멀쩡히 있는데, <code>.git</code>만 지우면 왜 히스토리가 통째로 날아가나요?</div>
+                <div class="a">
+                    <p>Git은 <strong>중앙 서버가 아니라 로컬 디렉토리에 완전한 데이터베이스를 가지고 있는</strong> 분산 VCS이기 때문입니다. SVN처럼 서버가 원본을 들고 있고 로컬은 체크아웃 사본인 구조가 아닙니다.</p>
+                    <p><code>.git</code> 디렉토리는 다음을 <em>전부</em> 담고 있는 유일한 사본입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>워킹 트리</th>
+                                <th>.git 디렉토리</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>담고 있는 것</td>
+                                <td>현재 커밋(또는 수정 중인) 시점의 파일 <strong>한 벌</strong></td>
+                                <td>역사상 존재한 <strong>모든 버전</strong>의 파일 내용, 커밋 그래프, 브랜치, 태그, 원격 설정</td>
+                            </tr>
+                            <tr>
+                                <td>복구 가능성</td>
+                                <td><code>.git</code>이 있으면 <code>git checkout .</code>으로 언제든 재생성</td>
+                                <td>사라지면 로컬에서는 <strong>복구 불가</strong> (원격 clone만이 유일한 백업)</td>
+                            </tr>
+                            <tr>
+                                <td>크기 특성</td>
+                                <td>파일 크기 합</td>
+                                <td>델타 압축 덕에 종종 워킹 트리보다 작음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">반대로 말하면 <strong><code>.git</code> 디렉토리만 통째로 복사하면 저장소 전체가 복제됩니다.</strong> <code>git clone</code>이 하는 일도 본질적으로는 "원격의 객체 DB와 refs를 내 <code>.git</code>으로 옮겨 오고, 마지막에 워킹 트리를 펼치는 것"입니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>워킹 트리는 <strong>책상 위에 펼쳐 놓은 원고 한 장</strong>이고, <code>.git</code>은 <strong>지금까지 쓴 모든 초고가 들어 있는 캐비닛</strong>입니다.</p>
+                        <p>책상 위 원고를 잃어버리면 캐비닛에서 다시 꺼내면 됩니다. 하지만 캐비닛을 통째로 버리면, 책상 위의 마지막 한 장 말고는 아무것도 남지 않습니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">bare 저장소(<code>--bare</code>)는 뭐가 다른가요?</div>
+                <div class="a">
+                    <p>bare 저장소는 <strong>워킹 트리 없이 <code>.git</code>의 내용물만 최상위에 펼쳐 놓은 것</strong>입니다. <code>myrepo.git/</code> 안에 곧바로 <code>objects/</code>, <code>refs/</code>, <code>HEAD</code>가 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">config 차이</div>
+                        <pre><code># 일반 저장소 .git/config
+[core]
+	repositoryformatversion = 0
+	filemode = false
+	bare = false
+	logallrefupdates = true
+
+# bare 저장소 config
+[core]
+	repositoryformatversion = 0
+	bare = true            # &larr; 이 한 줄이 핵심</code></pre>
+                    </div>
+                    <p>서버(GitHub, GitLab, 사내 Gitea)가 bare를 쓰는 이유는 명확합니다. 서버에는 체크아웃된 파일이 필요 없고, 오히려 워킹 트리가 있으면 push가 워킹 트리와 불일치를 일으키기 때문입니다. 그래서 일반 저장소의 체크아웃된 브랜치로 push하면 Git이 거부합니다(<code>receive.denyCurrentBranch</code>).</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 실전 &mdash; .git을 직접 들여다보기</h2>
+            <div class="conversation">
+                <div class="q">실제로 명령어를 쳐 가면서 확인하려면 어떤 순서가 좋을까요?</div>
+                <div class="a">
+                    <p>빈 디렉토리에서 시작해 파일 하나를 커밋하며 <code>.git</code>이 어떻게 변하는지 관찰하는 것이 가장 빠릅니다. 아래 순서를 그대로 따라 하면 이 시리즈의 나머지 주제가 전부 눈에 보이기 시작합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; .git 관찰 실습</div>
+                        <pre><code># 1) 빈 저장소를 만들고 구조를 본다
+$ git init lab &amp;&amp; cd lab
+$ find .git -type f | sort | head
+.git/config
+.git/description
+.git/HEAD
+.git/hooks/applypatch-msg.sample
+...
+# objects/ 아래에는 파일이 하나도 없다. refs/heads도 비어 있다.
+
+# 2) 파일 하나를 add 한다 (아직 커밋 아님)
+$ echo "hello" &gt; a.txt &amp;&amp; git add a.txt
+$ find .git/objects -type f
+.git/objects/ce/013625030ba8dba906f756967f9e9ca394464a
+# &larr; 커밋도 안 했는데 blob이 벌써 생겼다!
+
+# 3) 그 객체가 뭔지 물어본다
+$ git cat-file -t ce013625030ba8dba906f756967f9e9ca394464a
+blob
+$ git cat-file -p ce013625030ba8dba906f756967f9e9ca394464a
+hello
+
+# 4) 커밋하면 tree와 commit 객체가 추가된다
+$ git commit -m "first"
+$ find .git/objects -type f | wc -l
+3                      # blob + tree + commit
+
+# 5) 이제 refs가 생겼다
+$ cat .git/refs/heads/main
+f7d3c0e...             # 커밋 OID 40자 + 개행 = 41바이트
+$ cat .git/HEAD
+ref: refs/heads/main</code></pre>
+                    </div>
+                    <p class="key-point">여기서 얻는 결론은 단순합니다. <strong>Git의 "마법"은 전부 파일 몇 개의 내용입니다.</strong> 브랜치는 41바이트짜리 텍스트 파일이고, 커밋은 zlib으로 압축된 텍스트 덩어리이며, 스테이징 영역은 바이너리 파일 하나입니다.</p>
+                </div>
+
+                <div class="q">내부를 뜯어볼 때 쓸 만한 저수준(plumbing) 명령에는 뭐가 있나요?</div>
+                <div class="a">
+                    <p>Git 명령은 사용자용 <strong>porcelain</strong>(<code>add</code>, <code>commit</code>, <code>log</code>)과 스크립트용 <strong>plumbing</strong>으로 나뉩니다. 내부 학습에는 plumbing이 필수입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>명령</th>
+                                <th>하는 일</th>
+                                <th>언제 쓰나</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>git cat-file -t / -s / -p &lt;oid&gt;</code></td>
+                                <td>객체의 타입 / 크기 / 내용 출력</td>
+                                <td>모든 객체 해부의 출발점</td>
+                            </tr>
+                            <tr>
+                                <td><code>git hash-object -w &lt;file&gt;</code></td>
+                                <td>파일을 blob으로 저장하고 OID 출력</td>
+                                <td>해시가 어떻게 계산되는지 검증</td>
+                            </tr>
+                            <tr>
+                                <td><code>git ls-files --stage</code></td>
+                                <td>index 내용을 사람이 읽게 출력</td>
+                                <td>스테이징 영역 관찰, 충돌 stage 확인</td>
+                            </tr>
+                            <tr>
+                                <td><code>git ls-tree &lt;tree-ish&gt;</code></td>
+                                <td>트리 객체의 엔트리 나열</td>
+                                <td>디렉토리 구조 표현 방식 확인</td>
+                            </tr>
+                            <tr>
+                                <td><code>git rev-parse &lt;rev&gt;</code></td>
+                                <td>모든 표기법을 OID로 해석</td>
+                                <td><code>HEAD~3^2</code> 같은 표현 검증</td>
+                            </tr>
+                            <tr>
+                                <td><code>git rev-list --objects --all</code></td>
+                                <td>도달 가능한 모든 객체 나열</td>
+                                <td>GC/용량 분석</td>
+                            </tr>
+                            <tr>
+                                <td><code>git fsck --lost-found</code></td>
+                                <td>무결성 검사 + 미아 객체 찾기</td>
+                                <td>사고 복구</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">이 시리즈의 나머지 22편은 위 명령이 보여 주는 결과물이 <strong>디스크에서 실제로 어떤 바이트열인지</strong>를 하나씩 따라가는 여정입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong><code>git init</code>은 디렉토리 몇 개와 파일 세 개(config, HEAD, description)를 만드는 것이 전부다.</strong> 이 시점에 객체도, <code>refs/heads/main</code> 파일도 존재하지 않는다.</li>
+                <li><strong>Git은 네 축으로 돌아간다.</strong> objects("무엇이 있는가"), refs("무엇이 중요한가"), index("다음에 무엇을 저장하나"), HEAD("나는 지금 어디인가").</li>
+                <li><strong><code>git add</code> 시점에 이미 blob이 디스크에 기록된다.</strong> 커밋은 index를 tree로 굳히고 commit 객체를 만들어 ref를 옮기는 작업일 뿐이다.</li>
+                <li><strong>HEAD는 symref(<code>ref: refs/heads/main</code>) 또는 원시 OID 두 형태뿐이다.</strong> detached HEAD가 위험한 이유는 커밋을 가리킬 이름이 남지 않기 때문이다.</li>
+                <li><strong><code>.git</code>은 로컬에 존재하는 완전한 데이터베이스이자 유일한 사본이다.</strong> 워킹 트리는 그중 한 시점을 펼쳐 놓은 사본에 불과하다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

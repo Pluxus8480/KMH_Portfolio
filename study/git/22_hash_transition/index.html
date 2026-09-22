@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHA-1은 깨졌는데 Git은 왜 안 무너졌을까 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>SHA-1은 깨졌는데 Git은 왜 안 무너졌을까?</h1>
+            <p class="subtitle">해시 함수 전환 &mdash; SHAttered · 충돌 탐지 SHA-1 · SHA-256 선택 · objectFormat 확장</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 2017년 2월, SHAttered</h2>
+            <div class="conversation">
+                <div class="q">SHA-1이 깨졌다는 게 정확히 무슨 뜻인가요?</div>
+                <div class="a">
+                    <p>Git 문서가 직접 기록합니다. <strong>"2017년 2월 23일 SHAttered 공격이 실용적인 SHA-1 해시 충돌을 시연했다"</strong>(https://shattered.io).</p>
+                    <p>"깨졌다"는 표현을 정확히 이해해야 합니다. 암호학 해시에는 여러 속성이 있고, SHAttered가 깬 것은 그중 <strong>하나</strong>입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>속성</th><th>의미</th><th>SHA-1의 상태</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>충돌 저항성</strong><br>(collision resistance)</td>
+                                <td>같은 해시를 갖는 <strong>서로 다른 두 입력</strong>을 만들기 어려움</td>
+                                <td><strong>깨짐.</strong> SHAttered가 실제 PDF 두 개를 제시</td>
+                            </tr>
+                            <tr>
+                                <td><strong>제2 역상 저항성</strong><br>(2nd preimage)</td>
+                                <td><em>주어진</em> 입력과 같은 해시를 갖는 <strong>다른</strong> 입력 찾기</td>
+                                <td>아직 실용적 공격 없음</td>
+                            </tr>
+                            <tr>
+                                <td><strong>역상 저항성</strong><br>(preimage)</td>
+                                <td>해시값만으로 원본 입력 복원</td>
+                                <td>아직 실용적 공격 없음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">Git에 중요한 차이가 여기 있습니다. <strong>충돌 공격은 "공격자가 <em>둘 다</em> 만들어야" 성립합니다.</strong> "이미 저장소에 있는 특정 커밋과 같은 해시를 갖는 악성 커밋을 만드는 것"은 제2 역상 공격이고, 이는 아직 불가능합니다.</p>
+                    <p>그래도 위험합니다. 공격자가 <strong>양성 파일과 악성 파일을 미리 짝지어 만들어 두고</strong>, 양성 쪽을 PR로 보내 머지시킨 뒤, 나중에 악성 쪽으로 바꿔치기하는 시나리오가 가능합니다. Git 문서도 <strong>"SHA-1은 여전히 약하다"</strong>고 못 박습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>인감도장의 위조와 같습니다.</p>
+                        <p><strong>충돌</strong>은 "내가 <em>두 장</em>의 계약서를 만드는데, 같은 인영이 찍히도록 <em>둘 다</em> 미리 설계하는 것"입니다. 무해해 보이는 쪽을 상대에게 도장 받고, 나중에 악성 쪽으로 바꿔치기합니다.</p>
+                        <p><strong>제2 역상</strong>은 "<em>이미 남이 도장 찍은</em> 계약서와 같은 인영이 나오는 다른 계약서를 만드는 것"입니다. 훨씬 어렵고, 아직 아무도 못 했습니다.</p>
+                        <p>SHAttered가 보여 준 것은 전자입니다. 그래도 "도장을 바꿔야 한다"는 결론은 같습니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">그런데 왜 Git 저장소들이 실제로 무너지지 않았나요?</div>
+                <div class="a">
+                    <p>Git이 <strong>선제적으로 방어를 넣었기 때문</strong>입니다. Git 문서가 명시합니다. <strong>"Git v2.13.0 이후로는 기본적으로 강화된(hardened) SHA-1 구현으로 옮겨 갔으며, 이는 SHAttered 공격에 취약하지 않다."</strong></p>
+                    <p>이 구현이 <strong>sha1collisiondetection</strong>(sha1dc)입니다. Marc Stevens(SHAttered 공동 저자)와 Dan Shumow가 만든 라이브러리로, Git 소스 트리에 <code>sha1dc/</code>로 포함되어 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">동작 원리</div>
+                        <pre><code>일반 SHA-1: 입력 → 해시값
+
+sha1dc:     입력 → 해시값
+                 + <strong>충돌 공격의 흔적을 탐지</strong>
+
+SHA-1 충돌 공격은 특정한 형태의 "차분 경로(disturbance vector)"를
+압축 함수 내부에 남긴다. sha1dc는 해시를 계산하면서
+그 패턴이 나타나는지 동시에 검사한다.
+
+탐지되면 → Git이 오류를 내고 작업을 거부한다.
+탐지되지 않으면 → 일반 SHA-1과 <strong>완전히 동일한 값</strong>을 반환한다.</code></pre>
+                    </div>
+                    <p class="highlight">이 설계의 핵심은 <strong>하위 호환성</strong>입니다. 기존 저장소의 모든 OID가 그대로 유효합니다. <strong>공격이 시도된 객체만 거부</strong>되고, 정상 객체는 아무 영향을 받지 않습니다. 저장소를 변환할 필요도, 다른 도구와 호환이 깨질 일도 없었습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 실제로 확인해 보기</div>
+                        <pre><code># SHAttered의 충돌 PDF 두 개를 받아 add 해 보면
+$ wget https://shattered.io/static/shattered-1.pdf
+$ wget https://shattered.io/static/shattered-2.pdf
+$ git add shattered-1.pdf
+fatal: SHA-1 collision attack detected: shattered-1.pdf
+# ↑ Git이 충돌 공격 시도를 탐지하고 거부한다
+
+# 빌드 설정 확인 (Makefile)
+$ grep -n "DC_SHA1" /path/to/git/Makefile | head -3
+# DC_SHA1_EXTERNAL / DC_SHA1_SUBMODULE 등으로 구현을 고를 수 있다</code></pre>
+                    </div>
+                    <p class="key-point">그럼에도 Git 문서의 결론은 <strong>"신중하게, SHA-1의 어떤 변형에서도 벗어나는 것이 옳다"</strong>입니다. 이유도 명확합니다 &mdash; <strong>"미래에 SHA-1에 대한 새로운 공격이 발표되지 않으리라는 보장이 없고, 그 공격에는 실행 가능한 완화책이 없을 수 있다."</strong> sha1dc는 <em>알려진</em> 공격 패턴을 탐지하는 것이지, 근본적인 해결이 아닙니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 왜 SHA-256인가</h2>
+            <div class="conversation">
+                <div class="q">후속 해시는 어떻게 골랐나요?</div>
+                <div class="a">
+                    <p>Git 문서가 네 가지 선정 기준을 명시합니다.</p>
+                    <ol>
+                        <li><strong>256비트 길이</strong> &mdash; 일반적인 보안 관행에 부합할 만큼 길되, 성능과 디스크 사용량을 해칠 만큼 과하지 않게</li>
+                        <li><strong>고품질 구현이 널리 존재</strong> &mdash; OpenSSL, Apple CommonCrypto 등</li>
+                        <li><strong>Git의 필요와 속성이 맞을 것</strong> &mdash; 충돌 저항성과 제2 역상 저항성은 필요하지만, <strong>길이 확장 공격 저항성은 필요 없음</strong></li>
+                        <li><strong>타이브레이커: 계산이 빠를 것</strong> &mdash; 다행히 후보 다수가 SHA-1보다 빠름</li>
+                    </ol>
+                    <p>후보는 <strong>SHA-256, SHA-512/256, SHA-256x16, K12, BLAKE2bp-256</strong>이었고, <strong>2018년 말 SHA-256으로 결정</strong>되었습니다.</p>
+                    <p class="highlight">3번이 흥미롭습니다. SHA-256은 <strong>길이 확장 공격에 취약</strong>한 Merkle&ndash;Damg&aring;rd 구조입니다. 보통은 단점으로 꼽히지만, Git은 <strong>비밀 키를 해시에 넣는 MAC 용도로 쓰지 않으므로</strong> 그 취약점이 무의미합니다. "우리 용도에 필요 없는 속성"을 과감히 요구 사항에서 제외한 실용적 판단입니다.</p>
+                    <p class="key-point">"더 좋은 해시"가 아니라 <strong>"우리 문제에 충분하면서 생태계 지원이 가장 넓은 해시"</strong>를 고른 것입니다. BLAKE2bp-256이 더 빠를 수 있지만, SHA-256은 <strong>거의 모든 플랫폼에 하드웨어 가속(Intel SHA extensions, ARMv8 crypto)이 있고</strong> 모든 암호 라이브러리에 들어 있습니다.</p>
+                </div>
+
+                <div class="q">SHA-256으로 바뀌면 무엇이 달라지나요?</div>
+                <div class="a">
+                    <p>OID가 <strong>20바이트/40자 &rarr; 32바이트/64자</strong>가 되고, 그 여파가 모든 포맷에 미칩니다. 지금까지 본 포맷들을 다시 훑어보면 전부 "해시 길이에 의존"하고 있었습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>포맷</th><th>SHA-1</th><th>SHA-256</th><th>편</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>트리 엔트리의 OID</td><td>20바이트 바이너리</td><td>32바이트 바이너리</td><td>04편</td></tr>
+                            <tr><td>커밋 헤더의 OID</td><td>40자 16진수</td><td>64자 16진수</td><td>05편</td></tr>
+                            <tr><td>인덱스 엔트리</td><td>62바이트 고정부</td><td>74바이트 고정부</td><td>06편</td></tr>
+                            <tr><td>팩 트레일러 체크섬</td><td>20바이트</td><td>32바이트</td><td>08편</td></tr>
+                            <tr><td><code>.idx</code> OID 테이블</td><td>N&times;20바이트</td><td>N&times;32바이트</td><td>10편</td></tr>
+                            <tr><td>REF_DELTA의 base 참조</td><td>20바이트</td><td>32바이트</td><td>08편</td></tr>
+                            <tr><td>ref 파일</td><td>41바이트</td><td>65바이트</td><td>11편</td></tr>
+                            <tr><td>빈 트리 OID</td><td><code>4b825dc6...</code></td><td><code>6ef19b41...</code></td><td>03편</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">이 때문에 <strong>스크립트에 40이라는 숫자를 하드코딩하면 SHA-256 저장소에서 전부 깨집니다.</strong> <code>grep -E '^[0-9a-f]{40}$'</code> 같은 패턴이 대표적입니다. <code>git rev-parse</code>로 정규화하거나 길이를 가변으로 다루어야 합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 해시 비의존적으로 스크립트 짜기</div>
+                        <pre><code># ❌ 깨지는 코드
+$ git log --format=%H | grep -E '^[0-9a-f]{40}$'
+
+# ✅ 길이에 의존하지 않음
+$ git log --format=%H | while read oid; do
+    git rev-parse --verify "$oid^{commit}" &gt;/dev/null || echo "invalid: $oid"
+  done
+
+# 현재 저장소의 해시 알고리즘 확인
+$ git rev-parse --show-object-format
+sha1
+
+# 빈 트리 OID를 하드코딩하지 말고 계산해서 쓰기
+$ EMPTY_TREE=$(git hash-object -t tree /dev/null)
+$ git diff "$EMPTY_TREE" HEAD --stat</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 전환 설계 &mdash; 목표와 비(非)목표</h2>
+            <div class="conversation">
+                <div class="q">전 세계의 Git 저장소를 어떻게 한꺼번에 바꾸나요?</div>
+                <div class="a">
+                    <p>한꺼번에 바꾸지 않습니다. Git 문서의 첫 번째 목표가 그 점을 못 박습니다.</p>
+                    <p class="highlight"><strong>"SHA-256으로의 전환은 로컬 저장소 하나씩 수행할 수 있다. (a) 다른 어떤 당사자의 조치도 요구하지 않는다. (b) SHA-256 저장소가 SHA-1 Git 서버와 통신(push/fetch)할 수 있다. (c) 사용자는 SHA-1과 SHA-256 식별자를 <em>교차해서</em> 쓸 수 있다."</strong></p>
+                    <p>이를 가능하게 하는 것이 <strong>이중 저장(dual storage)</strong> 개념입니다. SHA-256 저장소가 <strong>SHA-1 OID와의 매핑 테이블</strong>을 함께 들고, 외부와 통신하거나 사용자가 옛 OID를 입력할 때 변환합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">.git/config &mdash; 관련 확장</div>
+                        <pre><code>[core]
+	repositoryformatversion = 1        # 확장을 쓰려면 반드시 1
+[extensions]
+	objectFormat = sha256              # 이 저장소의 해시 알고리즘
+	compatObjectFormat = sha1          # 호환용 보조 알고리즘</code></pre>
+                    </div>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>확장</th><th>역할</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>extensions.objectFormat</code></td>
+                                <td>이 저장소가 쓰는 해시. <code>sha1</code> 또는 <code>sha256</code>. 지정하지 않으면 <code>sha1</code></td>
+                            </tr>
+                            <tr>
+                                <td><code>extensions.compatObjectFormat</code></td>
+                                <td><strong>호환용</strong> 보조 해시. <code>objectFormat</code>과 달라야 한다. 이 알고리즘을 쓰는 저장소와 push/pull이 가능해지고, 그 형식의 OID로 객체를 지정할 수 있다</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">Git 문서가 <code>compatObjectFormat</code>에 대해 <strong>단호하게 경고</strong>합니다. <strong>"이 확장이 제공하는 기능은 불완전하며 변경될 수 있다. 현재는 기반 기능의 개발과 테스트를 위해서만 존재하며, 최종 사용자가 켜도록 설계되지 않았다."</strong> 즉 <strong>상호 운용은 아직 미완성</strong>입니다.</p>
+                    <p class="key-point"><code>repositoryformatversion = 1</code>이 중요한 장치입니다. 값이 0인 저장소만 알던 <strong>구버전 Git은 1을 보면 "모르는 형식"이라며 안전하게 거부</strong>합니다. 조용히 잘못 동작하는 대신 명확히 실패하게 만든 설계이며, 12편의 reftable 더미 파일과 같은 철학입니다.</p>
+                </div>
+
+                <div class="q">비(非)목표로 명시된 것들도 있다고 들었습니다.</div>
+                <div class="a">
+                    <p>있습니다. 그리고 이것이 <strong>전환이 왜 이렇게 오래 걸리는지</strong>를 설명합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>비목표</th><th>의미</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Git 프로토콜에 SHA-256 지원 추가</strong></td>
+                                <td>"가치 있고 논리적인 다음 단계지만 이 초기 설계의 범위 밖". 즉 <strong>전송 계층은 별도 작업</strong></td>
+                            </tr>
+                            <tr>
+                                <td>기존 SHA-1 서명 객체의 보안을 투명하게 개선</td>
+                                <td>이미 SHA-1으로 서명된 것은 소급해서 강해지지 않는다</td>
+                            </tr>
+                            <tr>
+                                <td><strong>한 저장소에서 여러 해시 객체를 섞기</strong></td>
+                                <td>저장소는 하나의 <code>objectFormat</code>을 갖는다. 혼재를 허용하지 않는다</td>
+                            </tr>
+                            <tr>
+                                <td>이 기회에 다른 포맷 버그를 고치기</td>
+                                <td>범위를 좁혀 위험을 줄인다</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">세 번째가 특히 중요한 설계 결정입니다. "한 저장소 안에 SHA-1 객체와 SHA-256 객체가 공존"하게 했다면 <strong>모든 코드 경로가 두 길이를 동시에 다뤄야</strong> 했을 것입니다. 대신 <strong>"저장소는 하나의 해시, 필요하면 매핑 테이블"</strong>로 단순화했습니다.</p>
+                    <p>두 번째 목표도 명시되어 있습니다. <strong>"SHA-1으로부터 완전히 벗어날 수 있어야 한다 &mdash; SHA-1 호환용 로컬 메타데이터는 더 이상 필요 없으면 저장소에서 제거할 수 있다."</strong> 즉 <strong>매핑 테이블은 영구 부담이 아니라 과도기 장치</strong>입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 지금 무엇을 할 수 있는가</h2>
+            <div class="conversation">
+                <div class="q">SHA-256 저장소를 지금 만들 수 있나요?</div>
+                <div class="a">
+                    <p>만들 수 있습니다. Git 2.29부터 실험적 기능이 아닌 정식 옵션이며, <strong>로컬에서 완결되는 작업에는 문제없이 동작</strong>합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; SHA-256 저장소</div>
+                        <pre><code>$ git init --object-format=sha256 repo256
+$ cd repo256
+
+$ git rev-parse --show-object-format
+sha256
+
+$ echo hello &gt; a.txt &amp;&amp; git add a.txt &amp;&amp; git commit -q -m first
+$ git log --format=%H
+5f2e8a1c9b7d3f4e6a0c2b8d1e5f7a9c3b6d8e0f2a4c6b8d0e2f4a6c8b0d2e4f
+  ↑ 64자
+
+$ cat .git/config
+[core]
+	repositoryformatversion = 1
+[extensions]
+	objectFormat = sha256
+
+# 빈 트리 OID도 달라진다
+$ git hash-object -t tree /dev/null
+6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321
+
+# 구버전 Git으로 열면?
+$ git-2.20 status
+fatal: unknown repository extension found: objectformat
+# → 조용히 망가지지 않고 명확히 거부한다</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">실무에서는 지금 무엇을 해야 하나요?</div>
+                <div class="a">
+                    <p>현실적인 판단을 나누면 이렇습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>상황</th><th>권장</th><th>이유</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>기존 팀 저장소</td>
+                                <td><strong>SHA-1 유지</strong></td>
+                                <td>호스팅 서비스·CI·IDE·도구 생태계가 아직 SHA-256을 온전히 지원하지 않음</td>
+                            </tr>
+                            <tr>
+                                <td>Git 버전</td>
+                                <td><strong>최신 유지</strong></td>
+                                <td>sha1dc 충돌 탐지가 기본 활성 (2.13+). 이것만으로 SHAttered는 막힌다</td>
+                            </tr>
+                            <tr>
+                                <td>서버 운영</td>
+                                <td><code>receive.fsckObjects = true</code></td>
+                                <td>손상·악성 객체를 push 시점에 차단 (20편)</td>
+                            </tr>
+                            <tr>
+                                <td>도구·스크립트 작성</td>
+                                <td><strong>해시 길이 비의존적으로</strong></td>
+                                <td>40 하드코딩 제거. 지금 고쳐 두면 전환 시 비용 0</td>
+                            </tr>
+                            <tr>
+                                <td>새 실험/격리 프로젝트</td>
+                                <td>SHA-256 시도 가능</td>
+                                <td>로컬 작업은 완전히 동작. 상호 운용만 주의</td>
+                            </tr>
+                            <tr>
+                                <td>무결성이 특히 중요한 경우</td>
+                                <td>커밋/태그 <strong>서명</strong></td>
+                                <td>GPG/SSH 서명은 자체 해시(SHA-256/512)를 쓰므로 추가 보증이 된다</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 지금 할 수 있는 보안 강화</div>
+                        <pre><code># 1) 커밋 서명 (SSH 키로, GPG보다 설정이 간단)
+$ git config --global gpg.format ssh
+$ git config --global user.signingkey ~/.ssh/id_ed25519.pub
+$ git config --global commit.gpgsign true
+$ git config --global tag.gpgsign true
+
+# 2) 서명 검증
+$ git log --show-signature -1
+$ git verify-commit HEAD
+$ git verify-tag v1.0
+
+# 3) 서버 측 객체 검증
+$ git config receive.fsckObjects true
+$ git config transfer.fsckObjects true
+
+# 4) 저장소 무결성 정기 점검
+$ git fsck --full --strict
+
+# 5) 스크립트의 해시 길이 의존성 점검
+$ grep -rn '\[0-9a-f\]\{40\}\|{40}\|cut -c1-40' scripts/ .github/</code></pre>
+                    </div>
+                    <p class="key-point">면접 포인트: <strong>"SHA-1이 깨졌는데 Git을 계속 써도 되는가"</strong>라는 질문에는 세 층으로 답하는 것이 좋습니다. (1) SHAttered가 깬 것은 <strong>충돌 저항성</strong>이고, 기존 커밋을 위조하는 <strong>제2 역상 공격은 여전히 불가능</strong>하다. (2) Git 2.13+는 <strong>sha1dc로 충돌 공격을 탐지해 거부</strong>하므로 실질적 공격 경로가 막혀 있다. (3) 그럼에도 <strong>SHA-256 전환이 진행 중</strong>이며, 저장소 단위로 점진적 전환이 가능하도록 설계되었다. 다만 프로토콜 지원과 상호 운용은 아직 미완성이다.</p>
+                    <p class="highlight">이 전환 과정 자체가 좋은 공학 사례입니다. <strong>"근본 해결(SHA-256)은 오래 걸리니, 그동안 실용적 완화책(sha1dc)으로 위험을 막고, 전환은 점진적·호환 가능하게 설계한다."</strong> 하위 호환을 유지하며 기반 포맷을 바꾸는 일이 얼마나 큰 작업인지, 그리고 왜 <code>repositoryformatversion</code> 같은 장치를 미리 심어 두는지를 보여 줍니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>2017년 SHAttered가 깬 것은 SHA-1의 충돌 저항성이다.</strong> 공격자가 두 입력을 <em>모두</em> 설계해야 성립하며, 기존 커밋을 위조하는 제2 역상 공격은 여전히 불가능하다.</li>
+                <li><strong>Git 2.13+는 sha1collisiondetection(sha1dc)을 기본으로 쓴다.</strong> 해시를 계산하며 충돌 공격의 차분 패턴을 탐지해 거부하고, 정상 입력에는 일반 SHA-1과 동일한 값을 반환해 <strong>기존 OID를 전부 보존</strong>한다.</li>
+                <li><strong>후속 해시로 SHA-256이 선택되었다(2018).</strong> 256비트 길이, 광범위한 고품질 구현, Git이 필요로 하는 속성 일치(길이 확장 저항성은 <em>불필요</em>), 계산 속도가 기준이었다.</li>
+                <li><strong>전환은 저장소 단위로, 다른 당사자의 조치 없이 가능하도록 설계되었다.</strong> <code>extensions.objectFormat</code>과 <code>repositoryformatversion = 1</code>이 그 장치이며, 구버전 Git은 조용히 오동작하는 대신 명확히 거부한다.</li>
+                <li><strong>프로토콜 지원과 <code>compatObjectFormat</code> 상호 운용은 아직 미완성이다.</strong> 실무에서는 Git 최신 유지 + <code>receive.fsckObjects</code> + 커밋 서명 + <strong>스크립트의 40자 하드코딩 제거</strong>가 지금 할 수 있는 준비다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

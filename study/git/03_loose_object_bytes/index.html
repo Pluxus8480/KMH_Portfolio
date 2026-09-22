@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>느슨한 객체 바이트 해부 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>해시는 파일 내용만으로 만들어지지 않는다</h1>
+            <p class="subtitle">느슨한 객체(loose object)의 바이트 단위 해부 &mdash; 헤더 · zlib · fanout 디렉토리 · 원자적 쓰기</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: OID는 정확히 무엇을 해시한 값인가</h2>
+            <div class="conversation">
+                <div class="q"><code>git hash-object</code>가 뱉는 값이 파일의 SHA-1과 다르던데요?</div>
+                <div class="a">
+                    <p>다릅니다. 그리고 이 차이가 Git 객체 모델의 출발점입니다. Git은 파일 내용만 해시하지 않고, 앞에 <strong>"타입 + 공백 + 크기 + NUL 바이트"</strong> 헤더를 붙인 뒤 해시합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">해시 대상 = 헤더 + 내용</div>
+                        <pre><code>"&lt;type&gt; &lt;size&gt;\0&lt;content&gt;"
+
+예) 내용이 "hello\n"(6바이트)인 blob:
+    "blob 6\0hello\n"   &larr; 이 13바이트를 SHA-1 한다</code></pre>
+                    </div>
+                    <p>Git 소스에서 이 헤더를 만드는 함수는 <code>object-file.c</code>의 <code>format_object_header()</code> 단 하나입니다. 모든 객체 쓰기 경로가 이 함수를 통과합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">object-file.c &mdash; format_object_header()</div>
+                        <pre><code>int format_object_header(char *str, size_t size, enum object_type type,
+                         size_t objsize)
+{
+        const char *name = type_name(type);   /* "blob" / "tree" / "commit" / "tag" */
+
+        if (!name)
+                BUG("could not get a type name for 'enum object_type' value %d", type);
+
+        /* xsnprintf가 반환하는 길이 + 1 = NUL 바이트까지 포함한 헤더 길이 */
+        return xsnprintf(str, size, "%s %"PRIuMAX, name, (uintmax_t)objsize) + 1;
+}</code></pre>
+                    </div>
+                    <p>직접 검증해 보면 OS의 <code>sha1sum</code>과 Git의 결과가 정확히 일치합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 헤더를 손으로 붙여 검증</div>
+                        <pre><code>$ printf 'blob 6\0hello\n' | sha1sum
+ce013625030ba8dba906f756967f9e9ca394464a  -
+
+$ printf 'hello\n' | git hash-object --stdin
+ce013625030ba8dba906f756967f9e9ca394464a     # &larr; 완전히 동일
+
+# 헤더 없이 내용만 해시하면 전혀 다른 값이 나온다
+$ printf 'hello\n' | sha1sum
+f572d396fae9206628714fb2ce00f72e94f2258f  -</code></pre>
+                    </div>
+                    <p class="key-point">왜 굳이 헤더를 붙일까요? 두 가지 이유가 있습니다. 첫째, <strong>타입이 다르면 OID도 달라야 하기 때문</strong>입니다. 내용이 같은 blob과 tag가 같은 OID를 갖는다면 객체 DB가 혼란에 빠집니다. 둘째, <strong>크기를 미리 알면 읽기가 빨라지기 때문</strong>입니다. 압축을 풀기 전에 버퍼를 정확한 크기로 한 번에 할당할 수 있습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>택배 상자에 <strong>운송장</strong>을 붙이는 것과 같습니다. 운송장에는 "종류: 도서, 무게: 6kg"이 적혀 있고, 이 운송장까지 포함해서 상자 전체의 봉인 도장을 찍습니다.</p>
+                        <p>덕분에 상자를 열지 않고도 무엇이 얼마나 들었는지 알 수 있고(빠른 읽기), 같은 물건이라도 "도서"로 보낸 것과 "의류"로 보낸 것은 다른 봉인이 찍힙니다(타입 구분).</p>
+                    </div>
+                </div>
+
+                <div class="q">빈 트리처럼 특수한 객체의 해시도 이 규칙을 따르나요?</div>
+                <div class="a">
+                    <p>예외 없이 따릅니다. 유명한 <strong>"빈 트리 OID"</strong>가 좋은 예입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 빈 트리</div>
+                        <pre><code>$ printf 'tree 0\0' | sha1sum
+4b825dc642cb6eb9a060e54bf8d69288fbee4904  -
+
+$ git hash-object -t tree /dev/null
+4b825dc642cb6eb9a060e54bf8d69288fbee4904</code></pre>
+                    </div>
+                    <p class="highlight"><code>4b825dc642cb6eb9a060e54bf8d69288fbee4904</code>는 SHA-1을 쓰는 <strong>모든 Git 저장소에서 동일한</strong> "빈 트리"의 OID입니다. 첫 커밋과 diff를 뜨고 싶을 때 <code>git diff 4b825dc... HEAD</code>처럼 쓸 수 있어서, 스크립트에서 자주 등장하는 상수입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 디스크에는 어떤 바이트가 놓이는가</h2>
+            <div class="conversation">
+                <div class="q">객체 파일을 <code>cat</code>으로 열면 깨진 글자만 나옵니다. 실제 바이트는 어떻게 생겼나요?</div>
+                <div class="a">
+                    <p>느슨한 객체 파일은 <strong>"헤더 + 내용"을 통째로 zlib deflate 한 결과</strong>입니다. 파일 자체에는 아무 메타데이터도 없고, 순수하게 압축 스트림 하나만 들어 있습니다.</p>
+                    <div class="pipeline">
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">1. 원본</div>
+                            <div class="pipeline-bar pb-gbuffer">
+                                <span>hello\n (6 bytes)</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">2. 헤더 부착</div>
+                            <div class="pipeline-bar pb-light">
+                                <span>"blob"</span><span>" "</span><span>"6"</span><span>NUL</span><span>hello\n</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">3. SHA-1</div>
+                            <div class="pipeline-bar pb-shadow">
+                                <span>ce013625030ba8dba906f756967f9e9ca394464a</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">4. zlib deflate</div>
+                            <div class="pipeline-bar pb-post">
+                                <span>78 01 4b ca c9 4f 52 30 ...</span>
+                            </div>
+                        </div>
+                        <div class="pipeline-stage">
+                            <div class="pipeline-label">5. 파일 경로</div>
+                            <div class="pipeline-bar pb-gbuffer">
+                                <span>.git/objects/<strong>ce</strong>/<strong>013625...464a</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                    <p>실제로 hexdump를 떠 보면 이렇습니다. 6바이트짜리 내용이 21바이트 파일이 됩니다(작은 파일은 압축으로 오히려 커집니다).</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 진짜 바이트 보기</div>
+                        <pre><code>$ git init -q lab &amp;&amp; cd lab
+$ printf 'hello\n' &gt; a.txt &amp;&amp; git add a.txt
+
+$ xxd .git/objects/ce/013625030ba8dba906f756967f9e9ca394464a
+00000000: 7801 4bca c94f 5230 63c8 48cd c9c9 e702  x.K..OR0c.H.....
+00000010: 001d c504 14                             .....
+
+# 78 01  = zlib 헤더 (CMF/FLG). 01은 "압축 레벨 1(최고 속도)"을 뜻한다
+# 마지막 4바이트 1dc50414 = 압축 해제 데이터의 Adler-32 체크섬
+
+# 파이썬으로 직접 풀어 보면 헤더가 그대로 드러난다
+$ python -c "import zlib,sys; \
+  print(zlib.decompress(open('.git/objects/ce/013625030ba8dba906f756967f9e9ca394464a','rb').read()))"
+b'blob 6\x00hello\n'</code></pre>
+                    </div>
+                    <p class="key-point">주목할 점은 <strong><code>78 01</code></strong>입니다. zlib 기본값은 레벨 6(<code>78 9c</code>)인데, Git은 느슨한 객체에 <strong>레벨 1</strong>을 씁니다. 어차피 나중에 팩으로 다시 압축될 임시 형태이므로, 공간보다 <strong>쓰기 속도</strong>를 택한 것입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">environment.c &mdash; 두 개의 압축 레벨</div>
+                        <pre><code>cfg-&gt;zlib_compression_level = Z_BEST_SPEED;          /* = 1, 느슨한 객체 */
+cfg-&gt;pack_compression_level = Z_DEFAULT_COMPRESSION; /* = -1 (=6), 팩 파일 */</code></pre>
+                    </div>
+                    <p>설정으로 바꿀 수 있습니다. <code>core.loosecompression</code>은 느슨한 객체, <code>core.compression</code>은 둘 다, <code>pack.compression</code>은 팩에만 적용됩니다.</p>
+                </div>
+
+                <div class="q">왜 <code>objects/ce/0136...</code>처럼 두 글자를 잘라서 디렉토리를 만드나요?</div>
+                <div class="a">
+                    <p><strong>한 디렉토리에 파일이 수만 개 쌓이는 것을 막기 위한 fanout</strong>입니다. ext3, HFS+, NTFS 같은 파일 시스템은 한 디렉토리의 엔트리가 많아지면 탐색이 급격히 느려집니다.</p>
+                    <p>OID 앞 2자(1바이트)를 디렉토리 이름으로 쓰면 <strong>256개의 하위 디렉토리</strong>로 고르게 흩어집니다. SHA-1의 출력은 균등 분포에 가까우므로, 객체 25만 개면 디렉토리당 약 1,000개가 됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">object-file.c &mdash; 경로 조립</div>
+                        <pre><code>const char *odb_loose_path(struct odb_source_loose *loose,
+                           struct strbuf *buf,
+                           const struct object_id *oid)
+{
+        strbuf_reset(buf);
+        strbuf_addstr(buf, loose-&gt;base.path);   /* .git/objects */
+        strbuf_addch(buf, '/');
+        fill_loose_path(buf, oid, ...);         /* "ce/013625...464a" 형태로 채움 */
+        return buf-&gt;buf;
+}</code></pre>
+                    </div>
+                    <p class="warning">그래도 한계는 분명합니다. 객체 100만 개면 디렉토리당 4,000개이고, <strong>파일 하나당 최소 1개 디스크 블록(보통 4KB)</strong>을 차지하므로 200바이트짜리 객체가 4KB를 먹습니다. 팩 파일이 존재하는 이유가 바로 이 낭비입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 쓰기는 어떻게 원자적으로 이루어지는가</h2>
+            <div class="conversation">
+                <div class="q">객체를 쓰는 도중에 프로세스가 죽으면 반쪽짜리 객체가 남지 않나요?</div>
+                <div class="a">
+                    <p>남지 않습니다. Git은 <strong>"임시 파일에 다 쓴 뒤 최종 경로로 rename"</strong>하는 고전적인 원자적 쓰기 패턴을 씁니다. POSIX에서 같은 파일 시스템 내 <code>rename(2)</code>은 원자적이므로, 관찰자에게는 "파일이 없거나, 완전한 파일이 있거나" 둘 중 하나만 보입니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">1. 임시 파일 생성</div>
+                                <div class="flow-box__items"><code>.git/objects/tmp_obj_XXXXXX</code></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">2. 압축 스트림 기록</div>
+                                <div class="flow-box__items">deflate 하며 동시에 SHA-1 갱신</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">3. close + (fsync)</div>
+                                <div class="flow-box__items"><code>core.fsyncObjectFiles</code> / <code>core.fsync</code> 설정에 따라 디스크 동기화</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">4. rename</div>
+                                <div class="flow-box__items">최종 경로 <code>ce/0136...</code>로 원자적 이동. 읽기 전용(0444)으로 권한 변경</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="highlight">객체 파일의 권한이 <strong>0444(읽기 전용)</strong>인 것도 의도적입니다. 불변 객체라는 계약을 파일 시스템 수준에서 한 번 더 못 박는 것입니다. <code>ls -l .git/objects/ce/</code>로 직접 확인할 수 있습니다.</p>
+                    <p>또한 쓰기 전에 <strong>이미 같은 OID가 있는지 먼저 확인</strong>합니다. 있으면 쓰지 않고 mtime만 갱신(freshen)하고 돌아갑니다 &mdash; 02편에서 본 중복 제거가 바로 이 지점입니다.</p>
+                </div>
+
+                <div class="q">읽을 때는 손상을 어떻게 감지하나요?</div>
+                <div class="a">
+                    <p>두 겹의 방어선이 있습니다.</p>
+                    <p><strong>1) zlib의 Adler-32 체크섬.</strong> 압축 스트림 끝의 4바이트가 압축 해제 결과와 맞지 않으면 <code>inflate()</code>가 실패합니다. 비트 플립 대부분이 여기서 걸립니다.</p>
+                    <p><strong>2) 객체 해시 재계산.</strong> 압축을 푼 뒤 "타입 크기\0내용"을 다시 해시해서 파일 이름(OID)과 비교합니다. Git 소스의 <code>check_object_signature()</code>가 이 역할을 합니다. <code>git fsck</code>는 저장소의 모든 객체에 대해 이 검사를 수행합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 손상을 일부러 만들어 보기</div>
+                        <pre><code>$ git fsck
+Checking object directories: 100% (256/256), done.
+# 아무 문제 없음
+
+# 객체 파일 한 바이트를 망가뜨린다 (실습용 저장소에서만!)
+$ chmod u+w .git/objects/ce/013625030ba8dba906f756967f9e9ca394464a
+$ printf '\x00' | dd of=.git/objects/ce/0136...464a bs=1 seek=10 conv=notrunc
+
+$ git fsck
+error: inflate: data stream error (incorrect data check)
+error: unable to unpack ce013625... header
+error: ce013625030ba8dba906f756967f9e9ca394464a: object corrupt or missing</code></pre>
+                    </div>
+                    <p class="key-point">여기서 Git의 강점이 드러납니다. <strong>손상을 "조용히" 넘어가지 않습니다.</strong> 내용 주소 지정 구조 덕분에, 데이터가 틀어지면 반드시 이름과 어긋나므로 즉시 들통납니다. 많은 파일 기반 도구가 못 하는 일입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 실습 &mdash; Git 없이 객체 만들고 읽기</h2>
+            <div class="conversation">
+                <div class="q">배운 규칙만으로 Git 객체를 직접 만들 수 있나요?</div>
+                <div class="a">
+                    <p>가능합니다. 규칙이 그만큼 단순합니다. 아래 파이썬 스크립트는 <code>git hash-object -w</code>와 <code>git cat-file -p</code>를 30줄로 재현합니다.</p>
+                    <details class="code-toggle">
+                        <summary>mini_git.py &mdash; 객체 쓰기/읽기 직접 구현 <span class="code-lang">Python</span></summary>
+                        <pre><code>import hashlib, zlib, os, sys
+
+def write_object(obj_type: str, content: bytes) -&gt; str:
+    """git hash-object -w 와 동일하게 동작한다."""
+    header = f"{obj_type} {len(content)}".encode() + b"\x00"
+    store  = header + content
+    oid    = hashlib.sha1(store).hexdigest()
+
+    path = os.path.join(".git", "objects", oid[:2], oid[2:])
+    if not os.path.exists(path):                       # 이미 있으면 쓰지 않는다
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "wb") as f:                     # 임시 파일에 쓰고
+            f.write(zlib.compress(store, 1))           # 레벨 1 (Z_BEST_SPEED)
+        os.replace(tmp, path)                          # 원자적 rename
+        os.chmod(path, 0o444)                          # 읽기 전용
+    return oid
+
+def read_object(oid: str):
+    """git cat-file -p 와 동일하게 동작한다."""
+    path = os.path.join(".git", "objects", oid[:2], oid[2:])
+    store = zlib.decompress(open(path, "rb").read())
+
+    nul          = store.index(b"\x00")
+    header       = store[:nul].decode()
+    obj_type, sz = header.split(" ")
+    content      = store[nul + 1:]
+
+    assert len(content) == int(sz), "크기 불일치 - 손상된 객체"
+    assert hashlib.sha1(store).hexdigest() == oid, "해시 불일치 - 손상된 객체"
+    return obj_type, content
+
+if __name__ == "__main__":
+    oid = write_object("blob", b"hello from python\n")
+    print("wrote:", oid)
+    print("read :", read_object(oid))</code></pre>
+                    </details>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; Git이 인정하는지 확인</div>
+                        <pre><code>$ python mini_git.py
+wrote: 8d0e41234f24b6da002d962a26c2495ea16a425f
+read : ('blob', b'hello from python\n')
+
+# Git이 이 객체를 자기 것으로 인식할까?
+$ git cat-file -t 8d0e41234f24b6da002d962a26c2495ea16a425f
+blob
+$ git cat-file -p 8d0e41234f24b6da002d962a26c2495ea16a425f
+hello from python
+
+# 인덱스에 직접 등록해서 커밋까지 할 수도 있다
+$ git update-index --add --cacheinfo 100644,8d0e4123...,greeting.txt
+$ git ls-files --stage
+100644 8d0e41234f24b6da002d962a26c2495ea16a425f 0	greeting.txt</code></pre>
+                    </div>
+                    <p class="highlight">Git은 <strong>"누가 썼는지"를 전혀 따지지 않습니다.</strong> 규칙에 맞는 바이트가 올바른 경로에 있으면 그것이 곧 Git 객체입니다. 이 단순함이 JGit, libgit2, go-git 같은 독립 구현이 가능한 이유입니다.</p>
+                </div>
+
+                <div class="q">실무에서 이 지식이 쓰이는 순간이 있나요?</div>
+                <div class="a">
+                    <p>세 가지 상황에서 직접적으로 도움이 됩니다.</p>
+                    <p><strong>1) 저장소 용량 분석.</strong> 어떤 blob이 용량을 먹는지 추적할 때 <code>git cat-file --batch-all-objects --batch-check</code>로 전 객체의 타입·크기를 뽑아 정렬합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 가장 큰 객체 Top 10 찾기</div>
+                        <pre><code>$ git cat-file --batch-all-objects --batch-check='%(objecttype) %(objectsize) %(objectname)' \
+    | grep '^blob' | sort -k2 -n -r | head -10
+blob 104857600 3f2a...   # 100MB짜리 blob 발견
+blob  52428800 7b1c...
+
+# 그 blob이 어떤 경로였는지 역추적
+$ git rev-list --objects --all | grep 3f2a
+3f2a... assets/video/intro.mp4</code></pre>
+                    </div>
+                    <p><strong>2) 사고 복구.</strong> 커밋이 사라졌을 때 <code>.git/objects</code>를 직접 훑어 타입이 commit인 객체를 찾아내면 reflog가 없어도 복구 단서를 얻을 수 있습니다(20편).</p>
+                    <p><strong>3) 도구 개발.</strong> CI 스크립트나 사내 도구에서 Git 바이너리 없이 객체를 읽어야 할 때, 위 30줄이면 충분합니다.</p>
+                    <p class="warning">단, 직접 쓰기는 <strong>느슨한 객체에만</strong> 통합니다. 팩 파일에 든 객체를 읽으려면 <code>.idx</code> 파싱과 델타 해제까지 구현해야 하므로 난이도가 확 올라갑니다(08~10편).</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>OID = SHA(<code>"&lt;type&gt; &lt;size&gt;\0" + content</code>)</strong>다. 파일 내용만 해시한 값과 다르며, 헤더 덕분에 타입이 구분되고 읽기 전 버퍼 크기를 미리 알 수 있다.</li>
+                <li><strong>느슨한 객체 파일 = zlib deflate된 "헤더+내용" 그 자체다.</strong> 다른 메타데이터는 일절 없고, 압축 레벨은 속도를 위해 1(<code>Z_BEST_SPEED</code>, <code>78 01</code>)을 쓴다.</li>
+                <li><strong>경로의 앞 2자 디렉토리는 fanout이다.</strong> 256개로 흩어 파일 시스템 탐색 성능을 지키지만, 객체당 최소 1블록 낭비는 피할 수 없어 팩 파일이 필요해진다.</li>
+                <li><strong>쓰기는 임시 파일 + rename으로 원자적이고, 완성된 객체는 0444 읽기 전용이 된다.</strong> 이미 존재하면 쓰지 않고 mtime만 갱신한다.</li>
+                <li><strong>손상은 zlib Adler-32와 해시 재계산 두 겹으로 잡힌다.</strong> 내용 주소 지정 구조라 데이터가 틀어지면 반드시 이름과 어긋난다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

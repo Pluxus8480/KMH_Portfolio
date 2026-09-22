@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git Internals Study | KMH Portfolio</title>
+    <meta name="description" content="Git 소스 코드(v2.56) 기반 내부 동작 원리 학습 기록">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>">
+</head>
+<body>
+    <header class="header" id="header">
+        <nav class="nav container">
+            <a href="../index.html" class="nav__logo"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></a>
+            <ul class="nav__menu" id="nav-menu">
+                <li class="nav__item"><a href="../index.html#about" class="nav__link">About</a></li>
+                <li class="nav__item"><a href="../index.html#projects" class="nav__link">Projects</a></li>
+                <li class="nav__item"><a href="../index.html#skills" class="nav__link">Skills</a></li>
+                <li class="nav__item"><a href="../study.html" class="nav__link active">Study</a></li>
+                <li class="nav__item"><a href="../index.html#contact" class="nav__link">Contact</a></li>
+            </ul>
+            <button class="nav__toggle" id="nav-toggle"><span></span><span></span><span></span></button>
+        </nav>
+    </header>
+    <main class="main">
+        <section class="study-detail section">
+            <div class="container">
+                <nav class="breadcrumb"><a href="../study.html">Study</a><span>/</span><span>Git Internals</span></nav>
+                <div class="study-detail__header">
+                    <span class="study-detail__icon">🌿</span>
+                    <h1 class="study-detail__title">Git Internals</h1>
+                </div>
+                <p class="study-detail__desc">Git 소스 코드(v2.56.0-rc1)를 직접 읽고 정리한 내부 동작 원리 &mdash; 객체 데이터베이스 · 인덱스 · 팩 파일 · 레퍼런스 · 머지 · 전송 프로토콜까지 바이트 단위로 해부합니다.</p>
+                <div class="study-detail__content">
+                    <div class="study-topics">
+                        <h2 class="study-topics__title">학습 주제 목록</h2>
+                        <ul class="study-topics__list">
+                            <li class="study-topic">
+                                <a href="git/01_dotgit_anatomy/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">01</span>
+                                    <span class="study-topic__name">폴더 하나를 지우면 왜 역사가 통째로 사라질까 &mdash; .git 디렉토리 해부</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/02_object_database/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">02</span>
+                                    <span class="study-topic__name">같은 파일을 100번 커밋해도 용량이 안 늘어난다 &mdash; 내용 주소 지정 객체 DB</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/03_loose_object_bytes/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">03</span>
+                                    <span class="study-topic__name">해시는 파일 내용만으로 만들어지지 않는다 &mdash; 느슨한 객체 바이트 해부</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/04_tree_object/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">04</span>
+                                    <span class="study-topic__name">Git은 폴더를 어떻게 기억할까 &mdash; 트리 객체 · 모드 비트 · 정렬 규칙</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/05_commit_dag/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">05</span>
+                                    <span class="study-topic__name">커밋은 변경사항이 아니다 &mdash; 커밋 객체 · 태그 · DAG</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/06_index_format/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">06</span>
+                                    <span class="study-topic__name">스테이징 영역은 대체 어디에 있는가 &mdash; 인덱스(DIRC) 바이너리 포맷</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/07_racy_git/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">07</span>
+                                    <span class="study-topic__name">1초 안에 두 번 고치면 Git이 못 알아챌까 &mdash; Racy Git과 stat 캐시</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/08_pack_format/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">08</span>
+                                    <span class="study-topic__name">객체 수십만 개를 파일 하나로 &mdash; 팩 파일 포맷과 가변 길이 인코딩</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/09_delta_compression/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">09</span>
+                                    <span class="study-topic__name">Git은 diff를 저장하지 않는다더니 &mdash; 델타 압축의 copy/insert 명령</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/10_pack_index/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">10</span>
+                                    <span class="study-topic__name">팩 안의 객체 하나를 어떻게 즉시 찾을까 &mdash; .idx v2 · .rev · MIDX</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/11_refs_atomicity/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">11</span>
+                                    <span class="study-topic__name">브랜치는 41바이트짜리 파일이다 &mdash; ref · packed-refs · reflog · 원자성</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/12_reftable/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">12</span>
+                                    <span class="study-topic__name">레퍼런스 86만 개를 어떻게 감당할까 &mdash; reftable 백엔드</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/13_revision_walk/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">13</span>
+                                    <span class="study-topic__name">git log는 어떤 순서로 커밋을 뱉을까 &mdash; 리비전 워크와 UNINTERESTING</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/14_commit_graph/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">14</span>
+                                    <span class="study-topic__name">조상인지 확인하는 데 왜 전부 안 뒤져도 될까 &mdash; commit-graph와 generation number</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/15_merge_base/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">15</span>
+                                    <span class="study-topic__name">공통 조상은 하나가 아닐 수 있다 &mdash; paint_down_to_common</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/16_diff_algorithm/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">16</span>
+                                    <span class="study-topic__name">git diff는 대체 무엇을 최소화하는가 &mdash; Myers · histogram · 들여쓰기 휴리스틱</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/17_rename_detection/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">17</span>
+                                    <span class="study-topic__name">파일을 옮겼는데 Git이 어떻게 알았을까 &mdash; rename detection과 유사도 점수</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/18_merge_ort/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">18</span>
+                                    <span class="study-topic__name">충돌 마커는 누가 어떻게 그릴까 &mdash; 3-way 머지와 merge-ort</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/19_sequencer_rebase/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">19</span>
+                                    <span class="study-topic__name">rebase는 커밋을 옮기지 않는다 &mdash; sequencer · todo list · patch-id</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/20_gc_reachability/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">20</span>
+                                    <span class="study-topic__name">지운 커밋은 언제 진짜로 사라질까 &mdash; 도달 가능성 · prune · fsck</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/21_protocol_v2/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">21</span>
+                                    <span class="study-topic__name">clone할 때 둘은 무슨 대화를 나눌까 &mdash; pkt-line · 프로토콜 v2 · 네고시에이션</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/22_hash_transition/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">22</span>
+                                    <span class="study-topic__name">SHA-1은 깨졌는데 Git은 왜 안 무너졌을까 &mdash; 해시 함수 전환과 SHA-256</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                            <li class="study-topic">
+                                <a href="git/23_partial_sparse/index.html" class="study-topic__link">
+                                    <span class="study-topic__number">23</span>
+                                    <span class="study-topic__name">100GB 리포를 몇 초 만에 clone하는 법 &mdash; 부분 클론 · 희소 체크아웃 · 희소 인덱스</span>
+                                    <span class="study-topic__status study-topic__status--done">완료</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <footer class="footer"><div class="container"><div class="footer__content"><p class="footer__name"><span class="logo-bracket">&lt;</span>KMH<span class="logo-bracket">/&gt;</span></p><p class="footer__copy">&copy; 2024 KMH. All rights reserved.</p></div></div></footer>
+    <script src="../js/study.js"></script>
+</body>
+</html>

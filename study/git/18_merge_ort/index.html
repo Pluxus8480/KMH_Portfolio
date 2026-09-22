@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>충돌 마커는 누가 어떻게 그릴까 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>충돌 마커는 누가 어떻게 그릴까?</h1>
+            <p class="subtitle">3-way 머지 해부 &mdash; 트리 머지와 콘텐츠 머지 · merge-ort · 충돌 스타일 · rerere</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 머지는 두 층으로 이루어진다</h2>
+            <div class="conversation">
+                <div class="q"><code>git merge</code>가 내부에서 하는 일을 층으로 나누면 어떻게 되나요?</div>
+                <div class="a">
+                    <p>명확히 <strong>두 층</strong>입니다. 이 구분을 잡으면 머지 관련 현상 대부분이 설명됩니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>층</th><th>다루는 것</th><th>구현</th><th>충돌 유형</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>트리 머지</strong><br>(구조)</td>
+                                <td>어떤 경로가 존재하는가, 어떤 OID/모드인가, rename/삭제/추가</td>
+                                <td><code>merge-ort.c</code></td>
+                                <td>modify/delete, rename/rename, add/add, 디렉토리/파일 충돌</td>
+                            </tr>
+                            <tr>
+                                <td><strong>콘텐츠 머지</strong><br>(내용)</td>
+                                <td>같은 경로의 파일 내용을 어떻게 합치는가</td>
+                                <td><code>merge-ll.c</code> &rarr; <code>xdiff/xmerge.c</code></td>
+                                <td>content conflict (<code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> 마커)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">1. merge base 찾기</div>
+                                <div class="flow-box__items">15편. 여러 개면 재귀적으로 가상 base 생성</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">2. 트리 3-way</div>
+                                <div class="flow-box__items">base/ours/theirs 세 트리를 비교. rename 감지(17편) 수행. 경로별 결과 확정</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">3. 콘텐츠 3-way</div>
+                                <div class="flow-box__items">양쪽이 모두 수정한 파일만 <code>xdl_merge()</code>로 내용 병합</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">4. 결과 기록</div>
+                                <div class="flow-box__items">충돌 없으면 트리+커밋 생성. 있으면 인덱스에 stage 1/2/3 + 워킹 트리에 마커</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">06편에서 본 <strong>stage 1/2/3</strong>이 여기서 쓰입니다. 충돌은 <strong>인덱스에 세 버전이 동시에 놓인 상태</strong>이고, 워킹 트리의 마커는 사람 보라고 그려 준 것일 뿐입니다.</p>
+                </div>
+
+                <div class="q">경로별로 어떤 판정이 나오나요?</div>
+                <div class="a">
+                    <p>트리 머지의 판정표입니다. base 대비 양쪽이 무엇을 했는가로 결정됩니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>ours</th><th>theirs</th><th>결과</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>변경 없음</td><td>변경 없음</td><td>base 그대로</td></tr>
+                            <tr><td>변경 없음</td><td>수정</td><td><strong>theirs 채택</strong> (충돌 없음)</td></tr>
+                            <tr><td>수정</td><td>변경 없음</td><td><strong>ours 채택</strong> (충돌 없음)</td></tr>
+                            <tr><td>수정</td><td>수정 (같은 내용)</td><td>그 내용 채택 (충돌 없음)</td></tr>
+                            <tr><td>수정</td><td>수정 (다른 내용)</td><td><strong>콘텐츠 머지로 넘김</strong></td></tr>
+                            <tr><td>삭제</td><td>수정</td><td><strong>modify/delete 충돌</strong> &mdash; 사람이 결정해야 함</td></tr>
+                            <tr><td>삭제</td><td>삭제</td><td>삭제 (충돌 없음)</td></tr>
+                            <tr><td>rename A&rarr;B</td><td>수정 A</td><td>수정을 <strong>B에 적용</strong> (rename 감지 성공 시)</td></tr>
+                            <tr><td>rename A&rarr;B</td><td>rename A&rarr;C</td><td><strong>rename/rename 충돌</strong></td></tr>
+                            <tr><td>추가 X</td><td>추가 X (다른 내용)</td><td><strong>add/add 충돌</strong> &mdash; base가 없으므로 2-way가 됨</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="warning"><strong>modify/delete 충돌</strong>이 가장 위험합니다. Git은 "삭제가 옳은가, 수정이 옳은가"를 판단할 근거가 없습니다. 기계적으로 해결할 수 없으므로 <strong>반드시 사람이 의도를 알아야</strong> 하며, 무심코 <code>git rm</code>으로 넘기면 상대의 수정이 사라집니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>공동 집필한 원고를 합치는 상황입니다.</p>
+                        <p><strong>트리 머지</strong>는 <strong>목차를 맞추는 일</strong>입니다. "A는 3장을 지웠고 B는 3장을 고쳤다", "A는 4장을 부록으로 옮겼고 B는 4장에 문단을 추가했다" 같은 <strong>구조 차원</strong>의 조정입니다.</p>
+                        <p><strong>콘텐츠 머지</strong>는 <strong>같은 장의 문장을 합치는 일</strong>입니다. 목차가 정리된 뒤, 둘 다 고친 장에 대해서만 문단 단위로 비교합니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: ort &mdash; recursive를 대체한 이유</h2>
+            <div class="conversation">
+                <div class="q">"ort"라는 이름은 무슨 뜻인가요?</div>
+                <div class="a">
+                    <p>Git 소스 <code>merge-ort.c</code> 맨 위의 주석이 직접 밝힙니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">merge-ort.c</div>
+                        <pre><code>/*
+ * "Ostensibly Recursive's Twin" merge strategy, or "ort" for short.  Meant
+ * as a drop-in replacement for the "recursive" merge strategy, allowing one
+ * to replace
+ *
+ *   git merge [-s recursive]
+ *
+ * with
+ *
+ *   git merge -s ort
+ *
+ * Note: git's parser allows the space between '-s' and its argument to be
+ * missing.  (Should I have backronymed "ham", "alsa", "kip", "nap, "alvo",
+ * "cale", "peedy", or "ins" instead of "ort"?)
+ */</code></pre>
+                    </div>
+                    <p><strong>"Ostensibly Recursive's Twin"</strong> &mdash; 겉보기에 recursive의 쌍둥이라는 뜻입니다. 농담 섞인 주석("ham", "alsa"... 는 전부 디즈니/만화 캐릭터 이름에서 따온 말장난입니다)까지 남아 있는 것이 Git 소스다운 대목입니다.</p>
+                    <p>"drop-in replacement"라는 표현이 핵심입니다. <strong>동작은 recursive와 같되 구현을 갈아엎은 것</strong>이며, Git 2.34부터 <strong>기본 전략</strong>이 되었습니다.</p>
+                </div>
+
+                <div class="q">구현을 갈아엎어서 뭐가 달라졌나요?</div>
+                <div class="a">
+                    <p>가장 큰 차이는 <strong>"인덱스와 워킹 트리를 거치지 않는다"</strong>는 점입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th>recursive (구)</th><th>ort (현재 기본)</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>작업 공간</td>
+                                <td><strong>인덱스 + 워킹 트리</strong>를 직접 조작</td>
+                                <td><strong>메모리상 자료구조</strong>에서만 계산</td>
+                            </tr>
+                            <tr>
+                                <td>충돌 시 상태</td>
+                                <td>중간 결과가 워킹 트리에 이미 흩뿌려짐</td>
+                                <td>계산이 끝난 뒤에야 기록. <strong>실패 시 깔끔</strong></td>
+                            </tr>
+                            <tr>
+                                <td>rename 감지</td>
+                                <td>머지마다 처음부터 다시</td>
+                                <td><strong>캐싱해 재사용</strong> (rebase/cherry-pick 연속 적용에 큰 효과)</td>
+                            </tr>
+                            <tr>
+                                <td>디렉토리 rename</td>
+                                <td>제한적</td>
+                                <td>체계적으로 처리</td>
+                            </tr>
+                            <tr>
+                                <td>희소 체크아웃</td>
+                                <td>머지하려면 체크아웃 필요</td>
+                                <td><strong>체크아웃 없이 머지 가능</strong> (서버 사이드 머지)</td>
+                            </tr>
+                            <tr>
+                                <td>성능</td>
+                                <td>기준</td>
+                                <td>대형 저장소 rebase에서 <strong>수 배~수십 배</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">"워킹 트리를 안 쓴다"는 것이 단순한 최적화가 아닙니다. <strong><code>git merge-tree --write-tree</code></strong>로 <strong>체크아웃 없이 머지 결과를 계산</strong>할 수 있게 되었고, 이는 <strong>서버가 PR의 머지 가능 여부를 판정</strong>하는 데 직접 쓰입니다. GitHub의 "This branch has conflicts" 표시가 이런 기능 위에서 동작합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 체크아웃 없는 머지 테스트</div>
+                        <pre><code># 워킹 트리를 전혀 건드리지 않고 머지 결과를 계산 (Git 2.38+)
+$ git merge-tree --write-tree main feature
+4d5e6f7a8b9c...                  # 성공: 결과 트리 OID
+
+$ echo $?
+0
+
+# 충돌이 나면 종료 코드 1과 충돌 정보
+$ git merge-tree --write-tree main conflicting
+a1b2c3d...
+1	src/config.c
+...
+CONFLICT (content): Merge conflict in src/config.c
+$ echo $?
+1
+
+# CI에서 "이 PR은 머지 가능한가"를 체크아웃 없이 판정할 수 있다</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">머지 base가 여러 개일 때 "재귀"는 정확히 무엇을 하나요?</div>
+                <div class="a">
+                    <p>15편에서 본 criss-cross 상황입니다. base가 여러 개면 <strong>그 base들끼리 머지해서 가상의 단일 base를 만듭니다.</strong></p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">문제</div>
+                                <div class="flow-box__items">merge base가 A와 B 두 개. 3-way merge는 base가 하나여야 함</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">재귀 호출</div>
+                                <div class="flow-box__items">A와 B를 <strong>머지</strong>한다 &mdash; 이때도 A와 B의 merge base를 찾아야 하므로 재귀</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">가상 base</div>
+                                <div class="flow-box__items">그 결과 트리를 base로 삼아 본래의 3-way merge 수행</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="warning">가상 base 자체에 충돌이 있을 수 있습니다. 이때 Git은 <strong>충돌 마커가 포함된 내용을 그대로 base로 사용</strong>합니다. 최선의 근사이며, 그래서 criss-cross 머지의 충돌 마커가 때때로 기괴해 보입니다. <code>Auto-merging</code> 줄 앞에 <code>Merging:</code>과 <code>found 2 common ancestors:</code>가 출력되면 이 상황입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">criss-cross 머지의 출력</div>
+                        <pre><code>$ git merge feature
+Merging:
+a1b2c3d 커밋 메시지
+virtual e5f6a7b
+found 2 common ancestors:            # ← 재귀가 발동한 신호
+c9d0e1f base 후보 1
+3f4a5b6 base 후보 2
+Auto-merging src/config.c
+CONFLICT (content): Merge conflict in src/config.c</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 콘텐츠 머지와 충돌 마커</h2>
+            <div class="conversation">
+                <div class="q">충돌 마커는 정확히 어떤 규칙으로 만들어지나요?</div>
+                <div class="a">
+                    <p><code>xdiff/xmerge.c</code>의 <code>xdl_merge()</code>가 그립니다. 동작 원리는 이렇습니다.</p>
+                    <ol>
+                        <li>base&rarr;ours diff와 base&rarr;theirs diff를 각각 계산합니다(16편의 알고리즘 사용).</li>
+                        <li>두 변경 집합을 <strong>겹치는 구간(hunk)</strong>으로 정렬합니다.</li>
+                        <li>한쪽만 바꾼 구간은 그쪽을 채택합니다.</li>
+                        <li><strong>둘 다 바꾼 구간</strong>에만 충돌 마커를 그립니다.</li>
+                    </ol>
+                    <div class="code-block">
+                        <div class="code-header">xdiff/xdiff.h &mdash; 머지 관련 상수</div>
+                        <pre><code>#define XDL_MERGE_MINIMAL        0
+#define XDL_MERGE_EAGER          1
+#define XDL_MERGE_ZEALOUS        2   /* 인접 충돌을 합침 */
+#define XDL_MERGE_ZEALOUS_ALNUM  3
+
+#define XDL_MERGE_FAVOR_OURS     1   /* -X ours */
+#define XDL_MERGE_FAVOR_THEIRS   2   /* -X theirs */
+#define XDL_MERGE_FAVOR_UNION    3   /* --union: 양쪽 다 넣기 */
+
+#define XDL_MERGE_DIFF3          1   /* diff3 스타일 */
+#define XDL_MERGE_ZEALOUS_DIFF3  2   /* zdiff3 스타일 */
+
+#define DEFAULT_CONFLICT_MARKER_SIZE 7   /* &lt;&lt;&lt;&lt;&lt;&lt;&lt; 가 7개인 이유 */</code></pre>
+                    </div>
+                    <p class="highlight"><code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>가 <strong>정확히 7개</strong>인 이유가 여기 있습니다. <code>merge.conflictMarkerSize</code>나 <code>.gitattributes</code>의 <code>conflict-marker-size</code>로 바꿀 수 있는데, <strong>Markdown 문서처럼 <code>&lt;&lt;&lt;</code>가 본문에 나올 수 있는 파일</strong>에서 유용합니다.</p>
+                    <p><code>ZEALOUS</code>는 "인접한 충돌 구간들을 하나로 합치는" 모드입니다. 충돌이 잘게 쪼개져 읽기 어려워지는 것을 막습니다.</p>
+                </div>
+
+                <div class="q">충돌 스타일은 어떤 것들이 있나요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>스타일</th><th>보여 주는 것</th><th>평가</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>merge</code> (기본)</td><td>ours와 theirs만</td><td>간결하지만 <strong>판단 근거가 부족</strong></td></tr>
+                            <tr><td><code>diff3</code></td><td>+ base 내용</td><td>판단 가능해짐. base 구간이 넓게 나올 수 있음</td></tr>
+                            <tr><td><code>zdiff3</code></td><td>diff3 + <strong>공통 접두/접미 제거</strong></td><td><strong>권장.</strong> base가 최소한으로 표시됨</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">세 스타일 비교</div>
+                        <pre><code>[merge — 기본]
+&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
+    timeout = 30;
+    retries = 3;
+=======
+    timeout = 30;
+    retries = 5;
+&gt;&gt;&gt;&gt;&gt;&gt;&gt; feature
+
+[zdiff3 — 권장]
+    timeout = 30;              ← 공통 부분이 마커 밖으로 빠짐
+&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
+    retries = 3;
+||||||| base
+    retries = 1;               ← 원래 1이었다! 둘 다 바꿨다
+=======
+    retries = 5;
+&gt;&gt;&gt;&gt;&gt;&gt;&gt; feature</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 충돌 해결 도구</div>
+                        <pre><code># zdiff3를 기본으로 (강력 권장)
+$ git config --global merge.conflictStyle zdiff3
+
+# 이미 충돌 난 파일을 다른 스타일로 다시 그리기
+$ git checkout --conflict=zdiff3 src/config.c
+
+# 한쪽을 통째로 채택
+$ git checkout --ours   src/config.c
+$ git checkout --theirs src/config.c
+$ git add src/config.c
+
+# 전략 옵션으로 자동 해결 (공백/생성파일에 유용)
+$ git merge -X ours feature       # 충돌 구간만 ours 우선 (-s ours와 다름!)
+$ git merge -X theirs feature
+$ git merge -X ignore-space-change feature
+
+# 각 stage를 파일로 꺼내 외부 도구로 비교
+$ git show :1:src/config.c &gt; base.c
+$ git show :2:src/config.c &gt; ours.c
+$ git show :3:src/config.c &gt; theirs.c
+$ git mergetool</code></pre>
+                    </div>
+                    <p class="warning"><code>-X ours</code>와 <code>-s ours</code>를 혼동하면 사고가 납니다. <strong><code>-X ours</code></strong>는 "충돌 구간만 ours를 택하고 나머지는 정상 머지"이고, <strong><code>-s ours</code></strong>는 <strong>"theirs의 변경을 전부 버리고 ours 트리를 그대로 결과로 삼는"</strong> 전혀 다른 전략입니다. 후자를 잘못 쓰면 상대 브랜치의 작업이 통째로 사라집니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: rerere &mdash; 같은 충돌을 두 번 풀지 않기</h2>
+            <div class="conversation">
+                <div class="q">긴 브랜치를 반복 rebase하면 같은 충돌을 계속 풀게 됩니다. 방법이 없나요?</div>
+                <div class="a">
+                    <p><strong>rerere(reuse recorded resolution)</strong>가 그 문제를 위해 존재합니다. <strong>"이 충돌을 이렇게 풀었다"를 기록해 두었다가, 같은 충돌이 다시 나오면 자동으로 적용</strong>합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; rerere 켜기</div>
+                        <pre><code>$ git config --global rerere.enabled true
+$ git config --global rerere.autoUpdate true   # 해결되면 자동으로 git add까지
+
+# 첫 번째 충돌 — 직접 해결
+$ git rebase main
+CONFLICT (content): Merge conflict in src/config.c
+Recorded preimage for 'src/config.c'          # ← 충돌 상태를 기록
+$ (해결)
+$ git add src/config.c
+Recorded resolution for 'src/config.c'        # ← 해결 방법을 기록
+$ git rebase --continue
+
+# 나중에 같은 충돌이 다시 나면
+$ git rebase main
+Resolved 'src/config.c' using previous resolution.   # ← 자동 적용!
+
+# 저장된 해결 목록 확인
+$ git rerere status
+$ git rerere diff
+$ ls .git/rr-cache/</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">"같은 충돌"인지 어떻게 판단하나요? 브랜치 이름이나 순서가 다를 텐데요.</div>
+                <div class="a">
+                    <p>Git 문서 <code>Documentation/technical/rerere.adoc</code>이 <strong>충돌 정규화(conflict normalization)</strong>라는 이름으로 이를 설명합니다.</p>
+                    <p>문서의 표현을 옮기면, rerere는 <strong>"브랜치를 다른 순서로 머지했거나, 다른 브랜치가 같은 충돌을 냈거나, 충돌 스타일 설정이 다르더라도"</strong> 기록된 해결을 찾을 수 있도록 충돌을 정규화합니다. 방법은 세 가지입니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">1. 라벨 제거</div>
+                                <div class="flow-box__items"><code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code>에서 브랜치 이름을 떼어 냄 &rarr; 브랜치명이 달라도 동일 취급</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">2. base 제거</div>
+                                <div class="flow-box__items"><code>diff3</code>/<code>zdiff3</code>의 공통 조상 부분을 제거 &rarr; <strong>충돌 스타일이 달라도 동일 취급</strong></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">3. hunk 정렬</div>
+                                <div class="flow-box__items">충돌 hunk들을 <strong>정렬</strong> &rarr; 머지 순서가 달라져도 동일 취급</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>정규화된 결과를 해시해 <strong>충돌 ID</strong>를 만들고, 이것을 <code>.git/rr-cache/&lt;id&gt;/</code>의 디렉토리 이름으로 씁니다. <code>preimage</code>(충돌 상태)와 <code>postimage</code>(해결 결과)가 그 안에 저장됩니다.</p>
+                    <p class="key-point">3번의 "hunk 정렬"이 특히 영리합니다. A를 B에 머지하든 B를 A에 머지하든 <strong>충돌 hunk의 집합은 같고 순서만 다릅니다.</strong> 정렬하면 같은 ID가 나오므로 한 번의 해결이 양방향에 재사용됩니다.</p>
+                    <p class="warning">rerere는 <strong>맹목적으로 재적용</strong>합니다. 문맥이 달라져 그 해결이 더 이상 맞지 않는데도 적용될 수 있습니다. 자동 적용된 결과는 <strong>반드시 <code>git diff --cached</code>로 확인</strong>하십시오. 의심스러우면 <code>git rerere forget &lt;path&gt;</code>로 그 기록을 지울 수 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; rerere 실무 패턴</div>
+                        <pre><code># 자동 적용된 결과를 반드시 검토
+$ git rebase main
+Resolved 'src/config.c' using previous resolution.
+$ git diff --cached src/config.c      # ← 이 확인을 생략하지 말 것
+
+# 잘못 기록된 해결 지우기
+$ git rerere forget src/config.c
+
+# 긴 feature 브랜치의 "미리 충돌 연습" 패턴
+$ git checkout -b throwaway feature
+$ git merge main                       # 충돌 해결 → rerere가 기록
+$ git checkout feature
+$ git branch -D throwaway               # 머지 자체는 버림
+# 나중에 진짜 머지/rebase 때 rerere가 자동 적용</code></pre>
+                    </div>
+                    <p class="highlight">마지막 패턴이 실전에서 유용합니다. <strong>충돌 해결은 저장하되 머지 커밋은 버리는</strong> 것으로, 장기 브랜치를 유지하면서 나중의 통합 비용을 미리 치러 두는 기법입니다. Git 자신의 메인테이너가 <code>pu</code>/<code>seen</code> 브랜치를 매일 재구축할 때 쓰는 방식이기도 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>머지는 트리 머지(구조)와 콘텐츠 머지(내용) 두 층이다.</strong> 트리 층이 rename·삭제·추가를 판정하고, 양쪽이 모두 수정한 파일만 <code>xdl_merge()</code>로 내려보낸다. 결과는 인덱스의 stage 1/2/3에 기록된다.</li>
+                <li><strong>ort는 "Ostensibly Recursive's Twin", recursive의 드롭인 대체품이다.</strong> 인덱스·워킹 트리 대신 <strong>메모리에서 계산</strong>하므로 실패해도 깔끔하고, rename 캐싱·디렉토리 rename으로 rebase가 극적으로 빨라졌다.</li>
+                <li><strong>merge base가 여러 개면 base들끼리 재귀적으로 머지해 가상 base를 만든다.</strong> 가상 base가 충돌을 포함할 수 있어, criss-cross 머지의 충돌 마커가 기괴해 보이는 원인이 된다.</li>
+                <li><strong><code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>가 7개인 것은 <code>DEFAULT_CONFLICT_MARKER_SIZE 7</code> 때문이다.</strong> <code>merge.conflictStyle = zdiff3</code>은 base 내용까지 최소한으로 보여 주므로 반드시 켜 둘 만하고, <code>-X ours</code>(충돌 구간만)와 <code>-s ours</code>(상대 변경 전부 폐기)를 혼동하면 안 된다.</li>
+                <li><strong>rerere는 충돌을 정규화(라벨 제거 · base 제거 · hunk 정렬)해 ID를 만들고 해결을 재사용한다.</strong> 브랜치명·충돌 스타일·머지 순서가 달라도 매치되지만, 맹목적으로 적용되므로 결과 검토가 필수다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

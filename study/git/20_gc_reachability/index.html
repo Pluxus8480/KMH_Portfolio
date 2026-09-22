@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>지운 커밋은 언제 진짜로 사라질까 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>지운 커밋은 언제 진짜로 사라질까?</h1>
+            <p class="subtitle">GC 해부 &mdash; 도달 가능성 · prune 2주의 유예 · cruft pack · fsck로 복구하기</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 도달 가능성 &mdash; Git의 생사 판정 기준</h2>
+            <div class="conversation">
+                <div class="q">브랜치를 지우면 그 커밋들은 어떻게 되나요?</div>
+                <div class="a">
+                    <p>즉시 지워지지 않습니다. <strong>"도달 불가능(unreachable)" 상태가 될 뿐</strong>이며, 그 자체로는 아무 일도 일어나지 않습니다.</p>
+                    <p>Git의 GC는 <strong>mark-and-sweep</strong> 방식입니다. 프로그래밍 언어의 가비지 컬렉터와 원리가 같습니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">1. 루트 수집</div>
+                                <div class="flow-box__items">모든 ref(브랜치·태그·원격 추적) + <strong>reflog 항목</strong> + 인덱스 + 진행 중 상태(MERGE_HEAD 등)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">2. 마킹</div>
+                                <div class="flow-box__items">루트에서 커밋 &rarr; 트리 &rarr; 하위 트리 &rarr; blob으로 <strong>전부 순회</strong>하며 표시 (13편의 리비전 워크)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">3. 스윕</div>
+                                <div class="flow-box__items">표시되지 않은 객체 중 <strong>충분히 오래된 것</strong>만 삭제</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">3번의 <strong>"충분히 오래된"</strong>이 Git GC의 결정적 안전장치입니다. 일반적인 GC와 달리 Git은 <strong>도달 불가능해진 즉시 지우지 않습니다.</strong></p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>사무실의 문서 폐기 규정과 같습니다.</p>
+                        <p>어떤 문서를 참조하는 색인 카드가 모두 없어지면 그 문서는 "버려도 되는 후보"가 됩니다. 하지만 <strong>즉시 파쇄하지 않고 2주간 폐기함에 둡니다.</strong> 누가 실수로 카드를 버렸을 수도 있고, 마침 지금 새 카드를 만드는 중일 수도 있기 때문입니다.</p>
+                        <p>Git의 2주 유예가 정확히 이 폐기함입니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">왜 즉시 지우지 않나요?</div>
+                <div class="a">
+                    <p>두 가지 이유가 있고, 둘 다 실용적입니다.</p>
+                    <p><strong>1) 사용자의 실수 복구.</strong> <code>reset --hard</code>, 브랜치 삭제, rebase 사고로 잃은 커밋을 되살릴 시간을 줍니다.</p>
+                    <p><strong>2) 경쟁 상태 방지 &mdash; 이쪽이 더 중요합니다.</strong> 다른 프로세스가 지금 막 객체를 쓰고 있는데 ref를 아직 만들지 않았다면, 그 객체는 <strong>순간적으로 도달 불가능</strong>합니다. 즉시 지우면 진행 중인 작업이 파괴됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">위험한 시나리오</div>
+                        <pre><code>프로세스 A (git commit 진행 중)
+  t1: blob 기록
+  t2: tree 기록
+  t3: commit 객체 기록       ← 아직 ref가 없다! 도달 불가능 상태
+  t4: refs/heads/main 갱신
+
+프로세스 B (git gc)
+  t3.5: "도달 불가능한 커밋 발견" → 즉시 삭제했다면?
+        → A의 t4에서 만들어진 ref가 <strong>없는 객체</strong>를 가리키게 됨 = 저장소 손상</code></pre>
+                    </div>
+                    <p class="highlight">02편에서 본 <strong>"이미 있으면 mtime만 갱신(freshen)"</strong>이 여기서 의미를 갖습니다. Git은 객체를 쓸 때 이미 존재하면 mtime을 갱신하는데, 이는 <strong>"이 객체는 방금 쓰이려 했으니 아직 지우지 마라"</strong>는 신호입니다. 도달 가능성과 mtime, 두 가지를 함께 보는 이유입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: gc가 실제로 하는 일들</h2>
+            <div class="conversation">
+                <div class="q"><code>git gc</code>는 무엇을 하나요?</div>
+                <div class="a">
+                    <p>이름은 "가비지 컬렉션"이지만 실제로는 <strong>유지보수 작업의 묶음</strong>입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>작업</th><th>내용</th><th>관련 설정</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>repack</code></td><td>느슨한 객체를 팩으로, 여러 팩을 하나로</td><td><code>gc.autoPackLimit</code> (기본 50)</td></tr>
+                            <tr><td><code>prune</code></td><td>오래되고 도달 불가능한 객체 삭제</td><td><code>gc.pruneExpire</code> (기본 <strong>2.weeks.ago</strong>)</td></tr>
+                            <tr><td><code>reflog expire</code></td><td>오래된 reflog 항목 삭제</td><td><code>gc.reflogExpire</code> 90일 / <code>gc.reflogExpireUnreachable</code> 30일</td></tr>
+                            <tr><td><code>pack-refs</code></td><td>loose ref를 packed-refs로</td><td>&mdash;</td></tr>
+                            <tr><td><code>commit-graph write</code></td><td>커밋 그래프 갱신</td><td><code>gc.writeCommitGraph</code></td></tr>
+                            <tr><td>worktree prune</td><td>사라진 worktree 정리</td><td><code>gc.worktreePruneExpire</code></td></tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">builtin/gc.c &mdash; 기본 유예 기간</div>
+                        <pre><code>.prune_expire = xstrdup("2.weeks.ago"),</code></pre>
+                    </div>
+                    <p class="key-point"><strong>reflog expire가 prune보다 먼저</strong> 실행된다는 순서가 중요합니다. reflog 항목이 사라져야 그 커밋이 비로소 도달 불가능해지고, 그 뒤에야 prune의 대상이 됩니다. 즉 <strong>실제 삭제까지는 "reflog 만료(30~90일) + prune 유예(2주)"</strong>가 걸립니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 삭제 시점 체험</div>
+                        <pre><code>$ git log --oneline -1
+a1b2c3d 실수로 만든 커밋
+
+$ git reset --hard HEAD~1              # 커밋을 "버렸다"
+
+# 여전히 살아 있다 — reflog가 가리키고 있기 때문
+$ git cat-file -t a1b2c3d
+commit
+$ git fsck --unreachable                # 아무것도 안 나옴 (reflog가 루트니까)
+
+# reflog까지 지워야 비로소 도달 불가능
+$ git reflog expire --expire=now --all
+$ git fsck --unreachable
+unreachable commit a1b2c3d...
+
+# 그래도 2주 유예 때문에 gc로는 안 지워진다
+$ git gc
+$ git cat-file -t a1b2c3d
+commit                                  # 아직 살아 있다!
+
+# 유예까지 무시하고 즉시 삭제
+$ git gc --prune=now
+$ git cat-file -t a1b2c3d
+fatal: git cat-file: could not get object info    # 이제 정말 사라졌다</code></pre>
+                    </div>
+                    <p class="warning"><code>--prune=now</code>는 <strong>진행 중인 다른 Git 프로세스를 파괴할 수 있습니다.</strong> 저장소를 아무도 안 쓰는 것이 확실할 때만 사용하십시오. 서버에서는 특히 위험합니다.</p>
+                </div>
+
+                <div class="q">자동 GC는 언제 돌아가나요?</div>
+                <div class="a">
+                    <p><code>commit</code>, <code>merge</code>, <code>rebase</code>, <code>am</code> 같은 명령이 끝날 때 <code>git gc --auto</code>를 호출합니다. 임계를 넘지 않으면 아무것도 하지 않고 돌아갑니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>설정</th><th>기본값</th><th>의미</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>gc.auto</code></td><td><strong>6700</strong></td><td>느슨한 객체가 이보다 많으면 팩으로 묶는다. 0이면 자동 GC 전체 비활성</td></tr>
+                            <tr><td><code>gc.autoPackLimit</code></td><td><strong>50</strong></td><td><code>.keep</code>이 없는 팩이 이보다 많으면 하나로 합친다</td></tr>
+                            <tr><td><code>gc.autoDetach</code></td><td>true</td><td>백그라운드에서 돌리고 즉시 반환</td></tr>
+                            <tr><td><code>gc.bigPackThreshold</code></td><td>&mdash;</td><td>이보다 큰 팩은 재패킹 대상에서 제외</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight"><code>gc.auto</code>가 <strong>6700</strong>이라는 어중간한 숫자인 데는 이유가 있습니다. 객체 앞 2자로 256개 디렉토리에 흩어지므로(03편), Git은 <strong><code>objects/17/</code> 디렉토리 하나만 세어 보고 &times;256으로 추정</strong>합니다. 전체를 스캔하지 않고 표본으로 어림하는 것이며, 6700은 그 추정 기준에 맞춘 값입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; GC 제어</div>
+                        <pre><code># 지금 GC가 필요한 상태인지
+$ git count-objects -v
+count: 8234                # gc.auto(6700) 초과 → 다음 명령에서 자동 GC
+
+# 자동 GC 임시 비활성 (대량 스크립트 작업 중)
+$ git -c gc.auto=0 fast-import &lt; data
+
+# 백그라운드 GC가 성가시다면 (CI 등)
+$ git config gc.autoDetach false
+
+# 현대적 대안: maintenance (2.31+)
+$ git config --global maintenance.auto false   # 자동 gc 끄고
+$ git maintenance register                      # 스케줄러에 등록
+$ git maintenance start
+# → gc 대신 incremental-repack, commit-graph, prefetch를 주기적으로 수행</code></pre>
+                    </div>
+                    <p class="key-point"><code>git maintenance</code>가 현대적 권장안입니다. <code>gc</code>가 "가끔 크게 한 번"이라면, maintenance는 <strong>"자주 조금씩"</strong>입니다. 대형 저장소에서 작업 중 갑자기 수 분간 멈추는 일을 방지합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: cruft pack &mdash; "느슨한 객체 폭발" 문제</h2>
+            <div class="conversation">
+                <div class="q">GC를 돌렸는데 오히려 파일 수가 늘어난 적이 있습니다. 왜 그런가요?</div>
+                <div class="a">
+                    <p>Git의 오래된 골칫거리였습니다. 원인은 <strong>mtime과 팩의 충돌</strong>입니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">문제</div>
+                                <div class="flow-box__items">prune은 <strong>객체별 mtime</strong>으로 만료를 판정한다</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">그런데</div>
+                                <div class="flow-box__items">팩 안의 객체는 개별 mtime이 없다. <strong>팩 파일 하나의 mtime</strong>만 존재</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">옛 해법</div>
+                                <div class="flow-box__items">repack 시 도달 불가능한 객체를 <strong>느슨한 객체로 풀어냄</strong>(<code>unpack-unreachable</code>) &rarr; <strong>파일 수 폭발</strong></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">현대 해법</div>
+                                <div class="flow-box__items"><strong>cruft pack</strong> &mdash; 별도 팩 + <code>.mtimes</code> 파일에 객체별 mtime 기록</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>10편에서 본 <code>.mtimes</code> 파일이 이 문제의 해답입니다. <strong>4바이트 &times; 객체 수</strong>의 테이블에 각 객체의 mtime을 담아, 팩 안에 있으면서도 개별 만료 판정이 가능해집니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; cruft pack 사용</div>
+                        <pre><code># 도달 불가능한 객체를 cruft pack으로 모으기
+$ git gc --cruft
+$ ls .git/objects/pack/
+pack-aaa.pack  pack-aaa.idx                    # 도달 가능한 객체
+pack-bbb.pack  pack-bbb.idx  pack-bbb.mtimes   # ← cruft pack
+
+# 만료 기간을 지정해 repack
+$ git repack --cruft --cruft-expiration=30.days -d
+
+# 기본값으로 켜기 (대형 저장소 권장)
+$ git config gc.cruftPacks true
+
+# 확인: .mtimes가 있는 팩이 cruft pack
+$ ls .git/objects/pack/*.mtimes</code></pre>
+                    </div>
+                    <p class="key-point">GitHub 같은 호스팅 서비스에는 이 기능이 <strong>존재 이유 그 자체</strong>였습니다. 거대 저장소에서 GC를 돌릴 때마다 inode가 수백만 개 생기는 문제를 겪었고, cruft pack이 그것을 해결했습니다.</p>
+                </div>
+
+                <div class="q"><code>.keep</code> 파일은 뭔가요?</div>
+                <div class="a">
+                    <p>팩 파일 옆에 같은 이름의 <code>.keep</code> 파일을 두면 <strong>그 팩은 repack 대상에서 제외</strong>됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; .keep 활용</div>
+                        <pre><code># 거대한 팩(예: 최초 clone으로 받은 것)을 재패킹에서 제외
+$ touch .git/objects/pack/pack-aaa.keep
+
+# 이후 gc는 이 팩을 건드리지 않는다
+$ git gc
+# → pack-aaa는 그대로, 새로 생긴 객체만 다른 팩으로
+
+# 효과: 20GB짜리 팩을 매번 다시 쓰는 비용을 없앤다
+# gc.autoPackLimit의 팩 개수 계산에서도 제외된다</code></pre>
+                    </div>
+                    <p>Git이 스스로 <code>.keep</code>을 만드는 경우도 있습니다. <code>fetch</code>로 팩을 받는 도중에는 임시 <code>.keep</code>을 두어, <strong>인덱싱이 끝나기 전에 다른 프로세스가 그 팩을 지우지 못하게</strong> 합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: fsck &mdash; 진단과 복구</h2>
+            <div class="conversation">
+                <div class="q">reflog도 없이 커밋을 잃었습니다. 복구할 방법이 있나요?</div>
+                <div class="a">
+                    <p><strong>GC가 아직 돌지 않았다면</strong> 가능성이 높습니다. <code>git fsck</code>가 "아무도 안 가리키는 객체"를 찾아 줍니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 미아 객체 찾기</div>
+                        <pre><code># reflog를 루트에서 제외하고 진짜 미아를 찾는다
+$ git fsck --lost-found --no-reflogs
+Checking object directories: 100% (256/256), done.
+dangling commit a1b2c3d4e5f6...
+dangling commit f7d3c0e9b8a7...
+dangling blob   9f8e7d6c5b4a...
+
+# 각각이 뭔지 확인
+$ git show a1b2c3d4e5f6
+commit a1b2c3d4e5f6
+Author: me
+Date:   ...
+    fix: 잃어버린 그 커밋!
+
+# 파일로도 떨어진다
+$ ls .git/lost-found/commit/
+a1b2c3d4e5f6...
+$ ls .git/lost-found/other/          # blob 등
+
+# 되살리기 — 이름을 붙여 주면 된다
+$ git branch recovered a1b2c3d4e5f6
+$ git log recovered</code></pre>
+                    </div>
+                    <p class="highlight">블롭만 남은 경우(<code>git add</code>는 했지만 커밋 전에 잃은 파일)도 건질 수 있습니다. <code>dangling blob</code>의 내용을 <code>git cat-file -p</code>로 꺼내 확인하고, 맞는 것을 파일로 저장하면 됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 스테이징만 하고 잃은 파일 찾기</div>
+                        <pre><code># dangling blob들을 훑어 내용 확인
+$ for b in $(git fsck --lost-found --no-reflogs | awk '/dangling blob/{print $3}'); do
+    echo "=== $b ($(git cat-file -s $b) bytes) ==="
+    git cat-file -p "$b" | head -5
+  done
+
+# 찾았으면 복원
+$ git cat-file -p 9f8e7d6c5b4a &gt; recovered.c</code></pre>
+                    </div>
+                    <p class="warning">시간이 관건입니다. <strong><code>git gc --prune=now</code>나 자동 GC가 돌기 전에</strong> 해야 합니다. 사고를 인지한 즉시 <strong>저장소 디렉토리 전체를 <code>cp -a</code>로 복사해 두는 것</strong>이 가장 안전한 첫 조치입니다.</p>
+                </div>
+
+                <div class="q"><code>fsck</code>는 복구 말고 무엇에 쓰나요?</div>
+                <div class="a">
+                    <p>이름 그대로 <strong>파일 시스템 검사(file system check)</strong>입니다. 저장소의 무결성을 전수 검증합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>검사 항목</th><th>내용</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>해시 일치</td><td>객체 내용을 다시 해시해 이름과 비교 (03편)</td></tr>
+                            <tr><td>연결 무결성</td><td>커밋이 가리키는 트리, 트리가 가리키는 blob이 실제로 존재하는가</td></tr>
+                            <tr><td>포맷 검증</td><td>트리 엔트리 정렬(04편), 커밋 헤더 순서, 모드 값의 유효성</td></tr>
+                            <tr><td>미아 객체</td><td>도달 불가능한 객체 목록</td></tr>
+                            <tr><td>손상된 ref</td><td>없는 객체를 가리키는 ref</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; fsck 실전</div>
+                        <pre><code># 전체 검사 (대형 저장소에서는 수 분 소요)
+$ git fsck --full --strict
+
+# 흔한 출력과 의미
+warning in tree 4d5e6f7: contains zero-padded file modes   # 옛 Git이 만든 040000
+warning in commit a1b2c3d: invalid author/committer line   # 이메일 형식 문제
+error: refs/heads/broken does not point to a valid object  # ref 손상
+missing blob 9f8e7d6c                                      # 객체 유실 (심각)
+
+# 수신 데이터 검증 강화 (서버 권장)
+$ git config transfer.fsckObjects true
+$ git config receive.fsckObjects true      # push 받을 때 검증
+$ git config fetch.fsckObjects true        # fetch 할 때 검증
+
+# 특정 경고 무시 (옛 저장소 마이그레이션 시)
+$ git config fsck.zeroPaddedFilemode warn</code></pre>
+                    </div>
+                    <p class="key-point"><strong><code>receive.fsckObjects = true</code>는 서버에서 반드시 켜야 할 설정</strong>입니다. 악의적이거나 손상된 객체가 저장소에 들어오는 것을 push 시점에 막습니다. 켜지 않으면 손상된 객체가 조용히 저장되었다가, 나중에 다른 사용자의 clone을 깨뜨립니다. 검증 비용이 있어 기본값이 아니지만, 공용 서버라면 켜는 것이 옳습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 저장소 용량 분석 (GC와 함께 자주 쓰는 패턴)</div>
+                        <pre><code># 1) 큰 blob Top 10과 그 경로
+$ git rev-list --objects --all \
+  | git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' \
+  | awk '$1=="blob"' | sort -k3 -n -r | head -10
+blob 3f4a5b6c 104857600 Assets/Textures/intro.png
+
+# 2) 도달 불가능한 객체가 차지하는 용량
+$ git count-objects -vH
+size-pack: 1.32 GiB
+$ git gc --prune=now --quiet &amp;&amp; git count-objects -vH
+size-pack: 842 MiB                  # 490MB가 쓰레기였다
+
+# 3) 브랜치별 기여도 (어느 브랜치가 용량을 먹는가)
+$ for b in $(git branch -r --format='%(refname)'); do
+    echo "$(git rev-list --count $b) $b"
+  done | sort -rn | head</code></pre>
+                    </div>
+                    <p class="highlight">면접 포인트: <strong>"Git에서 파일을 완전히 삭제하려면?"</strong>이라는 질문의 정답은 여러 단계입니다. (1) 히스토리 재작성(<code>filter-repo</code>)으로 도달 불가능하게 만들고, (2) 모든 클론에서 강제 push + 재클론, (3) reflog 만료 + <code>gc --prune=now</code>, (4) <strong>호스팅 서비스에 서버 측 GC를 요청</strong>. 그리고 <strong>유출된 비밀은 어차피 폐기(rotate)해야 한다</strong>는 점을 함께 말하는 것이 실무적인 답입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Git GC는 mark-and-sweep이며, 루트에는 ref뿐 아니라 reflog·인덱스·진행 중 상태가 포함된다.</strong> 브랜치를 지워도 reflog가 가리키는 동안은 도달 가능이다.</li>
+                <li><strong>도달 불가능해져도 즉시 지우지 않고 <code>gc.pruneExpire</code>(기본 2주) 유예를 둔다.</strong> 사용자 실수 복구뿐 아니라, "객체는 썼지만 ref는 아직" 상태의 다른 프로세스를 파괴하지 않기 위한 경쟁 상태 방어다.</li>
+                <li><strong>실제 삭제까지는 reflog 만료(도달 불가 항목 30일, 그 외 90일) + prune 유예 2주가 걸린다.</strong> <code>--prune=now</code>는 진행 중인 프로세스를 깨뜨릴 수 있어 서버에서 특히 위험하다.</li>
+                <li><strong>cruft pack + <code>.mtimes</code>가 "GC 후 느슨한 객체 폭발" 문제를 해결했다.</strong> 팩 안의 객체에도 개별 mtime을 부여해 만료 판정이 가능해졌다. <code>.keep</code> 파일은 거대 팩을 재패킹에서 제외한다.</li>
+                <li><strong><code>git fsck --lost-found --no-reflogs</code>가 reflog 없이도 미아 커밋·blob을 찾아 준다.</strong> 단 GC 전에 해야 하며, 사고 직후에는 저장소 디렉토리를 통째로 복사해 두는 것이 최선의 첫 조치다. 서버에서는 <code>receive.fsckObjects</code>를 켜 두는 것이 좋다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

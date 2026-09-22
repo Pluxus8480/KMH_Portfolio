@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>100GB 리포를 몇 초 만에 clone하는 법 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>100GB 리포를 몇 초 만에 clone하는 법</h1>
+            <p class="subtitle">부분 클론 · 희소 체크아웃 · 희소 인덱스 &mdash; promisor remote와 sparse directory 엔트리</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 세 가지 규모 축</h2>
+            <div class="conversation">
+                <div class="q">거대 저장소에서 Git이 느려지는 원인은 하나가 아니라고 하던데요?</div>
+                <div class="a">
+                    <p>Git 문서 <code>sparse-index.adoc</code>이 워킹 디렉토리의 <strong>세 가지 규모 축</strong>을 정의합니다. 이 구분이 처방을 나눕니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>축</th><th>질문</th><th>비용이 드는 작업</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>HEAD</strong></td><td>HEAD에 파일이 몇 개인가?</td><td>인덱스 파싱/쓰기, 트리 순회</td></tr>
+                            <tr><td><strong>Populated</strong></td><td>희소 체크아웃 범위 안에 몇 개인가?</td><td>워킹 트리 스캔, 체크아웃</td></tr>
+                            <tr><td><strong>Modified</strong></td><td>사용자가 몇 개를 수정했나?</td><td>diff, 커밋</td></tr>
+                        </tbody>
+                    </table>
+                    <p>문서가 지적하듯 이 셋은 <strong>크기 순서가 정해져 있습니다.</strong> 수정한 파일 &le; 채워진 파일 &le; HEAD의 파일입니다. 문제는 <strong>극단적 불균형</strong>이 생길 때입니다.</p>
+                    <p class="warning">문서의 예시입니다. <strong>"HEAD에 수백만 개의 경로가 있는데 populated set은 수만 개뿐이라면, <code>git status</code>와 <code>git add</code>가 O(Populated)가 아니라 O(HEAD) 연산에 지배당한다. 주된 비용은 인덱스를 파싱하고 다시 쓰는 것이며, 인덱스는 대부분 <code>SKIP_WORKTREE</code>로 표시된 HEAD의 파일들로 채워져 있다."</strong></p>
+                    <p class="key-point">즉 <strong>"파일을 받지 않았는데도 인덱스에는 다 들어 있어서 느린"</strong> 상황입니다. 여기서 세 가지 기술이 각각 다른 축을 공략합니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">부분 클론</div>
+                                <div class="flow-box__items">객체 DB의 크기를 줄임<br>(다운로드 · 디스크)</div>
+                            </div>
+                            <div class="flow-arrow">+</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">희소 체크아웃</div>
+                                <div class="flow-box__items"><strong>Populated</strong>를 줄임<br>(워킹 트리 파일 수)</div>
+                            </div>
+                            <div class="flow-arrow">+</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">희소 인덱스</div>
+                                <div class="flow-box__items"><strong>인덱스 엔트리 수</strong>를 줄임<br>(O(HEAD) &rarr; O(Populated))</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>백화점 전체 재고를 다루는 상황입니다.</p>
+                        <p><strong>부분 클론</strong>은 "창고에서 상품 실물을 다 가져오지 않고, <strong>필요할 때 주문</strong>하는 것"입니다.</p>
+                        <p><strong>희소 체크아웃</strong>은 "매장 진열대에 <strong>내 담당 코너 상품만</strong> 꺼내 두는 것"입니다.</p>
+                        <p><strong>희소 인덱스</strong>는 "재고 장부에서 <strong>남의 코너는 '3층 전체'라고 한 줄로 요약</strong>하는 것"입니다. 앞의 둘을 해도 장부가 수백만 줄이면 매번 장부를 읽고 쓰는 것만으로 느립니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 부분 클론 &mdash; promisor remote</h2>
+            <div class="conversation">
+                <div class="q">부분 클론은 무엇을 안 받는 건가요?</div>
+                <div class="a">
+                    <p>Git 문서 <code>partial-clone.adoc</code>이 동기를 명확히 밝힙니다. <strong>"clone과 fetch에서 Git은 저장소의 전체 내용과 히스토리를 다운로드한다. 극단적으로 큰 저장소에서는 clone이 수 시간(또는 며칠)이 걸리고 100GiB 이상을 소비한다."</strong></p>
+                    <p>불필요한 것의 예로 문서가 드는 두 가지입니다.</p>
+                    <ol>
+                        <li><strong>작업 영역 밖의 파일</strong> &mdash; "디렉토리 50만 개, 커밋마다 파일 350만 개인 저장소에서, 사용자가 좁은 '콘(cone)'만 필요하다면 많은 객체를 받지 않아도 된다"</li>
+                        <li><strong>큰 바이너리 에셋</strong> &mdash; "머지할 수 없는 대형 빌드 산출물의 과거 버전을 전부 받을 필요 없이, 실제로 참조되는 버전만 받으면 된다"</li>
+                    </ol>
+                    <p class="key-point">핵심 개념은 <strong>promisor remote</strong>입니다. 문서의 정의: <strong>"나중에 누락된 객체를 제공해 줄 수 있는 원격을 promisor remote라 부른다. 요청하면 객체를 보내 주겠다고 <em>약속(promise)</em>하기 때문이다."</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">필터 종류 (rev-list-options.adoc)</div>
+                        <pre><code>--filter=blob:none          모든 blob을 생략 (커밋·트리는 전부 받음)
+--filter=blob:limit=&lt;n&gt;     &lt;n&gt; 이상 크기의 blob 생략. k/m/g 접미사 가능
+                            (blob:limit=1k = blob:limit=1024)
+--filter=tree:0             모든 트리를 생략 (가장 공격적)
+--filter=object:type=&lt;t&gt;    해당 타입만 남기고 생략
+--filter=sparse:oid=&lt;blob&gt;  희소 체크아웃 명세 파일을 기준으로 필터
+--filter=combine:A+B        여러 필터 조합</code></pre>
+                    </div>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>필터</th><th>받는 것</th><th>적합한 용도</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>blob:none</code></td>
+                                <td>모든 커밋 + 모든 트리</td>
+                                <td><strong>일상 개발.</strong> <code>git log</code>·<code>diff</code>의 경로 정보가 살아 있고, 파일 내용만 필요 시 받음</td>
+                            </tr>
+                            <tr>
+                                <td><code>blob:limit=10m</code></td>
+                                <td>10MB 미만 blob까지</td>
+                                <td>대형 에셋이 섞인 저장소</td>
+                            </tr>
+                            <tr>
+                                <td><code>tree:0</code></td>
+                                <td>커밋만</td>
+                                <td>CI 빌드 등 히스토리 메타데이터만 필요한 경우</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 부분 클론</div>
+                        <pre><code>$ git clone --filter=blob:none https://github.com/torvalds/linux
+# 커밋·트리는 전부, blob은 현재 체크아웃에 필요한 것만
+
+$ cat .git/config
+[remote "origin"]
+	url = https://github.com/torvalds/linux
+	fetch = +refs/heads/*:refs/remotes/origin/*
+	promisor = true                    # ← "이 원격이 나머지를 약속했다"
+	partialclonefilter = blob:none
+[extensions]
+	partialClone = origin              # ← 어느 원격이 promisor인가
+
+# 옛 파일 내용이 필요해지면 자동으로 받아 온다
+$ git show HEAD~1000:kernel/fork.c
+remote: Enumerating objects: 1, done.
+# ↑ 이 순간 네트워크 요청이 발생한다
+
+# 미리 받아 두기 (오프라인 대비)
+$ git fetch --refetch --filter=blob:none origin</code></pre>
+                    </div>
+                    <p class="warning">문서가 분명히 경고합니다. <strong>"부분 클론을 쓰려면 사용자가 온라인이어야 하고 promisor remote가 on-demand fetch에 응답 가능해야 한다."</strong> 오프라인 환경이나 네트워크가 불안정한 곳에서는 <code>git log -p</code> 한 번이 수천 번의 개별 요청을 일으킬 수 있습니다.</p>
+                </div>
+
+                <div class="q">shallow clone과는 뭐가 다른가요?</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th>shallow (<code>--depth</code>)</th><th>부분 클론 (<code>--filter</code>)</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>자르는 축</td><td><strong>히스토리의 깊이</strong> (커밋 수)</td><td><strong>객체의 종류</strong> (blob/tree)</td></tr>
+                            <tr><td>남는 것</td><td>최근 N개 커밋의 완전한 스냅샷</td><td>전체 커밋 그래프 + 필요한 객체만</td></tr>
+                            <tr><td><code>git log</code></td><td>N개까지만 보임</td><td><strong>전체 히스토리 조회 가능</strong></td></tr>
+                            <tr><td><code>git blame</code>/<code>bisect</code></td><td>제한적 또는 불가</td><td>가능 (필요 객체를 받아 옴)</td></tr>
+                            <tr><td>복구</td><td><code>--unshallow</code>로 전체 받기</td><td>on-demand로 점진적</td></tr>
+                            <tr><td>적합</td><td><strong>CI</strong> (일회성 빌드)</td><td><strong>일상 개발</strong></td></tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">shallow는 <strong>"과거를 잘라내는"</strong> 것이고 부분 클론은 <strong>"덩어리를 미루는"</strong> 것입니다. CI 빌드에는 shallow가, 개발자 워크스테이션에는 부분 클론이 맞습니다. 14편에서 본 것처럼 shallow는 commit-graph의 세대 번호까지 왜곡하므로, 장기 사용에는 적합하지 않습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 희소 체크아웃 &mdash; cone 모드</h2>
+            <div class="conversation">
+                <div class="q">희소 체크아웃은 어떻게 동작하나요?</div>
+                <div class="a">
+                    <p>06편에서 본 <strong><code>skip-worktree</code> 비트</strong>가 핵심입니다. 인덱스에는 엔트리가 있지만 "워킹 트리에 없어도 정상"이라고 표시합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 희소 체크아웃</div>
+                        <pre><code>$ git sparse-checkout init --cone
+$ git sparse-checkout set services/payment shared/proto
+
+$ ls
+services/  shared/            # 나머지 디렉토리는 워킹 트리에 없다
+
+$ git ls-files | wc -l
+2847                          # 인덱스에는 여전히 다 있다
+
+$ git ls-files -t | grep '^S' | wc -l
+1203847                       # S = skip-worktree 표시된 것들
+
+$ cat .git/info/sparse-checkout
+/*
+!/*/
+/services/
+/shared/</code></pre>
+                    </div>
+                    <p><strong>cone 모드</strong>가 중요합니다. Git 문서는 <strong>"<code>core.sparseCheckoutCone</code>으로 활성화되는 cone 모드 패턴은, HEAD의 어떤 파일이 희소 체크아웃 cone에 속하는지 매우 빠르게 판별할 수 있게 해 준다"</strong>고 설명합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>구분</th><th>비-cone (레거시)</th><th>cone 모드 (권장)</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>패턴</td><td>임의의 gitignore 스타일 glob</td><td><strong>디렉토리 경로만</strong></td></tr>
+                            <tr><td>매칭 비용</td><td>경로마다 모든 패턴 검사 &mdash; O(경로 &times; 패턴)</td><td>접두사 해시 조회 &mdash; <strong>사실상 O(1)</strong></td></tr>
+                            <tr><td>표현력</td><td>높음 (<code>*.md</code>만 같은 것도 가능)</td><td>제한적 (디렉토리 단위)</td></tr>
+                            <tr><td>희소 인덱스</td><td><strong>불가</strong></td><td><strong>가능</strong></td></tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">"cone"이라는 이름은 <strong>디렉토리 트리에서 잘라낸 원뿔 모양</strong>에서 왔습니다. 포함된 디렉토리의 <strong>모든 조상 디렉토리</strong>도 함께 포함되므로, 루트에서 목표 디렉토리로 퍼져 가는 원뿔 형태가 됩니다. 이 제약 덕분에 <strong>"이 디렉토리 전체가 범위 밖"</strong>을 판정할 수 있고, 그것이 다음 절의 희소 인덱스를 가능하게 합니다.</p>
+                    <p class="warning"><code>skip-worktree</code>를 수동으로 조작하지 마십시오. 06편에서 언급했듯 <code>--assume-unchanged</code>와 혼동하기 쉽고, 희소 체크아웃 명령이 관리하는 상태를 망가뜨립니다. 반드시 <code>git sparse-checkout</code> 명령을 쓰십시오.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 희소 인덱스 &mdash; sparse directory 엔트리</h2>
+            <div class="conversation">
+                <div class="q">희소 체크아웃을 해도 느린 이유가 뭔가요?</div>
+                <div class="a">
+                    <p><strong>인덱스는 여전히 HEAD의 모든 파일을 담고 있기 때문</strong>입니다. 파일 350만 개짜리 모노레포에서 <code>services/payment/</code>만 체크아웃해도, 인덱스에는 <strong>350만 개 엔트리가 그대로</strong> 있고 대부분이 <code>skip-worktree</code>로 표시되어 있을 뿐입니다.</p>
+                    <p><code>git status</code>는 이 인덱스를 <strong>전부 파싱</strong>하고, <code>git add</code>는 <strong>전부 다시 씁니다.</strong> 문서의 표현대로 <strong>O(Populated)여야 할 작업이 O(HEAD)에 지배당합니다.</strong></p>
+                    <p class="highlight">해법은 <strong>인덱스 포맷을 바꾸는 것</strong>입니다. Git 문서: <strong>"희소 인덱스는 이 명령들을 O(HEAD)에서 O(Populated)로 바꾸려 한다. 이를 위해 인덱스 포맷을 상당히 변경해야 한다 &mdash; <em>sparse directory</em> 엔트리를 추가하는 것이다."</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">sparse directory 엔트리</div>
+                        <pre><code>[일반 인덱스 — 350만 엔트리]
+100644 aaa... 0  services/payment/src/main.go
+100644 bbb... 0  services/payment/src/util.go
+100644 ccc... 0  services/billing/src/main.go       ← skip-worktree
+100644 ddd... 0  services/billing/src/util.go       ← skip-worktree
+... (350만 줄)
+
+[희소 인덱스 — 수천 엔트리]
+100644 aaa... 0  services/payment/src/main.go
+100644 bbb... 0  services/payment/src/util.go
+<strong>040000 eee... 0  services/billing/</strong>              ← 디렉토리 하나로 압축!
+                                                     mode 040000, SKIP_WORKTREE,
+                                                     경로가 '/'로 끝남,
+                                                     HEAD의 <strong>트리 OID</strong>를 가리킴</code></pre>
+                    </div>
+                    <p>06편에서 읽은 인덱스 포맷 문서가 이를 명시합니다. <strong>"cone 모드가 활성화되고 <code>extensions.sparseIndex</code>가 켜지면, 인덱스는 희소 체크아웃 정의 밖의 디렉토리에 대한 엔트리를 담을 수 있다. 이 엔트리들은 모드 <code>040000</code>이고, <code>SKIP_WORKTREE</code> 비트를 포함하며, 경로가 디렉토리 구분자로 끝난다."</strong></p>
+                    <p class="key-point">디렉토리 안의 내용이 필요해지면 <strong>그 트리 OID로 트리를 파싱해 펼치면 됩니다.</strong> 04편의 트리 객체가 바로 그 정보를 갖고 있기 때문에 가능한 설계입니다.</p>
+                </div>
+
+                <div class="q">구현상의 어려움은 없었나요?</div>
+                <div class="a">
+                    <p>문서가 솔직하게 기록합니다. <strong>"작성 시점에 sparse-directory 엔트리는 인덱스 포맷과 그 인메모리 자료구조에 대한 기대를 위반한다. 코드베이스에는 모든 인덱스 엔트리를 순회하며 <em>파일만</em> 볼 것이라 기대하는 소비자가 많다. 사실 이 루프들은 스테이징된 모든 파일에 대한 참조를 보리라 기대한다."</strong></p>
+                    <p>해결 방식도 밝힙니다. 한 가지 방법은 <strong>인덱스를 로드할 때 sparse-directory 엔트리를 그 안의 파일들로 펼쳐 놓는 것</strong>인데, <strong>"트리를 파싱하는 것이 인덱스 포맷을 파싱하는 것보다 느리므로 오히려 더 느린 연산"</strong>이 됩니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">전략</div>
+                                <div class="flow-box__items">희소 인덱스를 <strong>있는 그대로</strong> 다루도록 명령들을 하나씩 개조</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">미개조 명령</div>
+                                <div class="flow-box__items">호출 전에 <code>ensure_full_index()</code>로 <strong>임시로 펼침</strong> (느리지만 정확)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">점진적 개선</div>
+                                <div class="flow-box__items"><code>status</code>, <code>add</code>, <code>commit</code>, <code>checkout</code>, <code>merge</code>... 순서대로 희소 인식 전환</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="highlight">이 방식이 훌륭한 엔지니어링 사례입니다. <strong>"전부 고칠 때까지 기다리지 않고, 안전한 폴백(<code>ensure_full_index</code>)을 두고 핵심 경로부터 이득을 본다."</strong> 덕분에 <code>git status</code>는 이미 빠르고, 드물게 쓰는 명령은 느리지만 <strong>정확하게</strong> 동작합니다.</p>
+                    <p>18편에서 본 <strong>merge-ort가 인덱스 대신 메모리에서 계산하는 것</strong>도 이 흐름의 일부입니다. 희소 인덱스를 펼치지 않고 머지할 수 있어야 했기 때문입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 희소 인덱스 사용과 측정</div>
+                        <pre><code># 전체 구성: 부분 클론 + cone 희소 체크아웃 + 희소 인덱스
+$ git clone --filter=blob:none --sparse https://.../monorepo
+$ cd monorepo
+$ git sparse-checkout set --cone services/payment shared/proto
+$ git config index.sparse true              # 희소 인덱스 활성
+
+# 인덱스 엔트리 수 비교
+$ git ls-files | wc -l
+2847                                         # 희소 인덱스
+$ git -c index.sparse=false ls-files | wc -l
+3512094                                      # 전체 인덱스
+
+# 인덱스 파일 크기
+$ ls -lh .git/index
+-rw-r--r-- 1 me me 412K .git/index           # 희소
+# (전체였다면 약 280MB)
+
+# 체감 성능
+$ time git status
+real	0m0.21s                               # 전: 8.4s
+
+# 디버깅: 어떤 명령이 인덱스를 펼치는지 확인
+$ GIT_TRACE2_PERF=1 git &lt;command&gt; 2&gt;&amp;1 | grep ensure_full_index
+# 출력이 있으면 그 명령은 아직 희소 인식이 안 된 것</code></pre>
+                    </div>
+                    <p class="warning">주의할 점들입니다. (1) <strong>cone 모드가 필수</strong>입니다 &mdash; 임의 패턴에서는 "디렉토리 전체가 범위 밖"을 판정할 수 없습니다. (2) <strong><code>extensions.sparseIndex</code>는 <code>repositoryformatversion = 1</code>을 요구</strong>하므로 구버전 Git이 거부합니다(22편과 같은 장치). (3) 범위 밖 파일을 실수로 수정하면 희소성이 깨지므로, <code>git sparse-checkout add</code>로 범위를 명시적으로 넓히십시오.</p>
+                    <p class="key-point">면접 포인트: <strong>"모노레포에서 Git이 느린데 어떻게 하겠는가"</strong>에는 <strong>축을 나눠</strong> 답하는 것이 좋습니다. 다운로드/디스크는 <strong>부분 클론</strong>, 워킹 트리 파일 수는 <strong>희소 체크아웃</strong>, 인덱스 크기는 <strong>희소 인덱스</strong>, 커밋 그래프 탐색은 <strong>commit-graph + Bloom filter</strong>(14편), 객체 조회는 <strong>MIDX</strong>(10편), 서버의 clone은 <strong>비트맵</strong>(10편). <strong>병목마다 다른 도구가 있다</strong>는 것을 아는 것이 핵심입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>워킹 디렉토리의 규모 축은 HEAD · Populated · Modified 세 가지다.</strong> HEAD가 수백만인데 Populated가 수만이면 <code>status</code>/<code>add</code>가 O(Populated)가 아니라 O(HEAD)에 지배당한다.</li>
+                <li><strong>부분 클론은 promisor remote가 "나중에 주겠다"고 약속한 객체를 미루는 것이다.</strong> <code>blob:none</code>이 일상 개발에 가장 실용적이며, 히스토리를 자르는 shallow와 달리 <code>log</code>·<code>blame</code>·<code>bisect</code>가 살아 있다. 대신 온라인이어야 한다.</li>
+                <li><strong>희소 체크아웃은 <code>skip-worktree</code> 비트로 워킹 트리 파일 수를 줄인다.</strong> cone 모드는 패턴을 디렉토리 단위로 제한해 매칭을 사실상 O(1)로 만들고, 이 제약이 희소 인덱스를 가능하게 한다.</li>
+                <li><strong>희소 인덱스는 범위 밖 디렉토리를 엔트리 하나(mode <code>040000</code> + <code>SKIP_WORKTREE</code> + 경로 끝 <code>/</code> + 트리 OID)로 압축한다.</strong> 인덱스 엔트리가 350만 개에서 수천 개로 줄어든다.</li>
+                <li><strong>미개조 명령은 <code>ensure_full_index()</code>로 임시 확장하는 안전한 폴백을 쓴다.</strong> "전부 고칠 때까지 기다리지 않고 핵심 경로부터 이득을 보는" 점진적 전환 전략이며, merge-ort가 메모리에서 머지하도록 바뀐 것도 같은 흐름이다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

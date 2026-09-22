@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Racy Git과 stat 캐시 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>1초 안에 두 번 고치면 Git이 못 알아챌까?</h1>
+            <p class="subtitle">Racy Git 문제 &mdash; stat 캐시의 경쟁 상태와 "size를 0으로 만드는" 기묘한 해법</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: Git은 왜 파일을 읽지 않고 "바뀌었다"고 말하는가</h2>
+            <div class="conversation">
+                <div class="q"><code>git status</code>는 어떻게 그렇게 빠른가요?</div>
+                <div class="a">
+                    <p>파일 내용을 <strong>읽지 않기 때문</strong>입니다. 인덱스에 저장해 둔 <code>lstat(2)</code> 결과와 지금의 <code>lstat</code> 결과를 비교하고, 하나라도 다르면 "수정됨"으로 판정합니다. 내용을 해시하는 것은 <strong>마지막 수단</strong>입니다.</p>
+                    <p>Git 소스의 <code>ce_match_stat_basic()</code>이 비교하는 필드는 다음과 같습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>필드</th><th>비교하나?</th><th>비고</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>st_mtime</code></td><td>항상</td><td>내용 변경 시각. 가장 중요한 신호</td></tr>
+                            <tr><td><code>st_ctime</code></td><td>항상</td><td>메타데이터 변경 시각</td></tr>
+                            <tr><td><code>st_size</code></td><td>항상</td><td>크기가 다르면 내용도 다름 (확정)</td></tr>
+                            <tr><td><code>st_ino</code>, <code>st_uid</code>, <code>st_gid</code></td><td>항상</td><td>파일이 교체되었는지 감지</td></tr>
+                            <tr><td><code>st_mode</code>의 파일 타입 / 실행 비트</td><td>항상</td><td>나머지 권한 비트는 무시</td></tr>
+                            <tr><td><code>st_dev</code></td><td>컴파일 옵션</td><td><code>USE_STDEV</code>. 네트워크 FS에서 불안정해 기본 비활성</td></tr>
+                            <tr><td><code>st_mtim.tv_nsec</code></td><td>컴파일 옵션</td><td><code>USE_NSEC</code>. 커널 in-core 시각 정밀도 문제로 Linux 기본 비활성</td></tr>
+                            <tr><td><code>st_atime</code></td><td>안 함</td><td>"읽기만 해도" 바뀌므로 무의미</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">여기서 문제의 씨앗이 보입니다. <strong>나노초 필드를 기본적으로 쓰지 않으므로, 비교 가능한 시각 해상도는 사실상 1초입니다.</strong></p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>도서관 사서가 반납된 책을 검사하는 상황입니다. 책을 한 장 한 장 확인하면(=내용 해시) 정확하지만 너무 느립니다.</p>
+                        <p>그래서 <strong>"무게와 반납 시각"</strong>만 봅니다. 대출 카드에 적힌 무게·시각과 다르면 뭔가 바뀐 것입니다. 빠르고 대부분 맞습니다. 그런데 반납 시각을 <strong>"분 단위"</strong>로만 기록한다면? 같은 분 안에 책을 바꿔치기하면서 무게까지 똑같이 맞추면, 사서는 아무 이상을 느끼지 못합니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">그 틈이 실제로 문제가 되는 상황이 있나요?</div>
+                <div class="a">
+                    <p>Git 문서 <code>Documentation/technical/racy-git.adoc</code>이 정확한 시나리오를 제시합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">문제의 시퀀스</div>
+                        <pre><code>: foo 수정
+$ git update-index foo          # 내용을 해시하고 stat 정보를 인덱스에 기록
+: foo를 다시 수정 — 단, 크기를 바꾸지 않고, 아주 빠르게</code></pre>
+                    </div>
+                    <p>두 번째 수정이 <strong>같은 초(second) 안에</strong> 끝나면 <code>st_mtime</code>이 그대로입니다. 크기를 바꾸지 않았으므로 <code>st_size</code>도 그대로입니다. 결과적으로 <strong>인덱스에 기록된 stat 정보가 현재 파일의 stat과 완전히 일치</strong>하지만, 내용은 다릅니다.</p>
+                    <p class="warning">이 상태의 엔트리를 <strong>"racily clean"</strong>(경쟁적으로 깨끗한)이라고 부릅니다. Git은 이 파일을 "변경 없음"으로 판단하고, <code>git commit</code>은 <strong>옛 내용을 커밋</strong>합니다. 사용자가 방금 저장한 변경이 조용히 사라지는 것입니다.</p>
+                    <p>발견자의 이름을 따 <strong>"Racy Git" 문제(Pasky가 발견)</strong>라고 부릅니다. 드물어 보이지만 실제로는 자주 일어납니다.</p>
+                    <ul>
+                        <li>빌드 스크립트가 <code>git add</code> 직후 코드 생성기를 돌려 같은 크기의 파일을 덮어쓰는 경우</li>
+                        <li>포매터(<code>clang-format</code>, <code>prettier</code>)가 공백만 조정해 크기가 유지되는 경우</li>
+                        <li>IDE가 저장 직후 자동 포맷을 수행하는 경우</li>
+                        <li>테스트 스위트가 밀리초 단위로 파일을 만들고 고치는 경우</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 해법 1 &mdash; 인덱스 파일 자신의 mtime을 기준선으로</h2>
+            <div class="conversation">
+                <div class="q">Git은 이 문제를 어떻게 막나요?</div>
+                <div class="a">
+                    <p>두 가지 장치를 씁니다. 첫 번째가 <strong>"인덱스 파일의 mtime을 기준선으로 삼기"</strong>입니다.</p>
+                    <p class="highlight">규칙: <strong>stat 정보가 일치하더라도, 파일의 <code>st_mtime</code>이 <code>.git/index</code> 파일 자신의 mtime과 같거나 더 새것이면 내용까지 읽어서 비교한다.</strong></p>
+                    <p>왜 이것으로 충분할까요? 논리가 우아합니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">1. 인덱스 쓰기 순서</div>
+                                <div class="flow-box__items">Git은 <strong>모든 파일의 stat을 수집한 뒤</strong> 인덱스를 쓴다. 따라서 인덱스의 mtime &ge; 수집한 모든 파일의 mtime</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">2. 이후의 수정</div>
+                                <div class="flow-box__items">인덱스를 쓴 뒤에 파일을 고치면, 아무리 빨라도 그 파일의 mtime은 <strong>인덱스 mtime보다 이르지 않다</strong></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">3. 결론</div>
+                                <div class="flow-box__items">racily clean일 수 있는 엔트리는 <strong>인덱스와 mtime이 같은 것들뿐</strong>. 그 소수만 내용 비교하면 된다</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p>Git 소스에서 이 흐름은 <code>ce_match_stat()</code>이 담당합니다. 빠른 경로로 <code>ce_match_stat_basic()</code>을 먼저 돌리고, racily clean 의심 대상에 한해 <code>ce_modified_check_fs()</code>로 내용을 확인합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">판정 흐름 (개념 코드)</div>
+                        <pre><code>int ce_match_stat(ce, st) {
+        changed = ce_match_stat_basic(ce, st);   /* 빠른 stat 비교 */
+        if (changed)
+                return changed;                   /* 확실히 바뀜 */
+
+        /* stat은 같다. 그런데 "인덱스와 같은 시각"이면 의심스럽다 */
+        if (is_racy_timestamp(index, ce))
+                return ce_modified_check_fs(ce, st);  /* 내용을 읽어 해시 비교 */
+
+        return 0;                                 /* 진짜로 안 바뀜 */
+}</code></pre>
+                    </div>
+                    <p class="key-point">이 설계의 묘미는 <strong>비용이 "의심스러운 소수"에게만 부과된다</strong>는 점입니다. 평소에는 인덱스 mtime이 모든 파일보다 새것이므로 racy 판정이 한 건도 안 나오고, <code>git status</code>는 stat 비교만으로 끝납니다.</p>
+                </div>
+
+                <div class="q">그런데 시간이 흐르면 그 보호가 사라지지 않나요?</div>
+                <div class="a">
+                    <p>바로 그것이 두 번째 문제입니다. 문서가 제시하는 시퀀스는 이렇습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">첫 번째 해법이 뚫리는 시퀀스</div>
+                        <pre><code>$ git update-index 'foo'
+: foo를 같은 크기로, 아주 빠르게 수정   &larr; foo는 racily clean이 됨
+: 충분한 시간 대기
+$ git update-index 'bar'                 &larr; 인덱스가 다시 쓰이면서 mtime이 "지금"으로 갱신</code></pre>
+                    </div>
+                    <p class="warning">인덱스 mtime이 새것으로 갱신되는 순간, <code>foo</code>의 mtime은 더 이상 "인덱스와 같은 시각"이 아니게 됩니다. 첫 번째 방어선이 <strong>스스로 무력화</strong>되어 <code>foo</code>는 영원히 깨끗한 것으로 오해받습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 해법 2 &mdash; size를 0으로 조작하는 기묘한 트릭</h2>
+            <div class="conversation">
+                <div class="q">그럼 두 번째 장치는 뭔가요?</div>
+                <div class="a">
+                    <p>Git 문서의 표현을 그대로 옮기면 이렇습니다.</p>
+                    <p class="highlight"><strong>"racily clean 엔트리가 포함된 인덱스를 새로 쓸 때는, 캐시된 <code>st_size</code> 정보를 0으로 잘라내고(truncate to zero) 기록한다."</strong></p>
+                    <p>얼핏 보면 데이터를 일부러 망가뜨리는 것처럼 보이지만, 정확히 의도된 동작입니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">문제 상황</div>
+                                <div class="flow-box__items">foo가 racily clean. 인덱스 mtime이 갱신되면 보호가 사라짐</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">트릭 적용</div>
+                                <div class="flow-box__items">인덱스를 쓸 때 foo 엔트리의 <code>st_size</code>를 <strong>0으로 기록</strong></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">효과</div>
+                                <div class="flow-box__items">이후 <code>lstat</code>의 실제 size(6)와 캐시된 size(0)가 <strong>영구히 불일치</strong> &rarr; 항상 "바뀜"으로 판정되어 내용을 읽게 됨</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">즉 <strong>"이 엔트리의 stat 캐시를 믿지 마라"는 표시를 stat 캐시 자체에 심는 것</strong>입니다. 별도의 플래그 비트를 두지 않고, 이미 있는 필드를 불가능한 값으로 만들어 신호로 삼는 영리한 해킹입니다.</p>
+                    <p>크기 0은 안전한 선택입니다. 진짜로 크기가 0인 파일(빈 파일)이면 내용 비교가 즉시 끝나므로 손해가 없고, 크기가 0이 아닌 파일은 반드시 불일치가 나서 의도대로 동작합니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>사서가 "이 책은 기록을 믿을 수 없다"고 판단하면, 대출 카드의 <strong>무게 칸에 일부러 "0kg"이라고 적어 둡니다.</strong></p>
+                        <p>다음에 누가 검사하더라도 실제 무게와 절대 맞지 않으므로, 무조건 책을 펼쳐 확인하게 됩니다. 별도의 경고 스티커를 붙이는 대신, 기존 칸을 불가능한 값으로 채워 경고를 대신한 것입니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">이 트릭의 대가는 없나요?</div>
+                <div class="a">
+                    <p>있습니다. Git 문서가 <strong>"Runtime penalty"</strong> 절을 따로 두어 경고할 정도입니다.</p>
+                    <p>racily clean 엔트리가 <em>많아지면</em> <code>ce_modified_check_fs()</code>로 떨어지는 파일이 많아지고, 그만큼 <strong>실제로 파일을 읽고 해시</strong>하게 됩니다. 문서가 제시하는 인위적 재현법은 이렇습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">racy 상태를 인위적으로 만드는 법 (문서의 예시)</div>
+                        <pre><code>$ date &gt;.datestamp
+$ git ls-files | xargs touch -r .datestamp      # 모든 파일에 같은 시각
+$ git ls-files | git update-index --stdin        # 전부 인덱스에 기록
+$ touch -r .datestamp .git/index                 # 인덱스도 같은 시각으로
+
+# 이제 저장소의 모든 엔트리가 racily clean이다.
+# git status 가 모든 파일을 읽고 해시하게 되어 극단적으로 느려진다.</code></pre>
+                    </div>
+                    <p class="warning">현실에서 이와 비슷한 상황이 만들어지는 경우가 있습니다. <strong>tar/zip 복원, 빌드 시스템의 대량 <code>touch</code>, 소스 트리 복사, 잘못 설정된 NFS/Docker 볼륨</strong>에서 다수 파일의 mtime이 한꺼번에 같아지면 <code>git status</code>가 갑자기 몇 배 느려집니다.</p>
+                    <p>해법은 단순합니다. <strong>인덱스를 한 번 갱신해 기준선을 새로 잡는 것</strong>입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; racy 상태 털어내기</div>
+                        <pre><code># 파일을 건드리지 않고 인덱스의 stat 캐시만 갱신
+$ git update-index --refresh
+# 또는
+$ git status &gt;/dev/null &amp;&amp; git status   # 두 번째 실행부터 정상 속도
+
+# 느려짐이 racy 때문인지 확인하려면 trace를 켜서 읽기 횟수를 본다
+$ GIT_TRACE_PERFORMANCE=1 git status</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 나노초 · 파일 시스템 · 실무 교훈</h2>
+            <div class="conversation">
+                <div class="q">나노초 타임스탬프를 쓰면 이 문제가 없어지지 않나요?</div>
+                <div class="a">
+                    <p>이론적으로는 크게 줄어듭니다. 하지만 Git은 <strong>Linux에서 나노초 비교를 기본 비활성화</strong>합니다. 이유가 역설적입니다.</p>
+                    <p>Git 문서가 인용하는 커널 커밋(2005년, kernel 2.6.11에 포함)에 따르면, <strong>커널의 in-core 타임스탬프가 디스크의 타임스탬프보다 정밀할 수 있습니다.</strong> inode가 캐시에서 쫓겨났다가 다시 읽히면 나노초 부분이 잘려 나가고, <strong>파일이 전혀 바뀌지 않았는데도 나노초 값이 달라 보입니다.</strong></p>
+                    <p class="warning">그러면 정반대의 문제가 생깁니다. 안 바뀐 파일이 "바뀜"으로 오판되어, <code>git status</code>가 멀쩡한 파일 수만 개를 전부 읽게 됩니다. <strong>거짓 음성(놓침)을 막으려다 거짓 양성(오탐)으로 성능을 잃는</strong> 트레이드오프입니다.</p>
+                    <p>게다가 그 커널 수정도 "정확히 1ns 또는 1s 해상도를 가진 파일 시스템"만 고쳤습니다. 문서는 <strong>CEPH, CIFS, NTFS, UDF</strong>가 여전히 문제라고 명시합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>선택지</th><th>장점</th><th>단점</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>초 단위만 비교 (기본)</td>
+                                <td>모든 FS에서 안정적. 오탐 없음</td>
+                                <td>같은 초 내 수정을 놓칠 수 있음 &rarr; racy 로직으로 보완</td>
+                            </tr>
+                            <tr>
+                                <td>나노초까지 비교 (<code>USE_NSEC</code>)</td>
+                                <td>racy 구간이 극히 좁아짐</td>
+                                <td>FS/커널에 따라 오탐 폭발 &rarr; 오히려 느려짐</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">Git이 택한 길은 <strong>"덜 정밀한 신호를 쓰되, 그 한계를 정확히 알고 보완 로직을 둔다"</strong>입니다. 완벽한 신호를 요구하는 대신 불완전한 신호 + 안전망으로 설계한 것이며, 이식성을 중시하는 시스템 프로그래밍의 전형적인 판단입니다.</p>
+                </div>
+
+                <div class="q">실무에서 기억해야 할 교훈은 무엇인가요?</div>
+                <div class="a">
+                    <p>네 가지로 정리됩니다.</p>
+                    <p><strong>1) 자동화 스크립트에서 <code>git add</code> 직후 파일을 고치지 마십시오.</strong> 코드 생성기나 포매터를 돌린다면 <code>add</code> 전에 하거나, 후에 했다면 <code>git update-index --refresh</code>를 한 번 더 부르십시오.</p>
+                    <div class="code-block">
+                        <div class="code-header">위험한 패턴 vs 안전한 패턴</div>
+                        <pre><code># 위험 — add 후 같은 크기로 덮어쓰면 변경이 누락될 수 있다
+git add src/
+./generate-code.sh          # src/*.g.cs 를 같은 크기로 재생성
+git commit -m "regen"       # 옛 내용이 커밋될 위험
+
+# 안전 — 생성 먼저, 스테이징은 나중
+./generate-code.sh
+git add src/
+git commit -m "regen"</code></pre>
+                    </div>
+                    <p><strong>2) <code>git status</code>가 갑자기 느려지면 mtime 일괄 변경을 의심하십시오.</strong> 아카이브 복원·컨테이너 볼륨 마운트·빌드 <code>touch</code>가 주범입니다.</p>
+                    <p><strong>3) 인덱스의 stat 캐시는 "힌트"이지 "진실"이 아닙니다.</strong> 진실은 객체 DB의 OID이고, stat은 그 확인을 생략하기 위한 최적화일 뿐입니다. 의심스러우면 <code>git diff --no-optional-locks</code> 대신 <code>git update-index --refresh</code>로 캐시를 갱신하십시오.</p>
+                    <p><strong>4) <code>--assume-unchanged</code>는 이 문제를 100배 키웁니다.</strong> racy 로직은 "stat이 같으면 내용을 확인한다"는 안전망인데, assume-valid는 <strong>stat 확인조차 건너뜁니다.</strong> 안전망 위에 구멍을 내는 셈입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; racy 문제를 직접 재현해 보기</div>
+                        <pre><code>$ git init -q racylab &amp;&amp; cd racylab
+$ printf 'AAAA\n' &gt; f.txt &amp;&amp; git add f.txt &amp;&amp; git commit -q -m init
+
+# 인덱스 mtime을 과거로 돌려 "보호막"을 무력화한다
+$ touch -d '2020-01-01' .git/index
+
+# 같은 크기로 내용만 바꾼다 (mtime도 과거로 맞춤)
+$ printf 'BBBB\n' &gt; f.txt
+$ touch -d '2020-01-01' f.txt
+
+$ git status --short
+# 아무 출력도 없다! Git은 변경을 인지하지 못한다.
+
+$ git diff --stat
+# 역시 비어 있음
+
+# 강제로 내용을 확인시키면 그제서야 드러난다
+$ git diff --no-index &lt;(git show HEAD:f.txt) f.txt
+--- /dev/fd/63
++++ f.txt
+-AAAA
++BBBB</code></pre>
+                    </div>
+                    <p class="highlight">이 실습이 보여 주는 것은 <strong>Git의 "빠름"이 공짜가 아니라는 사실</strong>입니다. 속도는 "파일을 읽지 않는다"는 가정 위에 서 있고, 그 가정이 깨지는 좁은 틈을 메우기 위해 인덱스 mtime 비교와 size-to-zero라는 두 겹의 장치가 존재합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Git은 파일 내용이 아니라 <code>lstat</code> 결과(mtime·ctime·size·ino·uid·gid·mode)를 비교해 변경을 판정한다.</strong> 이것이 <code>git status</code> 속도의 근거이자 Racy Git의 원인이다.</li>
+                <li><strong>같은 초 안에 크기를 유지한 채 수정하면 stat이 완전히 일치해 변경이 누락된다.</strong> 이런 엔트리를 "racily clean"이라 부른다.</li>
+                <li><strong>해법 1: 인덱스 파일 자신의 mtime을 기준선으로 삼는다.</strong> 파일 mtime이 인덱스 mtime과 같거나 새것이면 내용까지 읽어 확인한다. 인덱스는 stat 수집 후에 쓰이므로 이 기준이 성립한다.</li>
+                <li><strong>해법 2: racily clean 엔트리를 다시 쓸 때 <code>st_size</code>를 0으로 기록한다.</strong> stat 캐시를 일부러 불일치 상태로 만들어 "이 캐시를 믿지 말라"는 영구 신호로 삼는 트릭이다.</li>
+                <li><strong>나노초 비교는 오탐 위험 때문에 기본 비활성이다.</strong> 정밀한 신호 대신 불완전한 신호 + 안전망을 택한 이식성 우선 설계이며, mtime 일괄 변경(아카이브 복원·컨테이너 볼륨) 시 <code>status</code> 급감속의 원인이 된다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

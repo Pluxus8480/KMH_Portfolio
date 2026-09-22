@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>파일을 옮겼는데 Git이 어떻게 알았을까 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>파일을 옮겼는데 Git이 어떻게 알았을까?</h1>
+            <p class="subtitle">rename detection 해부 &mdash; 정확 매치 · 유사도 점수 · renameLimit 1000의 벽</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: Git은 rename을 기록하지 않는다</h2>
+            <div class="conversation">
+                <div class="q"><code>git mv</code>라는 명령이 있는데, 이동을 기록하지 않는다는 게 무슨 말인가요?</div>
+                <div class="a">
+                    <p><code>git mv old.c new.c</code>는 <strong>"파일 시스템에서 옮기고 + 인덱스에서 old를 빼고 new를 넣는"</strong> 편의 명령일 뿐입니다. 다음과 완전히 동일합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; git mv의 정체</div>
+                        <pre><code>$ git mv old.c new.c
+# 는 정확히 이것과 같다
+$ mv old.c new.c
+$ git rm --cached old.c
+$ git add new.c
+
+# 커밋된 결과를 보면 "이동"이라는 정보가 어디에도 없다
+$ git cat-file -p HEAD^{tree}
+100644 blob ce0136...	new.c          # new.c가 있을 뿐
+# old.c는 그냥 사라졌다. "old.c → new.c" 같은 기록은 없다</code></pre>
+                    </div>
+                    <p class="key-point">커밋은 <strong>스냅샷</strong>입니다(02편). 스냅샷에는 "어떻게 여기 도달했는가"라는 이력이 담기지 않습니다. rename은 <strong>두 스냅샷을 비교할 때 추론되는 것</strong>이며, <code>git log</code>나 <code>git show</code>가 "R100 old.c &rarr; new.c"라고 보여 주는 것은 <strong>조회 시점의 계산 결과</strong>입니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>사무실 사진을 매일 찍는다고 합시다. 어제 사진에는 <strong>3번 책상에 화분</strong>이 있었고, 오늘 사진에는 <strong>7번 책상에 화분</strong>이 있습니다.</p>
+                        <p>사진 어디에도 "화분을 옮겼다"는 기록은 없습니다. 하지만 두 사진을 비교하면 <strong>"3번의 화분이 사라졌고 7번에 똑같이 생긴 화분이 생겼으니, 옮긴 것이겠구나"</strong>라고 추론할 수 있습니다. Git이 하는 일이 정확히 이것입니다.</p>
+                        <p>그래서 화분에 <strong>페인트칠을 절반쯤 다시 했다면</strong>(파일을 크게 수정했다면) "같은 화분"이라는 추론이 실패할 수 있습니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">왜 그냥 기록하지 않았나요? SVN은 <code>svn mv</code>를 기록하는데요.</div>
+                <div class="a">
+                    <p>Linus Torvalds가 초기부터 강하게 밀어붙인 설계 결정이며, 근거가 명확합니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>관점</th><th>기록하는 방식 (SVN)</th><th>추론하는 방식 (Git)</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>사용자가 잊으면</td>
+                                <td><code>mv</code> + <code>add</code>/<code>rm</code>으로 하면 이동 정보가 <strong>영영 소실</strong></td>
+                                <td>어떻게 했든 <strong>결과만 같으면 감지</strong></td>
+                            </tr>
+                            <tr>
+                                <td>분할/병합</td>
+                                <td>"한 파일이 셋으로 쪼개짐"을 표현 못 함</td>
+                                <td>유사도 기반이라 <strong>copy 감지(<code>-C</code>)</strong>로 일부 표현 가능</td>
+                            </tr>
+                            <tr>
+                                <td>사후 개선</td>
+                                <td>기록된 것이 전부. 알고리즘을 고쳐도 옛 커밋은 그대로</td>
+                                <td><strong>Git을 업그레이드하면 과거 커밋의 감지 품질도 좋아짐</strong></td>
+                            </tr>
+                            <tr>
+                                <td>데이터 모델</td>
+                                <td>스냅샷 + 별도 메타데이터. 복잡</td>
+                                <td><strong>순수 스냅샷 유지</strong>. 모델이 단순</td>
+                            </tr>
+                            <tr>
+                                <td>비용</td>
+                                <td>조회가 쌈</td>
+                                <td><strong>조회할 때마다 계산</strong>. 큰 변경에서 비쌈</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="highlight">세 번째가 특히 강력한 논거입니다. Git의 rename 감지 알고리즘은 수차례 개선되었고(최근에는 merge-ort의 rename 캐싱), <strong>2010년에 만든 커밋도 오늘의 Git으로 보면 더 정확하게 rename이 감지됩니다.</strong> 기록 방식이었다면 불가능한 일입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 2단계 감지 &mdash; 정확 매치 먼저, 유사도는 나중</h2>
+            <div class="conversation">
+                <div class="q">감지는 어떤 순서로 이루어지나요?</div>
+                <div class="a">
+                    <p><code>diffcore-rename.c</code>의 흐름은 <strong>싼 것부터 비싼 것 순</strong>으로 짜여 있습니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">1. 후보 수집</div>
+                                <div class="flow-box__items">삭제된 파일 = <strong>src 후보</strong>, 추가된 파일 = <strong>dst 후보</strong></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">2. 정확 매치</div>
+                                <div class="flow-box__items"><code>find_exact_renames()</code> &mdash; <strong>OID가 같으면</strong> 즉시 100% 매치. 해시 비교뿐이라 사실상 공짜</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">3. 후보 수 점검</div>
+                                <div class="flow-box__items"><code>too_many_rename_candidates()</code> &mdash; 남은 조합이 한계를 넘으면 <strong>포기</strong></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">4. 유사도 비교</div>
+                                <div class="flow-box__items"><code>estimate_similarity()</code>를 <strong>남은 모든 (src, dst) 조합</strong>에 대해 실행. 가장 높은 점수끼리 짝지음</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">2단계가 실전에서 대부분을 처리합니다. <strong>"파일을 그냥 옮기기만 한" 경우는 내용이 바뀌지 않아 blob OID가 동일</strong>하므로, 해시 비교만으로 끝납니다. 디렉토리 구조 리팩터링처럼 수천 개 파일을 옮겨도 이 단계에서 즉시 해결됩니다.</p>
+                    <p>비싼 것은 4단계입니다. <strong>src가 M개, dst가 N개면 M&times;N번</strong>의 내용 비교가 필요합니다.</p>
+                </div>
+
+                <div class="q">유사도 점수는 어떻게 계산하나요?</div>
+                <div class="a">
+                    <p><code>estimate_similarity()</code>가 <strong>0에서 <code>MAX_SCORE</code>(=60000) 사이의 정수</strong>를 반환합니다. 핵심 공식은 마지막 두 줄입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">diffcore-rename.c &mdash; 점수 계산</div>
+                        <pre><code>/* How similar are they?
+ * what percentage of material in dst are from source?
+ */
+if (!dst-&gt;size)
+        score = 0;
+else
+        score = (int)(src_copied * MAX_SCORE / max_size);</code></pre>
+                    </div>
+                    <p><strong><code>src_copied</code></strong>는 <code>diffcore_count_changes()</code>가 계산합니다. 줄 단위가 아니라 <strong>"청크(span) 해시"</strong> 기반입니다 &mdash; <code>diffcore-delta.c</code>의 <code>struct spanhash</code>가 그것으로, 파일을 작은 조각으로 나눠 해시하고 양쪽에 공통으로 나타나는 양을 셉니다. 줄 기반이 아니므로 <strong>바이너리 파일에도 적용됩니다.</strong></p>
+                    <p>그 앞에 있는 <strong>조기 탈출 조건</strong>이 성능의 핵심입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">diffcore-rename.c &mdash; 크기만으로 걸러내기</div>
+                        <pre><code>/* We would not consider edits that change the file size so
+ * drastically.  delta_size must be smaller than
+ * (MAX_SCORE-minimum_score)/MAX_SCORE * min(src-&gt;size, dst-&gt;size).
+ */
+if (max_size * (MAX_SCORE-minimum_score) &lt; delta_size * MAX_SCORE)
+        return 0;</code></pre>
+                    </div>
+                    <p class="highlight">두 파일의 <strong>크기 차이만으로</strong> "최소 점수에 도달할 가능성이 없음"을 판정합니다. 이때는 <code>check_size_only = 1</code>로 <strong>파일 내용을 읽지도 않습니다.</strong> 크기 정보는 인덱스나 객체 헤더에 이미 있으므로 사실상 공짜입니다. 100바이트 파일과 10만 바이트 파일을 비교하는 헛수고를 원천 차단합니다.</p>
+                    <p class="warning">주의할 점 하나: <strong>심볼릭 링크는 정확 매치일 때만 rename으로 인식됩니다.</strong> 소스 주석이 명시합니다 &mdash; "Symlink renames are handled only when they are exact matches". 일반 파일(<code>S_ISREG</code>)이 아니면 점수 계산 자체를 하지 않습니다.</p>
+                </div>
+
+                <div class="q">임계값 50%는 어디서 오나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">diffcore.h</div>
+                        <pre><code>#define DEFAULT_RENAME_SCORE 30000 /* rename/copy similarity minimum (50%) */</code></pre>
+                    </div>
+                    <p><code>MAX_SCORE</code>가 60000이므로 30000이 정확히 50%입니다. <strong>"dst 내용의 절반 이상이 src에서 왔으면 rename"</strong>이라는 뜻입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 임계값 조정</div>
+                        <pre><code># 기본 50%
+$ git log --oneline -M --stat
+
+# 30%로 낮추기 — 크게 고친 파일의 이동도 잡아낸다
+$ git log -M30% --stat
+$ git diff --find-renames=30% HEAD~1
+
+# 100% — 완전히 동일한 경우만 (정확 매치 단계만 수행, 가장 빠름)
+$ git diff -M100% HEAD~1
+
+# copy 감지까지 (한 파일에서 여러 파일이 파생된 경우)
+$ git diff -C -C HEAD~1      # -C를 두 번 = 수정되지 않은 파일도 copy 소스로 고려
+
+# 출력의 R/C 뒤 숫자가 유사도 퍼센트다
+$ git show --stat -M HEAD
+R089	src/old_auth.c	src/auth/handler.c      # 89% 유사
+C075	src/base.c	src/derived.c              # 75% 유사한 복사</code></pre>
+                    </div>
+                    <p class="key-point">임계값을 낮추면 감지율이 올라가지만 <strong>거짓 양성</strong>이 늘어납니다. 서로 무관한 두 파일이 보일러플레이트(라이선스 헤더, import 블록) 때문에 35% 유사할 수 있습니다. 그래서 50%가 <strong>경험적 균형점</strong>으로 자리 잡았습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: renameLimit &mdash; 1000이라는 벽</h2>
+            <div class="conversation">
+                <div class="q">"inexact rename detection was skipped" 경고를 본 적이 있습니다. 무슨 뜻인가요?</div>
+                <div class="a">
+                    <p><strong>유사도 비교를 포기했다</strong>는 뜻입니다. 조합 폭발을 막기 위한 안전장치가 작동한 것입니다.</p>
+                    <p>Git 문서의 정의입니다. <strong><code>diff.renameLimit</code>은 "copy/rename 감지의 전수 비교 구간에서 고려할 파일 수"이며 기본값은 1000</strong>입니다. src와 dst 후보가 각각 1,000개를 넘어서면, 비교 횟수가 100만 번을 넘습니다. 각 비교가 파일 내용을 읽고 청크 해시를 계산하므로 감당이 안 됩니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">전형적인 경고</div>
+                        <pre><code>$ git log --stat -M
+warning: inexact rename detection was skipped due to too many files.
+warning: you may want to set your diff.renameLimit variable to at least 2847
+         and retry the command.</code></pre>
+                    </div>
+                    <p class="warning">이때 결과는 <strong>틀리지 않지만 불완전합니다.</strong> 정확 매치(OID 동일)로 잡힌 rename은 여전히 표시되고, 내용까지 바뀐 rename만 "삭제 + 추가"로 보입니다. <strong>조용히 나빠지는 것이 아니라 경고를 내며 품질이 떨어지는 것</strong>이라 진단이 가능합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 한계 조정</div>
+                        <pre><code># 이 명령에만
+$ git -c diff.renameLimit=5000 log --stat -M
+
+# 전역 (0 = 무제한. 신중하게!)
+$ git config --global diff.renameLimit 5000
+$ git config --global merge.renameLimit 5000   # 머지용은 별도 설정
+
+# 감지를 아예 끄기 (거대 리팩터링 커밋을 빠르게 훑을 때)
+$ git config diff.renames false
+$ git log --no-renames --stat</code></pre>
+                    </div>
+                    <p class="key-point"><strong><code>merge.renameLimit</code>이 별도로 존재</strong>한다는 점이 중요합니다. 머지에서 rename 감지가 실패하면 결과가 <strong>실질적으로 나빠집니다</strong> &mdash; "한쪽이 파일을 옮기고 다른 쪽이 그 파일을 수정한" 경우를 잡지 못해, 수정이 사라지거나 삭제/수정 충돌이 발생합니다. 그래서 머지 쪽 한계는 더 넉넉하게 잡는 것이 합리적입니다.</p>
+                </div>
+
+                <div class="q">거대 리팩터링에서 감지가 실패하지 않게 하려면요?</div>
+                <div class="a">
+                    <p><strong>커밋을 쪼개는 것</strong>이 가장 확실한 해법입니다. 알고리즘을 튜닝하는 것보다 효과가 큽니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">권장 패턴 &mdash; 이동과 수정을 분리</div>
+                        <pre><code># ❌ 한 커밋에 다 담기 — 감지가 실패하기 쉽다
+$ git mv -k src/* src/legacy/
+$ (파일들을 대거 수정)
+$ git commit -m "restructure and refactor"
+
+# ✅ 두 커밋으로 분리
+$ git mv src/a.c src/legacy/a.c
+$ git mv src/b.c src/legacy/b.c
+$ git commit -m "move: src/* → src/legacy/*"     # ← 내용 무변경 = 정확 매치 100%
+$ (수정)
+$ git commit -m "refactor: legacy 모듈 정리"      # ← 경로 무변경
+
+# 결과: 첫 커밋은 R100으로 깔끔하게, 둘째는 순수 수정으로 보인다.
+# blame, log --follow, 머지가 전부 정상 동작한다.</code></pre>
+                    </div>
+                    <p class="highlight">이 원칙은 <strong>"이동과 수정을 같은 커밋에 섞지 말라"</strong>로 요약됩니다. 리뷰어에게도 훨씬 친절하고, 나중에 blame으로 코드 이력을 추적하는 사람에게도 결정적으로 유리합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 머지에서의 rename &mdash; 가장 중요한 쓰임새</h2>
+            <div class="conversation">
+                <div class="q">머지에서 rename 감지가 왜 그렇게 중요한가요?</div>
+                <div class="a">
+                    <p>감지 실패가 <strong>실제로 코드를 잃어버리게 만들기 때문</strong>입니다. 상황을 보겠습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">rename 감지가 필요한 머지</div>
+                        <pre><code>base  : src/auth.c  (함수 login() 포함)
+
+ours  : src/auth/handler.c  ← 파일을 옮김 (내용은 그대로)
+theirs: src/auth.c          ← login()에 버그 수정 추가
+
+[rename을 감지했다면]
+  Git: "ours가 auth.c를 auth/handler.c로 옮겼고,
+        theirs가 auth.c를 수정했다.
+        → theirs의 수정을 <strong>auth/handler.c에 적용</strong>한다"
+  결과: src/auth/handler.c에 버그 수정이 반영됨 ✓
+
+[감지에 실패했다면]
+  Git: "ours가 auth.c를 삭제했고, theirs가 auth.c를 수정했다"
+  결과: <strong>modify/delete 충돌</strong>. 사람이 직접 해결해야 하고,
+        놓치면 버그 수정이 <strong>영영 유실</strong>된다 ✗</code></pre>
+                    </div>
+                    <p class="warning">이것이 <code>merge.renameLimit</code>을 넉넉히 설정해야 하는 이유입니다. diff에서의 감지 실패는 "보기 불편"이지만, 머지에서의 감지 실패는 <strong>데이터 유실 위험</strong>입니다.</p>
+                </div>
+
+                <div class="q">merge-ort가 rename 처리를 개선했다고 들었습니다.</div>
+                <div class="a">
+                    <p>맞습니다. <code>merge-ort</code>(18편)는 rename 감지 비용을 줄이기 위해 두 가지 큰 최적화를 도입했습니다. Git 문서 <code>Documentation/technical/remembering-renames.adoc</code>이 이를 다룹니다.</p>
+                    <p><strong>1) rename 캐싱.</strong> <code>rebase</code>나 <code>cherry-pick</code>은 여러 커밋을 <strong>같은 upstream에 연속으로</strong> 적용합니다. 매 커밋마다 같은 rename을 다시 감지하는 것은 낭비이므로, ort는 <strong>앞 단계에서 감지한 rename을 기억해 재사용</strong>합니다.</p>
+                    <p><strong>2) 디렉토리 rename 감지.</strong> 개별 파일이 아니라 <strong>디렉토리 전체가 이동했음</strong>을 인식합니다. <code>Documentation/technical/directory-rename-detection.adoc</code>에 규칙이 정리되어 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">디렉토리 rename 감지의 효과</div>
+                        <pre><code>ours  : src/ 아래 파일 200개를 lib/ 로 이동
+theirs: src/newfile.c 라는 <strong>새 파일</strong>을 추가
+
+[디렉토리 rename 감지 없음]
+  → lib/에는 200개, src/에는 newfile.c 하나만 덩그러니 남음
+
+[디렉토리 rename 감지 있음]
+  → "src/ 가 lib/ 로 이동했다"고 판단하여
+    theirs의 새 파일도 <strong>lib/newfile.c</strong>로 배치</code></pre>
+                    </div>
+                    <p class="highlight">이 기능은 <strong>장기 실행 feature 브랜치</strong>에서 결정적입니다. main에서 디렉토리 구조를 개편하는 동안 feature 브랜치가 옛 구조에 파일을 추가했다면, 머지 시 새 파일이 자동으로 새 위치에 놓입니다. 없었다면 수작업으로 200개 경로를 옮겨야 했습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 머지에서 rename 확인</div>
+                        <pre><code># 머지 결과에서 어떤 rename이 감지되었는지
+$ git merge feature
+$ git diff --stat -M HEAD@{1} HEAD
+
+# 충돌이 rename 때문인지 확인
+$ git status
+both modified:   src/auth/handler.c
+deleted by us:   src/auth.c          # ← rename 감지 실패 신호
+
+# 감지 한계를 올리고 다시 시도
+$ git merge --abort
+$ git -c merge.renameLimit=10000 merge feature
+
+# 머지 전에 미리 시뮬레이션 (Git 2.38+)
+$ git merge-tree --write-tree HEAD feature</code></pre>
+                    </div>
+                    <p class="key-point">면접 포인트: <strong>"Git이 rename을 기록하지 않는 것은 게으름이 아니라 설계 결정"</strong>입니다. 스냅샷 모델의 단순함을 지키면서, 감지 알고리즘을 사후에 개선할 여지를 남긴 선택입니다. 그 대가로 조회 비용과 <code>renameLimit</code>이라는 실용적 한계를 안게 되었고, merge-ort의 캐싱·디렉토리 감지가 그 대가를 줄여 온 과정입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Git은 rename을 저장하지 않는다.</strong> <code>git mv</code>는 <code>mv + rm --cached + add</code>의 편의 명령일 뿐이고, rename은 두 스냅샷을 비교할 때 <strong>추론</strong>된다. 덕분에 Git을 업그레이드하면 과거 커밋의 감지 품질도 좋아진다.</li>
+                <li><strong>감지는 2단계다.</strong> 먼저 <code>find_exact_renames()</code>가 blob OID가 같은 쌍을 공짜로 잡고, 남은 것만 <code>estimate_similarity()</code>로 전수 비교한다. "그냥 옮기기만 한" 경우는 1단계에서 끝난다.</li>
+                <li><strong>유사도 = <code>src_copied &times; 60000 / max_size</code>이고 기본 임계는 30000(50%)이다.</strong> 청크 해시 기반이라 바이너리에도 적용되며, 크기 차이만으로 가능성이 없는 쌍은 내용을 읽지도 않고 걸러낸다. 심링크는 정확 매치만 인정된다.</li>
+                <li><strong><code>diff.renameLimit</code>(기본 1000)을 넘으면 유사도 비교를 포기하고 경고를 낸다.</strong> diff에서는 "보기 불편"이지만 머지에서는 <strong>수정 유실 위험</strong>이므로 <code>merge.renameLimit</code>은 넉넉히 잡는다.</li>
+                <li><strong>이동과 수정을 같은 커밋에 섞지 마라.</strong> 이동만 한 커밋은 정확 매치 100%로 깔끔하게 잡히고, blame·<code>log --follow</code>·머지가 모두 정상 동작한다. merge-ort의 rename 캐싱과 디렉토리 rename 감지가 이 부담을 더 줄여 준다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>내용 주소 지정 객체 데이터베이스 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>같은 파일을 100번 커밋해도 용량이 안 늘어난다?</h1>
+            <p class="subtitle">내용 주소 지정(content-addressable) 객체 데이터베이스와 네 가지 객체 타입</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 이름이 아니라 내용으로 주소를 정한다</h2>
+            <div class="conversation">
+                <div class="q">"content-addressable"이라는 말이 계속 나오는데, 정확히 무슨 뜻인가요?</div>
+                <div class="a">
+                    <p>보통의 파일 시스템은 <strong>경로(이름)로 내용을 찾습니다.</strong> <code>/home/me/a.txt</code>를 열면 그 안에 무엇이 들었는지는 열어 봐야 압니다. 같은 경로라도 내용은 언제든 바뀝니다.</p>
+                    <p>Git의 객체 데이터베이스는 정반대입니다. <strong>내용을 해시한 값이 곧 주소입니다.</strong> 주소를 아는 순간 내용이 확정되고, 내용이 1비트라도 달라지면 주소 자체가 달라집니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">일반 파일 시스템</div>
+                                <div class="flow-box__items">경로 &rarr; 내용<br>같은 경로, 다른 내용 가능<br>내용이 바뀌어도 주소는 그대로</div>
+                            </div>
+                            <div class="flow-arrow">vs</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">Git 객체 DB</div>
+                                <div class="flow-box__items">내용 &rarr; 해시 &rarr; 주소<br>같은 내용은 반드시 같은 주소<br>내용이 바뀌면 다른 객체가 됨</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="highlight">이 설계에서 두 가지 성질이 <strong>공짜로</strong> 따라옵니다. 첫째, <strong>자동 중복 제거</strong>(같은 내용은 물리적으로 한 번만 저장). 둘째, <strong>무결성 검증</strong>(객체를 읽고 다시 해시해 보면 손상 여부를 즉시 안다).</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>일반 파일 시스템은 <strong>사물함 번호</strong>입니다. 3번 사물함에 무엇이 들었는지는 열어 봐야 알고, 내용물을 바꿔 넣어도 번호는 3번 그대로입니다.</p>
+                        <p>Git은 <strong>지문 보관함</strong>입니다. 물건의 지문(해시)을 떠서 그 지문을 번호로 씁니다. 똑같은 물건을 열 명이 맡기면 지문이 같으므로 보관함에는 하나만 들어갑니다. 반대로 물건에 흠집이 나면 지문이 달라지므로, 꺼낼 때 지문을 다시 떠 보면 바꿔치기를 잡아낼 수 있습니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">그래서 같은 파일을 100번 커밋해도 용량이 안 늘어난다는 게 사실인가요?</div>
+                <div class="a">
+                    <p>사실입니다. 단, 정확히 표현하면 <strong>"blob은 늘지 않고, 커밋 객체만 늘어난다"</strong>입니다.</p>
+                    <p>파일 <code>a.txt</code>의 내용이 그대로인 채 100번 커밋했다고 합시다. 매 커밋마다 Git은 <code>a.txt</code>의 내용을 해시합니다. 내용이 같으니 해시도 같고, 객체 DB에는 <strong>이미 그 OID가 존재</strong>합니다. Git 소스의 <code>write_object_file()</code> 경로를 보면 쓰기 전에 <code>check_and_freshen()</code>으로 존재 여부를 먼저 확인하고, 이미 있으면 파일을 쓰지 않고 <strong>mtime만 갱신(freshen)</strong>한 뒤 돌아갑니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">object-file.c &mdash; 이미 있으면 안 쓴다</div>
+                        <pre><code>/*
+ * check_and_freshen 계열 함수는 파일이 존재하면 1을 반환하고,
+ * (요청 시) mtime을 갱신해 GC의 prune 대상에서 벗어나게 한다.
+ */
+int check_and_freshen_file(const char *fn, int freshen,
+                           const time_t *mtime)
+{
+        if (access(fn, F_OK))
+                return 0;                       /* 없다 -&gt; 써야 한다 */
+        if (freshen &amp;&amp; !freshen_file(fn, mtime))
+                return 0;
+        return 1;                               /* 있다 -&gt; 쓰기 생략 */
+}</code></pre>
+                    </div>
+                    <p>mtime을 갱신하는 이유가 재미있습니다. GC의 <code>prune</code>은 "오래되고 도달 불가능한 객체"를 지우는데, 방금 다시 쓰이려 한 객체가 오래된 mtime 때문에 지워지면 곤란하기 때문입니다.</p>
+                    <p class="key-point">따라서 100번 커밋의 추가 비용은 <strong>커밋 객체 100개 + (내용이 바뀌지 않았다면) 트리 객체 0개</strong>입니다. 커밋 객체는 압축 후 대략 150~200바이트이므로, 100번 커밋해도 20KB 남짓 늘어날 뿐입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 객체 네 형제 &mdash; blob, tree, commit, tag</h2>
+            <div class="conversation">
+                <div class="q">Git이 저장하는 객체 타입은 몇 가지인가요?</div>
+                <div class="a">
+                    <p>개념적으로는 <strong>딱 네 가지</strong>입니다. Git 소스 <code>object.h</code>의 열거형이 그대로 진실입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">object.h</div>
+                        <pre><code>enum object_type {
+        OBJ_NONE = 0,
+        OBJ_COMMIT = 1,
+        OBJ_TREE = 2,
+        OBJ_BLOB = 3,
+        OBJ_TAG = 4,
+        /* 5 for future expansion */
+        OBJ_OFS_DELTA = 6,
+        OBJ_REF_DELTA = 7,
+        OBJ_ANY,
+        OBJ_MAX
+};</code></pre>
+                    </div>
+                    <p class="warning">주의: 타입 6, 7(<code>OFS_DELTA</code>, <code>REF_DELTA</code>)은 <strong>팩 파일 내부에서만 유효한 저장 형식</strong>이지 진짜 객체 타입이 아닙니다. 압축을 풀면 반드시 1~4 중 하나가 됩니다. 타입 5는 미래를 위해 비워 둔 자리이고, 타입 0은 무효입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>타입</th>
+                                <th>담는 것</th>
+                                <th>가리키는 대상</th>
+                                <th>비유</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>blob</strong></td>
+                                <td>파일의 <em>내용</em>만. 이름도, 권한도, 시각도 없음</td>
+                                <td>없음 (말단 노드)</td>
+                                <td>제본되지 않은 원고 뭉치</td>
+                            </tr>
+                            <tr>
+                                <td><strong>tree</strong></td>
+                                <td>디렉토리 한 층: (모드, 이름, OID) 목록</td>
+                                <td>blob, 하위 tree, (서브모듈이면) commit</td>
+                                <td>목차 한 페이지</td>
+                            </tr>
+                            <tr>
+                                <td><strong>commit</strong></td>
+                                <td>루트 tree + 부모들 + 작성자/커미터 + 메시지</td>
+                                <td>tree 1개, parent commit 0~N개</td>
+                                <td>"몇 월 며칠 판본" 도장</td>
+                            </tr>
+                            <tr>
+                                <td><strong>tag</strong></td>
+                                <td>대상 OID + 타입 + 태그명 + 태거 + 메시지 (+ GPG 서명)</td>
+                                <td>아무 객체 (보통 commit)</td>
+                                <td>공증된 라벨</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="q">이 넷이 조립되면 어떤 그림이 되나요?</div>
+                <div class="a">
+                    <p>커밋 하나를 뿌리로 삼으면 <strong>Merkle DAG(해시로 연결된 방향 비순환 그래프)</strong>가 펼쳐집니다. 아래는 <code>src/main.c</code>와 <code>README.md</code>가 있는 저장소의 커밋 한 개를 펼친 모습입니다.</p>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">commit f7d3c0e &mdash; "feat: 로그인 추가"</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">parent &rarr; commit 9a1b2c3 (이전 커밋)</div>
+                            <div class="hierarchy-item">tree &rarr; tree 4d5e6f7 (루트 디렉토리)</div>
+                        </div>
+                    </div>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">tree 4d5e6f7 (루트)</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">100644 README.md &rarr; blob aa11bb2</div>
+                            <div class="hierarchy-item">040000 src &rarr; tree 8c9d0e1</div>
+                        </div>
+                    </div>
+                    <div class="hierarchy-diagram">
+                        <div class="hierarchy-item hierarchy-item--root">tree 8c9d0e1 (src)</div>
+                        <div class="hierarchy-children">
+                            <div class="hierarchy-item">100644 main.c &rarr; blob cc33dd4</div>
+                        </div>
+                    </div>
+                    <p class="highlight">핵심은 <strong>"위쪽 객체의 해시는 아래쪽 객체들의 해시를 포함해 계산된다"</strong>는 점입니다. <code>main.c</code>의 한 글자를 바꾸면 blob OID가 바뀌고 &rarr; <code>src</code> tree의 내용(엔트리의 OID)이 바뀌어 tree OID가 바뀌고 &rarr; 루트 tree OID가 바뀌고 &rarr; commit OID가 바뀝니다. 연쇄가 뿌리까지 올라갑니다.</p>
+                    <p class="key-point">이것이 "커밋 해시를 신뢰하면 그 아래 모든 내용을 신뢰할 수 있다"의 근거입니다. 서명은 커밋 하나에만 하면 되고, 그 커밋이 도달하는 전체 스냅샷의 무결성이 해시 체인으로 보증됩니다. 블록체인이 쓰는 구조와 같은 원리(Merkle tree)입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 불변성과 그로 인한 오해들</h2>
+            <div class="conversation">
+                <div class="q">객체는 절대 수정되지 않는다고 하던데, 그럼 <code>git commit --amend</code>는 뭔가요?</div>
+                <div class="a">
+                    <p>Git 객체는 <strong>완전 불변(immutable)</strong>입니다. 한 번 쓰이면 내용이 바뀌지 않습니다. 바뀌면 해시가 달라지고, 그건 곧 <em>다른 객체</em>이기 때문입니다.</p>
+                    <p><code>--amend</code>는 커밋을 "수정"하지 않습니다. <strong>새 커밋 객체를 하나 더 만들고, 브랜치 ref가 그 새 커밋을 가리키게 옮기는 것</strong>이 전부입니다. 원래 커밋은 디스크에 그대로 살아 있습니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">amend 전</div>
+                                <div class="flow-box__items">main &rarr; C2 &rarr; C1</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">amend 후</div>
+                                <div class="flow-box__items">main &rarr; <strong>C2'</strong> &rarr; C1<br>(C2는 삭제되지 않음. 아무도 안 가리킬 뿐)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">C2는 어디에?</div>
+                                <div class="flow-box__items">reflog에 기록되어 있음. <code>git reflog</code>로 OID를 찾아 되살릴 수 있음</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="highlight">따라서 Git에서 "히스토리 변경"이라 부르는 모든 작업(<code>amend</code>, <code>rebase</code>, <code>reset</code>, <code>filter-repo</code>)은 실제로는 <strong>새 객체를 만들고 ref를 옮기는 일</strong>입니다. 기존 객체는 도달 불가능해질 뿐이며, GC가 돌기 전까지는 온전합니다.</p>
+                    <p class="warning">이 때문에 "실수로 민감 정보를 커밋했다가 <code>--amend</code>로 지웠다"는 안전하지 않습니다. blob은 여전히 객체 DB에 있고, 이미 push했다면 원격에도 남아 있습니다. 진짜로 지우려면 히스토리 재작성 + 강제 push + <strong>원격 측 GC</strong>까지 필요하며, 유출된 비밀은 애초에 폐기(rotate)하는 것이 정답입니다.</p>
+                </div>
+
+                <div class="q">객체는 어디에, 어떤 형태로 놓이나요?</div>
+                <div class="a">
+                    <p>두 가지 저장 형태가 있습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>느슨한 객체 (loose)</th>
+                                <th>팩 파일 (packed)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>위치</td>
+                                <td><code>.git/objects/ab/cdef...</code></td>
+                                <td><code>.git/objects/pack/pack-*.pack</code> + <code>.idx</code></td>
+                            </tr>
+                            <tr>
+                                <td>단위</td>
+                                <td>객체 1개 = 파일 1개</td>
+                                <td>객체 수십만 개 = 파일 1개</td>
+                            </tr>
+                            <tr>
+                                <td>압축</td>
+                                <td>zlib deflate만</td>
+                                <td>zlib + <strong>객체 간 델타 압축</strong></td>
+                            </tr>
+                            <tr>
+                                <td>만들어지는 때</td>
+                                <td><code>add</code>, <code>commit</code> 등 일상 작업</td>
+                                <td><code>gc</code>, <code>repack</code>, <code>clone</code>/<code>fetch</code> 수신 시</td>
+                            </tr>
+                            <tr>
+                                <td>장점</td>
+                                <td>쓰기가 단순하고 원자적(임시파일+rename)</td>
+                                <td>압도적인 공간 효율, inode 절약</td>
+                            </tr>
+                            <tr>
+                                <td>단점</td>
+                                <td>파일 수 폭발, 디스크 블록 낭비</td>
+                                <td>쓰기 비용 큼, 읽기에 인덱스 필요</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p>객체를 찾을 때 Git은 <strong>느슨한 객체를 먼저 보고, 없으면 각 팩의 <code>.idx</code>를 이진 탐색</strong>합니다. 이 두 형식은 각각 03편과 08~10편에서 바이트 단위로 해부합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 두 저장 형태 확인하기</div>
+                        <pre><code># 지금 저장소가 어떤 상태인지
+$ git count-objects -v
+count: 12            # 느슨한 객체 개수
+size: 48             # 느슨한 객체가 쓰는 디스크(KiB)
+in-pack: 284917      # 팩에 든 객체 개수
+packs: 2
+size-pack: 132487    # 팩 크기(KiB)
+prune-packable: 0
+garbage: 0
+
+# 느슨한 객체를 팩으로 밀어 넣기
+$ git gc
+$ git count-objects -v | head -2
+count: 0
+size: 0</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 왜 스냅샷인가 &mdash; 다른 VCS와의 결정적 차이</h2>
+            <div class="conversation">
+                <div class="q">SVN이나 CVS는 "변경분(delta)을 저장한다"고 배웠습니다. Git은 왜 다른 길을 갔나요?</div>
+                <div class="a">
+                    <p>전통적 VCS는 <strong>파일 단위로 변경 이력을 붙여 나갑니다.</strong> "v1 원본 + v2 diff + v3 diff ..." 식입니다. 특정 버전을 꺼내려면 원본부터 diff를 차례로 적용해야 합니다.</p>
+                    <p>Git은 <strong>매 커밋이 그 시점의 전체 스냅샷</strong>입니다. 다만 바뀌지 않은 파일은 <em>같은 blob OID를 재사용</em>하므로, 스냅샷을 통째로 저장해도 낭비가 없습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>구분</th>
+                                <th>델타 기반 (SVN/CVS)</th>
+                                <th>스냅샷 기반 (Git)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>모델</td>
+                                <td>파일별 변경 이력의 체인</td>
+                                <td>커밋별 전체 트리의 스냅샷</td>
+                            </tr>
+                            <tr>
+                                <td>특정 버전 꺼내기</td>
+                                <td>체인을 따라 diff 누적 적용 &rarr; 오래될수록 느림</td>
+                                <td>tree를 따라 blob 읽기 &rarr; 히스토리 길이와 무관</td>
+                            </tr>
+                            <tr>
+                                <td>브랜치 비용</td>
+                                <td>경로 복사(cheap copy)지만 메타데이터 부담</td>
+                                <td>41바이트 파일 하나 &rarr; 사실상 공짜</td>
+                            </tr>
+                            <tr>
+                                <td>파일 이동 추적</td>
+                                <td>명시적으로 기록(<code>svn mv</code>)</td>
+                                <td>기록하지 않고 <strong>조회 시 유사도로 추론</strong>(17편)</td>
+                            </tr>
+                            <tr>
+                                <td>공간 효율</td>
+                                <td>구조 자체가 델타라 기본적으로 효율적</td>
+                                <td>스냅샷이지만 <strong>팩 파일의 델타 압축</strong>으로 만회(09편)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">정리하면 Git은 <strong>"논리적으로는 스냅샷, 물리적으로는 델타"</strong>입니다. 데이터 모델(객체 DB)은 스냅샷이라 단순하고 병합·브랜치에 강하며, 저장 계층(팩 파일)에서만 델타를 써서 공간을 아낍니다. <strong>두 관심사를 분리한 것</strong>이 Git 설계의 핵심적인 승부수였습니다.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>델타 기반은 <strong>"원본 사진 + 수정 지시서 100장"</strong>입니다. 50번째 버전을 보려면 지시서 50장을 순서대로 적용해야 합니다.</p>
+                        <p>Git은 <strong>"사진 100장을 다 보관하되, 똑같은 사진은 한 장만 두고 나머지는 같은 사진을 가리킨다"</strong>입니다. 아무 버전이나 즉시 꺼낼 수 있고, 창고(팩 파일)에 넣을 때만 "이 사진은 저 사진과 3픽셀만 다름"이라고 압축합니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">이 설계가 실무에서 체감되는 순간은 언제인가요?</div>
+                <div class="a">
+                    <p>세 가지 장면에서 확실히 드러납니다.</p>
+                    <p><strong>1) 브랜치 전환이 즉각적이다.</strong> 브랜치 생성은 41바이트 파일 쓰기이고, 전환은 두 트리를 비교해 <em>달라진 파일만</em> 워킹 트리에 반영합니다. 파일 10만 개짜리 저장소에서 파일 3개가 다른 브랜치로 전환하면 실제 디스크 쓰기는 3개뿐입니다.</p>
+                    <p><strong>2) 머지가 강하다.</strong> 머지는 "diff를 순서대로 다시 적용"하는 것이 아니라 <strong>세 스냅샷(base, ours, theirs)을 비교</strong>하는 문제로 환원됩니다(18편). 스냅샷 모델이라 3-way merge가 자연스럽습니다.</p>
+                    <p><strong>3) 손상을 빨리 안다.</strong> 디스크 비트 플립이 생기면 해당 객체를 읽는 순간 해시 불일치가 나옵니다. <code>git fsck</code>는 저장소 전체에 대해 이 검사를 수행합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 중복 제거를 눈으로 확인하기</div>
+                        <pre><code>$ git init dedup &amp;&amp; cd dedup
+
+# 내용이 똑같은 파일 3개
+$ echo "same content" &gt; a.txt
+$ echo "same content" &gt; b.txt
+$ echo "same content" &gt; c.txt
+$ git add . &amp;&amp; git commit -q -m "three files"
+
+# blob은 몇 개 생겼을까?
+$ git cat-file --batch-all-objects --batch-check='%(objecttype)' | sort | uniq -c
+      1 blob          # &larr; 파일은 3개인데 blob은 1개!
+      1 commit
+      1 tree
+
+# 트리를 보면 셋 다 같은 OID를 가리킨다
+$ git ls-tree HEAD
+100644 blob 5f1a... a.txt
+100644 blob 5f1a... b.txt
+100644 blob 5f1a... c.txt</code></pre>
+                    </div>
+                    <p class="highlight">파일 이름과 권한은 <strong>blob이 아니라 tree에</strong> 기록됩니다. 그래서 이름만 다르고 내용이 같은 파일 1,000개는 blob 하나로 끝납니다. 이 분리가 다음 주제(03, 04편)의 출발점입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>Git 객체 DB는 내용 주소 지정 저장소다.</strong> 내용의 해시가 곧 주소이므로 중복 제거와 무결성 검증이 공짜로 따라온다.</li>
+                <li><strong>객체 타입은 blob·tree·commit·tag 네 가지뿐이다.</strong> <code>OFS_DELTA</code>(6), <code>REF_DELTA</code>(7)는 팩 파일 내부 저장 형식일 뿐 진짜 타입이 아니다.</li>
+                <li><strong>객체는 불변이다.</strong> <code>--amend</code>, <code>rebase</code>, <code>reset</code>은 새 객체를 만들고 ref를 옮길 뿐이며, 기존 객체는 GC 전까지 살아 있다.</li>
+                <li><strong>해시가 연쇄된 Merkle DAG다.</strong> blob 한 글자가 바뀌면 tree &rarr; 루트 tree &rarr; commit까지 OID가 연쇄적으로 바뀐다. 커밋 하나를 신뢰하면 전체 스냅샷을 신뢰할 수 있다.</li>
+                <li><strong>논리적으로는 스냅샷, 물리적으로는 델타.</strong> 데이터 모델의 단순함(스냅샷)과 저장 효율(팩 파일 델타)을 분리한 것이 Git 설계의 핵심이다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

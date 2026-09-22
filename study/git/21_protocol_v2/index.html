@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>clone할 때 둘은 무슨 대화를 나눌까 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>clone할 때 둘은 무슨 대화를 나눌까?</h1>
+            <p class="subtitle">전송 프로토콜 해부 &mdash; pkt-line 프레이밍 · 프로토콜 v2 · want/have 네고시에이션 · thin pack</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: pkt-line &mdash; Git의 와이어 프레이밍</h2>
+            <div class="conversation">
+                <div class="q">Git은 네트워크로 무엇을 어떻게 주고받나요?</div>
+                <div class="a">
+                    <p>모든 통신이 <strong>pkt-line</strong>이라는 단순한 프레이밍 위에서 이루어집니다. HTTP, SSH, git:// 어느 전송 계층을 쓰든 그 안에 흐르는 것은 pkt-line입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">pkt-line 포맷 (gitprotocol-common.adoc)</div>
+                        <pre><code>  data-pkt     =  pkt-len pkt-payload
+  pkt-len      =  4*(HEXDIG)              ← 길이를 4자리 16진수 <strong>ASCII</strong>로
+  pkt-payload  =  (pkt-len - 4)*(OCTET)
+
+  flush-pkt    = "0000"
+
+pkt-len은 <strong>자기 자신 4바이트를 포함한</strong> 전체 길이다.
+
+예시 (C 문자열 표기):
+  "0006a\n"       →  "a\n"          (6 = 4 + 2)
+  "0005a"         →  "a"            (5 = 4 + 1)
+  "000bfoobar\n"  →  "foobar\n"     (0x0b = 11 = 4 + 7)
+  "0000"          →  flush (구분자)</code></pre>
+                    </div>
+                    <p class="key-point">길이를 <strong>바이너리가 아니라 16진수 ASCII 4자로</strong> 쓴 것이 특징입니다. 디버깅할 때 <code>tcpdump</code>나 로그에서 눈으로 읽을 수 있고, 엔디언 문제가 없습니다. 페이로드 최대 길이는 <strong>65,516바이트</strong>입니다(<code>ffff</code> = 65535에서 헤더 4바이트와 여유를 뺀 값).</p>
+                    <p>프로토콜 v2에는 세 가지 특수 패킷이 있습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>패킷</th><th>이름</th><th>의미</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>0000</code></td><td>flush-pkt</td><td>메시지의 끝</td></tr>
+                            <tr><td><code>0001</code></td><td>delim-pkt</td><td>메시지 <strong>내부</strong>의 섹션 구분</td></tr>
+                            <tr><td><code>0002</code></td><td>response-end-pkt</td><td>stateless 연결에서 응답 하나의 끝</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>pkt-line은 <strong>"봉투마다 앞면에 두께를 적어 두는 우편"</strong>입니다.</p>
+                        <p>받는 쪽은 앞 4글자만 읽으면 <strong>이 봉투가 몇 바이트인지 정확히</strong> 알 수 있어, 딱 그만큼만 읽고 다음 봉투로 넘어갑니다. 내용물에 무엇이 들었든(바이너리 팩 데이터라도) 경계를 잃지 않습니다.</p>
+                        <p>빈 봉투 세 종류가 구두점 역할을 합니다 &mdash; <code>0000</code>은 마침표, <code>0001</code>은 쉼표, <code>0002</code>는 단락 끝입니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">실제 통신을 눈으로 볼 수 있나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 프로토콜 추적</div>
+                        <pre><code># 모든 패킷을 덤프
+$ GIT_TRACE_PACKET=1 git ls-remote https://github.com/git/git 2&gt;&amp;1 | head -20
+packet:        git&lt; version 2
+packet:        git&lt; agent=git/github-...
+packet:        git&lt; ls-refs=unborn
+packet:        git&lt; fetch=shallow wait-for-done filter
+packet:        git&lt; server-option
+packet:        git&lt; object-format=sha1
+packet:        git&lt; 0000
+packet:        git&gt; command=ls-refs
+packet:        git&gt; agent=git/2.56.0
+packet:        git&gt; 0001
+packet:        git&gt; peel
+packet:        git&gt; symrefs
+packet:        git&gt; ref-prefix HEAD
+packet:        git&gt; 0000
+packet:        git&lt; a1b2c3d... HEAD symref-target:refs/heads/master
+packet:        git&lt; 0000
+
+#  &lt; 는 서버 → 클라이언트, &gt; 는 클라이언트 → 서버
+#  0001(delim)이 "명령/능력" 구간과 "인자" 구간을 나누는 것이 보인다
+
+# 프로토콜 버전 강제
+$ GIT_TRACE_PACKET=1 git -c protocol.version=0 ls-remote ...   # v0(구버전)
+$ GIT_TRACE_PACKET=1 git -c protocol.version=2 ls-remote ...   # v2
+
+# 더 자세히
+$ GIT_TRACE=1 GIT_TRACE_PACKET=1 GIT_CURL_VERBOSE=1 git fetch 2&gt;&amp;1 | less</code></pre>
+                    </div>
+                    <p class="highlight"><code>GIT_TRACE_PACKET=1</code>은 <strong>전송 문제 디버깅의 1순위 도구</strong>입니다. 인증 실패, 프록시 문제, 서버 능력 불일치가 이 출력에서 대부분 드러납니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 프로토콜 v2가 고친 것</h2>
+            <div class="conversation">
+                <div class="q">v0(구버전)의 문제가 뭐였나요?</div>
+                <div class="a">
+                    <p>Git 문서가 v2의 개선점을 다섯 가지로 나열하는데, 뒤집어 보면 그것이 v0의 문제입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>v0의 문제</th><th>v2의 해법</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>무조건 전체 ref 광고</strong>. 연결하자마자 서버가 모든 ref를 쏟아냄</td>
+                                <td>명시적으로 요청하지 않으면 광고하지 않음. <code>ls-refs</code> 명령으로 필요한 것만</td>
+                            </tr>
+                            <tr>
+                                <td>서비스 이름이 여러 개(<code>git-upload-pack</code>, <code>git-receive-pack</code>)</td>
+                                <td><strong>하나의 서비스에 여러 명령</strong></td>
+                            </tr>
+                            <tr>
+                                <td>능력(capability)이 <strong>NUL 바이트 뒤에 숨어</strong> pkt-line 크기 제한을 받음</td>
+                                <td>능력이 <strong>독립 섹션</strong>으로 분리되어 확장 자유로움</td>
+                            </tr>
+                            <tr>
+                                <td>agent, symref 같은 정보가 NUL 뒤에 섞임</td>
+                                <td>각각 별도 능력/인자로 분리</td>
+                            </tr>
+                            <tr>
+                                <td>HTTP stateless 환경과 잘 안 맞음</td>
+                                <td><strong>처음부터 stateless를 전제</strong>로 설계. flush 의미가 명확해 HTTP 헬퍼가 단순 프록시로 동작</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">첫 번째 항목이 실무에서 가장 큽니다. ref가 86만 개인 저장소(12편)에서 <code>git fetch origin main</code> 한 번에 <strong>86만 줄의 ref 광고</strong>가 오갔습니다. v2에서는 <code>ref-prefix refs/heads/main</code>만 보내면 되므로 <strong>초기 왕복 데이터가 수십 MB에서 수 KB</strong>로 줄었습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">gitprotocol-v2.adoc &mdash; 설계 목표</div>
+                        <pre><code>  * 여러 서비스 이름 대신 <strong>하나의 서비스가 여러 명령</strong>을 지원
+  * 능력이 별도 섹션으로 분리되어 확장이 쉬움 (NUL 뒤에 숨지 않음)
+  * agent 문자열, symref 등을 별도 능력/인자로 분리
+  * <strong>명시적으로 요청하지 않으면 ref를 광고하지 않음</strong>
+  * ls-refs 명령으로 필요한 ref만 요청
+  * http와 stateless-rpc를 염두에 두고 설계</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">v2의 통신 흐름은 어떻게 되나요?</div>
+                <div class="a">
+                    <p><strong>"능력 광고 &rarr; 명령 요청 &rarr; 응답"</strong>의 반복입니다. 한 연결에서 여러 명령을 이어서 쓸 수 있습니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">1. 버전 선언</div>
+                                <div class="flow-box__items">클라이언트가 전송 계층별 채널로 <code>version=2</code> 전달 (<code>GIT_PROTOCOL</code> 환경변수 / HTTP 헤더)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">2. 능력 광고</div>
+                                <div class="flow-box__items">서버가 <code>version 2</code>, <code>agent=...</code>, <code>ls-refs=unborn</code>, <code>fetch=shallow filter ...</code>, <code>object-format=sha1</code> 등을 보냄</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">3. 명령 요청</div>
+                                <div class="flow-box__items"><code>command=ls-refs</code> 또는 <code>command=fetch</code> + 능력들 + <code>0001</code> + 인자들 + <code>0000</code></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">4. 응답 &amp; 반복</div>
+                                <div class="flow-box__items">응답 수신 후 <strong>같은 연결에서 다음 명령</strong> 가능</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p><code>ls-refs</code>가 받는 인자들이 최적화의 핵심입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>인자</th><th>의미</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>symrefs</code></td><td>symbolic ref가 가리키는 대상까지 함께 보여 달라 (HEAD &rarr; refs/heads/main)</td></tr>
+                            <tr><td><code>peel</code></td><td>주석 태그가 최종적으로 가리키는 커밋까지 (11편의 <code>fully-peeled</code>와 같은 개념)</td></tr>
+                            <tr><td><code>ref-prefix &lt;prefix&gt;</code></td><td><strong>이 접두사로 시작하는 ref만</strong> 보내 달라. 여러 번 지정 가능</td></tr>
+                            <tr><td><code>unborn</code></td><td>HEAD가 아직 없는 브랜치를 가리켜도 알려 달라 (빈 저장소 대응)</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">문서가 명시하는 중요한 단서: <strong><code>ref-prefix</code>는 순수한 최적화이며, 서버는 접두사에 맞지 않는 ref를 보내도 된다.</strong> 따라서 <strong>클라이언트가 스스로 한 번 더 필터링해야</strong> 합니다. 프로토콜 구현자가 놓치기 쉬운 지점입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 네고시에이션 &mdash; want와 have의 협상</h2>
+            <div class="conversation">
+                <div class="q"><code>fetch</code>에서 "필요한 것만 받는다"는 걸 어떻게 정하나요?</div>
+                <div class="a">
+                    <p><strong>클라이언트가 원하는 것(<code>want</code>)을 말하고, 이미 가진 것(<code>have</code>)을 조금씩 흘리면</strong> 서버가 공통 지점을 찾아 "준비됐다"고 답하는 구조입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">fetch 명령의 주요 인자</div>
+                        <pre><code>want &lt;oid&gt;        내가 원하는 객체 (보통 원격 브랜치의 tip)
+have &lt;oid&gt;        내가 이미 가진 객체
+done              협상 종료. 지금까지의 정보로 팩을 보내라
+
+thin-pack         base가 없는 thin pack을 받아도 좋다 (08편)
+ofs-delta         OBJ_OFS_DELTA를 이해할 수 있다
+no-progress       진행률 메시지 불필요
+include-tag       받는 객체를 가리키는 주석 태그도 함께 보내 달라
+deepen &lt;depth&gt;    shallow: 이 깊이까지만
+filter &lt;spec&gt;     부분 클론 필터 (23편)</code></pre>
+                    </div>
+                    <p>서버의 응답은 섹션으로 나뉩니다. <code>acknowledgments</code>, <code>shallow-info</code>, <code>wanted-refs</code>, <code>packfile-uris</code>, 그리고 마지막에 <code>packfile</code>입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">네고시에이션 왕복의 실제 모습</div>
+                        <pre><code>C: command=fetch
+C: 0001
+C: thin-pack
+C: ofs-delta
+C: want a1b2c3d...          ← origin/main의 최신 커밋
+C: have f7d3c0e...          ← 내 로컬 커밋들을 최근 것부터
+C: have c9d0e1f...
+C: have 3f4a5b6...
+C: 0000
+
+S: acknowledgments
+S: ACK c9d0e1f...           ← "이건 나도 있다" (공통)
+S: NAK                       ← 또는 "아무것도 공통이 아니다"
+S: 0000
+
+C: (더 오래된 have들을 추가로 전송...)
+C: done                      ← 이제 그만. 팩을 보내라
+C: 0000
+
+S: packfile
+S: (사이드밴드로 팩 데이터 스트리밍)
+S: 0000</code></pre>
+                    </div>
+                    <p>문서가 정리하는 <code>acknowledgments</code> 섹션의 규칙이 명확합니다.</p>
+                    <ul>
+                        <li>클라이언트가 <code>done</code>을 보내 팩을 요구했다면 이 섹션은 <strong>생략되어야 합니다.</strong></li>
+                        <li>공통인 <code>have</code>가 하나도 없으면 <strong><code>NAK</code></strong>, 있으면 각각에 <strong><code>ACK &lt;oid&gt;</code></strong>를 보냅니다.</li>
+                        <li><code>ACK</code>와 <code>NAK</code>가 <strong>같은 응답에 함께 올 수는 없습니다.</strong></li>
+                        <li>서버가 충분한 공통 기반을 찾으면 <strong><code>ready</code></strong>를 보내고, 같은 응답의 <code>packfile</code> 섹션에 팩을 담습니다.</li>
+                        <li><code>ready</code>를 보내기로 했다면 <strong>ACK들을 생략해도 됩니다</strong> &mdash; 이미 보낼 객체가 확정되어 더 협상할 필요가 없기 때문입니다.</li>
+                    </ul>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>전집을 빌려주는 상황입니다. "전체를 다 주면" 낭비이므로 <strong>어디까지 갖고 있는지</strong>를 확인해야 합니다.</p>
+                        <p>빌리는 쪽: "50권이 필요합니다. 참고로 저는 20권, 19권, 18권을 갖고 있습니다."<br>
+                        빌려주는 쪽: "20권은 저도 있는 판본이네요(ACK). 그럼 21~50권만 준비하겠습니다(ready)."</p>
+                        <p>한 번에 전부 말하지 않고 <strong>최근 것부터 조금씩 흘리는 이유</strong>는, 대개 최근 것에서 금방 공통점이 나오기 때문입니다. 100만 권 목록을 통째로 보내는 것은 낭비입니다.</p>
+                    </div>
+                </div>
+
+                <div class="q">클라이언트는 <code>have</code>를 어떻게 고르나요?</div>
+                <div class="a">
+                    <p><strong>네고시에이션 알고리즘</strong>이 담당하며, 13편의 리비전 워크를 씁니다. 기본은 "최근 커밋부터 지수적으로 간격을 벌리며" 보냅니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>알고리즘</th><th>방식</th><th>특징</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><code>default</code></td><td>커밋 날짜 역순으로 훑으며 <code>have</code> 전송</td><td>범용</td></tr>
+                            <tr><td><code>skipping</code></td><td>지수적으로 건너뛰며 전송</td><td>왕복 수 감소. 히스토리가 길 때 유리</td></tr>
+                            <tr><td><code>noop</code></td><td><code>have</code>를 아예 안 보냄</td><td>서버가 전부 보냄. 협상 비용 0, 전송량 최대</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 네고시에이션 튜닝</div>
+                        <pre><code># 알고리즘 선택
+$ git config fetch.negotiationAlgorithm skipping
+
+# 협상 왕복에 쓸 최대 커밋 수 (기본 100)
+$ git -c fetch.negotiationAlgorithm=skipping fetch origin
+
+# 네고시에이션 과정 추적
+$ GIT_TRACE_PACKET=1 git fetch origin 2&gt;&amp;1 | grep -E 'have|ACK|NAK|ready' | head -20
+
+# 협상 자체를 건너뛰기 (첫 clone처럼 동작)
+$ git fetch --negotiation-tip=HEAD origin
+# 특정 커밋들만 have로 보냄 — 거대 저장소에서 협상 비용 절감</code></pre>
+                    </div>
+                    <p class="key-point">협상이 끝나면 서버는 <strong>"want에서 도달 가능한 객체 &minus; have에서 도달 가능한 객체"</strong>를 계산해 팩으로 만듭니다. 이것이 13편에서 본 <strong><code>UNINTERESTING</code> 전파</strong>이고, 10편의 <strong>도달 가능성 비트맵</strong>이 결정적으로 기여하는 지점입니다 &mdash; 집합 차집합이 비트 연산 몇 번으로 끝납니다.</p>
+                    <p class="highlight">그리고 08편의 <strong>thin pack</strong>이 여기서 쓰입니다. 클라이언트가 <code>thin-pack</code> 능력을 선언했으므로, 서버는 <strong>클라이언트가 이미 가진 객체를 base로 하는 REF_DELTA</strong>를 보낼 수 있습니다. base를 포함하지 않으므로 전송량이 크게 줍니다. 클라이언트는 <code>index-pack --fix-thin</code>으로 로컬 base를 덧붙여 자기 완결적 팩으로 만든 뒤 저장합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 실전 &mdash; 전송 최적화와 문제 진단</h2>
+            <div class="conversation">
+                <div class="q">push는 fetch와 어떻게 다른가요?</div>
+                <div class="a">
+                    <p>방향이 반대이고, <strong>ref 갱신 요청</strong>이 추가됩니다. 서버 측 명령은 <code>receive-pack</code>입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">push의 흐름</div>
+                        <pre><code>1. 서버가 현재 ref 목록을 광고 (클라이언트가 무엇을 보낼지 판단하기 위해)
+
+2. 클라이언트가 ref 갱신 명령을 보냄
+   &lt;old-oid&gt; &lt;new-oid&gt; &lt;refname&gt;
+   ↑ old-oid가 <strong>compare-and-swap의 기대값</strong> (11편)
+     --force-with-lease가 이 값을 내가 마지막으로 본 값으로 채운다
+
+3. 클라이언트가 팩을 전송 (서버가 없는 객체만)
+
+4. 서버가 검증하고(receive.fsckObjects, 20편) 훅을 실행
+   pre-receive → update(ref마다) → (ref 갱신) → post-receive
+
+5. 서버가 결과 보고
+   unpack ok
+   ok refs/heads/main
+   ng refs/heads/protected  pre-receive hook declined</code></pre>
+                    </div>
+                    <p class="key-point"><strong>서버 측 훅이 실행되는 지점</strong>이 여기입니다. <code>pre-receive</code>는 전체 push를 한 번에 거부할 수 있고, <code>update</code>는 ref별로 거부할 수 있습니다. 브랜치 보호, 커밋 메시지 검증, 서명 확인이 전부 이 지점에서 이루어집니다.</p>
+                    <p class="warning"><code>git push --atomic</code>을 쓰면 11편의 <strong>ref 트랜잭션</strong>이 적용되어 "일부 ref만 갱신되는" 중간 상태가 생기지 않습니다. 릴리스 태그와 브랜치를 함께 밀어야 하는 배포 파이프라인에서 중요합니다.</p>
+                </div>
+
+                <div class="q">거대 저장소의 clone/fetch를 빠르게 하려면요?</div>
+                <div class="a">
+                    <p>병목이 어디냐에 따라 처방이 다릅니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>병목</th><th>처방</th><th>비고</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>서버의 객체 나열</td>
+                                <td>도달 가능성 <strong>비트맵</strong> (10편)</td>
+                                <td>서버 측 설정. <code>repack -adb</code></td>
+                            </tr>
+                            <tr>
+                                <td>전송량</td>
+                                <td><strong>부분 클론</strong> <code>--filter=blob:none</code> (23편)</td>
+                                <td>히스토리는 유지, blob은 필요할 때</td>
+                            </tr>
+                            <tr>
+                                <td>히스토리 깊이</td>
+                                <td><strong>shallow</strong> <code>--depth=1</code></td>
+                                <td>CI에 적합. 이후 작업에 제약</td>
+                            </tr>
+                            <tr>
+                                <td>ref 광고</td>
+                                <td>프로토콜 <strong>v2</strong> + <code>--single-branch</code></td>
+                                <td>Git 2.26부터 v2가 기본</td>
+                            </tr>
+                            <tr>
+                                <td>CDN 활용</td>
+                                <td><strong><code>packfile-uris</code></strong></td>
+                                <td>서버가 "이 URL에서 받아라"를 알려 줌</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p><code>packfile-uris</code>가 흥미롭습니다. 응답의 한 섹션으로 <strong>"이 팩은 이 URL에서 직접 받아라"</strong>를 알려 주어, 대용량 데이터를 Git 서버가 아닌 <strong>CDN이나 오브젝트 스토리지</strong>가 서빙하게 합니다. 거대 저장소를 호스팅하는 서비스의 핵심 확장입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 상황별 clone 전략</div>
+                        <pre><code># CI: 최신 커밋만 필요
+$ git clone --depth=1 --single-branch --branch main &lt;url&gt;
+
+# 개발: 히스토리는 필요하지만 옛날 파일 내용은 불필요
+$ git clone --filter=blob:none &lt;url&gt;         # blob은 필요할 때 on-demand
+
+# 모노레포에서 일부 디렉토리만
+$ git clone --filter=blob:none --sparse &lt;url&gt;
+$ cd repo &amp;&amp; git sparse-checkout set services/payment
+
+# 서버 측 준비 (호스팅을 직접 운영한다면)
+$ git repack -adb                              # 비트맵
+$ git multi-pack-index write --bitmap          # MIDX 비트맵
+$ git config uploadpack.allowFilter true       # 부분 클론 허용
+$ git config uploadpack.allowAnySHA1InWant true</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 전송 문제 진단 체크리스트</div>
+                        <pre><code># 1) 어떤 프로토콜 버전을 쓰는가
+$ GIT_TRACE_PACKET=1 git ls-remote &lt;url&gt; 2&gt;&amp;1 | head -3
+packet:        git&lt; version 2          # v2면 정상
+
+# 2) 서버가 어떤 능력을 광고하는가
+$ GIT_TRACE_PACKET=1 git ls-remote &lt;url&gt; 2&gt;&amp;1 | grep 'git&lt;'
+
+# 3) HTTP 레이어 문제인가 (프록시, 인증, TLS)
+$ GIT_CURL_VERBOSE=1 git fetch 2&gt;&amp;1 | head -40
+
+# 4) 큰 push가 실패한다면
+$ git config http.postBuffer 524288000        # 500MB (HTTP만 해당)
+# ↑ 다만 대개는 서버 측 제한이 원인. 커밋을 나눠 push하는 편이 낫다
+
+# 5) 얕은 클론에서 나중에 전체 히스토리가 필요해지면
+$ git fetch --unshallow
+$ git commit-graph write --reachable          # 세대 재계산 (14편)</code></pre>
+                    </div>
+                    <p class="highlight">면접 포인트: <strong>"clone이 느린데 원인을 어떻게 찾겠는가"</strong>라는 질문에는 계층을 나눠 답하는 것이 좋습니다. (1) <strong>협상</strong> &mdash; ref 광고량, 프로토콜 버전, (2) <strong>객체 나열</strong> &mdash; 서버의 비트맵 유무, (3) <strong>전송</strong> &mdash; 팩 크기, thin pack, CDN, (4) <strong>수신 처리</strong> &mdash; <code>index-pack</code>의 델타 복원과 fsck 검증. <code>GIT_TRACE_PACKET</code>과 진행률 표시가 어느 단계에서 멈추는지를 알려 줍니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>모든 Git 통신은 pkt-line 위에서 이루어진다.</strong> 길이를 16진수 ASCII 4자로 앞에 붙이며(자기 자신 포함), <code>0000</code>=flush, <code>0001</code>=delim, <code>0002</code>=response-end가 구두점 역할을 한다. 페이로드 최대 65,516바이트.</li>
+                <li><strong>프로토콜 v2의 핵심은 "요청하지 않으면 ref를 광고하지 않는다"이다.</strong> <code>ls-refs</code>의 <code>ref-prefix</code>로 필요한 것만 받으며, 다만 이는 최적화일 뿐이라 클라이언트가 한 번 더 필터링해야 한다.</li>
+                <li><strong>네고시에이션은 want/have의 협상이다.</strong> 서버는 공통 객체에 <code>ACK</code>, 없으면 <code>NAK</code>를 보내고, 충분한 기반을 찾으면 <code>ready</code> 후 팩을 보낸다. 클라이언트가 <code>done</code>을 보내면 acknowledgments 섹션은 생략된다.</li>
+                <li><strong>보낼 객체 = "want 도달 가능 &minus; have 도달 가능"이며, 비트맵이 이 차집합을 비트 연산으로 끝낸다.</strong> thin pack 덕분에 클라이언트가 이미 가진 객체를 base로 한 델타만 보낼 수 있다.</li>
+                <li><strong>push는 <code>&lt;old&gt; &lt;new&gt; &lt;ref&gt;</code> 형태의 CAS 요청이며, 서버 훅(pre-receive/update/post-receive)이 여기서 실행된다.</strong> 전송 최적화는 비트맵·부분 클론·shallow·<code>packfile-uris</code>(CDN)로 계층별 병목에 맞춰 선택한다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>
