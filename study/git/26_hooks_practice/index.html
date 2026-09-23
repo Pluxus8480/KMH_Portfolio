@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>훅으로 정책을 강제할 수 있을까 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>훅으로 정책을 강제할 수 있을까?</h1>
+            <p class="subtitle">훅 실전 &mdash; 우회 가능성 · 2중 방어 · 프레임워크와 배포 · 성능과 디버깅</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 클라이언트 훅은 강제가 아니다</h2>
+            <div class="conversation">
+                <div class="q">커밋 컨벤션을 훅으로 강제하면 되는 거 아닌가요?</div>
+                <div class="a">
+                    <p>여기서 많은 팀이 잘못된 보안 모델을 갖습니다. <strong>클라이언트 훅은 우회가 한 플래그면 됩니다.</strong></p>
+                    <div class="code-block">
+                        <div class="code-header">우회 방법들 &mdash; 전부 합법적인 Git 기능</div>
+                        <pre><code>$ git commit --no-verify -m "아무거나"     # pre-commit, commit-msg 건너뜀
+$ git push --no-verify                      # pre-push 건너뜀
+$ git config --unset core.hooksPath         # 훅 경로 자체를 해제
+$ chmod -x .githooks/*                      # 실행 비트를 떼면 조용히 무시됨(24편)
+$ rm .git/hooks/pre-commit                  # 그냥 지운다</code></pre>
+                    </div>
+                    <p class="key-point">따라서 클라이언트 훅의 정체는 <strong>"정책 집행 수단"이 아니라 "실수를 줄여 주는 편의 장치"</strong>입니다. 악의를 막지 못하고, 실수만 막습니다. 그리고 그것만으로도 충분히 가치가 있습니다 &mdash; 대부분의 문제는 악의가 아니라 실수니까요.</p>
+                    <div class="analogy-box">
+                        <strong>🎯 비유로 이해하기</strong>
+                        <p>클라이언트 훅은 <strong>자동차의 안전벨트 경고음</strong>입니다.</p>
+                        <p>띵띵거려서 대부분의 사람이 벨트를 매게 되지만, 버클만 꽂아 두면 그만입니다. 정말로 못 지나가게 하려면 <strong>톨게이트의 차단봉</strong>이 필요하고, 그것이 서버 훅입니다.</p>
+                        <p>그렇다고 경고음이 쓸모없는 건 아닙니다. <strong>톨게이트까지 가서야 제지당하는 것보다, 출발 전에 알려 주는 편이 훨씬 빠르고 친절합니다.</strong></p>
+                    </div>
+                </div>
+
+                <div class="q">그럼 진짜로 막으려면 어떻게 해야 하나요?</div>
+                <div class="a">
+                    <p><strong>2중 방어</strong>가 정석입니다. 같은 규칙을 두 층에 두되 역할을 나눕니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">1층: 클라이언트 훅</div>
+                                <div class="flow-box__items">커밋/푸시 직전에 <strong>즉각 피드백</strong><br>우회 가능하지만 빠르다</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">2층: 서버 훅 / CI</div>
+                                <div class="flow-box__items">push 시점에 <strong>실제로 차단</strong><br>우회 불가. 느리지만 확실</div>
+                            </div>
+                        </div>
+                    </div>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>환경</th><th>2층에 무엇을 두나</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>자체 Git 서버 (Gitea, GitLab self-hosted, bare 저장소)</td>
+                                <td><strong><code>pre-receive</code> / <code>update</code> 훅</strong> &mdash; 가장 강력. 25편 참고</td>
+                            </tr>
+                            <tr>
+                                <td>GitHub / GitLab SaaS</td>
+                                <td>서버 훅을 직접 못 넣음 &rarr; <strong>브랜치 보호 규칙 + 필수 상태 검사(CI)</strong></td>
+                            </tr>
+                            <tr>
+                                <td>GitHub Enterprise</td>
+                                <td><strong>pre-receive hook</strong> 기능 제공 (관리자 설정)</td>
+                            </tr>
+                            <tr>
+                                <td>Gerrit</td>
+                                <td><code>proc-receive</code> 기반 리뷰 강제 (25편)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">SaaS를 쓰는 대부분의 팀에게는 <strong>"서버 훅을 쓸 수 없다"</strong>가 현실입니다. 이때 <strong>브랜치 보호 규칙(force push 금지, 리뷰 필수, 상태 검사 통과 필수)</strong>이 서버 훅의 역할을 대신합니다. 훅으로 해결하려 하지 말고 그쪽을 설정해야 합니다.</p>
+                    <p class="key-point">그리고 중요한 원칙: <strong>같은 검증 로직을 두 번 작성하지 마십시오.</strong> 스크립트 하나를 만들어 클라이언트 훅과 CI가 <em>같은 파일</em>을 호출하게 해야 규칙이 어긋나지 않습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">검증 로직 단일화</div>
+                        <pre><code># scripts/validate-commit-msg.sh  ← 진실은 여기 하나뿐
+#!/bin/sh
+grep -qE '^(feat|fix|docs|refactor|test|chore)(\(.+\))?: .{1,72}$' "$1"
+
+# .githooks/commit-msg
+#!/bin/sh
+exec ./scripts/validate-commit-msg.sh "$1"
+
+# .github/workflows/ci.yml
+- run: |
+    git log --format=%B -n1 ${{ github.event.pull_request.head.sha }} &gt; /tmp/msg
+    ./scripts/validate-commit-msg.sh /tmp/msg</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 서버 훅으로 실제 정책 만들기</h2>
+            <div class="conversation">
+                <div class="q">실무에서 자주 쓰는 서버 정책을 예제로 보여 주세요.</div>
+                <div class="a">
+                    <p>가장 많이 요구되는 네 가지를 <code>pre-receive</code> 하나에 담으면 이렇습니다. 25편의 stdin 포맷과 24편의 all-zeroes 규칙이 그대로 쓰입니다.</p>
+                    <details class="code-toggle">
+                        <summary>hooks/pre-receive &mdash; 통합 정책 훅 <span class="code-lang">sh</span></summary>
+                        <pre><code>#!/bin/sh
+# 서버(bare) 저장소의 hooks/pre-receive
+# stdin: &lt;old-oid&gt; SP &lt;new-oid&gt; SP &lt;ref-name&gt; LF  (25편)
+
+zero=$(git hash-object --stdin -t tree &lt;/dev/null | tr '[0-9a-f]' '0')
+fail=0
+
+# push option으로 긴급 우회를 허용 (감사 로그는 남긴다)
+i=0
+emergency=0
+while [ "$i" -lt "${GIT_PUSH_OPTION_COUNT:-0}" ]; do
+    eval "opt=\$GIT_PUSH_OPTION_$i"
+    [ "$opt" = "emergency" ] &amp;&amp; emergency=1
+    i=$((i + 1))
+done
+
+while read old new ref; do
+
+    # -- 정책 1: 보호 브랜치 삭제 금지 ------------------
+    if [ "$new" = "$zero" ]; then
+        case "$ref" in
+            refs/heads/main|refs/heads/release/*)
+                echo "거부: $ref 는 삭제할 수 없습니다." &gt;&2
+                fail=1 ;;
+        esac
+        continue                       # 삭제는 더 검사할 게 없다
+    fi
+
+    # -- 정책 2: non-fast-forward 금지 (15편의 조상 판정) --
+    if [ "$old" != "$zero" ]; then
+        case "$ref" in
+            refs/heads/main|refs/heads/release/*)
+                if ! git merge-base --is-ancestor "$old" "$new"; then
+                    echo "거부: $ref 에 force push 할 수 없습니다." &gt;&2
+                    fail=1; continue
+                fi ;;
+        esac
+    fi
+
+    # 검사할 커밋 범위 결정 (24편의 all-zeroes 처리)
+    if [ "$old" = "$zero" ]; then
+        # 새 브랜치: 기존 브랜치들에 없는 커밋만 (13편의 --not --all)
+        range=$(git rev-list "$new" --not --all)
+    else
+        range=$(git rev-list "$old".."$new")
+    fi
+
+    for c in $range; do
+        subject=$(git log -1 --format=%s "$c")
+
+        # -- 정책 3: 커밋 메시지 컨벤션 ------------------
+        if ! printf '%s' "$subject" | grep -qE '^(feat|fix|docs|refactor|test|chore)(\(.+\))?: .+'; then
+            echo "거부: $c 메시지가 컨벤션에 맞지 않습니다: $subject" &gt;&2
+            fail=1
+        fi
+
+        # -- 정책 4: 대용량 파일 차단 (09편 — 델타가 안 먹힌다) --
+        git diff-tree -r --no-commit-id --name-only "$c" | while read path; do
+            blob=$(git rev-parse "$c:$path" 2&gt;/dev/null) || continue
+            size=$(git cat-file -s "$blob" 2&gt;/dev/null) || continue
+            if [ "$size" -gt 10485760 ]; then
+                echo "거부: $path 가 10MB를 초과합니다 ($size). LFS를 사용하세요." &gt;&2
+                exit 1
+            fi
+        done || fail=1
+    done
+done
+
+if [ "$fail" -ne 0 ]; then
+    if [ "$emergency" -eq 1 ]; then
+        echo "경고: --push-option=emergency 로 정책을 우회했습니다." &gt;&2
+        logger -t git-hook "EMERGENCY BYPASS by $(whoami)"
+        exit 0
+    fi
+    echo "" &gt;&2
+    echo "정책 위반으로 push가 거부되었습니다." &gt;&2
+    echo "긴급 시: git push --push-option=emergency" &gt;&2
+    exit 1
+fi
+exit 0</code></pre>
+                    </details>
+                    <p class="highlight">여기서 눈여겨볼 설계가 둘 있습니다.</p>
+                    <p><strong>1) 새 브랜치에는 <code>git rev-list "$new" --not --all</code>을 씁니다.</strong> <code>old</code>가 all-zeroes라 범위를 만들 수 없는데, 그렇다고 <code>$new</code> 전체를 검사하면 <strong>이미 main에 있는 옛 커밋까지 전부 재검사</strong>하게 됩니다. <code>--not --all</code>이 13편의 <code>UNINTERESTING</code> 전파를 이용해 "이 저장소에 아직 없는 커밋만" 골라 줍니다.</p>
+                    <p><strong>2) 우회 경로를 <em>의도적으로</em> 남겼습니다.</strong> 장애 상황에서 정책 때문에 핫픽스를 못 올리는 일은 실제로 벌어집니다. <code>--push-option</code>(24편)으로 명시적 우회를 허용하되 <strong>반드시 로그를 남기는</strong> 것이 현실적인 타협입니다.</p>
+                    <p class="warning">셸 스크립트의 함정 하나: <code>while read ... done</code>이 파이프 뒤에 오면 <strong>서브셸에서 실행되어 변수 변경이 밖으로 전파되지 않습니다.</strong> 위 코드의 <code>git diff-tree | while read</code> 블록에서 <code>fail=1</code>을 직접 설정하지 않고 <code>exit 1</code> + <code>|| fail=1</code>로 처리한 이유입니다.</p>
+                </div>
+
+                <div class="q">서버 훅 성능은 신경 안 써도 되나요?</div>
+                <div class="a">
+                    <p>신경 써야 합니다. <strong>push할 때마다 사용자가 기다리는 시간</strong>입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>안티패턴</th><th>문제</th><th>대안</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>커밋마다 <code>git</code> 명령 수십 번</td>
+                                <td>1,000커밋 push에 수만 번의 프로세스 생성</td>
+                                <td><code>git log --format=...</code>로 <strong>한 번에</strong> 뽑아 파싱</td>
+                            </tr>
+                            <tr>
+                                <td>훅에서 전체 테스트 실행</td>
+                                <td>push가 수 분 블로킹</td>
+                                <td>훅은 <strong>빠른 검증만</strong>, 테스트는 CI로</td>
+                            </tr>
+                            <tr>
+                                <td><code>post-receive</code>에서 동기 배포</td>
+                                <td>배포 끝날 때까지 push 안 끝남</td>
+                                <td>큐에 넣고 <strong>즉시 반환</strong></td>
+                            </tr>
+                            <tr>
+                                <td><code>reference-transaction</code>에서 네트워크 호출</td>
+                                <td>모든 ref 연산이 느려짐(25편)</td>
+                                <td>파일에 append만, 집계는 별도 프로세스</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">sh &mdash; 프로세스 생성 줄이기</div>
+                        <pre><code># ❌ 커밋당 git 프로세스 1개
+for c in $(git rev-list "$old".."$new"); do
+    subject=$(git log -1 --format=%s "$c")
+    check "$subject"
+done
+
+# ✅ 한 번의 호출로 전부 수집
+git rev-list "$old".."$new" --format='%H%x09%s' --no-commit-header \
+  | while IFS="$(printf '\t')" read -r sha subject; do
+        check "$subject"
+    done</code></pre>
+                    </div>
+                    <p class="key-point"><code>post-receive</code>에서 배포를 트리거할 때는 <strong>반드시 비동기</strong>여야 합니다. <code>nohup ... &amp;</code>로 떼어 내거나 메시지 큐에 넣고 즉시 반환하십시오. 동기로 두면 개발자가 <code>git push</code> 앞에서 배포가 끝나길 기다리게 되고, push가 타임아웃되면 <strong>ref는 갱신됐는데 배포는 실패한</strong> 어중간한 상태가 됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 프레임워크와 팀 배포</h2>
+            <div class="conversation">
+                <div class="q">훅 프레임워크는 뭘 해결해 주나요?</div>
+                <div class="a">
+                    <p>직접 짤 때 부딪히는 세 가지 문제를 해결합니다.</p>
+                    <ol>
+                        <li><strong>설치 강제</strong> &mdash; <code>.git/hooks</code>는 클론되지 않고, <code>core.hooksPath</code> 설정은 각자 해야 합니다(24편).</li>
+                        <li><strong>한 이벤트에 여러 도구</strong> &mdash; 전통적 훅은 이벤트당 파일 하나뿐이라, 린터와 시크릿 탐지기를 함께 돌리려면 디스패처를 직접 만들어야 합니다.</li>
+                        <li><strong>변경된 파일만 검사</strong> &mdash; 전체 검사는 느려서 아무도 안 씁니다.</li>
+                    </ol>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>도구</th><th>생태계</th><th>설치 방식</th><th>특징</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Husky</strong></td>
+                                <td>Node.js</td>
+                                <td><code>npm install</code>의 <code>prepare</code> 스크립트</td>
+                                <td><code>core.hooksPath</code>를 <code>.husky</code>로 설정. lint-staged와 조합</td>
+                            </tr>
+                            <tr>
+                                <td><strong>pre-commit</strong></td>
+                                <td>Python (언어 무관)</td>
+                                <td><code>pre-commit install</code></td>
+                                <td><strong>도구를 격리 환경에 자동 설치.</strong> YAML 선언형. CI 연동 강력</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Lefthook</strong></td>
+                                <td>Go 단일 바이너리</td>
+                                <td><code>lefthook install</code></td>
+                                <td>런타임 의존성 없음. <strong>병렬 실행</strong> 내장</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Overcommit</strong></td>
+                                <td>Ruby</td>
+                                <td><code>overcommit --install</code></td>
+                                <td>서명 검증으로 훅 변조 감지</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="code-block">
+                        <div class="code-header">.pre-commit-config.yaml &mdash; 선언형 예시</div>
+                        <pre><code>repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict      # 충돌 마커(18편)가 남았는지
+      - id: check-added-large-files
+        args: ['--maxkb=10240']       # 09편 — 큰 바이너리 차단
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.0
+    hooks:
+      - id: gitleaks                  # 시크릿 탐지</code></pre>
+                    </div>
+                    <p class="highlight"><strong><code>pre-commit</code>이 특히 강력한 이유</strong>는 도구를 격리 환경에 자동 설치한다는 점입니다. 팀원이 파이썬 린터를 안 깔았어도 알아서 가상환경을 만들어 동일 버전으로 실행합니다. <strong>"내 로컬에선 통과했는데 CI에선 실패"를 구조적으로 없앱니다.</strong></p>
+                    <p class="key-point">그리고 24편에서 본 <strong>config 기반 훅(<code>hook.&lt;name&gt;.command</code>)</strong>이 장기적으로 2번 문제를 Git 자체에서 해결합니다. 다만 아주 최신 기능이라, 당분간은 프레임워크가 현실적인 선택입니다.</p>
+                </div>
+
+                <div class="q">팀에 배포할 때 실제 세팅은 어떻게 하나요?</div>
+                <div class="a">
+                    <p><strong>"클론 후 한 번의 명령"</strong>으로 끝나게 만드는 것이 목표입니다. 프레임워크 없이 순수 Git으로 한다면 이렇습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 순수 Git 팀 배포 구성</div>
+                        <pre><code># 저장소 구조
+.githooks/
+  pre-commit
+  commit-msg
+  pre-push
+scripts/
+  setup-hooks.sh
+  validate-commit-msg.sh
+
+# scripts/setup-hooks.sh
+#!/bin/sh
+set -e
+git config core.hooksPath .githooks
+echo "훅이 설치되었습니다: $(git rev-parse --git-path hooks)"
+
+# 실행 비트를 인덱스에 박아 둔다 (24편 — Windows 대응 필수)
+$ git update-index --chmod=+x .githooks/*
+
+# 팀원 안내 (README)
+$ ./scripts/setup-hooks.sh</code></pre>
+                    </div>
+                    <p>여기서 <strong>"설치를 잊는 사람"</strong> 문제가 남습니다. 몇 가지 현실적 대응이 있습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>방법</th><th>동작</th><th>한계</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>빌드 도구에 끼워 넣기</td>
+                                <td><code>npm prepare</code>, <code>make</code>, Gradle 태스크에서 자동 설정</td>
+                                <td>빌드를 한 번은 돌려야 함</td>
+                            </tr>
+                            <tr>
+                                <td><code>init.templateDir</code> 전사 표준</td>
+                                <td>온보딩 시 개인 환경에 1회 설정(24편)</td>
+                                <td>개인 설정이라 강제 불가</td>
+                            </tr>
+                            <tr>
+                                <td><strong>서버/CI에서 검증</strong></td>
+                                <td>설치 여부와 무관하게 push/PR에서 차단</td>
+                                <td><strong>이것이 정답.</strong> 클라이언트 훅은 보조</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning">결국 Part 1의 결론으로 돌아옵니다. <strong>"모두가 훅을 설치하게 만드는 완벽한 방법은 없습니다."</strong> 설치를 쉽게 만들되, <strong>정책은 서버나 CI에서 검증</strong>하는 것이 유일하게 확실한 구조입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 디버깅과 함정</h2>
+            <div class="conversation">
+                <div class="q">훅이 이상하게 동작할 때 어떻게 디버깅하나요?</div>
+                <div class="a">
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 훅 디버깅 체크리스트</div>
+                        <pre><code># 1) Git이 보는 훅 경로 확인 (24편)
+$ git rev-parse --git-path hooks
+$ git config --get core.hooksPath
+
+# 2) 훅을 Git과 동일한 방식으로 직접 실행
+$ git hook run pre-commit
+$ git hook run commit-msg -- /tmp/testmsg      # 인자 전달
+
+# 3) 훅에 추적 코드를 심는다
+#!/bin/sh
+exec 2&gt;&gt;/tmp/hook-debug.log                    # stderr를 파일로
+set -x                                          # 실행되는 명령을 전부 출력
+echo "=== $(date) args: $@ ==="
+cat &gt;&gt;/tmp/hook-stdin.log                       # stdin을 통째로 보존
+# ↑ stdin을 소비했으므로 실제 로직에서 다시 읽을 수 없음에 주의
+
+# 4) 환경 확인 — 훅의 PATH는 셸과 다를 수 있다
+#!/bin/sh
+env | sort &gt; /tmp/hook-env.txt
+which node npm python3 &gt;&gt; /tmp/hook-env.txt
+
+# 5) 훅을 빼고 재현 — 훅이 원인인지 격리
+$ git commit --no-verify -m test
+$ git -c core.hooksPath=/dev/null commit -m test
+
+# 6) Git 내부 추적
+$ GIT_TRACE=1 git commit -m test 2&gt;&amp;1 | grep -i hook</code></pre>
+                    </div>
+                    <p class="key-point">4번 <strong>PATH 문제</strong>가 압도적으로 흔합니다. GUI 클라이언트(SourceTree, VS Code, Fork, IntelliJ)는 <strong>로그인 셸을 거치지 않고</strong> Git을 실행하므로, <code>.bashrc</code>/<code>.zshrc</code>에서 설정한 PATH가 없습니다. nvm으로 설치한 node, pyenv의 python이 <strong>터미널에서는 되는데 GUI에서는 "command not found"</strong>가 되는 이유입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">sh &mdash; PATH 문제 방어</div>
+                        <pre><code>#!/bin/sh
+# 흔한 위치를 명시적으로 추가
+export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+
+# nvm 환경 로드 (GUI 클라이언트 대응)
+[ -s "$HOME/.nvm/nvm.sh" ] &amp;&amp; . "$HOME/.nvm/nvm.sh"
+
+# 도구가 없으면 "조용히 통과"시킬지 "실패"시킬지 명시적으로 결정
+if ! command -v npx &gt;/dev/null 2&gt;&amp;1; then
+    echo "경고: npx를 찾을 수 없어 린트를 건너뜁니다." &gt;&2
+    exit 0            # ← 팀 정책에 따라 exit 1 일 수도 있다
+fi</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">그 밖에 자주 밟는 함정들을 정리해 주세요.</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>함정</th><th>증상</th><th>해결</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>실행 비트 누락</strong></td>
+                                <td>아무 일도 안 일어남(24편)</td>
+                                <td><code>chmod +x</code> + <code>git update-index --chmod=+x</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>셔뱅 없음/CRLF</strong></td>
+                                <td>Windows에서 <code>bad interpreter</code></td>
+                                <td><code>#!/bin/sh</code> 명시 + <code>.gitattributes</code>에 <code>.githooks/* text eol=lf</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>워킹 트리를 검사</strong></td>
+                                <td>스테이징 안 한 변경까지 린트에 걸림</td>
+                                <td><code>git diff --cached</code>로 <strong>인덱스</strong>를 본다(06편)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>부분 스테이징 무시</strong></td>
+                                <td><code>git add -p</code>로 일부만 올렸는데 파일 전체를 검사</td>
+                                <td><code>git stash -k</code>로 워킹 트리를 인덱스와 일치시킨 뒤 검사</td>
+                            </tr>
+                            <tr>
+                                <td><strong>all-zeroes 미처리</strong></td>
+                                <td>새 브랜치 push에서 훅이 터짐</td>
+                                <td>24편의 zero OID 검사</td>
+                            </tr>
+                            <tr>
+                                <td><strong><code>GIT_DIR</code> 오염</strong></td>
+                                <td>다른 저장소 명령이 엉뚱한 곳을 봄</td>
+                                <td><code>unset $(git rev-parse --local-env-vars)</code>(24편)</td>
+                            </tr>
+                            <tr>
+                                <td><strong>stdin 중복 소비</strong></td>
+                                <td>로그에 찍고 나면 본 로직에서 빈 입력</td>
+                                <td>변수에 담아 재사용: <code>input=$(cat)</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>훅 안에서 커밋/체크아웃</strong></td>
+                                <td><code>index.lock</code> 충돌(11편)</td>
+                                <td>훅에서 저장소 상태를 바꾸지 않는다</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning"><strong>부분 스테이징 문제</strong>가 특히 교묘합니다. <code>git add -p</code>로 파일의 일부 hunk만 올렸는데 훅이 워킹 트리 파일을 린트하면, <strong>커밋되지 않을 코드를 검사</strong>하게 됩니다. 반대로 통과했는데 실제 커밋 내용은 깨져 있을 수도 있습니다. lint-staged 같은 도구가 존재하는 이유가 정확히 이것입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">sh &mdash; 인덱스 내용만 정확히 검사하기</div>
+                        <pre><code>#!/bin/sh
+# 인덱스 상태를 임시 디렉토리에 펼쳐서 검사 (워킹 트리를 건드리지 않음)
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# 인덱스의 내용을 그대로 꺼낸다 (04편의 tree, 06편의 인덱스)
+git checkout-index --prefix="$tmp/" -af
+
+# 스테이징된 파일만 골라 검사
+git diff --cached --name-only --diff-filter=ACM -z \
+  | while IFS= read -r -d '' f; do
+        case "$f" in *.js|*.ts) npx eslint "$tmp/$f" || exit 1 ;; esac
+    done</code></pre>
+                    </div>
+                    <p class="highlight"><code>git checkout-index --prefix=</code>가 우아한 해법입니다. <strong>인덱스의 내용을 워킹 트리와 무관한 위치에 펼쳐</strong>서 검사하므로, 부분 스테이징이든 워킹 트리에 수정이 남아 있든 <strong>"실제로 커밋될 내용"만 정확히</strong> 검증합니다. <code>stash</code>를 쓰는 방식보다 안전합니다 &mdash; 훅이 중간에 죽어도 사용자의 작업이 stash에 갇히지 않습니다.</p>
+                    <p class="key-point">면접 포인트: <strong>"훅으로 코드 품질을 강제하겠다"는 답은 절반짜리입니다.</strong> 클라이언트 훅은 우회 가능하므로 <strong>빠른 피드백</strong> 역할이고, 실제 강제는 <strong>서버 훅 또는 브랜치 보호 + CI</strong>에서 이루어지며, 두 층이 <strong>같은 검증 스크립트를 공유</strong>해야 규칙이 어긋나지 않는다 &mdash; 여기까지 말해야 설계를 이해한 답이 됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>클라이언트 훅은 <code>--no-verify</code> 한 번이면 우회된다.</strong> 정책 집행 수단이 아니라 <strong>실수를 줄이는 빠른 피드백</strong> 장치이며, 실제 강제는 서버 훅(<code>pre-receive</code>/<code>update</code>)이나 브랜치 보호 + CI에서만 가능하다.</li>
+                <li><strong>두 층이 같은 검증 스크립트를 호출하게 만들어야 한다.</strong> 로직을 두 번 작성하면 반드시 어긋나고, 클라이언트는 통과하는데 CI는 막는 상황이 생긴다.</li>
+                <li><strong>서버 훅에서 새 브랜치는 <code>git rev-list "$new" --not --all</code>로 "아직 없는 커밋"만 검사한다.</strong> 긴급 우회는 <code>--push-option</code>으로 명시적으로 열어 두되 반드시 로그를 남긴다.</li>
+                <li><strong>훅 성능은 곧 사용자 대기 시간이다.</strong> 커밋마다 git 프로세스를 띄우지 말고 한 번에 수집하며, <code>post-receive</code>의 배포는 반드시 비동기로 떼어 낸다.</li>
+                <li><strong>가장 흔한 사고는 실행 비트 누락과 GUI 클라이언트의 PATH 문제다.</strong> 그리고 워킹 트리가 아니라 <strong>인덱스</strong>를 검사해야 하며, <code>git checkout-index --prefix=</code>로 펼쳐 검사하면 부분 스테이징까지 정확히 다룰 수 있다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

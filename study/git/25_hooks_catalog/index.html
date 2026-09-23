@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>29개 훅은 언제 무엇을 받는가 | KMH Portfolio</title>
+    <link rel="stylesheet" href="../../../css/study-content.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-container">
+        <a href="../../git.html" class="back-link">&larr; 목록으로</a>
+
+        <header class="content-header">
+            <h1>29개 훅은 언제 무엇을 받는가</h1>
+            <p class="subtitle">전수 레퍼런스 &mdash; 커밋 계열 · 워크플로 계열 · 서버 계열 · proc-receive와 reference-transaction</p>
+        </header>
+
+        <!-- Part 1 -->
+        <section class="part">
+            <h2>Part 1: 커밋 계열 &mdash; 메시지를 고쳐 쓸 수 있는 훅들</h2>
+            <div class="conversation">
+                <div class="q">커밋 하나를 만들 때 훅이 몇 번이나 불리나요?</div>
+                <div class="a">
+                    <p>평범한 <code>git commit</code> 한 번에 <strong>최대 네 개</strong>가 순서대로 불립니다. 순서가 곧 각 훅의 역할을 규정합니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">1. pre-commit</div>
+                                <div class="flow-box__items">메시지를 <strong>얻기 전</strong>. 인자 없음<br>&rarr; 내용 검증 (린트·테스트·시크릿 탐지)</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">2. prepare-commit-msg</div>
+                                <div class="flow-box__items">기본 메시지 준비 후, <strong>에디터 실행 전</strong><br>&rarr; 메시지 <strong>초안 작성</strong></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">3. commit-msg</div>
+                                <div class="flow-box__items">사용자가 메시지를 다 쓴 뒤<br>&rarr; 메시지 <strong>검증·정규화</strong></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">4. post-commit</div>
+                                <div class="flow-box__items">커밋 생성 후. 인자 없음<br>&rarr; 알림만. <strong>결과에 영향 없음</strong></div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">2번과 3번의 차이가 중요합니다. <strong><code>prepare-commit-msg</code>는 "에디터가 뜨기 전"이므로 사용자가 볼 초안을 만드는 자리</strong>이고, <strong><code>commit-msg</code>는 "사용자가 다 쓴 뒤"이므로 최종 검증 자리</strong>입니다. 이슈 번호 자동 삽입은 전자에, 컨벤션 검사는 후자에 넣어야 합니다.</p>
+                </div>
+
+                <div class="q">각 훅의 정확한 스펙을 정리해 주세요.</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>훅</th><th>인자</th><th>stdin</th><th>0이 아닌 종료 시</th><th><code>--no-verify</code></th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>pre-commit</strong></td>
+                                <td>없음</td>
+                                <td>없음</td>
+                                <td>커밋 중단</td>
+                                <td><strong>우회됨</strong></td>
+                            </tr>
+                            <tr>
+                                <td><strong>prepare-commit-msg</strong></td>
+                                <td>1~3개<br><code>$1</code> 메시지 파일<br><code>$2</code> 출처<br><code>$3</code> 커밋 OID</td>
+                                <td>없음</td>
+                                <td>커밋 중단</td>
+                                <td><strong>우회 안 됨</strong></td>
+                            </tr>
+                            <tr>
+                                <td><strong>commit-msg</strong></td>
+                                <td><code>$1</code> 메시지 파일</td>
+                                <td>없음</td>
+                                <td>커밋 중단</td>
+                                <td><strong>우회됨</strong></td>
+                            </tr>
+                            <tr>
+                                <td><strong>post-commit</strong></td>
+                                <td>없음</td>
+                                <td>없음</td>
+                                <td><strong>무시됨</strong></td>
+                                <td>&mdash;</td>
+                            </tr>
+                            <tr>
+                                <td><strong>pre-merge-commit</strong></td>
+                                <td>없음</td>
+                                <td>없음</td>
+                                <td>머지 중단</td>
+                                <td><strong>우회됨</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning"><strong><code>prepare-commit-msg</code>만 <code>--no-verify</code>로 우회되지 않습니다.</strong> 문서가 명시합니다 &mdash; "The purpose of the hook is to edit the message file in place, and it is not suppressed by the <code>--no-verify</code> option." 검증이 아니라 <strong>메시지 생성</strong>이 목적이므로 건너뛰면 커밋 자체가 이상해지기 때문입니다.</p>
+                    <p><code>prepare-commit-msg</code>의 <code>$2</code>(출처)가 특히 유용합니다. 값이 정해져 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">prepare-commit-msg의 $2 값</div>
+                        <pre><code>message   : -m 또는 -F 옵션이 주어졌다
+template  : -t 옵션 또는 commit.template 설정이 있다
+merge     : 머지 커밋이거나 .git/MERGE_MSG가 존재한다
+squash    : .git/SQUASH_MSG가 존재한다
+commit    : -c / -C / --amend 가 주어졌다  → $3에 커밋 OID가 따라온다
+(없음)    : 평범한 git commit (에디터가 뜬다)</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 브랜치명에서 이슈 번호 자동 삽입</div>
+                        <pre><code>#!/bin/sh
+# .githooks/prepare-commit-msg
+msg_file="$1"
+source="$2"
+
+# -m 으로 직접 쓴 경우와 머지/스쿼시는 건드리지 않는다
+case "$source" in
+    merge|squash|commit) exit 0 ;;
+esac
+
+branch=$(git symbolic-ref --short HEAD 2&gt;/dev/null) || exit 0
+issue=$(printf '%s' "$branch" | grep -oE '[A-Z]{2,}-[0-9]+') || exit 0
+
+# 이미 들어 있으면 중복 삽입하지 않는다
+grep -q "$issue" "$msg_file" &amp;&amp; exit 0
+
+# 첫 줄 앞에 붙인다
+printf '[%s] %s' "$issue" "$(cat "$msg_file")" &gt; "$msg_file.tmp"
+mv "$msg_file.tmp" "$msg_file"</code></pre>
+                    </div>
+                    <p class="highlight">Git이 기본 제공하는 샘플 훅들도 참고할 만합니다. 문서에 따르면 기본 <code>pre-commit</code>은 <strong>비ASCII 파일명과 줄 끝 공백</strong>을 막고(<code>hooks.allownonascii</code>로 조절), 기본 <code>commit-msg</code>는 <strong>중복 <code>Signed-off-by</code> 트레일러</strong>를 잡아냅니다.</p>
+                </div>
+
+                <div class="q"><code>git am</code> 계열 훅도 있던데요?</div>
+                <div class="a">
+                    <p>메일로 패치를 주고받는 워크플로(Linux 커널 방식)를 위한 세 개입니다. <strong>커밋 계열과 대응 관계</strong>가 있습니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>훅</th><th>인자</th><th>시점</th><th>기본 동작</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>applypatch-msg</strong></td>
+                                <td><code>$1</code> 메시지 파일</td>
+                                <td>패치 적용 전</td>
+                                <td>기본 훅은 <code>commit-msg</code>를 대신 실행</td>
+                            </tr>
+                            <tr>
+                                <td><strong>pre-applypatch</strong></td>
+                                <td>없음</td>
+                                <td>패치 적용 후, <strong>커밋 전</strong></td>
+                                <td>기본 훅은 <code>pre-commit</code>을 대신 실행</td>
+                            </tr>
+                            <tr>
+                                <td><strong>post-applypatch</strong></td>
+                                <td>없음</td>
+                                <td>커밋 후</td>
+                                <td>알림 전용. 결과에 영향 없음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point"><code>pre-applypatch</code>의 시점이 재미있습니다. <strong>"패치는 이미 워킹 트리에 적용됐지만 커밋은 아직"</strong>인 상태라, 워킹 트리를 검사해 커밋을 거부할 수 있습니다. 그래서 기본 훅이 <code>pre-commit</code>을 재활용합니다 &mdash; <strong>같은 검증 로직을 두 워크플로에서 공유</strong>하는 구조입니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2 -->
+        <section class="part">
+            <h2>Part 2: 워크플로 계열 &mdash; 체크아웃 · 머지 · 재작성</h2>
+            <div class="conversation">
+                <div class="q">브랜치를 오갈 때 불리는 훅들을 정리해 주세요.</div>
+                <div class="a">
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>훅</th><th>인자</th><th>중단 가능?</th><th>비고</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>post-checkout</strong></td>
+                                <td><code>$1</code> 이전 HEAD<br><code>$2</code> 새 HEAD<br><code>$3</code> 플래그(1=브랜치, 0=파일)</td>
+                                <td>불가<br>(단 종료 코드가 <strong>명령의 종료 코드가 됨</strong>)</td>
+                                <td><code>clone</code>, <code>worktree add</code>에서도 실행. 이때 <code>$1</code>은 null-ref, <code>$3</code>은 항상 1</td>
+                            </tr>
+                            <tr>
+                                <td><strong>post-merge</strong></td>
+                                <td><code>$1</code> squash 여부(0/1)</td>
+                                <td>불가</td>
+                                <td><strong>충돌로 실패한 머지에서는 실행 안 됨</strong></td>
+                            </tr>
+                            <tr>
+                                <td><strong>pre-rebase</strong></td>
+                                <td><code>$1</code> upstream<br><code>$2</code> 대상 브랜치(현재 브랜치 rebase 시 <strong>없음</strong>)</td>
+                                <td>가능</td>
+                                <td>공유 브랜치 rebase 차단에 사용</td>
+                            </tr>
+                            <tr>
+                                <td><strong>post-rewrite</strong></td>
+                                <td><code>$1</code> <code>amend</code> 또는 <code>rebase</code></td>
+                                <td>불가</td>
+                                <td>stdin으로 <code>&lt;old&gt; &lt;new&gt;</code> 목록</td>
+                            </tr>
+                            <tr>
+                                <td><strong>pre-auto-gc</strong></td>
+                                <td>없음</td>
+                                <td>가능 (<code>gc --auto</code> 중단)</td>
+                                <td>20편의 자동 GC 억제용</td>
+                            </tr>
+                            <tr>
+                                <td><strong>post-index-change</strong></td>
+                                <td><code>$1</code> 워킹 디렉토리 갱신 여부<br><code>$2</code> skip-worktree 변경 가능성</td>
+                                <td>불가</td>
+                                <td>인덱스가 쓰일 때마다(06편)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="warning"><code>post-checkout</code>의 <strong><code>$3</code> 플래그를 반드시 확인해야 합니다.</strong> <code>git checkout -- file.txt</code>(파일 복원)에서도 이 훅이 불리는데, 이때 <code>$3</code>이 0입니다. 브랜치 전환에만 반응하고 싶다면 <code>[ "$3" = "1" ]</code> 검사가 필수입니다. 이걸 빠뜨리면 파일 하나 복원할 때마다 <code>npm install</code>이 도는 참사가 납니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 브랜치 전환 시 의존성 자동 갱신</div>
+                        <pre><code>#!/bin/sh
+# .githooks/post-checkout
+prev="$1"; new="$2"; is_branch="$3"
+
+[ "$is_branch" = "1" ] || exit 0          # 파일 체크아웃이면 무시
+
+# lock 파일이 바뀌었을 때만 설치 (13편의 경로 제한 diff)
+if ! git diff --quiet "$prev" "$new" -- package-lock.json 2&gt;/dev/null; then
+    echo "package-lock.json 변경 감지 → npm ci"
+    npm ci
+fi</code></pre>
+                    </div>
+                    <p class="key-point"><code>post-rewrite</code>는 19편과 직결됩니다. rebase나 <code>--amend</code>로 <strong>커밋 OID가 바뀐 매핑(<code>&lt;old&gt; &lt;new&gt;</code>)</strong>을 통째로 받으므로, 외부 시스템(이슈 트래커, 리뷰 도구)에 기록된 옛 OID를 새 OID로 갱신할 수 있습니다.</p>
+                    <p>문서가 rebase에 대해 짚는 세부 사항이 중요합니다. <strong>"squash와 fixup 연산에서는 뭉쳐진 모든 커밋이 그 스쿼시 결과 커밋으로 재작성된 것으로 나열된다"</strong> &mdash; 즉 <strong>같은 <code>new-oid</code>를 갖는 줄이 여러 개</strong> 나옵니다. 또 <strong>"커밋은 rebase가 처리한 순서대로 나열됨이 보장된다"</strong>고 명시합니다.</p>
+                    <p class="warning">함정: 문서가 <strong>"<code>git fast-import</code>나 <code>git-filter-repo</code> 같은 전체 히스토리 재작성 도구는 보통 이 훅을 부르지 않는다"</strong>고 경고합니다. 대규모 재작성에서는 <code>post-rewrite</code>에 의존할 수 없습니다.</p>
+                </div>
+
+                <div class="q">나머지 특수 훅들은요?</div>
+                <div class="a">
+                    <p><strong><code>fsmonitor-watchman</code></strong>이 가장 이질적입니다. 검증이 아니라 <strong>데이터를 반환하는 훅</strong>입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">fsmonitor-watchman 프로토콜</div>
+                        <pre><code>입력 (v2):  $1 = 2 (버전),  $2 = 토큰 (watchman의 clock id)
+출력:       새 토큰 + NUL + "변경됐을 수 있는 파일 목록" (NUL 구분)
+
+규칙:
+  - 경로는 워킹 트리 루트 기준 상대 경로
+  - <strong>실제로 안 바뀐 파일을 포함해도 된다</strong> (보수적으로 넓게)
+  - 생성·삭제·rename(양쪽 이름 모두) 전부 포함해야 한다
+  - "전부 바뀌었다"를 최적화해 알리려면 파일명 "/" 하나를 반환
+  - 오류로 종료하면 Git은 <strong>전체 검사로 후퇴</strong>한다</code></pre>
+                    </div>
+                    <p class="highlight">07편과 직접 연결됩니다. Git은 <code>lstat</code> 비교로 변경을 판정하는데, 파일 수십만 개에서는 그 <code>lstat</code> 자체가 비쌉니다. fsmonitor는 <strong>"파일 시스템 감시 데몬이 알려 준 후보만 검사"</strong>하게 해 <code>git status</code>를 극적으로 줄입니다. "포함해도 된다(false positive 허용)"는 규칙이 14편의 Bloom filter와 같은 설계 철학입니다.</p>
+                    <p><strong><code>sendemail-validate</code></strong>는 <code>git send-email</code>용입니다. <code>$1</code>은 메일 본문 파일, <code>$2</code>는 SMTP 헤더 파일이며, 실제 메일은 <strong><code>$2</code>의 내용 뒤에 <code>$1</code>의 내용</strong>이 붙은 형태입니다. <code>GIT_SENDEMAIL_FILE_COUNTER</code>/<code>_TOTAL</code>로 "패치 시리즈 전체가 다 왔는지"를 판단할 수 있습니다.</p>
+                    <p><strong><code>p4-*</code> 네 개</strong>(<code>p4-changelist</code>, <code>p4-prepare-changelist</code>, <code>p4-post-changelist</code>, <code>p4-pre-submit</code>)는 <code>git-p4 submit</code> 전용입니다. 커밋 계열과 <strong>구조가 그대로 대응</strong>합니다 &mdash; prepare(초안 작성, <code>--no-verify</code> 우회 불가) &rarr; changelist(검증) &rarr; post(알림). Perforce 연동을 쓰지 않으면 무시해도 됩니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 3 -->
+        <section class="part">
+            <h2>Part 3: 서버 계열 &mdash; 진짜 강제력이 있는 자리</h2>
+            <div class="conversation">
+                <div class="q">push 한 번에 서버에서 훅이 어떤 순서로 불리나요?</div>
+                <div class="a">
+                    <p><code>receive-pack</code>이 다음 순서로 실행합니다. <strong>거부 가능한 지점이 두 군데</strong>라는 점이 핵심입니다.</p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">1. pre-receive</div>
+                                <div class="flow-box__items">전체에 <strong>1회</strong>. stdin으로 모든 ref<br>&rarr; 0이 아니면 <strong>전부 거부</strong></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">2. update</div>
+                                <div class="flow-box__items">ref마다 <strong>1회씩</strong>. 인자 3개<br>&rarr; 0이 아니면 <strong>그 ref만</strong> 거부</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">3. (ref 갱신)</div>
+                                <div class="flow-box__items">11편의 ref 트랜잭션 수행</div>
+                            </div>
+                        </div>
+                        <div class="flow-row">
+                            <div class="flow-box">
+                                <div class="flow-box__title">4. post-receive</div>
+                                <div class="flow-box__items">전체에 1회. stdin으로 <strong>성공한</strong> ref 목록<br>&rarr; 결과에 영향 없음</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box">
+                                <div class="flow-box__title">5. post-update</div>
+                                <div class="flow-box__items">인자로 갱신된 ref <strong>이름만</strong><br>&rarr; 기본 훅은 <code>update-server-info</code> 실행</div>
+                            </div>
+                        </div>
+                    </div>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th>훅</th><th>실행 횟수</th><th>데이터</th><th>거부 범위</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>pre-receive</strong></td>
+                                <td>1회</td>
+                                <td>stdin: <code>&lt;old&gt; &lt;new&gt; &lt;ref&gt;</code> 전부</td>
+                                <td><strong>push 전체</strong></td>
+                            </tr>
+                            <tr>
+                                <td><strong>update</strong></td>
+                                <td>ref 수만큼</td>
+                                <td>인자: <code>$1</code>=ref, <code>$2</code>=old, <code>$3</code>=new</td>
+                                <td>해당 ref 하나</td>
+                            </tr>
+                            <tr>
+                                <td><strong>post-receive</strong></td>
+                                <td>1회 (최소 1개 성공 시)</td>
+                                <td>stdin: 성공한 ref만</td>
+                                <td>없음</td>
+                            </tr>
+                            <tr>
+                                <td><strong>post-update</strong></td>
+                                <td>1회</td>
+                                <td>인자: ref 이름들 (<strong>old/new 없음</strong>)</td>
+                                <td>없음</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">문서가 <strong><code>post-update</code>보다 <code>post-receive</code>를 쓰라</strong>고 권합니다 &mdash; "post-update는 어떤 head가 push됐는지는 알지만 원래 값과 갱신된 값을 모르므로 old..new 로그를 찍기에 나쁜 자리다." <code>post-update</code>는 <code>post-receive</code>가 없던 시절의 유산이고, 지금은 사실상 <code>update-server-info</code> 전용입니다.</p>
+                    <p><code>update</code> 훅의 용도도 문서가 짚습니다. <strong>"특정 ref에 대한 forced update를 막는 데 쓸 수 있다 &mdash; 새 객체가 옛 객체의 자손인지 확인해 fast-forward만 허용하는 정책"</strong>입니다. 15편의 조상 판정이 그대로 쓰입니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; fast-forward 전용 정책 (update 훅)</div>
+                        <pre><code>#!/bin/sh
+# hooks/update   $1=ref  $2=old  $3=new
+ref="$1"; old="$2"; new="$3"
+zero=$(git hash-object --stdin -t tree &lt;/dev/null | tr '[0-9a-f]' '0')
+
+case "$ref" in
+    refs/heads/main|refs/heads/release/*) ;;
+    *) exit 0 ;;                                 # 보호 대상만 검사
+esac
+
+[ "$new" = "$zero" ] &amp;&amp; { echo "보호된 브랜치는 삭제할 수 없습니다." &gt;&2; exit 1; }
+[ "$old" = "$zero" ] &amp;&amp; exit 0                   # 새로 생성은 허용
+
+# old가 new의 조상이 아니면 = 되감기(force) 시도 (15편)
+if ! git merge-base --is-ancestor "$old" "$new"; then
+    echo "non-fast-forward push는 $ref 에서 금지됩니다." &gt;&2
+    exit 1
+fi</code></pre>
+                    </div>
+                </div>
+
+                <div class="q">서버 훅이 실행될 때 객체는 이미 저장된 상태인가요?</div>
+                <div class="a">
+                    <p>중요한 질문입니다. 답은 <strong>"격리(quarantine) 영역에 있다"</strong>입니다. <code>git-receive-pack</code> 문서의 "QUARANTINE ENVIRONMENT" 절이 이를 규정합니다.</p>
+                    <p class="highlight"><strong>"receive-pack이 객체를 받으면 <code>$GIT_DIR/objects</code> 안의 임시 '격리' 디렉토리에 두고, <code>pre-receive</code> 훅이 완료된 뒤에야 메인 객체 저장소로 옮긴다. 그 전에 push가 실패하면 임시 디렉토리는 통째로 제거된다."</strong></p>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">팩 수신</div>
+                                <div class="flow-box__items">객체가 <strong>격리 디렉토리</strong>에 기록됨</div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--info">
+                                <div class="flow-box__title">pre-receive 실행</div>
+                                <div class="flow-box__items">훅은 격리 객체를 <strong>읽을 수 있음</strong></div>
+                            </div>
+                            <div class="flow-arrow">&rarr;</div>
+                            <div class="flow-box flow-box--highlight">
+                                <div class="flow-box__title">성공 &rarr; 이관</div>
+                                <div class="flow-box__items">메인 객체 저장소로 migrate</div>
+                            </div>
+                            <div class="flow-arrow">/</div>
+                            <div class="flow-box flow-box--warning">
+                                <div class="flow-box__title">실패 &rarr; 폐기</div>
+                                <div class="flow-box__items">디렉토리째 삭제. <strong>디스크에 아무것도 안 남음</strong></div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="key-point">이 설계가 20편의 GC 문제를 우아하게 피합니다. 격리가 없다면 <strong>거부된 push의 객체가 도달 불가능한 쓰레기로 계속 쌓이고</strong>, 2주 유예 동안 디스크를 차지합니다. 문서의 표현대로 <strong>"반복 실패한 push가 디스크를 채우는 것을 막아 주지만, 디버깅은 더 어려워집니다."</strong></p>
+                    <p class="warning">훅 작성자가 주의할 점: <strong><code>pre-receive</code> 훅이 만든 객체도 격리 디렉토리에 생성되며, 성공해야만 이관됩니다.</strong> 훅에서 객체를 만들어 두고 나중에 쓰려 한다면 이 동작을 반드시 고려해야 합니다.</p>
+                </div>
+
+                <div class="q"><code>push-to-checkout</code>은 어떤 상황의 훅인가요?</div>
+                <div class="a">
+                    <p><strong>bare가 아닌 저장소로 push</strong>할 때의 문제를 다룹니다. 01편에서 본 <code>receive.denyCurrentBranch</code>가 배경입니다.</p>
+                    <p>체크아웃된 브랜치로 push하면 <strong>ref는 바뀌는데 워킹 트리와 인덱스는 그대로</strong>라 불일치가 생깁니다. 그래서 Git은 기본적으로 거부합니다. <code>receive.denyCurrentBranch = updateInstead</code>로 설정하면 "워킹 트리까지 같이 갱신"을 시도하는데, 이때 <strong>워킹 트리나 인덱스에 차이가 있으면 여전히 거부</strong>합니다.</p>
+                    <p><code>push-to-checkout</code> 훅이 그 기본 동작을 <strong>덮어씁니다.</strong> 인자로 새 커밋 OID를 받고, 두 가지 중 하나를 해야 합니다.</p>
+                    <ul>
+                        <li>거부한다 &mdash; 0이 아닌 코드로 종료. 단 <strong>인덱스와 워킹 트리를 수정하면 안 됩니다.</strong></li>
+                        <li>수용한다 &mdash; 워킹 트리와 인덱스를 원하는 상태로 만들고 0으로 종료</li>
+                    </ul>
+                    <div class="code-block">
+                        <div class="code-header">문서가 제시하는 구현 예</div>
+                        <pre><code>#!/bin/sh
+# hooks/push-to-checkout   $1 = 새 커밋 OID
+exec git read-tree -u -m HEAD "$1"
+
+# 2-tree 형태의 read-tree -u -m 은 본질적으로
+# "로컬 변경을 유지한 채 브랜치를 전환하는" git switch와 같다.
+# 즉 push 방향으로 뒤집힌 git fetch를 흉내 내는 것.</code></pre>
+                    </div>
+                    <p class="highlight">배포 서버에 직접 push해서 즉시 반영하는 워크플로(간단한 정적 사이트 등)에서 쓰입니다. 다만 요즘은 CI/CD로 처리하는 것이 일반적이라, 실무에서 만나기는 드뭅니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 4 -->
+        <section class="part">
+            <h2>Part 4: 고급 &mdash; proc-receive와 reference-transaction</h2>
+            <div class="conversation">
+                <div class="q"><code>proc-receive</code>가 특별한 이유가 뭔가요?</div>
+                <div class="a">
+                    <p>다른 훅은 "허가/거부"만 하지만, <strong><code>proc-receive</code>는 ref 갱신을 <em>대신 수행</em>합니다.</strong> 문서의 표현입니다.</p>
+                    <p class="key-point"><strong>"서버가 <code>receive.procReceiveRefs</code>를 설정했고 receive-pack에 온 명령의 ref 이름이 매칭되면, 그 명령들은 내부 <code>execute_commands()</code> 함수 <em>대신</em> 이 훅이 실행한다. 이 훅이 관련 ref를 갱신하고 결과를 receive-pack에 보고할 책임을 진다."</strong></p>
+                    <p>Gerrit이나 Gitea에서 <code>git push origin HEAD:refs/for/main</code> 하면 <strong>브랜치가 아니라 리뷰가 생성되는</strong> 동작이 정확히 이것입니다. <code>refs/for/main</code>은 실제 ref가 아니라 <strong>의사 ref(pseudo-reference)</strong>이고, 훅이 이를 가로채 전혀 다른 일을 합니다.</p>
+                    <p>다른 훅과 달리 <strong>pkt-line 프로토콜(21편)로 양방향 대화</strong>합니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">proc-receive 프로토콜 (S=receive-pack, H=훅)</div>
+                        <pre><code># 1) 버전·기능 협상
+S: PKT-LINE(version=1\0push-options atomic...)
+S: flush-pkt
+H: PKT-LINE(version=1\0push-options...)
+H: flush-pkt
+
+# 2) 서버 → 훅: 처리할 명령들
+S: PKT-LINE(&lt;old-oid&gt; &lt;new-oid&gt; &lt;ref&gt;)
+S: ... ...
+S: flush-pkt
+S: PKT-LINE(push-option)          # push-options 기능이 켜진 경우만
+S: flush-pkt
+
+# 3) 훅 → 서버: 결과 보고
+H: PKT-LINE(ok &lt;ref&gt;)                     # 성공
+H: PKT-LINE(ng &lt;ref&gt; &lt;reason&gt;)            # 거부
+H: PKT-LINE(ok &lt;ref&gt;)                     # 내가 처리 안 함 —
+H: PKT-LINE(option fall-through)          #   receive-pack이 알아서 하라
+H: PKT-LINE(ok &lt;ref&gt;)                     # 성공했는데 실제로는
+H: PKT-LINE(option refname &lt;refname&gt;)     #   다른 ref를 갱신했다
+H: PKT-LINE(option old-oid &lt;old-oid&gt;)
+H: PKT-LINE(option new-oid &lt;new-oid&gt;)
+H: PKT-LINE(option forced-update)
+H: flush-pkt</code></pre>
+                    </div>
+                    <p class="highlight"><strong><code>option refname</code></strong>이 핵심 장치입니다. 클라이언트는 <code>refs/for/main</code>으로 push했지만, 훅은 실제로 <code>refs/changes/34/1234/1</code> 같은 ref를 만들 수 있고, <strong>그 사실을 클라이언트에게 되돌려 보고</strong>합니다. 그래서 push 결과 화면에 리뷰 URL이 뜨는 것입니다.</p>
+                    <p>문서가 짚는 세부 규칙 두 가지입니다. <strong>"이 훅으로 오는 각 명령은 의사 ref를 가리킬 수 있고 항상 zero-old를 old-oid로 갖지만, 훅은 이미 존재하는(non-zero old-oid) 다른 ref를 갱신할 수 있다."</strong> 그리고 <strong>"보고 순서는 입력과 같아야 한다."</strong></p>
+                    <p class="warning">종료 코드의 의미도 다릅니다 &mdash; <strong>"훅의 종료 상태는 자신에게 전달된 명령 그룹의 성공/실패만 결정한다(atomic push를 쓰는 경우 제외)."</strong> 다른 ref들의 운명에는 영향을 주지 않습니다.</p>
+                </div>
+
+                <div class="q"><code>reference-transaction</code>은 얼마나 자주 불리나요?</div>
+                <div class="a">
+                    <p><strong>ref를 바꾸는 모든 명령</strong>에서, 그것도 <strong>여러 번</strong> 불립니다. 11편에서 본 ref 트랜잭션의 각 단계마다 호출되기 때문입니다.</p>
+                    <table class="compare-table">
+                        <thead>
+                            <tr><th><code>$1</code> 상태</th><th>시점</th><th>종료 코드</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>preparing</code></td>
+                                <td>모든 갱신이 큐에 들어갔지만 <strong>아직 락 전</strong></td>
+                                <td><strong>0이 아니면 트랜잭션 중단</strong></td>
+                            </tr>
+                            <tr>
+                                <td><code>prepared</code></td>
+                                <td>큐에 들어갔고 <strong>디스크에 락까지 획득</strong></td>
+                                <td><strong>0이 아니면 트랜잭션 중단</strong></td>
+                            </tr>
+                            <tr>
+                                <td><code>committed</code></td>
+                                <td>커밋 완료. 모든 ref가 새 값</td>
+                                <td>무시됨</td>
+                            </tr>
+                            <tr>
+                                <td><code>aborted</code></td>
+                                <td>중단됨. 변경 없고 락 해제됨</td>
+                                <td>무시됨</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="key-point">문서가 명시하는 규칙입니다 &mdash; <strong>"종료 상태는 <code>preparing</code>과 <code>prepared</code>를 제외한 모든 상태에서 무시된다. 이 두 상태에서 0이 아닌 종료는 트랜잭션을 중단시킨다. 그 경우 훅은 <code>aborted</code> 상태로 호출되지 않는다."</strong></p>
+                    <p>stdin 포맷은 익숙한 삼종 세트이지만, <strong>symbolic ref를 위한 확장</strong>이 있습니다.</p>
+                    <div class="code-block">
+                        <div class="code-header">reference-transaction의 stdin</div>
+                        <pre><code>&lt;old-value&gt; SP &lt;new-value&gt; SP &lt;ref-name&gt; LF
+
+특수 규칙:
+  - 강제 갱신이거나 새로 생성이면 &lt;old-value&gt;는 all-zeroes
+    → 둘을 구분하려면 git rev-parse로 현재 값을 직접 확인해야 한다
+  - symbolic ref 갱신이면 값이 객체가 아니라 <strong>ref</strong>일 수 있고,
+    "ref:" 접두사가 붙는다  (예: ref:refs/heads/main)
+  - "preparing" 상태에서는 <strong>symbolic ref가 해석되지 않는다</strong>
+    → &lt;ref-name&gt;은 가리키는 대상이 아니라 symbolic ref 자신</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <div class="code-header">bash &mdash; 완전한 ref 감사 로그</div>
+                        <pre><code>#!/bin/sh
+# hooks/reference-transaction
+[ "$1" = "committed" ] || exit 0          # 실제로 반영된 것만 기록
+
+ts=$(date -Is)
+who=$(git config user.email 2&gt;/dev/null || echo unknown)
+cmd="${GIT_REFLOG_ACTION:-unknown}"       # 어떤 작업이었는지 힌트
+
+while read old new ref; do
+    printf '%s\t%s\t%s\t%s\t%s -&gt; %s\n' \
+        "$ts" "$who" "$cmd" "$ref" "$old" "$new" &gt;&gt; /var/log/git-refs.log
+done</code></pre>
+                    </div>
+                    <p class="warning">성능 주의가 필요합니다. <code>commit</code>, <code>merge</code>, <code>rebase</code>, <code>fetch</code>, <code>reset</code>, <code>gc</code>까지 <strong>거의 모든 명령</strong>에서, 그것도 상태마다 불립니다. 대량 fetch에서는 수천 번 호출될 수 있으므로 <strong>무거운 작업(네트워크 호출 등)을 넣으면 체감 성능이 즉시 무너집니다.</strong> 파일에 append하는 정도로 끝내고, 집계는 별도 프로세스가 하도록 설계해야 합니다.</p>
+                    <p class="highlight">이 훅의 진가는 <strong>규제 대응</strong>입니다. reflog(11편)는 로컬에만 있고 만료되며 bare 저장소에는 기본적으로 없지만, <code>reference-transaction</code>은 <strong>서버에서 모든 ref 변경을 빠짐없이 외부 로그로 뽑아낼 수 있습니다.</strong> "누가 언제 어떤 브랜치를 되감았는가"를 증명해야 하는 환경에서 유일한 수단에 가깝습니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 핵심 정리 -->
+        <section class="summary-box">
+            <h3>📌 핵심 정리</h3>
+            <ul>
+                <li><strong>커밋 하나에 최대 4개(<code>pre-commit</code> &rarr; <code>prepare-commit-msg</code> &rarr; <code>commit-msg</code> &rarr; <code>post-commit</code>)가 순서대로 불린다.</strong> 메시지 초안은 <code>prepare-commit-msg</code>(<code>--no-verify</code>로 <strong>우회 안 됨</strong>), 검증은 <code>commit-msg</code>에 넣는다.</li>
+                <li><strong><code>post-checkout</code>은 파일 복원(<code>$3</code>=0)에서도 불리므로 <code>$3</code> 검사가 필수이고, 종료 코드가 명령의 종료 코드가 된다.</strong> <code>post-rewrite</code>는 rebase/amend의 old&rarr;new 매핑을 주지만 <code>filter-repo</code> 같은 도구는 호출하지 않는다.</li>
+                <li><strong>서버 훅은 <code>pre-receive</code>(전체 1회, 전부 거부) &rarr; <code>update</code>(ref마다, 해당 ref만 거부) &rarr; <code>post-receive</code>(성공 ref만) &rarr; <code>post-update</code>(이름만) 순이다.</strong> old/new가 필요하면 <code>post-update</code>가 아니라 <code>post-receive</code>를 쓴다.</li>
+                <li><strong>수신 객체는 격리(quarantine) 디렉토리에 들어갔다가 <code>pre-receive</code> 성공 후에야 이관된다.</strong> 실패한 push는 디스크에 아무것도 남기지 않으며, 훅이 만든 객체도 같은 규칙을 따른다.</li>
+                <li><strong><code>proc-receive</code>는 pkt-line 프로토콜로 ref 갱신을 대신 수행해 <code>refs/for/*</code> 같은 의사 ref를 리뷰 생성으로 바꾸고, <code>reference-transaction</code>은 모든 ref 변경을 4단계로 관측해 완전한 감사 로그를 만든다.</strong> 후자는 호출 빈도가 매우 높아 가벼워야 한다.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>
