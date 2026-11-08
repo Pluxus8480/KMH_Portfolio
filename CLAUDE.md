@@ -7,20 +7,38 @@
 ```
 KMH_Portfolio/
 ├── index.html              # 메인 포트폴리오 페이지
+├── career.html             # 경력 페이지
+├── share.html              # 공유용 페이지
 ├── study.html              # Study 메인 페이지 (카테고리 목록)
-├── study/                  # 카테고리별 세부 페이지
-│   ├── unreal.html
-│   ├── graphics.html
-│   ├── server.html
-│   ├── database.html
-│   ├── cs-fundamentals.html
-│   ├── algorithm.html
-│   └── cpp.html
-├── css/style.css           # 스타일시트
-└── js/
-    ├── main.js             # 메인 페이지 스크립트
-    └── study.js            # Study 페이지 스크립트
+├── study/                  # 카테고리별 목록 페이지 + 주제 폴더
+│   ├── unreal.html         (+ unreal/)
+│   ├── graphics.html       (+ graphics/)
+│   ├── server.html         (+ server/)
+│   ├── csharp-server.html  (+ csharp-server/)
+│   ├── database.html       (+ database/)
+│   ├── cs-fundamentals.html (+ cs-fundamentals/)
+│   ├── algorithm.html      (+ algorithm/)
+│   ├── cpp.html            (+ cpp/)
+│   ├── csharp.html         (+ csharp/)
+│   ├── unity.html          (+ unity/)
+│   └── git.html            (+ git/)
+├── projects/               # 프로젝트 상세 페이지
+│   ├── ghost-runner/
+│   ├── hifi-rush/
+│   └── mullet-madjack/
+├── css/                    # style, career, project-detail, share, study-content
+├── js/
+│   ├── main.js             # 메인 페이지 스크립트
+│   └── study.js            # Study 페이지 스크립트
+├── assets/images/          # 이미지 리소스
+├── doc/                    # 작업 메모 (todo 등)
+└── private/                # 개인 문서 (git-ignored)
 ```
+
+### 개인 문서 관리
+
+자기소개서, 면접 준비, 지원동기 등 개인 문서는 반드시 `private/` 폴더에만 둡니다.
+이 폴더는 `.gitignore`에 등록되어 있어 커밋되지 않습니다. 레포가 공개 GitHub Pages로 배포되므로 개인 문서를 다른 위치에 두지 마세요.
 
 ## Study 콘텐츠 작성 규칙
 
